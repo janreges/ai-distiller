@@ -13,6 +13,8 @@
   <img src="https://img.shields.io/badge/Performance-5k+_files/sec-green" alt="Performance">
   <img src="https://img.shields.io/badge/Compression-90%25+-orange" alt="Compression">
   <img src="https://img.shields.io/badge/Tests-1211_passed-purple" alt="Tests">
+
+[![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/janreges/ai-distiller)](https://archestra.ai/mcp-catalog/janreges__ai-distiller)
 </p
 
 
