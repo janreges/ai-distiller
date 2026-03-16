@@ -5,9 +5,6 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
-  schedule:
-    # Run tests daily at 6 AM UTC
-    - cron: '0 6 * * *'
 
 env:
   GO_VERSION: '1.23'
