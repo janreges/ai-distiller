@@ -1165,3 +1165,8 @@ MIT License - see [LICENSE](LICENSE) for details.
 - Built on [tree-sitter](https://tree-sitter.github.io/) for accurate parsing
 - Inspired by the need for better AI-code interaction
 - Created with ❤️ by Claude Code & Ján Regeš from [SiteOne](https://www.siteone.io/) (Czech Republic).
+
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/janreges-ai-distiller-mcp).
+
