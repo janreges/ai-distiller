@@ -429,7 +429,14 @@ func shouldIncludeFile(filePath string, includePatterns, excludePatterns []strin
 			}
 		} else {
 			// Simple filename pattern
-			if matched, _ := filepath.Match(pattern, filepath.Base(filePath)); matched {
+			baseName := filepath.Base(filePath)
+			matched, _ := filepath.Match(pattern, baseName)
+			if !matched {
+				// Also check if pattern matches any directory component
+				// This handles cases like "*migrations*" matching "db/migrations/file.go"
+				matched = dirMatchesPattern(filePath, pattern)
+			}
+			if matched {
 				return false
 			}
 		}
@@ -520,6 +527,20 @@ func matchesPathPattern(path, pattern string) bool {
 	// Try standard glob matching on full path
 	matched, _ := filepath.Match(pattern, path)
 	return matched
+}
+
+// dirMatchesPattern checks if any directory component in the path matches a pattern.
+// This allows patterns like "*migrations*" to match "db/migrations/file.go".
+func dirMatchesPattern(path string, pattern string) bool {
+	pathSlash := filepath.ToSlash(path)
+	parts := strings.Split(pathSlash, "/")
+	// Check all components except the last (which is the filename)
+	for i := 0; i < len(parts)-1; i++ {
+		if matched, _ := filepath.Match(pattern, parts[i]); matched {
+			return true
+		}
+	}
+	return false
 }
 
 // isDefaultIgnoredDir checks if a directory should be ignored by default
