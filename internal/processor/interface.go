@@ -76,6 +76,10 @@ type ProcessOptions struct {
 	// IncludeMethods includes methods/functions (when false, removes them)
 	IncludeMethods bool
 
+	// ExpandSymbols holds glob patterns; functions/methods whose name matches
+	// keep their implementation even when implementations are otherwise stripped.
+	ExpandSymbols []string
+
 	// MaxDepth limits the depth of nested structures
 	MaxDepth int
 
@@ -242,5 +246,6 @@ func (opts ProcessOptions) ToStripperOptions() stripper.Options {
 		RemoveAnnotations:     !opts.IncludeAnnotations,
 		RemoveFields:          !opts.IncludeFields,
 		RemoveMethods:         !opts.IncludeMethods,
+		ExpandSymbols:         opts.ExpandSymbols,
 	}
 }

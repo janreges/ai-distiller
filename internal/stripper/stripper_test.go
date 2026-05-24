@@ -318,3 +318,57 @@ func TestVisitPackageStripsChildren(t *testing.T) {
 		assert.Len(t, pkg.Children, 2)
 	})
 }
+
+// TestExpandSymbols verifies that --expand keeps the implementation of symbols
+// whose name matches an expand glob, even when implementations are otherwise
+// stripped, while leaving non-matching symbols as signatures only.
+func TestExpandSymbols(t *testing.T) {
+	makeFile := func() *ir.DistilledFile {
+		return &ir.DistilledFile{
+			Path: "demo.go",
+			Children: []ir.DistilledNode{
+				&ir.DistilledFunction{
+					Name:           "GetUser",
+					Visibility:     ir.VisibilityPublic,
+					Implementation: "{ return db.find(id) }",
+				},
+				&ir.DistilledFunction{
+					Name:           "GetOrder",
+					Visibility:     ir.VisibilityPublic,
+					Implementation: "{ return db.order(id) }",
+				},
+			},
+		}
+	}
+
+	t.Run("exact name match keeps only that body", func(t *testing.T) {
+		s := New(Options{RemoveImplementations: true, ExpandSymbols: []string{"GetUser"}})
+		result := makeFile().Accept(s).(*ir.DistilledFile)
+
+		got := map[string]string{}
+		for _, c := range result.Children {
+			fn := c.(*ir.DistilledFunction)
+			got[fn.Name] = fn.Implementation
+		}
+		assert.Equal(t, "{ return db.find(id) }", got["GetUser"], "matched symbol keeps body")
+		assert.Empty(t, got["GetOrder"], "non-matched symbol is stripped to signature")
+	})
+
+	t.Run("glob pattern matches multiple", func(t *testing.T) {
+		s := New(Options{RemoveImplementations: true, ExpandSymbols: []string{"Get*"}})
+		result := makeFile().Accept(s).(*ir.DistilledFile)
+		for _, c := range result.Children {
+			fn := c.(*ir.DistilledFunction)
+			assert.NotEmpty(t, fn.Implementation, "Get* should expand %s", fn.Name)
+		}
+	})
+
+	t.Run("no expand patterns strips all bodies", func(t *testing.T) {
+		s := New(Options{RemoveImplementations: true})
+		result := makeFile().Accept(s).(*ir.DistilledFile)
+		for _, c := range result.Children {
+			fn := c.(*ir.DistilledFunction)
+			assert.Empty(t, fn.Implementation)
+		}
+	})
+}

@@ -1,6 +1,7 @@
 package stripper
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/janreges/ai-distiller/internal/ir"
@@ -19,6 +20,23 @@ type Options struct {
 	RemoveAnnotations     bool  // Remove decorators/annotations
 	RemoveFields          bool  // Remove class fields/properties
 	RemoveMethods         bool  // Remove methods/functions
+
+	// ExpandSymbols holds glob patterns; functions/methods whose name matches
+	// keep their implementation even when RemoveImplementations is set.
+	ExpandSymbols []string
+}
+
+// shouldExpand reports whether a symbol name matches any --expand glob pattern.
+func (o Options) shouldExpand(name string) bool {
+	for _, pattern := range o.ExpandSymbols {
+		if pattern == "" {
+			continue
+		}
+		if matched, _ := filepath.Match(pattern, name); matched {
+			return true
+		}
+	}
+	return false
 }
 
 // HasAnyOption returns true if any stripping option is enabled
@@ -184,8 +202,9 @@ func (s *Stripper) visitFunction(n *ir.DistilledFunction) ir.DistilledNode {
 		Implementation: n.Implementation,
 	}
 	
-	// Strip implementation if requested
-	if s.options.RemoveImplementations {
+	// Strip implementation if requested, unless this symbol is explicitly
+	// expanded via --expand.
+	if s.options.RemoveImplementations && !s.options.shouldExpand(n.Name) {
 		result.Implementation = ""
 	}
 	

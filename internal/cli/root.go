@@ -39,6 +39,7 @@ var (
 	stripOptions     []string // Deprecated, kept for backward compatibility
 	includeGlob      []string
 	excludeGlob      []string
+	expandGlob       []string
 	recursiveStr     string
 	filePathType     string
 	relativePathPrefix string
@@ -290,6 +291,7 @@ func initFlags() {
 	// File pattern flags
 	rootCmd.Flags().StringSliceVar(&includeGlob, "include", nil, "Include file patterns (comma-separated: *.go,*.py or use flag multiple times)")
 	rootCmd.Flags().StringSliceVar(&excludeGlob, "exclude", nil, "Exclude file patterns (comma-separated: *.json,*test* or use flag multiple times)")
+	rootCmd.Flags().StringSliceVar(&expandGlob, "expand", nil, "Keep full implementation only for symbols whose name matches these globs (comma-separated: GetUser,*Service* or use flag multiple times)")
 	rootCmd.Flags().StringVarP(&recursiveStr, "recursive", "r", "1", "Process directories recursively (0/1, default: 1)")
 	rootCmd.Flags().StringVar(&filePathType, "file-path-type", "relative", "How paths appear in output: relative|absolute (default: relative)")
 	rootCmd.Flags().StringVar(&relativePathPrefix, "relative-path-prefix", "", "Custom prefix for relative paths (e.g., \"src/\")")
@@ -929,6 +931,7 @@ func createProcessOptionsFromFlags() processor.ProcessOptions {
 		opts.Recursive = recursiveStr != "0"
 		opts.IncludePatterns = includeGlob
 		opts.ExcludePatterns = excludeGlob
+		opts.ExpandSymbols = expandGlob
 		opts.MaxDepth = maxDepth
 		opts.SymbolResolution = dependencyAware
 		return opts
@@ -940,6 +943,7 @@ func createProcessOptionsFromFlags() processor.ProcessOptions {
 		opts.Recursive = recursiveStr != "0"
 		opts.IncludePatterns = includeGlob
 		opts.ExcludePatterns = excludeGlob
+		opts.ExpandSymbols = expandGlob
 		opts.MaxDepth = maxDepth
 		opts.SymbolResolution = dependencyAware
 		return opts
@@ -994,6 +998,7 @@ func createProcessOptionsFromFlags() processor.ProcessOptions {
 	// Set include/exclude patterns
 	opts.IncludePatterns = includeGlob
 	opts.ExcludePatterns = excludeGlob
+	opts.ExpandSymbols = expandGlob
 	
 	// Dependency-aware distillation options
 	opts.MaxDepth = maxDepth
