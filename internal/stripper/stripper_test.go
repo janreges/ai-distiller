@@ -410,3 +410,30 @@ func TestExpandSymbols_ClassLevel(t *testing.T) {
 		assert.Empty(t, fn.Implementation, "non-matched class: OrderService.%s body should be stripped", fn.Name)
 	}
 }
+
+// TestExpandSymbols_StructLevel verifies that class-level expansion also works
+// for structs (Go/Rust/Swift/C#), exercising the visitStruct path.
+func TestExpandSymbols_StructLevel(t *testing.T) {
+	file := &ir.DistilledFile{
+		Path: "demo.go",
+		Children: []ir.DistilledNode{
+			&ir.DistilledStruct{
+				Name:       "Server",
+				Visibility: ir.VisibilityPublic,
+				Children: []ir.DistilledNode{
+					&ir.DistilledFunction{Name: "Start", Visibility: ir.VisibilityPublic, Implementation: "{ listen() }"},
+					&ir.DistilledFunction{Name: "Stop", Visibility: ir.VisibilityPublic, Implementation: "{ close() }"},
+				},
+			},
+		},
+	}
+
+	s := New(Options{RemoveImplementations: true, ExpandSymbols: []string{"Server"}})
+	result := file.Accept(s).(*ir.DistilledFile)
+
+	strct := result.Children[0].(*ir.DistilledStruct)
+	for _, m := range strct.Children {
+		fn := m.(*ir.DistilledFunction)
+		assert.NotEmpty(t, fn.Implementation, "matched struct: Server.%s body should be kept", fn.Name)
+	}
+}
