@@ -1,6 +1,7 @@
 <file path="source.cs">
 #nullable enable
 
+using System.Linq;
 using System.Threading.Tasks;
 namespace Constructs.Medium03;
 public interface IRepository<TEntity, TKey> where TEntity : IEntity<TKey> where TKey : notnull {
@@ -13,17 +14,44 @@ public interface IEntity<TKey> {
 }
 public abstract record EntityBase(Id T) : IEntity;
 public class InMemoryRepository<TEntity, TKey> : IRepository where TEntity : EntityBase<TKey> where TKey : notnull {
-    public Task AddAsync(TEntity entity, CancellationToken ct) { }
-    public Task<TEntity?> GetAsync(TKey id, CancellationToken ct) { }
-    public Task<bool> RemoveAsync(TKey id, CancellationToken ct) { }
-    public async IAsyncEnumerable<TEntity> QueryAsync(Func<TEntity, bool> predicate, CancellationToken ct) { }
+    public Task AddAsync(TEntity entity, CancellationToken ct) {
+        _store[entity.Id] = entity;
+        return Task.CompletedTask;
+    }
+    public Task<TEntity?> GetAsync(TKey id, CancellationToken ct) => Task.FromResult(_store.TryGetValue(id, out var e) ? e : null);
+    public Task<bool> RemoveAsync(TKey id, CancellationToken ct) => Task.FromResult(_store.TryRemove(id, out _));
+    public async IAsyncEnumerable<TEntity> QueryAsync(Func<TEntity, bool> predicate, CancellationToken ct) {
+        // LINQ + async enumeration.
+        foreach (var entity in _store.Values.Where(predicate))
+        {
+            ct.ThrowIfCancellationRequested();
+            await Task.Yield(); // Simulate async I/O latency.
+            yield return entity;
+        }
+    }
 }
 public class CachedRepository<TEntity, TKey> : IRepository where TEntity : EntityBase<TKey> where TKey : notnull {
-    public CachedRepository(IRepository<TEntity, TKey> innerRepository, TimeSpan cacheExpiry) { }
-    public async Task AddAsync(TEntity entity, CancellationToken ct) { }
-    public async Task<TEntity?> GetAsync(TKey id, CancellationToken ct) { }
-    public async Task<bool> RemoveAsync(TKey id, CancellationToken ct) { }
-    public IAsyncEnumerable<TEntity> QueryAsync(Func<TEntity, bool> predicate, CancellationToken ct) { }
+    public CachedRepository(IRepository<TEntity, TKey> innerRepository, TimeSpan cacheExpiry) {
+        _innerRepository = innerRepository;
+        _cacheExpiry = cacheExpiry;
+    }
+    public async Task AddAsync(TEntity entity, CancellationToken ct) {
+        await _innerRepository.AddAsync(entity, ct);
+        _cache[entity.Id] = entity;
+    }
+    public async Task<TEntity?> GetAsync(TKey id, CancellationToken ct) {
+        if (_cache.TryGetValue(id, out var cached))
+            return cached;
+        var entity = await _innerRepository.GetAsync(id, ct);
+        if (entity != null)
+            _cache[id] = entity;
+        return entity;
+    }
+    public async Task<bool> RemoveAsync(TKey id, CancellationToken ct) {
+        _cache.TryRemove(id, out _);
+        return await _innerRepository.RemoveAsync(id, ct);
+    }
+    public IAsyncEnumerable<TEntity> QueryAsync(Func<TEntity, bool> predicate, CancellationToken ct) => _innerRepository.QueryAsync(predicate, ct);
 }
 public record User(
     Id Guid,
@@ -31,8 +59,16 @@ public record User(
     string Email,
     bool IsValid) : EntityBase<Guid>(Id);
 public class UserService {
-    public UserService(IRepository<User, Guid> userRepository) { }
-    public async Task<User?> CreateUserAsync(string name, string email) { }
-    public Task<User?> GetUserAsync(Guid id) { }
+    public UserService(IRepository<User, Guid> userRepository) {
+        _userRepository = userRepository;
+    }
+    public async Task<User?> CreateUserAsync(string name, string email) {
+        var user = new User(Guid.NewGuid(), name, email);
+        if (!user.IsValid)
+            return null;
+        await _userRepository.AddAsync(user);
+        return user;
+    }
+    public Task<User?> GetUserAsync(Guid id) => _userRepository.GetAsync(id);
 }
 </file>

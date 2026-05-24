@@ -3,6 +3,9 @@
 
 class User:
     # A simple representation of a user with basic attributes.
+    user_id = user_id
+    username = username
+    email = email
     __init__(self, user_id: int, username: str, email: str)
     deactivate(self) -> None
     get_status(self) -> str

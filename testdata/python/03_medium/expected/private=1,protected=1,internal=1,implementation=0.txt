@@ -6,6 +6,11 @@ class BaseNotifier(ABC):
     send(self, message: str) -> None
 
 class EmailNotifier(BaseNotifier):
+    -_smtp_host = smtp_host
+    -_port = port
+    from_address = from_address
+    -_connection = None
+    -_connection = "CONNECTED"
     __init__(self, smtp_host: str, port: int, from_address: str)
     @property
     connection_info(self) -> str

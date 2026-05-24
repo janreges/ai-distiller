@@ -5,17 +5,32 @@ namespace Constructs.VeryComplex05;
 public record VectorN(
     T[] Components,
     int Dim) {
-    public static VectorN<T> operator +(VectorN<T> a, VectorN<T> b) { }
-    public T Dot(VectorN<T> other) { }
-    public override string ToString() { }
+    public static VectorN<T> operator +(VectorN<T> a, VectorN<T> b) {
+        if (a.Dim != b.Dim) throw new ArgumentException("Dimension mismatch.");
+        var result = new T[a.Dim];
+        for (var i = 0; i < a.Dim; i++)
+            result[i] = a.Components[i] + b.Components[i];
+        return new(result);
+    }
+    public T Dot(VectorN<T> other) {
+        if (Dim != other.Dim) throw new ArgumentException("Dimension mismatch.");
+        var sum = T.Zero;
+        for (var i = 0; i < Dim; i++)
+            sum += Components[i] * other.Components[i];
+        return sum;
+    }
+    public override string ToString() => $"[{string.Join(", ", Components)}]";
 }
 public interface IAlgebraService {
-    public VectorN<T> Add<T>(VectorN<T> a, VectorN<T> b) where T : INumber<T> { }
-    public T Dot<T>(VectorN<T> a, VectorN<T> b) where T : INumber<T> { }
-    public VectorN<T> Normalize<T>(VectorN<T> vector) where T : IFloatingPointIeee754<T> { }
+    public VectorN<T> Add<T>(VectorN<T> a, VectorN<T> b) where T : INumber<T> => a + b;
+    public T Dot<T>(VectorN<T> a, VectorN<T> b) where T : INumber<T> => a.Dot(b);
+    public VectorN<T> Normalize<T>(VectorN<T> vector) where T : IFloatingPointIeee754<T> => vector.Normalize();
 }
 public sealed class AlgebraService : IAlgebraService {
-    public VectorN<T> Add<T>(VectorN<T> a, VectorN<T> b) where T : INumber<T> { }
+    public VectorN<T> Add<T>(VectorN<T> a, VectorN<T> b) where T : INumber<T> {
+        Console.WriteLine($"Adding {a} and {b}");
+        return a + b;
+    }
 }
 public abstract record CalcCommand {
     public sealed record AddCommand(
@@ -29,12 +44,54 @@ public abstract record CalcCommand {
     }
 }
 public static class CalcDispatcher {
-    public static double Execute(CalcCommand cmd, IAlgebraService svc) { }
+    public static double Execute(CalcCommand cmd, IAlgebraService svc) => cmd switch
+    {
+        CalcCommand.AddCommand(var a, var b) => svc.Add(a, b).Dot(new VectorN<double>(new[] {1d,1d})), // dummy use
+        CalcCommand.DotCommand(var a, var b) => svc.Dot(a, b),
+        CalcCommand.NormalizeCommand(var v) => svc.Normalize(v).Components.Sum(),
+        _                                     => throw new NotSupportedException($"Unhandled {cmd.GetType().Name}")
+    };
 }
 public class MathProcessor<T> where T : INumber<T>, IMinMaxValue<T> {
-    public T ProcessValue(T input) { }
+    public T ProcessValue(T input) {
+        if (input > T.MaxValue / (T.One + T.One))
+            return T.MaxValue;
+        if (input < T.MinValue / (T.One + T.One))
+            return T.MinValue;
+        return input * (T.One + T.One);
+    }
 }
 public static class Program {
-    public static void Main() { }
+    public static void Main() {
+        // Build DI container.
+        using var provider = new ServiceCollection()
+            .AddSingleton<IAlgebraService, AlgebraService>()
+            .AddTransient<MathProcessor<double>>()
+            .BuildServiceProvider();
+        var algebra = provider.GetRequiredService<IAlgebraService>();
+        // Create some vectors.
+        var a = new VectorN<double>(new[] {1.0, 2.0});
+        var b = new VectorN<double>(new[] {3.5, -1.0});
+        // Issue commands.
+        IReadOnlyList<CalcCommand> commands = new CalcCommand[]
+        {
+            new CalcCommand.AddCommand(a, b),
+            new CalcCommand.DotCommand(a, b),
+            new CalcCommand.NormalizeCommand(a),
+            new CalcCommand.UnknownCommand()
+        };
+        foreach (var cmd in commands)
+        {
+            try
+            {
+                var result = CalcDispatcher.Execute(cmd, algebra);
+                Console.WriteLine($"Result = {result}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+        }
+    }
 }
 </file>

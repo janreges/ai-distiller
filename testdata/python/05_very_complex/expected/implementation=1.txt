@@ -4,6 +4,8 @@ from typing import Type, TypeVar, Generic
 T = TypeVar('T')
 
 class ValidatedSetting:
+    setting_type = setting_type
+    default = default
     def __init__(self, setting_type: Type[T], default: T):
         self.setting_type = setting_type
                 self.default = default
@@ -29,6 +31,10 @@ class AppConfig:
     timeout = ValidatedSetting(int, 30)
     retries = ValidatedSetting(int, 3)
     api_key = ValidatedSetting(str, "")
+    timeout = 45
+    timeout = self._temp_settings['timeout']
+    retries = self._temp_settings['retries']
+    api_key = self._temp_settings['api_key']
     def __init__(self):
         self._temp_settings = {}
                 print("Initializing AppConfig singleton...")

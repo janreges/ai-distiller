@@ -2,6 +2,9 @@
 from datetime import datetime
 
 class User:
+    user_id = user_id
+    username = username
+    email = email
     def __init__(self, user_id: int, username: str, email: str):
         if not username or not email:
                     raise ValueError("Username and email cannot be empty.")

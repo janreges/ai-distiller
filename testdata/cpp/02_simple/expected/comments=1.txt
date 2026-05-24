@@ -19,26 +19,18 @@ class LibraryItem {
     virtual bool borrow()
     virtual void returnItem()
     virtual getDetails() const = 0
-    void setAvailability(bool status)
-    auto id_;
-    auto title_;
-    bool isAvailable_;
 };
 class Book : public LibraryItem {
     Book(const & id, const & title, const & author, const & isbn)
     const & getAuthor() const
     const & getISBN() const
     getDetails() const
-    auto author_;
-    auto isbn_;
 };
 class Magazine : public LibraryItem {
     Magazine(const & id, const & title, int issueNumber, const & publisher)
     int getIssueNumber() const
     const & getPublisher() const
     getDetails() const
-    int issueNumber_;
-    auto publisher_;
 };
 class LibraryCatalog {
     void addItem(auto item)
@@ -46,7 +38,6 @@ class LibraryCatalog {
     getAvailableItems() const
     searchByTitle(const & searchTerm) const
     size_t getItemCount() const
-    auto items_;
 };
 struct TitleComparator {
     bool operator()(const LibraryItem* a, const LibraryItem* b) const
@@ -57,7 +48,6 @@ class LibraryUtils {
     static filterItems(const & items, Predicate pred)
     template<typename ItemType>
     static size_t countItemsByType(const & items)
-    LibraryUtils()
 };
 class FileManager {
     FileManager(const & filename)

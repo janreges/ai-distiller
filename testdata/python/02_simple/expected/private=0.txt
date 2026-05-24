@@ -1,6 +1,9 @@
 <file path="source.py">
 
 class User:
+    user_id = user_id
+    username = username
+    email = email
     __init__(self, user_id: int, username: str, email: str)
     deactivate(self) -> None
     get_status(self) -> str

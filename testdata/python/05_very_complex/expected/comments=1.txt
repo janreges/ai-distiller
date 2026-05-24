@@ -6,6 +6,8 @@ T = TypeVar('T')
 # Descriptor for type-validated settings
 
 class ValidatedSetting:
+    setting_type = setting_type
+    default = default
     __init__(self, setting_type: Type[T], default: T)
     __set_name__(self, owner, name)
     __get__(self, instance, owner) -> T
@@ -21,6 +23,10 @@ class AppConfig:
     timeout = ValidatedSetting(int, 30)
     retries = ValidatedSetting(int, 3)
     api_key = ValidatedSetting(str, "")
+    timeout = 45
+    timeout = self._temp_settings['timeout']
+    retries = self._temp_settings['retries']
+    api_key = self._temp_settings['api_key']
     __init__(self)
     load_from_remote(self, url: str) -> None
     __enter__(self)

@@ -3,6 +3,10 @@
 
 namespace Constructs.Basic01;
 public static class StringExtensions {
-    public static string ToTitleCase(string input) { }
+    public static string ToTitleCase(string input) {
+        if (string.IsNullOrEmpty(input))
+            return input;
+        return char.ToUpper(input[0]) + input.Substring(1).ToLower();
+    }
 }
 </file>

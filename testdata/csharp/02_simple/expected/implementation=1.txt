@@ -6,23 +6,37 @@ public class BankAccount {
     public dynamic BalanceChanged;
     public string AccountNumber { get; }
     public decimal Balance { get; set; }
-    public BankAccount(string accountNumber, decimal openingBalance) { }
-    public void Deposit(decimal amount) { }
-    public void Withdraw(decimal amount) { }
-    public override string ToString() { }
+    public BankAccount(string accountNumber, decimal openingBalance) => (AccountNumber, Balance) = (accountNumber, openingBalance);
+    public void Deposit(decimal amount) {
+        if (amount <= 0) throw new ArgumentOutOfRangeException(nameof(amount));
+        Balance += amount;
+    }
+    public void Withdraw(decimal amount) {
+        if (amount > Balance) throw new InvalidOperationException("Insufficient funds.");
+        Balance -= amount;
+    }
+    public override string ToString() => $"{AccountNumber}: {Balance:C}";
 }
 struct Money {
-    public Money(decimal amount, string currency) { }
+    public Money(decimal amount, string currency) => (Amount, Currency) = (amount, currency);
     public decimal Amount { get; }
     public string Currency { get; }
-    public bool Equals(Money other) { }
-    public override int GetHashCode() { }
-    public override string ToString() { }
-    public static Money operator +(Money left, Money right) { }
+    public bool Equals(Money other) => Amount == other.Amount && Currency == other.Currency;
+    public override int GetHashCode() => HashCode.Combine(Amount, Currency);
+    public override string ToString() => $"{Amount:0.00} {Currency}";
+    public static Money operator +(Money left, Money right) {
+        if (left.Currency != right.Currency)
+            throw new InvalidOperationException("Cannot add different currencies");
+        return new Money(left.Amount + right.Amount, left.Currency);
+    }
 }
 public class SavingsAccount : BankAccount {
     public decimal InterestRate { get; set; }
-    public SavingsAccount(string accountNumber, decimal interestRate, decimal openingBalance) { }
-    public void AddMonthlyInterest() { }
+    public SavingsAccount(string accountNumber, decimal interestRate, decimal openingBalance) {
+        InterestRate = interestRate;
+    }
+    public void AddMonthlyInterest() {
+        ProcessInterest(InterestRate / 12 / 100);
+    }
 }
 </file>

@@ -1,28 +1,70 @@
 <file path="source.cs">
 #nullable enable
 
+using System.Collections.Generic;
 using System.Threading.Tasks;
 namespace Constructs.Complex04;
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false)]
 public sealed class StringRangeAttribute : ValidationAttribute {
     public int Min { get; }
     public int Max { get; }
-    public StringRangeAttribute(int min, int max) { }
-    public override bool IsValid(object? value) { }
+    public StringRangeAttribute(int min, int max) => (Min, Max) = (min, max);
+    public override bool IsValid(object? value) => value is string s && s.Length is >= 0 and var len
+                             && len >= Min && len <= Max;
 }
 public static class ModelValidatorBuilder {
-    public static Func<TModel, bool> Build<TModel>() { }
+    public static Func<TModel, bool> Build<TModel>() {
+        // Parameter representing the object to validate.
+        var param = Expression.Parameter(typeof(TModel), "model");
+        var conditions = new List<Expression>();
+        foreach (var prop in typeof(TModel).GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            var attr = prop.GetCustomAttribute<StringRangeAttribute>();
+            if (attr is null) continue;
+            // Generate: ((string)model.Prop).Length >= Min && ... <= Max
+            var propAccess   = Expression.Property(param, prop);
+            var notNull      = Expression.NotEqual(propAccess, Expression.Constant(null, typeof(string)));
+            var lengthProp   = Expression.Property(propAccess, nameof(string.Length));
+            var greaterEqMin = Expression.GreaterThanOrEqual(lengthProp, Expression.Constant(attr.Min));
+            var lessEqMax    = Expression.LessThanOrEqual (lengthProp, Expression.Constant(attr.Max));
+            var condition    = Expression.AndAlso(notNull,
+                               Expression.AndAlso(greaterEqMin, lessEqMax));
+            conditions.Add(condition);
+        }
+        var body = conditions.Any()
+            ? conditions.Aggregate(Expression.AndAlso)
+            : Expression.Constant(true);
+        var lambda = Expression.Lambda<Func<TModel, bool>>(body, param);
+        return lambda.Compile();
+    }
 }
 public record SignupRequest(
     [property: StringRange(3,12)] string Username,
     [property: StringRange(8,64)] string Password) {
-    public bool IsPasswordStrong() { }
+    public bool IsPasswordStrong() {
+        return _hasUpperCase() && _hasLowerCase() && _hasNumber();
+    }
 }
 public static class Demo {
-    public static async Task ConsumeAsync(IAsyncEnumerable<SignupRequest> inputs) { }
+    public static async Task ConsumeAsync(IAsyncEnumerable<SignupRequest> inputs) {
+        var isValid = ModelValidatorBuilder.Build<SignupRequest>();
+        await foreach (var req in inputs)
+        {
+            Console.WriteLine(isValid(req)
+                ? $"✓ Accepted {req.Username}"
+                : $"✗ Rejected {req.Username}");
+        }
+    }
 }
 public class ServiceLocator {
-    public void Register<T>(T instance) where T : class { }
-    public T Resolve<T>() where T : class { }
+    public void Register<T>(T instance) where T : class {
+        _services[typeof(T)] = instance;
+    }
+    public T Resolve<T>() where T : class {
+        if (_services.TryGetValue(typeof(T), out var service))
+            return (T)service;
+        // Try to create instance using reflection
+        return CreateInstance<T>();
+    }
 }
 </file>
