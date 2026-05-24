@@ -84,7 +84,8 @@ async function extractArchive(archivePath, destDir, platform) {
     fs.mkdirSync(destDir, { recursive: true });
   }
   
-  if (platform === 'windows') {
+  // Accept both the mapped value ('windows') and the raw os.platform() value ('win32')
+  if (platform === 'windows' || platform === 'win32') {
     // For Windows, use built-in PowerShell or fallback to manual extraction
     try {
       // Try PowerShell first (available on all modern Windows)
