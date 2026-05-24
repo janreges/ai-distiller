@@ -477,17 +477,61 @@ func (f *CSharpFormatter) formatFunction(fn *ir.DistilledFunction, indent int) s
 		}
 	}
 
-	// Add semicolon for method declarations without implementation
+	// Render the method body when present, otherwise emit a bare declaration.
 	if fn.Implementation == "" {
-		signature += ";"
-	} else {
-		// Add implementation with braces
-		signature += " {"
-		// Implementation would go here
-		signature += " }"
+		return signature + ";"
 	}
 
-	return signature
+	impl := strings.TrimSpace(fn.Implementation)
+
+	// Expression-bodied member: "=> expr"
+	if strings.HasPrefix(impl, "=>") {
+		if !strings.HasSuffix(impl, ";") {
+			impl += ";"
+		}
+		return signature + " " + impl
+	}
+
+	// Block body. The parser captures the whole block including its braces, so
+	// strip the outer braces and re-indent the inner statements to match the
+	// nesting of the distilled output (preserving relative indentation).
+	body := strings.Trim(strings.TrimSuffix(strings.TrimPrefix(impl, "{"), "}"), "\n")
+	lines := strings.Split(body, "\n")
+
+	minIndent := -1
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		lead := len(line) - len(strings.TrimLeft(line, " \t"))
+		if minIndent == -1 || lead < minIndent {
+			minIndent = lead
+		}
+	}
+	if minIndent < 0 {
+		minIndent = 0
+	}
+
+	var sb strings.Builder
+	sb.WriteString(signature)
+	sb.WriteString(" {")
+	bodyIndent := strings.Repeat("    ", indent+1)
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if len(line) >= minIndent {
+			line = line[minIndent:]
+		}
+		sb.WriteString("\n")
+		sb.WriteString(bodyIndent)
+		sb.WriteString(strings.TrimRight(line, " \t"))
+	}
+	sb.WriteString("\n")
+	sb.WriteString(indentStr)
+	sb.WriteString("}")
+
+	return sb.String()
 }
 
 func (f *CSharpFormatter) formatField(field *ir.DistilledField, indent int) string {

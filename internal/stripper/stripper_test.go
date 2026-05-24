@@ -257,3 +257,64 @@ func TestVisit(t *testing.T) {
 		})
 	}
 }
+// TestVisitPackageStripsChildren verifies that declarations nested inside a
+// DistilledPackage (e.g. C# namespaces) are stripped by visibility and
+// implementation options. Before the visitPackage handler existed, package
+// subtrees fell through to visitChildren and were returned unchanged (issue #3).
+func TestVisitPackageStripsChildren(t *testing.T) {
+	makeFile := func() *ir.DistilledFile {
+		return &ir.DistilledFile{
+			Path:     "demo.cs",
+			Language: "csharp",
+			Children: []ir.DistilledNode{
+				&ir.DistilledPackage{
+					Name: "Demo",
+					Children: []ir.DistilledNode{
+						&ir.DistilledClass{
+							Name:       "Hidden",
+							Visibility: ir.VisibilityInternal,
+						},
+						&ir.DistilledClass{
+							Name:       "Calc",
+							Visibility: ir.VisibilityPublic,
+							Children: []ir.DistilledNode{
+								&ir.DistilledFunction{
+									Name:           "Add",
+									Visibility:     ir.VisibilityPublic,
+									Implementation: "{ return a + b; }",
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	t.Run("internal class inside namespace is removed", func(t *testing.T) {
+		s := New(Options{RemoveInternalOnly: true})
+		result := makeFile().Accept(s).(*ir.DistilledFile)
+
+		pkg := result.Children[0].(*ir.DistilledPackage)
+		assert.Len(t, pkg.Children, 1, "internal class should be stripped from package")
+		assert.Equal(t, "Calc", pkg.Children[0].(*ir.DistilledClass).Name)
+	})
+
+	t.Run("implementation inside namespace is stripped", func(t *testing.T) {
+		s := New(Options{RemoveImplementations: true})
+		result := makeFile().Accept(s).(*ir.DistilledFile)
+
+		pkg := result.Children[0].(*ir.DistilledPackage)
+		calc := pkg.Children[1].(*ir.DistilledClass)
+		method := calc.Children[0].(*ir.DistilledFunction)
+		assert.Empty(t, method.Implementation, "method body inside namespace should be stripped")
+	})
+
+	t.Run("no options preserves package subtree", func(t *testing.T) {
+		s := New(Options{})
+		// HasAnyOption is false, but Accept should still round-trip the package.
+		result := makeFile().Accept(s).(*ir.DistilledFile)
+		pkg := result.Children[0].(*ir.DistilledPackage)
+		assert.Len(t, pkg.Children, 2)
+	})
+}

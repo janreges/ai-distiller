@@ -50,7 +50,10 @@ func (s *Stripper) Visit(node ir.DistilledNode) ir.DistilledNode {
 	switch n := node.(type) {
 	case *ir.DistilledFile:
 		return s.visitFile(n)
-		
+
+	case *ir.DistilledPackage:
+		return s.visitPackage(n)
+
 	case *ir.DistilledComment:
 		// Always preserve API docblocks (containing @property, @method, etc.)
 		if n.Extensions != nil && n.Extensions.PHP != nil && n.Extensions.PHP.IsAPIDocblock {
@@ -131,7 +134,29 @@ func (s *Stripper) visitFile(n *ir.DistilledFile) *ir.DistilledFile {
 	
 	// Post-process to remove orphaned docstrings
 	result.Children = s.removeOrphanedDocstrings(result.Children)
-	
+
+	return result
+}
+
+// visitPackage strips the children of a package/namespace node. Without this,
+// languages that nest their declarations inside a DistilledPackage (e.g. C#
+// namespaces) fell through to visitChildren, which returned the subtree
+// unchanged — so visibility and implementation filtering never applied to
+// anything inside the namespace.
+func (s *Stripper) visitPackage(n *ir.DistilledPackage) ir.DistilledNode {
+	result := &ir.DistilledPackage{
+		BaseNode: n.BaseNode,
+		Name:     n.Name,
+	}
+
+	for _, child := range n.Children {
+		if visited := child.Accept(s); visited != nil {
+			result.Children = append(result.Children, visited)
+		}
+	}
+
+	result.Children = s.removeOrphanedDocstrings(result.Children)
+
 	return result
 }
 
