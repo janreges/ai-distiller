@@ -428,9 +428,17 @@ func shouldIncludeFile(filePath string, includePatterns, excludePatterns []strin
 				return false
 			}
 		} else {
-			// Simple filename pattern
-			if matched, _ := filepath.Match(pattern, filepath.Base(filePath)); matched {
-				return false
+			// Simple pattern without a path separator. Match it against every
+			// path segment (the basename is the last segment) so that a pattern
+			// like "*migrations*" also excludes files inside a directory named
+			// "migrations", not only files whose basename matches (issue #9).
+			for _, segment := range strings.Split(normalizedPath, "/") {
+				if segment == "" {
+					continue
+				}
+				if matched, _ := filepath.Match(pattern, segment); matched {
+					return false
+				}
 			}
 		}
 	}
