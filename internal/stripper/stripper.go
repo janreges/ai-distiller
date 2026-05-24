@@ -49,6 +49,13 @@ func (o Options) HasAnyOption() bool {
 // Stripper removes specified elements from the IR based on options
 type Stripper struct {
 	options Options
+
+	// inExpandedScope is true while traversing the children of a type
+	// (class/struct) whose name matched an --expand pattern, so all of its
+	// methods keep their implementation. Saved/restored around each scope to
+	// support nesting. Safe as instance state: a Stripper is created per file
+	// and the traversal is synchronous.
+	inExpandedScope bool
 }
 
 // New creates a new stripper with the given options
@@ -203,8 +210,9 @@ func (s *Stripper) visitFunction(n *ir.DistilledFunction) ir.DistilledNode {
 	}
 	
 	// Strip implementation if requested, unless this symbol is explicitly
-	// expanded via --expand.
-	if s.options.RemoveImplementations && !s.options.shouldExpand(n.Name) {
+	// expanded via --expand (by its own name, or by being inside a type whose
+	// name matched).
+	if s.options.RemoveImplementations && !s.options.shouldExpand(n.Name) && !s.inExpandedScope {
 		result.Implementation = ""
 	}
 	
@@ -239,14 +247,20 @@ func (s *Stripper) visitClass(n *ir.DistilledClass) ir.DistilledNode {
 		Description: n.Description,
 		APIDocblock: n.APIDocblock,
 	}
-	
-	// Visit children
+
+	// Visit children. If this class name matched --expand, keep all of its
+	// methods' implementations.
+	prevExpandedScope := s.inExpandedScope
+	if s.options.shouldExpand(n.Name) {
+		s.inExpandedScope = true
+	}
 	for _, child := range n.Children {
 		if visited := child.Accept(s); visited != nil {
 			result.Children = append(result.Children, visited)
 		}
 	}
-	
+	s.inExpandedScope = prevExpandedScope
+
 	// Post-process to remove orphaned docstrings
 	result.Children = s.removeOrphanedDocstrings(result.Children)
 	
@@ -298,14 +312,20 @@ func (s *Stripper) visitStruct(n *ir.DistilledStruct) ir.DistilledNode {
 		Visibility: n.Visibility,
 		TypeParams: n.TypeParams,
 	}
-	
-	// Visit children
+
+	// Visit children. If this struct name matched --expand, keep all of its
+	// methods' implementations.
+	prevExpandedScope := s.inExpandedScope
+	if s.options.shouldExpand(n.Name) {
+		s.inExpandedScope = true
+	}
 	for _, child := range n.Children {
 		if visited := child.Accept(s); visited != nil {
 			result.Children = append(result.Children, visited)
 		}
 	}
-	
+	s.inExpandedScope = prevExpandedScope
+
 	return result
 }
 

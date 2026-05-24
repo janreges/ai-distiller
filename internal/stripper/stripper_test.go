@@ -372,3 +372,41 @@ func TestExpandSymbols(t *testing.T) {
 		}
 	})
 }
+
+// TestExpandSymbols_ClassLevel verifies that matching a class name with --expand
+// keeps the implementation of ALL methods inside that class, while methods of
+// non-matching classes are still stripped to signatures.
+func TestExpandSymbols_ClassLevel(t *testing.T) {
+	mkClass := func(name string) *ir.DistilledClass {
+		return &ir.DistilledClass{
+			Name:       name,
+			Visibility: ir.VisibilityPublic,
+			Children: []ir.DistilledNode{
+				&ir.DistilledFunction{Name: "Get", Visibility: ir.VisibilityPublic, Implementation: "{ get }"},
+				&ir.DistilledFunction{Name: "Set", Visibility: ir.VisibilityPublic, Implementation: "{ set }"},
+			},
+		}
+	}
+	file := &ir.DistilledFile{
+		Path:     "demo.cs",
+		Children: []ir.DistilledNode{mkClass("UserService"), mkClass("OrderService")},
+	}
+
+	s := New(Options{RemoveImplementations: true, ExpandSymbols: []string{"UserService"}})
+	result := file.Accept(s).(*ir.DistilledFile)
+
+	classes := map[string]*ir.DistilledClass{}
+	for _, c := range result.Children {
+		cl := c.(*ir.DistilledClass)
+		classes[cl.Name] = cl
+	}
+
+	for _, m := range classes["UserService"].Children {
+		fn := m.(*ir.DistilledFunction)
+		assert.NotEmpty(t, fn.Implementation, "matched class: UserService.%s body should be kept", fn.Name)
+	}
+	for _, m := range classes["OrderService"].Children {
+		fn := m.(*ir.DistilledFunction)
+		assert.Empty(t, fn.Implementation, "non-matched class: OrderService.%s body should be stripped", fn.Name)
+	}
+}
