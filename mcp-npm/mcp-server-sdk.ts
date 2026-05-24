@@ -200,6 +200,7 @@ class AidDistillerServer {
           include_comments: z.boolean().optional().describe("Include comments (default: false)"),
           include_fields: z.boolean().optional().describe("Include fields/properties (default: true)"),
           include_methods: z.boolean().optional().describe("Include methods/functions (default: true)"),
+          expand: z.string().optional().describe("Keep full implementation ONLY for symbols whose name matches these globs (comma-separated, e.g. 'GetUser,*Service*'); matches a function/method name, or a class/struct name to expand all its methods. Signatures everywhere else."),
           output_format: z.enum(["text", "md", "jsonl", "json-structured", "xml"]).optional().describe("Output format (default: text)")
         }
       },
@@ -215,7 +216,8 @@ class AidDistillerServer {
         if (params.include_comments) args.push('--comments=1');
         if (params.include_fields === false) args.push('--fields=0');
         if (params.include_methods === false) args.push('--methods=0');
-        
+        if (params.expand) args.push(`--expand=${params.expand}`);
+
         if (isDebug) console.error(`[AID MCP] distill_file final args: ${JSON.stringify(args)}`);
         const result = await this.executeAidCommand(args);
         
@@ -253,6 +255,7 @@ class AidDistillerServer {
           include_methods: z.boolean().optional().describe("Include methods/functions (default: true)"),
           include_patterns: z.string().optional().describe("File patterns to include (comma-separated, e.g., '*.go,*.py')"),
           exclude_patterns: z.string().optional().describe("File patterns to exclude (comma-separated, e.g., '*test*,vendor/**')"),
+          expand: z.string().optional().describe("Keep full implementation ONLY for symbols whose name matches these globs (comma-separated, e.g. 'GetUser,*Service*'); matches a function/method name, or a class/struct name to expand all its methods. Signatures everywhere else."),
           output_format: z.enum(["text", "md", "jsonl", "json-structured", "xml"]).optional().describe("Output format (default: text)")
         }
       },
@@ -271,7 +274,8 @@ class AidDistillerServer {
         if (params.include_methods === false) args.push('--methods=0');
         if (params.include_patterns) args.push(`--include=${params.include_patterns}`);
         if (params.exclude_patterns) args.push(`--exclude=${params.exclude_patterns}`);
-        
+        if (params.expand) args.push(`--expand=${params.expand}`);
+
         if (isDebug) console.error(`[AID MCP] distill_directory final args: ${JSON.stringify(args)}`);
         const result = await this.executeAidCommand(args);
         
@@ -307,6 +311,7 @@ class AidDistillerServer {
           include_comments: z.boolean().optional().describe("Include comments (default: false)"),
           include_fields: z.boolean().optional().describe("Include fields/properties (default: true)"),
           include_methods: z.boolean().optional().describe("Include methods/functions (default: true)"),
+          expand: z.string().optional().describe("Keep full implementation ONLY for symbols whose name matches these globs (comma-separated, e.g. 'GetUser,*Service*'); matches a function/method name, or a class/struct name to expand all its methods. Signatures everywhere else."),
           output_format: z.enum(["text", "md", "jsonl", "json-structured", "xml"]).optional().describe("Output format (default: text)")
         }
       },
@@ -326,7 +331,8 @@ class AidDistillerServer {
         if (params.include_comments) args.push('--comments=1');
         if (params.include_fields === false) args.push('--fields=0');
         if (params.include_methods === false) args.push('--methods=0');
-        
+        if (params.expand) args.push(`--expand=${params.expand}`);
+
         if (isDebug) console.error(`[AID MCP] distill_with_dependencies final args: ${JSON.stringify(args)}`);
         const result = await this.executeAidCommand(args);
         
