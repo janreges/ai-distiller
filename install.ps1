@@ -29,19 +29,19 @@ function Test-CommandExists {
 
 # Main installation
 try {
-    # Detect architecture
-    $Arch = switch ((Get-CimInstance Win32_OperatingSystem).OSArchitecture) {
-        "64-bit" { "amd64" }
-        "32-bit" { 
-            Write-Host-Colored "Error: 32-bit Windows is not supported" "Red"
-            exit 1
-        }
-        "ARM 64-bit" { "arm64" }
-        default {
-            Write-Host-Colored "Error: Unknown architecture: $_" "Red"
-            exit 1
-        }
+    # Detect architecture.
+    # Note: (Get-CimInstance Win32_OperatingSystem).OSArchitecture is *localized*
+    # (e.g. "64-bit", "64 bits", "64 位"), so matching it by string is unreliable.
+    # Rely on locale-independent sources instead. PROCESSOR_ARCHITEW6432 is set when
+    # running inside a 32-bit (WOW64) process on a 64-bit OS and holds the real arch.
+    $ProcArch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+
+    if (-not [Environment]::Is64BitOperatingSystem) {
+        Write-Host-Colored "Error: 32-bit Windows is not supported" "Red"
+        exit 1
     }
+
+    $Arch = if ($ProcArch -match 'ARM') { "arm64" } else { "amd64" }
 
     # Construct URLs
     $ArchiveName = "aid-windows-$Arch-v$Version.zip"
