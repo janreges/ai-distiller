@@ -64,7 +64,7 @@ The new flag system provides precise control over what to include:
 - `--comments=0/1` (default: 0) - Include comments
 - `--docstrings=0/1` (default: 1) - Include documentation comments
 - `--implementation=0/1` (default: 0) - Include function/method bodies
-- `--expand "<glob>"` (default: none) - Keep full implementation ONLY for symbols whose name matches (comma-separated / repeatable). Matches a function/method name, or a class/struct name to expand all of its methods. Signatures everywhere else.
+- `--expand "<glob>"` (default: none) - Keep full implementation ONLY for symbols whose name matches (comma-separated / repeatable). Matches a function/method name; matching a type name expands the methods nested inside it (nesting languages like Python/TypeScript/Java/C#). For Go-style file-level receiver methods, match the method name. Signatures everywhere else.
 - `--imports=0/1` (default: 1) - Include import statements
 - `--annotations=0/1` (default: 1) - Include decorators/annotations
 - `--fields=0/1` (default: 1) - Include class fields and properties
@@ -101,7 +101,7 @@ aid src/ --include-only=public,protected,imports
 aid src/ --fields=0 --implementation=0
 
 # Signatures everywhere, but full bodies only for selected symbols (agent context building)
-aid src/ --expand "GetUser"          # full body of GetUser, or all methods of class/struct GetUser
+aid src/ --expand "GetUser"          # full body of GetUser (or, in nesting languages, all methods of a type named GetUser)
 aid src/ --expand "*Service*,run"    # multiple glob patterns
 
 # Extract only data structures (no method noise)

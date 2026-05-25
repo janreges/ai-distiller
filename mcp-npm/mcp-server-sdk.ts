@@ -200,7 +200,7 @@ class AidDistillerServer {
           include_comments: z.boolean().optional().describe("Include comments (default: false)"),
           include_fields: z.boolean().optional().describe("Include fields/properties (default: true)"),
           include_methods: z.boolean().optional().describe("Include methods/functions (default: true)"),
-          expand: z.string().optional().describe("Keep full implementation ONLY for symbols whose name matches these globs (comma-separated, e.g. 'GetUser,*Service*'); matches a function/method name, or a class/struct name to expand all its methods. Signatures everywhere else."),
+          expand: z.string().optional().describe("Keep full implementation ONLY for symbols whose name matches these globs (comma-separated, e.g. 'GetUser,*Service*'). Matches a function/method name anywhere; matching a type name expands the methods nested inside that type's body (works for languages that nest methods under the type, e.g. Python/TypeScript/Java/C#). For languages where methods are file-level with a receiver (e.g. Go), match the method name. Signatures everywhere else."),
           output_format: z.enum(["text", "md", "jsonl", "json-structured", "xml"]).optional().describe("Output format (default: text)")
         }
       },
@@ -255,7 +255,7 @@ class AidDistillerServer {
           include_methods: z.boolean().optional().describe("Include methods/functions (default: true)"),
           include_patterns: z.string().optional().describe("File patterns to include (comma-separated, e.g., '*.go,*.py')"),
           exclude_patterns: z.string().optional().describe("File patterns to exclude (comma-separated, e.g., '*test*,vendor/**')"),
-          expand: z.string().optional().describe("Keep full implementation ONLY for symbols whose name matches these globs (comma-separated, e.g. 'GetUser,*Service*'); matches a function/method name, or a class/struct name to expand all its methods. Signatures everywhere else."),
+          expand: z.string().optional().describe("Keep full implementation ONLY for symbols whose name matches these globs (comma-separated, e.g. 'GetUser,*Service*'). Matches a function/method name anywhere; matching a type name expands the methods nested inside that type's body (works for languages that nest methods under the type, e.g. Python/TypeScript/Java/C#). For languages where methods are file-level with a receiver (e.g. Go), match the method name. Signatures everywhere else."),
           output_format: z.enum(["text", "md", "jsonl", "json-structured", "xml"]).optional().describe("Output format (default: text)")
         }
       },
@@ -311,7 +311,7 @@ class AidDistillerServer {
           include_comments: z.boolean().optional().describe("Include comments (default: false)"),
           include_fields: z.boolean().optional().describe("Include fields/properties (default: true)"),
           include_methods: z.boolean().optional().describe("Include methods/functions (default: true)"),
-          expand: z.string().optional().describe("Keep full implementation ONLY for symbols whose name matches these globs (comma-separated, e.g. 'GetUser,*Service*'); matches a function/method name, or a class/struct name to expand all its methods. Signatures everywhere else."),
+          expand: z.string().optional().describe("Keep full implementation ONLY for symbols whose name matches these globs (comma-separated, e.g. 'GetUser,*Service*'). Matches a function/method name anywhere; matching a type name expands the methods nested inside that type's body (works for languages that nest methods under the type, e.g. Python/TypeScript/Java/C#). For languages where methods are file-level with a receiver (e.g. Go), match the method name. Signatures everywhere else."),
           output_format: z.enum(["text", "md", "jsonl", "json-structured", "xml"]).optional().describe("Output format (default: text)")
         }
       },

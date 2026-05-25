@@ -670,7 +670,7 @@ aid <path> [OPTIONS]
 | `--comments` | 0\|1 | `0` | Include inline and block comments |
 | `--docstrings` | 0\|1 | `1` | Include documentation comments (docstrings, JSDoc, etc.) |
 | `--implementation` | 0\|1 | `0` | Include function/method bodies (implementation details) |
-| `--expand` | String | *(none)* | Keep full implementation **only** for symbols whose name matches these globs (comma-separated / repeatable). Matches a function/method name, or a class/struct name to expand all of its methods. e.g. `--expand "GetUser"`, `--expand "*Service*"`. Signatures everywhere else — great for agent-driven context building |
+| `--expand` | String | *(none)* | Keep full implementation **only** for symbols whose name matches these globs (comma-separated / repeatable). Matches a function/method name; matching a type name expands the methods nested inside it (Python/TypeScript/Java/C# etc.). For Go-style file-level receiver methods, match the method name. e.g. `--expand "GetUser"`, `--expand "*Service*"`. Signatures everywhere else — great for agent-driven context building |
 | `--imports` | 0\|1 | `1` | Include import/require statements |
 | `--annotations` | 0\|1 | `1` | Include decorators and annotations |
 | `--fields` | 0\|1 | `1` | Include class fields and properties |

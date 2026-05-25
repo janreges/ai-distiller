@@ -41,7 +41,7 @@ jobs:
         # cmd/aid-validate depends on a package that is intentionally not part of
         # the build (see Makefile, which excludes it too). `go list -e` tolerates
         # that broken package while still listing all others.
-        run: go test $(go list -e ./... | grep -vE '/tools/|/test_project/|/cmd/aid-validate')
+        run: CGO_ENABLED=1 go test $(go list -e ./... | grep -vE '/tools/|/test_project/|/cmd/aid-validate')
 
   # ---------------------------------------------------------------------------
   # Build CGO-enabled binaries for every platform and package them as the
@@ -217,15 +217,28 @@ jobs:
   publish-npm:
     needs: [build, release]
     runs-on: ubuntu-latest
+    # Map the secret to an env var so steps can guard on its presence. When the
+    # token is missing we skip publishing gracefully (the GitHub Release has
+    # already succeeded) instead of hard-failing the whole run.
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
+      - name: Skip notice (no npm token)
+        if: env.NPM_TOKEN == ''
+        run: |
+          echo "::warning::NPM_TOKEN secret is not set — skipping npm publish. The GitHub Release succeeded; publish manually with mcp-npm/publish.sh, or set the NPM_TOKEN secret and re-run."
+
       - uses: actions/checkout@v4
+        if: env.NPM_TOKEN != ''
 
       - uses: actions/setup-node@v4
+        if: env.NPM_TOKEN != ''
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Verify the release binary is downloadable
+        if: env.NPM_TOKEN != ''
         run: |
           set -euo pipefail
           VERSION="${{ needs.release.outputs.version }}"
@@ -235,6 +248,7 @@ jobs:
           echo "OK: release binary is reachable"
 
       - name: Sync package version and binary version
+        if: env.NPM_TOKEN != ''
         working-directory: mcp-npm
         run: |
           set -euo pipefail
@@ -245,12 +259,14 @@ jobs:
           grep "const AID_VERSION" scripts/postinstall.js
 
       - name: Install and build
+        if: env.NPM_TOKEN != ''
         working-directory: mcp-npm
         run: |
           npm install
           npm run build
 
       - name: Publish to npm
+        if: env.NPM_TOKEN != ''
         working-directory: mcp-npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
