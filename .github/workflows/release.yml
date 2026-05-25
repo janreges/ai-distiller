@@ -79,11 +79,14 @@ jobs:
             cc: x86_64-w64-mingw32-gcc
             apt: gcc-mingw-w64-x86-64
           - os: darwin
-            arch: amd64
-            runner: macos-13   # Intel host -> native amd64 cgo build
-          - os: darwin
             arch: arm64
             runner: macos-14   # Apple Silicon host -> native arm64 cgo build
+          - os: darwin
+            arch: amd64
+            # Cross-compile amd64 on the Apple Silicon runner (macOS clang is a
+            # universal toolchain). Avoids the deprecated/scarce Intel runner.
+            runner: macos-14
+            cc: "clang -arch x86_64"
     steps:
       - uses: actions/checkout@v4
         with:
