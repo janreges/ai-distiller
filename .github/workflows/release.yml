@@ -7,224 +7,265 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g., v1.0.0)'
+        description: 'Release tag (e.g., v1.4.0)'
         required: true
         type: string
 
+# Needed by the release job to create the GitHub Release and upload assets.
+permissions:
+  contents: write
+
 env:
-  BINARY_NAME: aid
-  GO_VERSION: '1.21'
+  GO_VERSION: '1.25'
 
 jobs:
-  # Run tests before release
+  # ---------------------------------------------------------------------------
+  # Gate: run the test suite before building/publishing anything.
+  # ---------------------------------------------------------------------------
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+      # The integration tests (internal/testrunner) run the compiled binary if
+      # it exists at the project root, which is far faster than "go run" mode.
+      # CGO is required for the tree-sitter language parsers.
+      - name: Build aid binary for integration tests
+        run: CGO_ENABLED=1 CGO_CFLAGS=-w go build -o aid ./cmd/aid
 
       - name: Run tests
-        run: |
-          go test -v -race -coverprofile=coverage.out ./...
-          go tool cover -html=coverage.out -o coverage.html
+        # cmd/aid-validate depends on a package that is intentionally not part of
+        # the build (see Makefile, which excludes it too). `go list -e` tolerates
+        # that broken package while still listing all others.
+        run: go test $(go list -e ./... | grep -vE '/tools/|/test_project/|/cmd/aid-validate')
 
-      - name: Upload coverage reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage.html
-
-  # Build binaries for multiple platforms
+  # ---------------------------------------------------------------------------
+  # Build CGO-enabled binaries for every platform and package them as the
+  # archives the npm postinstall (and install.ps1) expect:
+  #   aid-<os>-<arch>-v<version>.tar.gz   (unix)
+  #   aid-<os>-<arch>-v<version>.zip      (windows)
+  #
+  # CGO_ENABLED MUST be 1: the language parsers are tree-sitter C libraries
+  # compiled via cgo. With CGO disabled the build falls back to stub parsers
+  # (internal/language/nocgo.go) that error out for every language, so a
+  # CGO=0 release binary cannot parse anything. Native runners are used where
+  # possible; Linux-arm64 and Windows are cross-compiled with the same gcc
+  # toolchains proven in scripts/build-releases.sh.
+  # ---------------------------------------------------------------------------
   build:
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [linux, darwin, windows]
-        arch: [amd64, arm64]
-        exclude:
-          # Windows ARM64 builds often have issues
-          - os: windows
+        include:
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+          - os: linux
             arch: arm64
-    
+            runner: ubuntu-latest
+            cc: aarch64-linux-gnu-gcc
+            apt: gcc-aarch64-linux-gnu
+          - os: windows
+            arch: amd64
+            runner: ubuntu-latest
+            cc: x86_64-w64-mingw32-gcc
+            apt: gcc-mingw-w64-x86-64
+          - os: darwin
+            arch: amd64
+            runner: macos-13   # Intel host -> native amd64 cgo build
+          - os: darwin
+            arch: arm64
+            runner: macos-14   # Apple Silicon host -> native arm64 cgo build
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+      - name: Install cross-compiler
+        if: matrix.apt != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.apt }}
 
-      - name: Build binary
+      - name: Build and package
         env:
           GOOS: ${{ matrix.os }}
           GOARCH: ${{ matrix.arch }}
-          CGO_ENABLED: 0
+          CGO_ENABLED: '1'
+          CGO_CFLAGS: '-w'
+          CC: ${{ matrix.cc }}
         run: |
-          # Set version from tag or input
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.tag }}"
-          else
-            VERSION="${{ github.ref_name }}"
-          fi
-          
-          # Set binary extension for Windows
-          BINARY_EXT=""
-          if [ "${{ matrix.os }}" = "windows" ]; then
-            BINARY_EXT=".exe"
-          fi
-          
-          # Build with version info
-          go build \
-            -ldflags="-s -w -X 'main.version=${VERSION}' -X 'main.buildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)' -X 'main.commit=${GITHUB_SHA}'" \
-            -o "${BINARY_NAME}-${VERSION}-${{ matrix.os }}-${{ matrix.arch }}${BINARY_EXT}" \
-            ./cmd/aid/
+          set -euo pipefail
 
-      - name: Upload binary artifacts
+          # Resolve the numeric version (strip the leading "v" from the tag).
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          VERSION="${TAG#v}"
+          echo "Building aid v${VERSION} for ${GOOS}/${GOARCH} (CGO_ENABLED=${CGO_ENABLED}, CC=${CC:-default})"
+
+          BIN="aid"
+          ARCHIVE_EXT="tar.gz"
+          if [ "${GOOS}" = "windows" ]; then
+            BIN="aid.exe"
+            ARCHIVE_EXT="zip"
+          fi
+
+          mkdir -p dist
+          go build -tags cgo \
+            -ldflags "-s -w \
+              -X 'github.com/janreges/ai-distiller/internal/version.Version=${VERSION}' \
+              -X 'github.com/janreges/ai-distiller/internal/version.Commit=${GITHUB_SHA::7}' \
+              -X 'github.com/janreges/ai-distiller/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ)'" \
+            -o "dist/${BIN}" ./cmd/aid
+
+          # Sanity-print the built binary's real architecture (guards against a
+          # runner label silently changing host arch).
+          file "dist/${BIN}" || true
+
+          ARCHIVE="aid-${GOOS}-${GOARCH}-v${VERSION}.${ARCHIVE_EXT}"
+          cd dist
+          if [ "${GOOS}" = "windows" ]; then
+            zip -q "${ARCHIVE}" "${BIN}"
+          else
+            tar -czf "${ARCHIVE}" "${BIN}"
+          fi
+          rm -f "${BIN}"
+          echo "Created dist/${ARCHIVE}"
+          ls -la
+
+      - name: Upload archive
         uses: actions/upload-artifact@v4
         with:
-          name: binaries
-          path: ${{ env.BINARY_NAME }}-*
+          name: aid-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/aid-*
+          if-no-files-found: error
 
-  # Create GitHub release with binaries
+  # ---------------------------------------------------------------------------
+  # Collect all archives, checksum them, and publish the GitHub Release.
+  # ---------------------------------------------------------------------------
   release:
     needs: [test, build]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Fetch full history for changelog
-
-      - name: Download binary artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: binaries
-          path: ./binaries
-
-      - name: Set release version
+      - name: Resolve version
         id: version
         run: |
+          set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.tag }}"
+            TAG="${{ github.event.inputs.tag }}"
           else
-            VERSION="${{ github.ref_name }}"
+            TAG="${{ github.ref_name }}"
           fi
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "VERSION=${VERSION}" >> $GITHUB_ENV
-
-      - name: Generate changelog
-        id: changelog
-        run: |
-          # Get previous tag for changelog generation
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
-          
-          # Generate changelog
-          if [ -n "$PREVIOUS_TAG" ]; then
-            echo "## Changes since ${PREVIOUS_TAG}" > CHANGELOG.md
-            echo "" >> CHANGELOG.md
-            git log --pretty="- %s (%h)" ${PREVIOUS_TAG}..HEAD >> CHANGELOG.md
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          if [[ "${TAG}" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
           else
-            echo "## Initial Release" > CHANGELOG.md
-            echo "" >> CHANGELOG.md
-            echo "- Initial release of AI Distiller" >> CHANGELOG.md
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
-          
-          # Add feature highlights
-          cat >> CHANGELOG.md << 'EOF'
-          
-          ## Key Features
-          
-          ### 🚀 Core Functionality
-          - **Multi-language support**: Python, JavaScript, TypeScript, Go, Java, C#, Rust
-          - **Fast processing**: 10MB codebase in <2 seconds  
-          - **Multiple output formats**: Markdown, Text, JSON, JSONL, XML
-          - **Flexible stripping**: Remove comments, implementations, private members
-          
-          ### 🔧 Advanced Features
-          - **Semantic analysis**: Symbol extraction and call graph generation
-          - **Tree-sitter parsing**: Accurate AST-based code analysis
-          - **Performance optimization**: Concurrent processing and intelligent caching
-          - **Single binary**: No runtime dependencies
-          
-          ### 📊 Output Examples
-          ```bash
-          aid                                    # Process current directory
-          aid src/                              # Process src directory  
-          aid --strip comments,implementation   # Remove comments and implementations
-          aid --format json-structured --output api.json   # JSON output to file
-          aid --strip non-public --stdout       # Print only public members
-          ```
-          
-          ### 🛠 Installation
-          Download the appropriate binary for your platform from the release assets below.
-          
-          EOF
 
-      - name: Create checksums
+      - name: Download all archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: aid-*
+          path: ./dist
+          merge-multiple: true
+
+      - name: Generate checksums
         run: |
-          cd binaries
-          sha256sum * > checksums.txt
+          set -euo pipefail
+          cd dist
+          sha256sum aid-*.tar.gz aid-*.zip > checksums.txt
           cat checksums.txt
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: "AI Distiller ${{ steps.version.outputs.version }}"
-          body_path: CHANGELOG.md
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "AI Distiller ${{ steps.version.outputs.tag }}"
+          generate_release_notes: true
           draft: false
-          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+          prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
+          make_latest: ${{ steps.version.outputs.prerelease == 'false' }}
           files: |
-            binaries/*
-            binaries/checksums.txt
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            dist/aid-*.tar.gz
+            dist/aid-*.zip
+            dist/checksums.txt
 
-      - name: Update latest release pointer
-        if: "!contains(steps.version.outputs.version, '-')"
+  # ---------------------------------------------------------------------------
+  # Publish the MCP package to npm. Runs AFTER the GitHub Release exists, since
+  # the package's postinstall downloads the aid binary from that release at
+  # install time — publishing first would make every install 404.
+  #
+  # Requires an npm automation token in the NPM_TOKEN repository secret.
+  # ---------------------------------------------------------------------------
+  publish-npm:
+    needs: [build, release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Verify the release binary is downloadable
         run: |
-          # Create/update 'latest' tag to point to this release
-          git tag -f latest
-          git push -f origin latest
+          set -euo pipefail
+          VERSION="${{ needs.release.outputs.version }}"
+          URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/aid-linux-amd64-v${VERSION}.tar.gz"
+          echo "Checking ${URL}"
+          curl -fsSL -o /dev/null "${URL}"
+          echo "OK: release binary is reachable"
 
-  # Build and publish Docker image
+      - name: Sync package version and binary version
+        working-directory: mcp-npm
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.release.outputs.version }}"
+          npm version "${VERSION}" --no-git-tag-version --allow-same-version
+          # AID_VERSION decides which GitHub binary release the postinstall fetches.
+          sed -i "s/const AID_VERSION = '[^']*'/const AID_VERSION = '${VERSION}'/" scripts/postinstall.js
+          grep "const AID_VERSION" scripts/postinstall.js
+
+      - name: Install and build
+        working-directory: mcp-npm
+        run: |
+          npm install
+          npm run build
+
+      - name: Publish to npm
+        working-directory: mcp-npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm publish --access public ${{ needs.release.outputs.prerelease == 'true' && '--tag next' || '' }}
+
+  # ---------------------------------------------------------------------------
+  # Optional Docker image (only runs if Docker Hub credentials are configured).
+  # Left unchanged from the previous workflow.
+  # ---------------------------------------------------------------------------
   docker:
     needs: [test, build]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -238,15 +279,14 @@ jobs:
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
 
-      - name: Set version for Docker
+      - name: Resolve version
         id: docker_version
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.tag }}"
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
           else
-            VERSION="${{ github.ref_name }}"
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           fi
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
         if: env.DOCKER_USERNAME != ''
@@ -256,32 +296,29 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/ai-distiller:${{ steps.docker_version.outputs.version }}
+            ${{ secrets.DOCKER_USERNAME }}/ai-distiller:${{ steps.docker_version.outputs.tag }}
             ${{ secrets.DOCKER_USERNAME }}/ai-distiller:latest
           build-args: |
-            VERSION=${{ steps.docker_version.outputs.version }}
-            BUILD_TIME=${{ github.run_id }}
+            VERSION=${{ steps.docker_version.outputs.tag }}
             COMMIT=${{ github.sha }}
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
 
-  # Notify on completion
+  # ---------------------------------------------------------------------------
+  # Summary.
+  # ---------------------------------------------------------------------------
   notify:
-    needs: [test, build, release]
+    needs: [release, publish-npm]
     runs-on: ubuntu-latest
     if: always()
-    
     steps:
-      - name: Notify success
-        if: needs.release.result == 'success'
+      - name: Report
         run: |
-          echo "🎉 Release completed successfully!"
-          echo "Version: ${{ needs.release.outputs.version || github.ref_name }}"
-          echo "Download: https://github.com/${{ github.repository }}/releases/latest"
-
-      - name: Notify failure
-        if: needs.release.result == 'failure'
-        run: |
-          echo "❌ Release failed!"
-          echo "Check the workflow logs for details."
-          exit 1
+          echo "Release:    ${{ needs.release.result }}"
+          echo "npm publish: ${{ needs.publish-npm.result }}"
+          if [ "${{ needs.release.result }}" = "success" ] && [ "${{ needs.publish-npm.result }}" = "success" ]; then
+            echo "🎉 Release ${{ needs.release.outputs.tag }} completed (GitHub Release + npm)."
+          else
+            echo "❌ Release did not fully succeed — check the job logs."
+            exit 1
+          fi

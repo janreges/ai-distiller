@@ -763,6 +763,40 @@ For data dumps at level 3:
 
 Remember: A clean repository is a professional repository!
 
+## Release & Deployment
+
+Releases are fully automated by `.github/workflows/release.yml`. **The git tag is the single source of truth** — pushing a tag `vX.Y.Z` triggers everything; no files need to be hand-edited first.
+
+### How to cut a release
+```bash
+# 1. Make sure main is green and pushed.
+# 2. Tag and push:
+git tag v1.4.0
+git push origin v1.4.0
+# (or run the "Release" workflow manually via workflow_dispatch with the tag)
+```
+
+The workflow then, in order:
+1. **test** — builds `aid` (CGO) and runs the suite (excludes `cmd/aid-validate`, `/tools/`, `/test_project/`).
+2. **build** — cross-builds the binary for `linux/{amd64,arm64}`, `windows/amd64`, `darwin/{amd64,arm64}` and packages each as `aid-<os>-<arch>-v<version>.tar.gz` (`.zip` for Windows) — exactly the names `mcp-npm/scripts/postinstall.js` and `install.ps1` download.
+3. **release** — checksums + publishes the GitHub Release with all archives.
+4. **publish-npm** — runs *after* the Release exists (so the binary is downloadable), bumps `mcp-npm/package.json` version + `AID_VERSION` in `postinstall.js` from the tag, builds the TypeScript, and `npm publish --access public`es `@janreges/ai-distiller-mcp`.
+
+### CRITICAL: CGO must be enabled
+Release binaries are built with `CGO_ENABLED=1`. The language parsers are tree-sitter C libraries linked via cgo; with cgo disabled the build falls back to stub parsers (`internal/language/nocgo.go`) that error for every language. **A CGO=0 binary cannot parse anything** — never release one. macOS builds run on native runners (`macos-13` Intel, `macos-14` ARM); Linux-arm64 and Windows are cross-compiled with `aarch64-linux-gnu-gcc` / `x86_64-w64-mingw32-gcc`.
+
+### Required configuration
+- **`NPM_TOKEN`** repo secret — an npm automation token with publish rights for the `@janreges` scope. Without it, `publish-npm` fails. (Optional: `DOCKER_USERNAME` / `DOCKER_PASSWORD` for the Docker job, which is skipped if unset.)
+
+### Ordering matters
+The GitHub Release must exist before npm publishes, because the npm package's `postinstall` downloads the `aid` binary from `releases/download/v<version>/...` at install time. Publishing npm first would make every install 404 (the cause of the historical Windows-install issues).
+
+### Manual fallback
+If you must release by hand: `scripts/build-releases.sh` (CGO=1 + cross-toolchains, produces the correctly-named archives), upload via `gh release create`, then `cd mcp-npm && ./publish.sh` (after bumping `package.json` + `AID_VERSION`). See `mcp-npm/docs/HOW-TO-RELEASE-TO-NPMJS.md`.
+
+### Not built
+`windows/arm64` is not produced (no ARM mingw toolchain); ARM-Windows users have no prebuilt binary.
+
 ## Parser Development Guide
 
 ### Key Principles Learned from Go/TypeScript/Python/JavaScript

@@ -201,7 +201,7 @@ func (f *RustFormatter) formatStruct(w io.Writer, class *ir.DistilledClass, inde
 					if field.Type != nil && field.Type.Name != "" {
 						if strings.HasPrefix(field.Type.Name, "(") {
 							// Tuple variant
-							fmt.Fprintf(w, field.Type.Name)
+							fmt.Fprint(w, field.Type.Name)
 						} else if field.Type.Name == "struct" {
 							// Struct variant
 							fmt.Fprintf(w, " { /* fields */ }")
