@@ -786,7 +786,7 @@ The workflow then, in order:
 Release binaries are built with `CGO_ENABLED=1`. The language parsers are tree-sitter C libraries linked via cgo; with cgo disabled the build falls back to stub parsers (`internal/language/nocgo.go`) that error for every language. **A CGO=0 binary cannot parse anything** — never release one. macOS builds run on native runners (`macos-13` Intel, `macos-14` ARM); Linux-arm64 and Windows are cross-compiled with `aarch64-linux-gnu-gcc` / `x86_64-w64-mingw32-gcc`.
 
 ### Required configuration
-- **`NPM_TOKEN`** repo secret — an npm automation token with publish rights for the `@janreges` scope. Without it, `publish-npm` fails. (Optional: `DOCKER_USERNAME` / `DOCKER_PASSWORD` for the Docker job, which is skipped if unset.)
+- **npm Trusted Publishing (OIDC)** — no token/secret needed. The package `@janreges/ai-distiller-mcp` has a trusted publisher configured on npmjs.com pointing at this repo + workflow `release.yml`. The `publish-npm` job authenticates via the GitHub OIDC token (`permissions: id-token: write`) and generates a provenance attestation. If you ever rename the workflow file, update the trusted-publisher config too. (Optional: `DOCKER_USERNAME` / `DOCKER_PASSWORD` for the Docker job, which is skipped if unset.)
 
 ### Ordering matters
 The GitHub Release must exist before npm publishes, because the npm package's `postinstall` downloads the `aid` binary from `releases/download/v<version>/...` at install time. Publishing npm first would make every install 404 (the cause of the historical Windows-install issues).
