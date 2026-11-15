@@ -27,13 +27,25 @@ type Options struct {
 }
 
 // shouldExpand reports whether a symbol name matches any --expand glob pattern.
+// A qualified name such as a C++ out-of-class definition ("Bar::vis") also
+// matches by its member part after the last "::", the way a Go receiver method
+// matches by its method name.
 func (o Options) shouldExpand(name string) bool {
+	member := name
+	if i := strings.LastIndex(name, "::"); i >= 0 {
+		member = name[i+2:]
+	}
 	for _, pattern := range o.ExpandSymbols {
 		if pattern == "" {
 			continue
 		}
 		if matched, _ := filepath.Match(pattern, name); matched {
 			return true
+		}
+		if member != name {
+			if matched, _ := filepath.Match(pattern, member); matched {
+				return true
+			}
 		}
 	}
 	return false

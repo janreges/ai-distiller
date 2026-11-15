@@ -213,3 +213,103 @@ func convertToString(file *ir.DistilledFile) string {
 
 	return sb.String()
 }
+
+func parseCpp(t *testing.T, code string) *ir.DistilledFile {
+	t.Helper()
+	file, err := NewTreeSitterProcessor().ProcessSource(context.Background(), []byte(code), "test.cpp")
+	require.NoError(t, err)
+	return file
+}
+
+func findCppTopLevelFn(t *testing.T, file *ir.DistilledFile, name string) *ir.DistilledFunction {
+	t.Helper()
+	for _, child := range file.Children {
+		if fn, ok := child.(*ir.DistilledFunction); ok && fn.Name == name {
+			return fn
+		}
+	}
+	require.Failf(t, "function not found", "no top-level function named %q", name)
+	return nil
+}
+
+func TestCpp_OutOfClassDefinitionHasQualifiedName(t *testing.T) {
+	file := parseCpp(t, "class Foo { public: int bar(); };\nint Foo::bar() { return 1; }\n")
+	fn := findCppTopLevelFn(t, file, "Foo::bar")
+	assert.Equal(t, "int", fn.Returns.Name)
+	assert.Equal(t, ir.VisibilityPublic, fn.Visibility)
+}
+
+func TestCpp_OutOfClassDefinitionInheritsVisibility(t *testing.T) {
+	file := parseCpp(t, "class Foo { int secret(); public: int open(); };\nint Foo::secret() { return 1; }\nint Foo::open() { return 2; }\n")
+	assert.Equal(t, ir.VisibilityPrivate, findCppTopLevelFn(t, file, "Foo::secret").Visibility)
+	assert.Equal(t, ir.VisibilityPublic, findCppTopLevelFn(t, file, "Foo::open").Visibility)
+}
+
+// findCppFn returns the function named name among nodes, searching namespace
+// (package) children too, and fails the test when there is none.
+func findCppFn(t *testing.T, nodes []ir.DistilledNode, name string) *ir.DistilledFunction {
+	t.Helper()
+	var walk func([]ir.DistilledNode) *ir.DistilledFunction
+	walk = func(nodes []ir.DistilledNode) *ir.DistilledFunction {
+		for _, n := range nodes {
+			switch n := n.(type) {
+			case *ir.DistilledFunction:
+				if n.Name == name {
+					return n
+				}
+			case *ir.DistilledPackage:
+				if fn := walk(n.Children); fn != nil {
+					return fn
+				}
+			}
+		}
+		return nil
+	}
+	fn := walk(nodes)
+	require.NotNil(t, fn, "no function named %q", name)
+	return fn
+}
+
+func TestCpp_OutOfClassDefinitionVisibilityLayouts(t *testing.T) {
+	cases := []struct {
+		name string
+		code string
+		want map[string]ir.Visibility
+	}{
+		{"class and definitions in a namespace",
+			"namespace ns {\nclass Foo { int secret(); public: int open(); };\nint Foo::secret() { return 1; }\nint Foo::open() { return 2; }\n}\n",
+			map[string]ir.Visibility{"Foo::secret": ir.VisibilityPrivate, "Foo::open": ir.VisibilityPublic}},
+		{"namespace-qualified definition",
+			"namespace ns { class Foo { protected: int prot(); public: int open(); }; }\nint ns::Foo::prot() { return 1; }\nint ns::Foo::open() { return 2; }\n",
+			map[string]ir.Visibility{"ns::Foo::prot": ir.VisibilityProtected, "ns::Foo::open": ir.VisibilityPublic}},
+		{"nested namespaces",
+			"namespace a { namespace b { class Foo { int secret(); }; int Foo::secret() { return 1; } } }\n",
+			map[string]ir.Visibility{"Foo::secret": ir.VisibilityPrivate}},
+		{"nested class",
+			"class Bar {\npublic:\n  class In { int deeph(); public: int deepp(); };\n};\nint Bar::In::deeph() { return 1; }\nint Bar::In::deepp() { return 2; }\n",
+			map[string]ir.Visibility{"Bar::In::deeph": ir.VisibilityPrivate, "Bar::In::deepp": ir.VisibilityPublic}},
+		{"member of a private nested class is no more open than the class",
+			"class Bar {\n  struct Impl { int run(); };\n};\nint Bar::Impl::run() { return 1; }\n",
+			map[string]ir.Visibility{"Bar::Impl::run": ir.VisibilityPrivate}},
+		{"class template",
+			"template <typename T>\nclass Tp { T get(); public: T put(); };\ntemplate <typename T>\nT Tp<T>::get() { return T(); }\ntemplate <typename T>\nT Tp<T>::put() { return T(); }\n",
+			map[string]ir.Visibility{"Tp<T>::get": ir.VisibilityPrivate, "Tp<T>::put": ir.VisibilityPublic}},
+		{"operator",
+			"class Foo { bool operator<(const Foo& o) const; };\nbool Foo::operator<(const Foo& o) const { return true; }\n",
+			map[string]ir.Visibility{"Foo::operator<": ir.VisibilityPrivate}},
+		{"struct members are public by default",
+			"struct S { int f(); private: int g(); };\nint S::f() { return 1; }\nint S::g() { return 2; }\n",
+			map[string]ir.Visibility{"S::f": ir.VisibilityPublic, "S::g": ir.VisibilityPrivate}},
+		{"no declaration keeps the definition public",
+			"int Unknown::f() { return 1; }\n",
+			map[string]ir.Visibility{"Unknown::f": ir.VisibilityPublic}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			file := parseCpp(t, tc.code)
+			for fnName, want := range tc.want {
+				assert.Equal(t, want, findCppFn(t, file.Children, fnName).Visibility, fnName)
+			}
+		})
+	}
+}

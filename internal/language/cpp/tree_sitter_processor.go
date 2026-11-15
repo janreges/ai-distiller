@@ -51,8 +51,213 @@ func (p *TreeSitterProcessor) ProcessSource(ctx context.Context, source []byte, 
 
 	// Process the tree
 	p.processNode(tree.RootNode(), source, file, nil)
+	members := memberVisibilities{}
+	p.indexMembers(tree.RootNode(), source, nil, ir.VisibilityPublic, members)
+	inheritOutOfClassVisibility(file.Children, members)
 
 	return file, nil
+}
+
+// memberVisibilities maps a member key to the visibility of every in-class
+// declaration or definition of that member. The key is the chain of
+// enclosing class names and the member name joined by "::" ("Foo::bar",
+// "Outer::Inner::bar"); namespaces and template arguments are left out.
+type memberVisibilities map[string][]ir.Visibility
+
+// indexMembers records in idx the visibility of every member function declared
+// or defined in a class, struct or union body at or below node. scope holds the
+// names of the enclosing classes. ceiling is the most open visibility a member
+// can have: the access of the enclosing nested class within its outer class,
+// so a public member of a private nested class is recorded as private.
+// Function bodies are not searched: a local class has no out-of-class members.
+func (p *TreeSitterProcessor) indexMembers(node *sitter.Node, source []byte, scope []string, ceiling ir.Visibility, idx memberVisibilities) {
+	switch node.Type() {
+	case "class_specifier", "struct_specifier", "union_specifier":
+		name, body := node.ChildByFieldName("name"), node.ChildByFieldName("body")
+		if name == nil || body == nil {
+			return
+		}
+		path := append([]string{}, scope...)
+		for _, seg := range splitScope(p.nodeText(name, source)) {
+			path = append(path, stripTemplateArgs(seg))
+		}
+		access := ir.VisibilityPublic
+		if node.Type() == "class_specifier" {
+			access = ir.VisibilityPrivate
+		}
+		for i := 0; i < int(body.NamedChildCount()); i++ {
+			member := body.NamedChild(i)
+			if member.Type() == "access_specifier" {
+				access = accessVisibility(p.nodeText(member, source))
+				continue
+			}
+			p.indexMember(member, source, path, leastOpen(ceiling, access), idx)
+		}
+	case "compound_statement":
+		return
+	default:
+		for i := 0; i < int(node.NamedChildCount()); i++ {
+			p.indexMembers(node.NamedChild(i), source, scope, ceiling, idx)
+		}
+	}
+}
+
+// indexMember records one member of the class body whose class chain is path;
+// vis is the member's visibility. A nested class is indexed with vis as its
+// ceiling.
+func (p *TreeSitterProcessor) indexMember(member *sitter.Node, source []byte, path []string, vis ir.Visibility, idx memberVisibilities) {
+	switch member.Type() {
+	case "class_specifier", "struct_specifier", "union_specifier":
+		p.indexMembers(member, source, path, vis, idx)
+	case "template_declaration":
+		for i := 0; i < int(member.NamedChildCount()); i++ {
+			p.indexMember(member.NamedChild(i), source, path, vis, idx)
+		}
+	case "field_declaration", "declaration", "function_definition":
+		// `class In {...};` inside a class is a field_declaration whose type
+		// is the nested class.
+		if typ := member.ChildByFieldName("type"); typ != nil {
+			p.indexMembers(typ, source, path, vis, idx)
+		}
+		if name := p.memberFunctionName(member, source); name != "" {
+			key := strings.Join(append(append([]string{}, path...), name), "::")
+			idx[key] = append(idx[key], vis)
+		}
+	}
+}
+
+// memberFunctionName returns the name of the function that decl declares or
+// defines, looking through pointer and reference declarators, or "" when decl
+// declares no function.
+func (p *TreeSitterProcessor) memberFunctionName(decl *sitter.Node, source []byte) string {
+	d := decl.ChildByFieldName("declarator")
+	for d != nil {
+		if d.Type() == "function_declarator" {
+			if name := d.ChildByFieldName("declarator"); name != nil {
+				return p.nodeText(name, source)
+			}
+			return ""
+		}
+		// reference_declarator has no "declarator" field: the wrapped
+		// declarator is its last named child.
+		next := d.ChildByFieldName("declarator")
+		if next == nil && d.NamedChildCount() > 0 {
+			next = d.NamedChild(int(d.NamedChildCount()) - 1)
+		}
+		d = next
+	}
+	return ""
+}
+
+// inheritOutOfClassVisibility gives every out-of-class member definition
+// (`int X::m() {...}`) among nodes, including those inside namespaces, the
+// visibility of the in-class declaration of m in class X. The definition's
+// qualified name is matched from its longest suffix down to "Class::member",
+// so namespace qualifiers (`ns::X::m`) and template arguments (`X<T>::m`) are
+// ignored and nested classes (`Outer::Inner::m`) match. Without a matching
+// declaration the definition stays public. With overloads, any member of that
+// name decides: the definition gets the most open visibility found.
+func inheritOutOfClassVisibility(nodes []ir.DistilledNode, members memberVisibilities) {
+	for _, node := range nodes {
+		switch n := node.(type) {
+		case *ir.DistilledPackage:
+			inheritOutOfClassVisibility(n.Children, members)
+		case *ir.DistilledFunction:
+			if vis, found := lookupMember(n.Name, members); found {
+				n.Visibility = vis
+			}
+		}
+	}
+}
+
+// lookupMember returns the most open visibility recorded for the qualified
+// function name, or false when name is unqualified or matches no member.
+func lookupMember(name string, members memberVisibilities) (ir.Visibility, bool) {
+	segs := splitScope(name)
+	if len(segs) < 2 {
+		return "", false
+	}
+	for i := range segs[:len(segs)-1] {
+		segs[i] = stripTemplateArgs(segs[i])
+	}
+	for start := 0; start <= len(segs)-2; start++ {
+		vis, found := members[strings.Join(segs[start:], "::")]
+		if !found {
+			continue
+		}
+		best := vis[0]
+		for _, v := range vis[1:] {
+			if visibilityRank(v) > visibilityRank(best) {
+				best = v
+			}
+		}
+		return best, true
+	}
+	return "", false
+}
+
+// splitScope splits a qualified name on the "::" separators that are outside
+// template argument lists: "a::B<c::D>::f" gives "a", "B<c::D>", "f".
+func splitScope(name string) []string {
+	var segs []string
+	depth, start := 0, 0
+	for i := 0; i < len(name); i++ {
+		switch name[i] {
+		case '<':
+			depth++
+		case '>':
+			if depth > 0 {
+				depth--
+			}
+		case ':':
+			if depth == 0 && i+1 < len(name) && name[i+1] == ':' {
+				segs = append(segs, strings.TrimSpace(name[start:i]))
+				start = i + 2
+				i++
+			}
+		}
+	}
+	return append(segs, strings.TrimSpace(name[start:]))
+}
+
+// stripTemplateArgs returns a class name without its template argument list.
+func stripTemplateArgs(seg string) string {
+	if i := strings.IndexByte(seg, '<'); i > 0 {
+		return strings.TrimSpace(seg[:i])
+	}
+	return seg
+}
+
+// accessVisibility maps the text of an access_specifier to a visibility.
+func accessVisibility(spec string) ir.Visibility {
+	switch strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(spec), ":")) {
+	case "public":
+		return ir.VisibilityPublic
+	case "protected":
+		return ir.VisibilityProtected
+	}
+	return ir.VisibilityPrivate
+}
+
+// visibilityRank orders visibilities from private (0) to public (3).
+func visibilityRank(v ir.Visibility) int {
+	switch v {
+	case ir.VisibilityPublic:
+		return 3
+	case ir.VisibilityProtected:
+		return 2
+	case ir.VisibilityInternal:
+		return 1
+	}
+	return 0
+}
+
+// leastOpen returns the less open of a and b.
+func leastOpen(a, b ir.Visibility) ir.Visibility {
+	if visibilityRank(a) < visibilityRank(b) {
+		return a
+	}
+	return b
 }
 
 // processNode recursively processes tree-sitter nodes
@@ -619,7 +824,7 @@ func (p *TreeSitterProcessor) extractFunctionDeclarator(node *sitter.Node, sourc
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
 		switch child.Type() {
-		case "identifier", "field_identifier", "destructor_name", "operator_name", "type_identifier":
+		case "identifier", "field_identifier", "destructor_name", "operator_name", "type_identifier", "qualified_identifier":
 			if function.Name == "" { // Avoid overwriting name from parenthesized declarators
 				function.Name = p.nodeText(child, source)
 			}

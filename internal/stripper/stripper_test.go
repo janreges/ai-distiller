@@ -488,3 +488,34 @@ func TestStripperPreservesEveryField(t *testing.T) {
 		assert.Equal(t, n, got, "%T lost a field in the stripper", n)
 	}
 }
+
+// TestExpandSymbols_QualifiedName verifies that a pattern matches the member
+// part of a qualified function name (a C++ out-of-class definition such as
+// "Bar::vis"), like the method name of a Go receiver method, as well as the
+// whole qualified name. The class part alone does not match: the definition
+// is not nested inside the class.
+func TestExpandSymbols_QualifiedName(t *testing.T) {
+	body := "{ return 1; }"
+	cases := []struct {
+		pattern string
+		name    string
+		want    bool
+	}{
+		{"vis", "Bar::vis", true},
+		{"vis", "ns::Bar::In::vis", true},
+		{"v*", "Tp<T>::vis", true},
+		{"Bar::vis", "Bar::vis", true},
+		{"Bar::*", "Bar::vis", true},
+		{"Bar", "Bar::vis", false},
+		{"is", "Bar::vis", false},
+		{"vis", "Bar::visible", false},
+	}
+	for _, tc := range cases {
+		file := &ir.DistilledFile{Children: []ir.DistilledNode{
+			&ir.DistilledFunction{Name: tc.name, Visibility: ir.VisibilityPublic, Implementation: body},
+		}}
+		s := New(Options{RemoveImplementations: true, ExpandSymbols: []string{tc.pattern}})
+		fn := file.Accept(s).(*ir.DistilledFile).Children[0].(*ir.DistilledFunction)
+		assert.Equal(t, tc.want, fn.Implementation == body, "--expand=%s on %s", tc.pattern, tc.name)
+	}
+}
