@@ -43,6 +43,7 @@ func (f *SwiftFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent i
 		return f.formatEnum(w, n, indent)
 	default:
 		// Skip unknown nodes
+		reportUnhandled("swift", node)
 		return nil
 	}
 }

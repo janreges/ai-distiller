@@ -47,6 +47,7 @@ func (f *RustFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent in
 		return f.formatComment(w, n, indentStr)
 	default:
 		// Skip unknown nodes
+		reportUnhandled("rust", node)
 		return nil
 	}
 }

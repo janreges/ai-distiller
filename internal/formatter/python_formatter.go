@@ -36,6 +36,7 @@ func (f *PythonFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent 
 		return f.formatClass(w, n, indent)
 	default:
 		// Skip unknown nodes
+		reportUnhandled("python", node)
 		return nil
 	}
 }

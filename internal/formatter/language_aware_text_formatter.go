@@ -410,6 +410,7 @@ func (f *LanguageAwareTextFormatter) formatNodeGeneric(w io.Writer, node ir.Dist
 		}
 	default:
 		// Skip unknown nodes
+		reportUnhandled("generic", node)
 	}
 
 	return nil

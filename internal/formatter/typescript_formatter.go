@@ -35,6 +35,7 @@ func (f *TypeScriptFormatter) FormatNode(w io.Writer, node ir.DistilledNode, ind
 		return f.formatTypeAlias(w, n)
 	default:
 		// Fallback for unknown nodes
+		reportUnhandled("typescript", node)
 		return nil
 	}
 }

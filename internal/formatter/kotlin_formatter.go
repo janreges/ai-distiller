@@ -42,7 +42,8 @@ func (f *KotlinFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent 
 		_, err := fmt.Fprintln(w, f.formatField(n, indent))
 		return err
 	default:
-		// For nodes with children, process them recursively
+		// Report the node, then process any children recursively
+		reportUnhandled("kotlin", node)
 		children := node.GetChildren()
 		for _, child := range children {
 			if err := f.FormatNode(w, child, indent); err != nil {

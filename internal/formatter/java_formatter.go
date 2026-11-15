@@ -43,6 +43,7 @@ func (f *JavaFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent in
 		return f.formatPackage(w, n, indentStr)
 	default:
 		// Skip unknown nodes
+		reportUnhandled("java", node)
 		return nil
 	}
 }

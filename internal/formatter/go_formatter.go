@@ -75,6 +75,7 @@ func (f *GoFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent int)
 		return f.formatTypeAlias(w, n, indentStr)
 	default:
 		// Skip unknown nodes
+		reportUnhandled("go", node)
 		return nil
 	}
 }

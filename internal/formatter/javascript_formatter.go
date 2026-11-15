@@ -35,6 +35,7 @@ func (f *JavaScriptFormatter) FormatNode(w io.Writer, node ir.DistilledNode, ind
 		return f.formatComment(w, n, indent)
 	default:
 		// Fallback for unknown nodes
+		reportUnhandled("javascript", node)
 		return nil
 	}
 }

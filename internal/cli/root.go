@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	
 	"github.com/spf13/cobra"
@@ -399,7 +400,23 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 	// Create debugger based on verbosity level
 	dbg := debug.New(os.Stderr, verbosity)
 	ctx := debug.NewContext(context.Background(), dbg)
-	
+
+	if verbosity >= 1 {
+		// Report each skipped node kind once per language, not once per node.
+		var reportedMu sync.Mutex
+		reported := map[string]bool{}
+		formatter.OnUnhandledNode = func(lang string, node ir.DistilledNode) {
+			key := lang + "/" + string(node.GetNodeKind())
+			reportedMu.Lock()
+			defer reportedMu.Unlock()
+			if reported[key] {
+				return
+			}
+			reported[key] = true
+			dbg.Logf(debug.LevelBasic, "formatter: no text rendering for %s in %s", node.GetNodeKind(), lang)
+		}
+	}
+
 	// Log startup info
 	dbg.Logf(debug.LevelBasic, "AI Distiller %s starting", Version)
 	

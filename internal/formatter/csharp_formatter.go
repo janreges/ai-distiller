@@ -159,7 +159,8 @@ func (f *CSharpFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent 
 		fmt.Fprint(w, n.Content)
 		return nil
 	default:
-		// For nodes with children, process them recursively
+		// Report the node, then process any children recursively
+		reportUnhandled("csharp", node)
 		children := node.GetChildren()
 		for _, child := range children {
 			if err := f.FormatNode(w, child, indent); err != nil {

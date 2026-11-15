@@ -39,6 +39,7 @@ func (f *RubyFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent in
 		return f.formatComment(w, n, indentStr)
 	default:
 		// Skip unknown nodes
+		reportUnhandled("ruby", node)
 		return nil
 	}
 }
