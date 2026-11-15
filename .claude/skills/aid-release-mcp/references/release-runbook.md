@@ -73,7 +73,7 @@ Before re-running, check what already exists outside the run.
 | Failed job | Already published | What to do |
 |---|---|---|
 | `test` or a `build` target | nothing | A transient failure (runner, network, apt): re-run failed jobs. A failure that needs a code change: the tag points at the old commit, so the owner tags the fixed commit with a new version; or, since nothing was published, deletes the tag (`git push origin :refs/tags/v1.4.1`, `git tag -d v1.4.1`) and tags the fixed commit again. |
-| `release` | maybe a partial release: `gh release view v1.4.1 --json assets` | Re-run failed jobs. `softprops/action-gh-release@v2` reuses an existing release for the tag and replaces assets of the same name (`overwrite_files` defaults to true). |
+| `release` | maybe a partial release: `gh release view v1.4.1 --json assets` | Re-run failed jobs. `softprops/action-gh-release@v3` reuses an existing release for the tag and replaces assets of the same name (`overwrite_files` defaults to true). |
 | `publish-npm` | the GitHub Release; npm: check `npm view @janreges/ai-distiller-mcp@1.4.1 version` | E404: nothing reached npm; re-run failed jobs. The version is shown: the publish went through; do not re-run `publish-npm`, npm refuses to publish a version twice. A real test failure in "Install and test" fails again on re-run; it needs a code change and so a new version, and this version stays a GitHub Release without an npm package. |
 | `docker` | independent of the rest; `notify` does not wait for it | Re-run if the image matters. |
 | `notify` | nothing of its own | It only reports; fix the job it names. |
