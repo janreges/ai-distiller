@@ -1,9 +1,8 @@
 benchmark/
 test_repos/
 test_project/
-differential_testing_results.json
 coverage.txt
-aid
+/aid
 .aid/
 tmp/
 .*.aid.txt
@@ -14,10 +13,11 @@ aid.*.txt
 !.claude/skills/
 
 # Binary files
-aid
-aid-*
-# ...but not the skill directories, which are named aid-<topic>
-!.claude/skills/*/
+/aid-*.tar.gz
+/aid-*.zip
+# Local leftovers that were hidden by the old "aid-*" pattern; delete them when convenient.
+/aid-readme.md
+/cmd/aid-validate/
 
 # Build directories
 build/
