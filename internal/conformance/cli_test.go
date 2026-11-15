@@ -133,3 +133,51 @@ func TestNoArgumentReadsPipedStdin(t *testing.T) {
 	require.Equal(t, 0, code)
 	assert.Contains(t, out, "from_stdin")
 }
+
+func TestLangAcceptsAlias(t *testing.T) {
+	out, stderr, code := aidRun(t, conformanceData(t), strings.NewReader(stdinSnippet), "--lang", "py")
+	require.Equal(t, 0, code, stderr)
+	assert.Contains(t, out, "from_stdin")
+}
+
+const tsxComponents = "import React from \"react\";\n\n" +
+	"export const Hello = ({ name }: { name: string }) => <h1>Hello {name}</h1>;\n\n" +
+	"export function App({ title }: { title: string }) {\n  return <Hello name={title} />;\n}\n"
+
+// TSX on stdin (--lang tsx, or detected TypeScript with JSX) is parsed with the
+// TSX grammar, like a .tsx file; the output path stays "stdin".
+func TestStdinTSXMatchesFileRun(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "comp.tsx"), []byte(tsxComponents), 0o644))
+	fromFile, stderr, code := aidRun(t, dir, nil, "comp.tsx", "--stdout", "--summary-type=off")
+	require.Equal(t, 0, code, stderr)
+	require.Contains(t, fromFile, "export function App")
+	want := strings.Replace(fromFile, `<file path="comp.tsx">`, `<file path="stdin">`, 1)
+	for _, args := range [][]string{{"--lang", "tsx"}, nil} {
+		out, stderr, code := aidRun(t, dir, strings.NewReader(tsxComponents), args...)
+		require.Equal(t, 0, code, stderr)
+		assert.Equal(t, want, out, "stdin %v", args)
+	}
+}
+
+func TestUndetectedStdinListsLanguages(t *testing.T) {
+	_, stderr, code := aidRun(t, conformanceData(t), strings.NewReader("hello world\n"))
+	assert.NotEqual(t, 0, code)
+	assert.Contains(t, stderr, "could not auto-detect the language of stdin; pass --lang with one of: "+
+		"cpp, csharp, go, java, javascript, kotlin, php, python, ruby, rust, swift, typescript (aliases: ")
+	assert.Contains(t, stderr, "py, rb, rs, ts, tsx)")
+}
+
+func TestEmptyStdinSaysNoInput(t *testing.T) {
+	_, stderr, code := aidRun(t, conformanceData(t), strings.NewReader(""))
+	assert.NotEqual(t, 0, code)
+	assert.Contains(t, stderr, "no input on stdin")
+	assert.NotContains(t, stderr, "auto-detect")
+}
+
+func TestUnknownLangListsRegisteredNames(t *testing.T) {
+	_, stderr, code := aidRun(t, conformanceData(t), strings.NewReader(stdinSnippet), "--lang", "zig")
+	assert.NotEqual(t, 0, code)
+	assert.Contains(t, stderr, `unknown language "zig"; supported: `+
+		"cpp, csharp, go, java, javascript, kotlin, php, python, ruby, rust, swift, typescript")
+}

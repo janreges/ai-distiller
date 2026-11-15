@@ -3,13 +3,6 @@ package conformance
 // knownGaps lists the checks that fail today, keyed "<lang>/<cap>", with the
 // reason. A fix deletes its entry: a listed check that passes fails the suite.
 var knownGaps = map[string]string{
-	// The fixture is detected as "typescript" before C# is scored, because the
-	// TypeScript pattern <\w+> matches <summary>; without that tag the detector
-	// returns "c#". Both have to be fixed for the check to pass.
-	"csharp/stdin-detect": `H3: detector returns "c#"`,
-
-	// Detected as "typescript": the pattern <\w+> matches "#include <string>".
-	"cpp/stdin-detect": "found by the first conformance run",
 	// By default PHP drops the /** */ docblocks of classes, methods and
 	// properties, while file and top-level function docblocks print, so
 	// --docstrings means something different in PHP than in the other

@@ -27,4 +27,6 @@ public class ConfWidget {
         String c = "CONF_BODY_C";
         return c;
     }
+
+    private enum ConfColor { CONF_RED, CONF_GREEN }
 }

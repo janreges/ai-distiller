@@ -178,6 +178,8 @@ PROCESSING MODE:
   --lang <language>            Override language detection
                               Languages: auto|python|typescript|javascript|go|ruby|
                               swift|rust|java|csharp|kotlin|cpp|php
+                              Aliases: py, js, jsx, ts, tsx, golang, c++, cxx, cc,
+                              c#, cs, rb, rs, kt
                               (default: auto)
   --tree-sitter                Use tree-sitter parser (experimental)
 
@@ -304,7 +306,7 @@ func initFlags() {
 	
 
 	// Language override flag
-	rootCmd.Flags().StringVar(&langOverride, "lang", "auto", "Override language detection: auto|python|typescript|javascript|go|ruby|swift|rust|java|csharp|kotlin|cpp|php")
+	rootCmd.Flags().StringVar(&langOverride, "lang", "auto", "Override language detection: auto|python|typescript|javascript|go|ruby|swift|rust|java|csharp|kotlin|cpp|php (aliases such as py, ts, c++, c# are accepted)")
 	
 	// New filtering flags - visibility
 	rootCmd.Flags().String("public", "1", "Include public members (0/1, default: 1)")
@@ -803,51 +805,55 @@ func processStdinWithContext(ctx context.Context) error {
 	outputToStdout = true
 	
 	dbg.Logf(debug.LevelBasic, "Processing input from stdin")
-	
-	// Read stdin into buffer for language detection
-	var buffer bytes.Buffer
-	tee := io.TeeReader(os.Stdin, &buffer)
-	
-	// Read up to 64kB for detection
-	detectBuf := make([]byte, 64*1024)
-	n, _ := tee.Read(detectBuf)
-	detectBuf = detectBuf[:n]
-	
-	dbg.Logf(debug.LevelDetailed, "Read %d bytes for language detection", n)
-	
+
+	// Read all of stdin; detection looks at the first 64kB
+	fullContent, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return fmt.Errorf("failed to read stdin: %w", err)
+	}
+
+	dbg.Logf(debug.LevelDetailed, "Read %d bytes from stdin", len(fullContent))
+
 	// Determine language
 	lang := langOverride
 	if lang == "auto" {
+		if len(bytes.TrimSpace(fullContent)) == 0 {
+			return fmt.Errorf("no input on stdin")
+		}
 		detector := language.NewDetector()
-		detectedLang, err := detector.DetectFromReader(bytes.NewReader(detectBuf))
+		detectedLang, err := detector.DetectFromReader(bytes.NewReader(fullContent))
 		if err != nil {
-			return fmt.Errorf("could not auto-detect language from stdin. Please specify with --lang flag")
+			return fmt.Errorf("could not auto-detect the language of stdin; pass --lang with one of: %s", supportedLanguages())
 		}
 		lang = detectedLang
 		dbg.Logf(debug.LevelBasic, "Detected language: %s", lang)
 	} else {
 		dbg.Logf(debug.LevelBasic, "Using specified language: %s", lang)
 	}
-	
-	// Read the rest of stdin
-	remainingBytes, _ := io.ReadAll(tee)
-	fullContent := append(detectBuf, remainingBytes...)
-	
-	// Get language processor
-	langProc, ok := language.GetProcessor(lang)
+
+	// Get language processor; --lang accepts aliases such as "py" or "c++"
+	canonical := language.Canonical(lang)
+	langProc, ok := language.GetProcessor(canonical)
 	if !ok {
-		return fmt.Errorf("no processor found for language: %s", lang)
+		return fmt.Errorf("unknown language %q; supported: %s", lang, supportedLanguages())
 	}
-	
+
+	// The TypeScript processor takes its TSX grammar from a .tsx file name
+	parseName := "stdin"
+	if canonical == "typescript" && (strings.EqualFold(langOverride, "tsx") || langOverride == "auto" && language.HasJSX(fullContent)) {
+		parseName = "stdin.tsx"
+	}
+
 	// Create processor options from flags
 	procOpts := createProcessOptionsFromFlags()
-	
+
 	// Process the input with our debug-enabled context
-	result, err := langProc.ProcessWithOptions(ctx, bytes.NewReader(fullContent), "stdin", procOpts)
+	result, err := langProc.ProcessWithOptions(ctx, bytes.NewReader(fullContent), parseName, procOpts)
 	if err != nil {
 		return fmt.Errorf("failed to process stdin: %w", err)
 	}
-	
+	result.Path = "stdin"
+
 	// Create formatter based on format
 	formatterOpts := formatter.Options{
 		ProcessingOptions: formatter.ProcessingInfo{
@@ -879,6 +885,11 @@ func processStdinWithContext(ctx context.Context) error {
 	fmt.Print(output.String())
 	
 	return nil
+}
+
+// supportedLanguages lists the names and aliases --lang accepts.
+func supportedLanguages() string {
+	return strings.Join(language.RegisteredNames(), ", ") + " (aliases: " + strings.Join(language.Aliases(), ", ") + ")"
 }
 
 // parseBoolFlag parses a string flag as boolean (0/1)

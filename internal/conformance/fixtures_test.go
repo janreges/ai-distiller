@@ -97,12 +97,8 @@ var fixtures = []fixture{
 			Contains: []string{"        let a = \"CONF_BODY_A\";\n        a\n    }\n"}},
 		check{Cap: "one-line-body", Flags: []string{"--implementation=1"}, Contains: []string{"conf_quick(&self) -> i32 { 1 }"}},
 		check{Cap: "const-case", Contains: []string{"conf_max"}, NotContains: []string{"CONF_MAX"}},
-		check{Cap: "trait-impl-body", Flags: []string{"--expand=conf_area"}, Contains: []string{"CONF_BODY_C"}})},
-	// An enum has its own file: the stdin detector reads "enum Name" as
-	// TypeScript, so in sample.rs it would break rust/stdin-detect.
-	{Lang: "rust", File: "rust/one_line_enum.rs", Checks: []check{
-		{Cap: "one-line-enum", Contains: []string{"ConfRed", "ConfGreen"}},
-	}},
+		check{Cap: "trait-impl-body", Flags: []string{"--expand=conf_area"}, Contains: []string{"CONF_BODY_C"}},
+		check{Cap: "one-line-enum", Contains: []string{"ConfRed", "ConfGreen"}})},
 	{Lang: "swift", File: "swift/sample.swift", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
 		Private:   []string{"confPrivate"},
@@ -124,10 +120,9 @@ var fixtures = []fixture{
 		ExpandSym: "confPublic",
 	}), check{Cap: "throws-kept", Contains: []string{"confThrows() throws java.io.IOException"}},
 		check{Cap: "body-indent", Flags: []string{"--implementation=1"},
-			Contains: []string{"        String a = \"CONF_BODY_A\";\n        return a;\n"}})},
-	{Lang: "java", File: "java/ConfVisibility.java", Checks: []check{
-		{Cap: "public-off-keeps-private-enum-constants", Flags: []string{"--public=0", "--private=1"},
-			Contains: []string{"package com.example.conf", "CONF_RED", "CONF_GREEN"}, NotContains: []string{"confPublicField"}}}},
+			Contains: []string{"        String a = \"CONF_BODY_A\";\n        return a;\n"}},
+		check{Cap: "public-off-keeps-private-enum-constants", Flags: []string{"--public=0", "--private=1"},
+			Contains: []string{"package com.example.conf", "CONF_RED", "CONF_GREEN"}, NotContains: []string{"confField"}})},
 	{Lang: "csharp", File: "csharp/ConfWidget.cs", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "ConfField", "ConfPublic", "ConfOther"},
 		Private:   []string{"ConfPrivate"},

@@ -30,6 +30,8 @@ impl ConfWidget {
 
 pub const conf_max: u32 = 5;
 
+pub enum ConfColor { ConfRed, ConfGreen }
+
 pub trait ConfShape {
     fn conf_area(&self) -> i32;
 }

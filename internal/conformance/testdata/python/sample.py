@@ -1,4 +1,5 @@
 import os
+from dataclasses import dataclass
 
 # CONF_LINE_COMMENT
 
@@ -21,6 +22,7 @@ class ConfWidget:
         return b
 
 
+@dataclass
 class ConfRecord:
     conf_id: int
     conf_name: str = "x"
