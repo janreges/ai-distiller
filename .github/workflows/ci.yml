@@ -65,7 +65,7 @@ jobs:
       - name: cgo stays enabled
         run: sh scripts/check-cgo.sh
       - name: Skill anchors
-        run: sh scripts/tests/check_skill_anchors_test.sh && sh scripts/check-skill-anchors.sh .claude/skills
+        run: sh scripts/tests/check_skill_anchors_test.sh && sh scripts/check-skill-anchors.sh
 
   mcp:
     runs-on: ubuntu-latest
