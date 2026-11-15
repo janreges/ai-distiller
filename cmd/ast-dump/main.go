@@ -15,12 +15,12 @@ import (
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/kotlin"
-	"github.com/smacker/go-tree-sitter/python"
 	tree_sitter_c_sharp "github.com/tree-sitter/tree-sitter-c-sharp/bindings/go"
 	tree_sitter_cpp "github.com/tree-sitter/tree-sitter-cpp/bindings/go"
 	tree_sitter_java "github.com/tree-sitter/tree-sitter-java/bindings/go"
 	tree_sitter_javascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
 	tree_sitter_php "github.com/tree-sitter/tree-sitter-php/bindings/go"
+	tree_sitter_python "github.com/tree-sitter/tree-sitter-python/bindings/go"
 	tree_sitter_ruby "github.com/tree-sitter/tree-sitter-ruby/bindings/go"
 	typescript "tree-sitter-typescript"
 )
@@ -30,7 +30,7 @@ const maxTextBytes = 60
 func language(lang string) (*sitter.Language, error) {
 	switch lang {
 	case "python":
-		return python.GetLanguage(), nil
+		return sitter.NewLanguage(tree_sitter_python.Language()), nil
 	case "kotlin":
 		return kotlin.GetLanguage(), nil
 	case "typescript":

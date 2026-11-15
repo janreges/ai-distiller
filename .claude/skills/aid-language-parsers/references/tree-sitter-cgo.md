@@ -6,7 +6,7 @@ Tree-sitter grammars are generated C parsers. Go reaches them through the
 binding `github.com/smacker/go-tree-sitter`, which is itself cgo code: without
 cgo its package has no `Node` type, and every grammar package is excluded by
 its build constraints. Nine processors use it (all but Go, Rust and Swift), and
-so does `internal/semantic` (Python grammar), which
+so does `internal/semantic` (Python grammar, official module), which
 `internal/processor/dependency.go` imports. So nothing in aid compiles without
 cgo, not even `internal/language` on its own.
 
@@ -14,9 +14,8 @@ cgo, not even `internal/language` on its own.
 
 | Language | Go import | Where the C code comes from |
 |---|---|---|
-| python | `github.com/smacker/go-tree-sitter/python` | bundled in the binding module |
 | kotlin | `github.com/smacker/go-tree-sitter/kotlin` | bundled in the binding module |
-| javascript, java, csharp, cpp, ruby, php | `github.com/tree-sitter/tree-sitter-<name>/bindings/go` | the grammar's own Go module (version in `go.mod`); the processor wraps its pointer with `sitter.NewLanguage(...)`, PHP with `LanguagePHP()` |
+| python, javascript, java, csharp, cpp, ruby, php | `github.com/tree-sitter/tree-sitter-<name>/bindings/go` | the grammar's own Go module (version in `go.mod`); the processor wraps its pointer with `sitter.NewLanguage(...)`, PHP with `LanguagePHP()` |
 | typescript, tsx | `tree-sitter-typescript` | a local wrapper module, see below |
 | swift | `tree-sitter-swift` | vendored in `internal/parser/grammars/tree-sitter-swift`; only the unused tree-sitter processor imports it (`references/swift.md`) |
 | go | none | standard library `go/parser` |
@@ -61,7 +60,7 @@ CGO_ENABLED=0 go build ./cmd/aid
 fails at compile time, with errors such as:
 
 ```text
-github.com/smacker/go-tree-sitter/python: build constraints exclude all Go files in ...
+github.com/smacker/go-tree-sitter/kotlin: build constraints exclude all Go files in ...
 ../go/pkg/mod/github.com/smacker/go-tree-sitter@.../iter.go:17:18: undefined: Node
 ```
 

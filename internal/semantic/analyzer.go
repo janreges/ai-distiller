@@ -9,7 +9,7 @@ import (
 	"time"
 
 	sitter "github.com/smacker/go-tree-sitter"
-	"github.com/smacker/go-tree-sitter/python"
+	tree_sitter_python "github.com/tree-sitter/tree-sitter-python/bindings/go"
 )
 
 //go:embed queries/*.scm
@@ -26,7 +26,7 @@ type Analyzer struct {
 // NewAnalyzer creates a new semantic analyzer for Python
 func NewAnalyzer(projectRoot string) (*Analyzer, error) {
 	analyzer := &Analyzer{
-		language:    python.GetLanguage(),
+		language:    sitter.NewLanguage(tree_sitter_python.Language()),
 		parser:      sitter.NewParser(),
 		projectRoot: projectRoot,
 		queries:     make(map[string]*sitter.Query),

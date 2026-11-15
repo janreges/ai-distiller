@@ -8,7 +8,7 @@ import (
 	"github.com/janreges/ai-distiller/internal/debug"
 	"github.com/janreges/ai-distiller/internal/ir"
 	sitter "github.com/smacker/go-tree-sitter"
-	"github.com/smacker/go-tree-sitter/python"
+	tree_sitter_python "github.com/tree-sitter/tree-sitter-python/bindings/go"
 )
 
 // NativeTreeSitterProcessor uses native Go tree-sitter bindings
@@ -21,7 +21,7 @@ type NativeTreeSitterProcessor struct {
 // NewNativeTreeSitterProcessor creates a new native tree-sitter processor
 func NewNativeTreeSitterProcessor() (*NativeTreeSitterProcessor, error) {
 	parser := sitter.NewParser()
-	parser.SetLanguage(python.GetLanguage())
+	parser.SetLanguage(sitter.NewLanguage(tree_sitter_python.Language()))
 
 	return &NativeTreeSitterProcessor{
 		parser: parser,

@@ -77,7 +77,7 @@ function the package's `ProcessWithOptions` calls.
 
 | Language | Parser actually wired | Grammar import | Reference |
 |---|---|---|---|
-| python | `internal/language/python/native_tree_sitter_processor.go#NativeTreeSitterProcessor.ProcessSource` | `github.com/smacker/go-tree-sitter/python` | `references/python.md` |
+| python | `internal/language/python/native_tree_sitter_processor.go#NativeTreeSitterProcessor.ProcessSource` | `github.com/tree-sitter/tree-sitter-python/bindings/go` | `references/python.md` |
 | typescript | `internal/language/typescript/ast_parser.go#ASTParser.ProcessSource` | `tree-sitter-typescript` (replaced by `internal/parser/grammars/tree-sitter-typescript`) | `references/typescript.md` |
 | javascript | `internal/language/javascript/tree_sitter_processor.go#TreeSitterProcessor.ProcessSource` | `github.com/tree-sitter/tree-sitter-javascript/bindings/go` | `references/javascript.md` |
 | go | `internal/language/golang/ast_parser.go#ASTParser.ProcessSource` | `go/parser`, `go/ast` (standard library) | `references/go.md` |
