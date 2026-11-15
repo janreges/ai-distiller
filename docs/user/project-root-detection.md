@@ -175,14 +175,14 @@ The MCP (Model Context Protocol) cache is stored in `.aid/cache/mcp/` with a 5-m
 
 ## Migration from Old Behavior
 
-Previously, AI Distiller created output files in the current directory. If you have existing `.aid.*` files scattered throughout your project:
+Previously, AI Distiller wrote output files named `.aid.<name>.[options].txt` into the current directory. It now writes `.aid/aid.<name>[.<options>].<ext>` in the project root. If you have old `.aid.*.txt` files scattered throughout your project:
 
 1. Create `.aidrc` at your project root
-2. Move existing outputs to the new `.aid/` directory:
+2. Regenerate the outputs you still need (`aid <path>` writes `.aid/aid.<name>[.<options>].<ext>`) and delete the old files:
    ```bash
-   find . -name ".aid.*.txt" -exec mv {} .aid/ \;
+   find . -name ".aid.*.txt" -not -path "./.aid/*" -delete
    ```
-3. Update any scripts or workflows that expect outputs in the old location
+3. Update any scripts or workflows that expect outputs in the old location or under the old names
 
 ## Summary
 

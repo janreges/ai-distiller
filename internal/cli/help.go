@@ -64,7 +64,7 @@ USAGE:
   {{.CommandPath}} [command]{{end}}
 
 PATH:
-  <path>                      Relative or absolute path to source directory or file
+  <path>                      Relative or absolute path to source directory or file; - reads stdin
 
 QUICK START:
   # Most common usage patterns
@@ -108,11 +108,13 @@ FILTERING (Essential):
   --public/--private/--protected/--internal     Visibility control (0/1, default: public=1)
   --comments/--docstrings/--implementation      Content control (0/1)
   --include/--exclude PATTERNS                  File patterns (e.g., "*.go,*.py")
+  --expand PATTERNS                             Keep full bodies only for symbols matching these globs
 
 SPECIAL MODES:
   --raw                       Process text files without parsing (overrides all content filters)
-  --lang LANGUAGE             Force language: auto|python|typescript|javascript|go|rust|
-                              java|csharp|kotlin|cpp|php|ruby|swift (useful for stdin input)
+  --lang LANGUAGE             Language for stdin input (not used for files): auto|python|typescript|javascript|go|rust|
+                              java|csharp|kotlin|cpp|php|ruby|swift;
+                              aliases: py, js, jsx, ts, tsx, golang, c++, cxx, cc, c#, cs, rb, rs, kt
   aid .git                    Git history analysis mode (shows commit history)
   --with-analysis-prompt      Add comprehensive AI prompt for commit quality analysis, patterns,
                               development timeline visualization, and complexity insights
@@ -220,10 +222,15 @@ AI ACTIONS (--ai-action)
 OPTIONS
 
 Primary Options:
-    <path>                      Path to source file or directory [required]
-    -o, --output FILE           Write output to file (default: .aid/aid.<name>[.<options>].<ext> in the project root)
+    <path>                      Path to source file or directory; - reads stdin (piped stdin is
+                                read when no path is given)
+    -o, --output FILE           Output file (default: .aid/aid.<name>[.<options>].<ext> in the project root);
+                                AI actions always write to --ai-output and reject -o
+    --stdout                    Print to stdout; no file is written unless -o is also given;
+                                AI actions always write to --ai-output and reject -o
     --ai-action ACTION          Use predefined AI action configuration
-    --ai-output FILE            Custom output path for AI action
+    --ai-output FILE            Custom output path for AI action; must stay inside <path> or the
+                                project's .aid/ directory
     --format FORMAT             Output format (text|md|jsonl|json-structured|xml)
 
 Visibility Filtering:
@@ -251,11 +258,16 @@ Alternative Filtering:
 File Selection:
     --include PATTERNS         Include file patterns (e.g., "*.py,*.go")
     --exclude PATTERNS         Exclude file patterns (e.g., "*test*,*.json")
+    --expand PATTERNS          Keep full bodies only for symbols whose name matches these globs
+                               (comma-separated or repeated, e.g., "GetUser,*Service*"); every other
+                               symbol stays a signature. Matching a type name expands its methods.
 
 Processing Options:
     --raw                      Process all text files without parsing
-    --lang LANGUAGE            Override language detection
-    --tree-sitter              Use tree-sitter parser (experimental)
+    --lang LANGUAGE            Language of code read from stdin (ignored for files and
+                               directories): auto|python|typescript|javascript|go|
+                               ruby|swift|rust|java|csharp|kotlin|cpp|php
+                               Aliases: py, js, jsx, ts, tsx, golang, c++, cxx, cc, c#, cs, rb, rs, kt
     -r, --recursive 0|1        Process directories recursively (default: 1)
 
 Path Control:
@@ -284,10 +296,23 @@ Summary Output:
                                off: Disable summary output
     --no-emoji                 Disable emojis in summary output
 
-Diagnostics:
+Text Output:
+    --show-ai-agent-instructions  Put a short block of instructions for AI agents at the start of
+                               the text output (default: off)
+    --filter-imports           Drop imports the distilled output does not use, text format only
+                               (default: on; disable with --filter-imports=false)
+
+Diagnostics and Help:
     -v, --verbose              Verbose output (-vv, -vvv for more detail)
-    --strict                   Fail on first syntax error
     --version                  Show version information
+    --help                     Show the short help
+    --help-extended            Show this complete reference
+    --cheat                    Show the quick reference card
+
+EXPERIMENTAL
+    --dependency-aware         Cross-file dependency analysis and call graph traversal
+                               (default: off; behaviour may change)
+    --max-depth N              Maximum depth for dependency traversal (default: 2)
 
 SUPPORTED LANGUAGES
 
@@ -309,12 +334,12 @@ AI-Powered Analysis:
 Output Control:
     aid ./src --format=md -o analysis.md
     aid ./src --stdout | pbcopy          # Copy to clipboard (macOS)
-    aid ./src --format=jsonl > data.jsonl
+    aid ./src --format=jsonl --stdout > data.jsonl
 
 Filtering Examples:
     aid --include "*.go,*.py" ./          # Only Go and Python files
     aid --exclude "*test*,*spec*" ./      # Exclude test files
-    aid --include-only public,imports ./  # Only public APIs and imports
+    aid --include-only public,methods,fields,imports ./  # Public APIs with members, and imports
     aid --exclude-items comments,implementation ./
 
 Git Analysis:
@@ -322,24 +347,31 @@ Git Analysis:
     aid .git --with-analysis-prompt      # With AI analysis guidance
 
 Advanced:
-    aid --lang=python ./mixed-repo       # Force Python parsing
+    cat snippet.py | aid --lang python   # Language for stdin input
     aid --raw ./docs                     # Process as plain text
     aid -w 1 ./large-project            # Single-threaded processing
 
 FILES
 
     Output Files:
-        Default pattern: .aid.<dirname>.[options].txt
-        Example: .aid.myproject.pub.txt (public only)
-                 .aid.myproject.priv.prot.impl.txt (private, protected, implementation)
+        aid PATH                    writes .aid/aid.<name>[.<options>].<ext> in the project root, prints nothing
+        aid PATH -o FILE            writes FILE, prints nothing
+        aid PATH --stdout           prints the output, writes no file
+        aid PATH -o FILE --stdout   writes FILE and prints the output
+        ... | aid [-o FILE]         stdin: prints the output; -o FILE also writes FILE
+        aid .git [-o FILE]          git mode: prints the log, or writes FILE with -o
+        AI actions always write to --ai-output and reject -o; with --stdout a prompt action
+        also prints its prompt
 
     Configuration:
         No configuration file support - all options via command line
 
 EXIT STATUS
-    0    Success
-    1    General error (file not found, parse error, etc.)
-    2    Invalid arguments or conflicting options
+    0    Success; source that does not parse does not fail the run
+    1    Error (path not found, unknown flag, invalid --format or 0/1 visibility and content
+         value, unknown --ai-action, -o with --ai-action, stdin language not detected, etc.)
+    Some invalid values fall back with exit 0 (--summary-type, --file-path-type,
+    --fields/--methods, unknown --include-only categories); see COMMAND-LINE-OPTIONS.md
 
 SEE ALSO
     aid help actions     - Detailed AI actions documentation
@@ -650,7 +682,8 @@ flow-for-multi-file-docs
 
 CUSTOMIZING AI ACTION OUTPUT:
 
-    --ai-output PATH        Custom output file path
+    --ai-output PATH        Custom output file path; must stay inside the analysed path
+                           or the project's .aid/ directory
                            Supports template variables:
                            %%YYYY-MM-DD%% - Current date
                            %%HH-MM-SS%%   - Current time  
@@ -682,11 +715,11 @@ COMBINING WITH FILTERING:
 WORKFLOW INTEGRATION:
 
     # CI/CD Security Pipeline
-    aid --ai-action prompt-for-security-analysis . > security-prompt.md
+    aid --ai-action prompt-for-security-analysis . --stdout > security-prompt.md
     # Feed security-prompt.md + distilled code to LLM
     
     # Code Review Assistant
-    aid --ai-action prompt-for-refactoring-suggestion ./changed-files > review.md
+    aid --ai-action prompt-for-refactoring-suggestion ./changed-files --stdout > review.md
     # Use review.md as context for AI-powered code review
 
 OUTPUT FILE NAMING & MANAGEMENT:
@@ -694,7 +727,7 @@ OUTPUT FILE NAMING & MANAGEMENT:
 AI Distiller uses intelligent file naming to avoid conflicts and enable easy management:
 
 DEFAULT FILE PATTERNS:
-    Regular distillation: .aid.{basename}.{options}.txt
+    Regular distillation: .aid/aid.<name>[.<options>].<ext> in the project root
     AI actions: .aid/{ACTION-NAME}.{timestamp}.{basename}.md
     Flow actions: .aid/ directory with multiple files and subdirectories
 
@@ -705,14 +738,15 @@ RATIONALE:
     • Large codebases can generate MBs of output - files prevent context overflow
 
 STDOUT CONSIDERATIONS:
-    --stdout works for all operations but use carefully:
+    --stdout prints the output and writes no file unless -o FILE is also given.
+    AI actions always write to --ai-output and reject -o. Use carefully:
     • Small projects: safe for direct AI tool input
     • Large codebases: may generate MBs of text exceeding AI context limits
     • Flow actions: only shows summary, full output still goes to .aid/ directory
 
 EXAMPLES:
-    aid ./src                    → .aid.src.pub.txt
-    aid ./src --implementation=1 → .aid.src.pub.impl.txt
+    aid ./src                    → .aid/aid.src.txt
+    aid ./src --implementation=1 → .aid/aid.src.impl.txt
     aid ./src --ai-action prompt-for-refactoring-suggestion → .aid/REFACTORING-SUGGESTION.2025-06-17.14-30-00.src.md
     aid ./src --ai-action flow-for-deep-file-to-file-analysis → .aid/ directory with task lists and templates
 
@@ -753,7 +787,7 @@ Controls which code elements are included based on their access level:
     
     --protected 0|1        Include protected members (default: 0)
                           • Protected methods (Java, C#, C++)
-                          • _single_underscore methods (Python convention)
+                          • (not Python _name: those count as private)
     
     --internal 0|1         Include internal/package-private members (default: 0)
                           • Package-private (Java)
@@ -812,12 +846,15 @@ ALTERNATIVE FILTERING SYNTAX:
     --exclude-items CATEGORIES   Exclude specified categories
     
     Categories: public, protected, internal, private, comments, docstrings,
-               implementation, imports, annotations
+               implementation, imports, annotations, fields, methods
     
     EXAMPLES:
-        --include-only public,imports         # Only public APIs and imports
+        --include-only public,methods,fields,imports  # Public APIs with members, and imports
         --exclude-items comments,private      # Everything except comments and private
-        --include-only public,protected,implementation  # Public/protected with bodies
+        --include-only public,protected,methods,fields,implementation  # Public/protected with bodies
+
+    --include-only starts from nothing: list methods and/or fields, or every class
+    and interface is printed with an empty body.
 
 FILE PATTERN FILTERING:
 
@@ -825,12 +862,15 @@ Controls which files are processed:
 
     --include PATTERNS     Include files matching patterns (comma-separated)
     --exclude PATTERNS     Exclude files matching patterns (comma-separated)
+    --expand PATTERNS      Keep full bodies only for symbols whose name matches
+                           (comma-separated globs); all other symbols stay signatures
     
-    Pattern syntax:
+    Pattern syntax (all rules: "Pattern rules" in docs/user/COMMAND-LINE-OPTIONS.md):
         *.ext              Files with specific extension
-        **/pattern         Recursive directory matching
-        dir/*              Files in specific directory
-        *test*             Files containing "test"
+        **/name            Directory or file "name" at any depth (a directory with everything in it)
+        dir/*              Everything in dir/, subdirectories included
+        *test*             --exclude: any file or directory name below <path> containing "test";
+                           --include: file names only
     
     EXAMPLES:
         --include "*.go,*.py"              # Only Go and Python files
@@ -841,7 +881,7 @@ Controls which files are processed:
 PRACTICAL FILTERING COMBINATIONS:
 
 Public API Documentation:
-    aid ./src --include-only public,docstrings,imports
+    aid ./src --include-only public,methods,fields,docstrings,imports
     # Perfect for generating API documentation
 
 Security Analysis (All Code):
@@ -853,7 +893,7 @@ Refactoring Analysis:
     # Focus on code structure and implementation
 
 Architecture Overview:
-    aid ./ --include-only public,protected,imports --exclude "*test*"
+    aid ./ --include-only public,protected,methods,fields,imports --exclude "*test*"
     # High-level structure without implementation details
 
 Performance Analysis:
@@ -861,14 +901,14 @@ Performance Analysis:
     # Implementation details for performance-critical languages
 
 Clean Interface Export:
-    aid ./lib --include-only public,docstrings
+    aid ./lib --include-only public,methods,fields,docstrings
     # Clean API surface for library documentation
 
 DEBUGGING FILTERING:
 
 Use verbose mode to see what's being filtered:
 
-    aid ./ -v --include-only public         # See what gets included
+    aid ./ -v --include-only public,methods,fields  # See what gets included
     aid ./ -vv --exclude "*test*"           # See exclusion details
     aid ./ -vvv --implementation=1          # Full filtering trace
 
@@ -876,7 +916,7 @@ FILTERING VALIDATION:
 
 Check your filtering with dry-run approach:
 
-    aid ./ --stdout --format=text           # Quick preview
+    aid ./ --stdout --format=text           # Quick preview (prints, writes no file)
     aid ./ --format=md                      # Formatted preview
     
 Common mistakes:
@@ -981,7 +1021,7 @@ Combine git mode with regular distillation for comprehensive analysis:
     aid .git --git-limit=20 > recent-changes.md
     
     # 2. Get current codebase structure  
-    aid --ai-action prompt-for-refactoring-suggestion . > code-analysis.md
+    aid --ai-action prompt-for-refactoring-suggestion . --stdout > code-analysis.md
     
     # 3. Feed both to LLM for comprehensive review
 
@@ -1079,10 +1119,11 @@ ESSENTIAL FILTERING:
   --comments=1                           # Include comments
   --include "*.go,*.py"                  # File patterns
   --exclude "*test*"                     # Exclude tests
+  --expand "GetUser,*Service*"           # Full bodies only for matching symbols
 
 QUICK COMBINATIONS:
   # API Documentation
-  aid ./src --include-only public,docstrings,imports
+  aid ./src --include-only public,methods,fields,docstrings,imports
 
   # Security Analysis (everything)
   aid ./ --ai-action prompt-for-security-analysis --private=1
@@ -1112,8 +1153,10 @@ SUMMARY FORMATS:
   --no-emoji                           # Remove emojis from summary
 
 OUTPUT FILES:
-  Default: .aid/ folder or .aid.*.txt (easy git recognition)
-  --stdout available but large codebases may exceed AI context limits
+  Default: .aid/aid.<name>[.<options>].<ext> in the project root, nothing printed
+  --stdout: print to stdout; no file is written unless -o FILE is also given;
+  AI actions always write to --ai-output and reject -o
+  Large codebases may exceed AI context limits when printed
 
 HELP:
   aid --help-extended  # Complete documentation

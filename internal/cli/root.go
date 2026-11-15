@@ -102,125 +102,6 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "aid [path]",
 	Short: "AI Distiller - Extract essential code structure for LLMs",
-	Long: `AI Distiller (aid) intelligently "distills" source code from any project 
-into a compact, structured format, optimized for the context window of 
-Large Language Models (LLMs).
-
-Special Git Mode: When you pass a .git directory path, aid switches to git log
-mode and outputs formatted commit history instead of processing source files.
-
-═══════════════════════════════════════════════════════════════════════════════
-
-BASIC OPTIONS:
-  -o, --output <file>          Output file (default: auto-generated)
-  --stdout                     Print to stdout; no file is written unless -o is also given
-  --format <type>              Output format: text|md|jsonl|json-structured|xml
-                              (default: text)
-
-PATH & OUTPUT CONTROL:
-  --file-path-type <type>      How paths appear in output: relative|absolute
-                              (default: relative)
-  --relative-path-prefix <str> Custom prefix for relative paths (e.g., "src/")
-  -r, --recursive              Process directories recursively
-                              0/1 (default: 1)
-
-───────────────────────────────────────────────────────────────────────────────
-
-VISIBILITY FILTERING:
-  Control which visibility levels are included in output
-  
-  --public                     Include public members
-                              0/1 (default: 1)
-  --protected                  Include protected members
-                              0/1 (default: 0)
-  --internal                   Include internal/package-private members
-                              0/1 (default: 0)
-  --private                    Include private members
-                              0/1 (default: 0)
-
-CONTENT FILTERING:
-  Control what code elements are included
-  
-  --comments                   Include comments
-                              0/1 (default: 0)
-  --docstrings                 Include documentation
-                              0/1 (default: 1)
-  --implementation             Include function/method bodies
-                              0/1 (default: 0)
-  --imports                    Include import statements
-                              0/1 (default: 1)
-  --annotations                Include decorators/annotations
-                              0/1 (default: 1)
-
-ALTERNATIVE FILTERING:
-  --include-only <items>       Include ONLY these categories (comma-separated)
-  --exclude-items <items>      Exclude these categories (comma-separated)
-                              Categories: public,protected,internal,private,
-                              comments,docstrings,implementation,imports,annotations
-
-───────────────────────────────────────────────────────────────────────────────
-
-FILE SELECTION:
-  --include <pattern>          Include file patterns (comma-separated)
-                              Examples: "*.go", "*.go,*.py", "src/**/*.js"
-  --exclude <pattern>          Exclude file patterns (comma-separated)
-                              Examples: "*_test.go", "vendor/**", "*/tmp/*"
-                              
-                              Pattern types:
-                              - Simple: "*.go" (matches Go files)
-                              - Multiple: "*.go,*.py,*.js" (multiple extensions)
-                              - Directory: "vendor/**" (exclude vendor tree)
-                              - Path: "*/internal/*" (match path segments)
-                              - Complex: "src/**/*.js" (recursive directory)
-
-PROCESSING MODE:
-  --raw                        Process all text files without parsing
-  --lang <language>            Override language detection
-                              Languages: auto|python|typescript|javascript|go|ruby|
-                              swift|rust|java|csharp|kotlin|cpp|php
-                              Aliases: py, js, jsx, ts, tsx, golang, c++, cxx, cc,
-                              c#, cs, rb, rs, kt
-                              (default: auto)
-  --tree-sitter                Use tree-sitter parser (experimental)
-
-───────────────────────────────────────────────────────────────────────────────
-
-PERFORMANCE:
-  -w, --workers <num>          Number of parallel workers
-                              0=auto (80% CPU), 1=serial, N=use N workers
-                              (default: 0)
-
-SUMMARY OUTPUT:
-  --summary-type <type>        Summary format after processing
-                              visual-progress-bar|stock-ticker|speedometer-dashboard|
-                              minimalist-sparkline|ci-friendly|json|off
-                              (default: visual-progress-bar)
-  --no-emoji                   Disable emojis in summary output
-
-DIAGNOSTICS:
-  -v, --verbose                Verbose output (use -vv or -vvv for more)
-  --strict                     Fail on first syntax error
-  --version                    Show version information
-  --help                       Show this help message
-
-═══════════════════════════════════════════════════════════════════════════════
-
-EXAMPLES:
-  aid                          # Show this help message
-  aid .                        # Process current dir, public APIs only
-  aid src/ --private=1         # Include private members
-  aid --file-path-type=absolute . # Use absolute paths in output
-  aid docs/ --raw              # Process text files without parsing
-  aid . -w 1                   # Force serial processing
-  aid --relative-path-prefix="module/" docs/  # Add custom prefix to paths
-  aid .git                     # Show git commit history (special mode)
-  aid .git --git-limit=50      # Show latest 50 commits
-  
-  # File filtering examples:
-  aid --exclude "*_test.go"    # Exclude test files
-  aid --include "*.go,*.py"    # Only Go and Python files
-  aid --exclude "vendor/**,node_modules/**"  # Skip dependency directories
-  aid src/ --include "**/*.ts" --exclude "**/*.spec.ts"  # TypeScript without tests`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runDistiller,
 }
@@ -306,7 +187,7 @@ func initFlags() {
 	
 
 	// Language override flag
-	rootCmd.Flags().StringVar(&langOverride, "lang", "auto", "Override language detection: auto|python|typescript|javascript|go|ruby|swift|rust|java|csharp|kotlin|cpp|php (aliases such as py, ts, c++, c# are accepted)")
+	rootCmd.Flags().StringVar(&langOverride, "lang", "auto", "Language of code read from stdin, ignored for files and directories: auto|python|typescript|javascript|go|ruby|swift|rust|java|csharp|kotlin|cpp|php (aliases such as py, ts, c++, c# are accepted)")
 	
 	// New filtering flags - visibility
 	rootCmd.Flags().String("public", "1", "Include public members (0/1, default: 1)")
