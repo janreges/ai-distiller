@@ -2,7 +2,6 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const os = require('node:os');
-const { z } = require('zod');
 const {
   extractSavedPath, resolveBasePath, savedPathLine, truncationNotice, spawnFailureMessage,
   aiActionText, withIncompleteNotice,
@@ -67,12 +66,6 @@ test('spawn failure blames a missing working directory, not the binary', () => {
   assert.doesNotMatch(text, /retry|try again/i);
 });
 
-test('removed parameters are tolerated', () => {
-  const { TOOL_SCHEMAS } = require('../dist/mcp-server-sdk.js');
-  const parsed = z.object(TOOL_SCHEMAS.aid_hunt_bugs).parse({ target_path: 'src', focus_area: 'concurrency' });
-  assert.deepEqual(parsed, { target_path: 'src' });
-});
-
 test('the server schemas no longer declare the ignored parameters', () => {
   const { TOOL_SCHEMAS } = require('../dist/mcp-server-sdk.js');
   const gone = {
@@ -82,7 +75,7 @@ test('the server schemas no longer declare the ignored parameters', () => {
   };
   for (const [tool, param] of Object.entries(gone)) {
     assert.ok(TOOL_SCHEMAS[tool], tool);
-    assert.equal(param in TOOL_SCHEMAS[tool], false, `${tool}.${param}`);
+    assert.equal(param in TOOL_SCHEMAS[tool].shape, false, `${tool}.${param}`);
   }
 });
 

@@ -48,41 +48,43 @@ function requireBinary(): void {
 }
 
 /**
- * Input schemas of the tools that take few parameters, exported so tests can pin
- * how the SDK treats unknown keys (a plain zod object drops them).
+ * Input schemas of the specialized tools and aid_analyze, exported for the tests.
+ * Like every tool schema in this file they are strict objects: an unknown or
+ * mistyped key is rejected with a -32602 error that names it, and the advertised
+ * JSON schema says additionalProperties: false.
  */
-export const TOOL_SCHEMAS: Record<string, z.ZodRawShape> = {
-  aid_hunt_bugs: {
+export const TOOL_SCHEMAS = {
+  aid_hunt_bugs: z.strictObject({
     target_path: z.string().describe("Path to file or directory to analyze for bugs"),
     include_private: z.boolean().optional().describe("Include private members in analysis (default: true)"),
     include_patterns: z.string().optional().describe("File patterns to include"),
     exclude_patterns: z.string().optional().describe("File patterns to exclude")
-  },
-  aid_suggest_refactoring: {
+  }),
+  aid_suggest_refactoring: z.strictObject({
     target_path: z.string().describe("Path to file or directory to analyze"),
     include_implementation: z.boolean().optional().describe("Include implementation details in analysis (default: true)"),
     include_patterns: z.string().optional().describe("File patterns to include"),
     exclude_patterns: z.string().optional().describe("File patterns to exclude")
-  },
-  aid_generate_diagram: {
+  }),
+  aid_generate_diagram: z.strictObject({
     target_path: z.string().describe("Path to file or directory to visualize"),
     include_patterns: z.string().optional().describe("File patterns to include"),
     exclude_patterns: z.string().optional().describe("File patterns to exclude")
-  },
-  aid_analyze_security: {
+  }),
+  aid_analyze_security: z.strictObject({
     target_path: z.string().describe("Path to file or directory to analyze"),
     include_private: z.boolean().optional().describe("Include private members in analysis (default: true)"),
     include_implementation: z.boolean().optional().describe("Include implementation details (default: true)"),
     include_patterns: z.string().optional().describe("File patterns to include"),
     exclude_patterns: z.string().optional().describe("File patterns to exclude")
-  },
-  aid_generate_docs: {
+  }),
+  aid_generate_docs: z.strictObject({
     target_path: z.string().describe("Path to file or directory to document"),
     doc_type: z.enum(["single-file-docs", "multi-file-docs", "api-reference"]).optional().describe("Type of documentation to generate"),
     include_patterns: z.string().optional().describe("File patterns to include"),
     exclude_patterns: z.string().optional().describe("File patterns to exclude")
-  },
-  aid_analyze: {
+  }),
+  aid_analyze: z.strictObject({
     ai_action: z.enum([
       "flow-for-deep-file-to-file-analysis",
       "flow-for-multi-file-docs",
@@ -106,15 +108,16 @@ export const TOOL_SCHEMAS: Record<string, z.ZodRawShape> = {
     include_methods: z.boolean().optional().describe("Include methods/functions (default: true)"),
     include_patterns: z.string().optional().describe("File patterns to include"),
     exclude_patterns: z.string().optional().describe("File patterns to exclude")
-  },
-};
+  }),
+} satisfies Record<string, z.ZodObject>;
 
 /**
  * AI Distiller MCP Server
  * Executes aid commands with queuing to handle concurrency
  */
-class AidDistillerServer {
-  private server: McpServer;
+export class AidDistillerServer {
+  /** The SDK server with every tool registered; exported so tests can connect a client to it. */
+  readonly server: McpServer;
   private queue = new SerialQueue();
 
   constructor() {
@@ -177,7 +180,7 @@ class AidDistillerServer {
       {
         title: "Extract Code Structure from File",
         description: "Extracts essential code structure from a single file - the core functionality of AI Distiller. Returns clean, structured code signatures optimized for AI context windows.\n\nUSAGE: Essential for providing accurate code context to AI assistants. Automatically detects language and extracts API signatures, types, and structure while removing unnecessary implementation details.",
-        inputSchema: {
+        inputSchema: z.strictObject({
           file_path: z.string().describe("Path to the file to distill"),
           include_private: z.boolean().optional().describe("Include private members (default: false)"),
           include_protected: z.boolean().optional().describe("Include protected members (default: false)"),
@@ -188,7 +191,7 @@ class AidDistillerServer {
           include_methods: z.boolean().optional().describe("Include methods/functions (default: true)"),
           expand: z.string().optional().describe("Keep full implementation ONLY for symbols whose name matches these globs (comma-separated, e.g. 'GetUser,*Service*'). Matches a function/method name anywhere; matching a type name expands the methods nested inside that type's body (works for languages that nest methods under the type, e.g. Python/TypeScript/Java/C#). For languages where methods are file-level with a receiver (e.g. Go), match the method name. Signatures everywhere else."),
           output_format: z.enum(["text", "md", "jsonl", "json-structured", "xml"]).optional().describe("Output format (default: text)")
-        }
+        })
       },
       async (params) => {
         if (isDebug) console.error(`[AID MCP] distill_file called with params: ${JSON.stringify(params)}`);
@@ -229,7 +232,7 @@ class AidDistillerServer {
       {
         title: "Extract Code Structure from Directory",
         description: "Extracts essential code structure from entire directories - the core functionality of AI Distiller. Processes all supported programming languages and returns structured API/code signatures optimized for AI context windows.\n\nUSAGE: Perfect for understanding codebases, API discovery, and providing accurate code context to AI assistants. Supports filtering by visibility levels, file patterns, and content types.",
-        inputSchema: {
+        inputSchema: z.strictObject({
           directory_path: z.string().describe("Path to the directory to distill"),
           recursive: z.boolean().optional().describe("Process subdirectories recursively (default: true)"),
           include_private: z.boolean().optional().describe("Include private members (default: false)"),
@@ -243,7 +246,7 @@ class AidDistillerServer {
           exclude_patterns: z.string().optional().describe("File patterns to exclude (comma-separated, e.g., '*test*,vendor/**')"),
           expand: z.string().optional().describe("Keep full implementation ONLY for symbols whose name matches these globs (comma-separated, e.g. 'GetUser,*Service*'). Matches a function/method name anywhere; matching a type name expands the methods nested inside that type's body (works for languages that nest methods under the type, e.g. Python/TypeScript/Java/C#). For languages where methods are file-level with a receiver (e.g. Go), match the method name. Signatures everywhere else."),
           output_format: z.enum(["text", "md", "jsonl", "json-structured", "xml"]).optional().describe("Output format (default: text)")
-        }
+        })
       },
       async (params) => {
         if (isDebug) console.error(`[AID MCP] distill_directory called with params: ${JSON.stringify(params)}`);
@@ -287,7 +290,7 @@ class AidDistillerServer {
       {
         title: "Dependency-Aware Code Distillation",
         description: "EXPERIMENTAL (regex-based, may miss or over-include calls): follows function/method calls across files up to the specified depth and returns distilled code of only what the target file appears to use.\n\nUSAGE: Perfect for understanding code execution flows, impact analysis, and creating focused context for AI assistants. Particularly useful for large codebases where you need to understand how specific functionality works across multiple files.",
-        inputSchema: {
+        inputSchema: z.strictObject({
           file_path: z.string().describe("Target file to analyze"),
           max_depth: z.number().default(2).describe("Maximum depth to follow dependencies (default: 2)"),
           include_private: z.boolean().optional().describe("Include private members (default: false)"),
@@ -299,7 +302,7 @@ class AidDistillerServer {
           include_methods: z.boolean().optional().describe("Include methods/functions (default: true)"),
           expand: z.string().optional().describe("Keep full implementation ONLY for symbols whose name matches these globs (comma-separated, e.g. 'GetUser,*Service*'). Matches a function/method name anywhere; matching a type name expands the methods nested inside that type's body (works for languages that nest methods under the type, e.g. Python/TypeScript/Java/C#). For languages where methods are file-level with a receiver (e.g. Go), match the method name. Signatures everywhere else."),
           output_format: z.enum(["text", "md", "jsonl", "json-structured", "xml"]).optional().describe("Output format (default: text)")
-        }
+        })
       },
       async (params) => {
         if (isDebug) console.error(`[AID MCP] distill_with_dependencies called with params: ${JSON.stringify(params)}`);
@@ -497,13 +500,13 @@ class AidDistillerServer {
       {
         title: "Deep File-by-File Analysis Workflow",
         description: "Generates task lists and prompts for systematic file-by-file analysis. Creates a structured workflow where AI agents analyze each file across multiple dimensions (Security, Performance, Maintainability, Readability). Perfect for comprehensive codebase reviews.\n\nOUTPUT: Generates task list, summary template, and directory structure for organizing analysis results. AI agents should read the task list and follow instructions systematically.",
-        inputSchema: {
+        inputSchema: z.strictObject({
           target_path: z.string().describe("Path to analyze"),
           include_private: z.boolean().optional().describe("Include all visibility levels (default: true)"),
           include_implementation: z.boolean().optional().describe("Include implementation details (default: true)"),
           include_patterns: z.string().optional().describe("File patterns to include"),
           exclude_patterns: z.string().optional().describe("File patterns to exclude")
-        }
+        })
       },
       async (params) => {
         const args = [
@@ -532,11 +535,11 @@ class AidDistillerServer {
       {
         title: "Multi-File Documentation Workflow",
         description: "Creates documentation workflow prompts with file relationships. Generates structured prompts that guide AI agents to create interconnected documentation covering multiple files, their relationships, and overall system architecture.\n\nOUTPUT: Generates workflow files that AI agents can follow to create comprehensive documentation with proper cross-references.",
-        inputSchema: {
+        inputSchema: z.strictObject({
           target_path: z.string().describe("Path to document"),
           include_patterns: z.string().optional().describe("File patterns to include"),
           exclude_patterns: z.string().optional().describe("File patterns to exclude")
-        }
+        })
       },
       async (params) => {
         const args = [
@@ -563,13 +566,13 @@ class AidDistillerServer {
       {
         title: "Complex Codebase Analysis",
         description: "Enterprise-grade analysis prompt with full codebase context. Generates comprehensive prompts for architecture analysis, compliance checks, and detailed findings. Best suited for large codebases requiring deep architectural insights.\n\nOUTPUT: Generates analysis prompt with distilled code that AI agents can use to create architecture diagrams, identify patterns, and provide strategic recommendations.",
-        inputSchema: {
+        inputSchema: z.strictObject({
           target_path: z.string().describe("Path to analyze"),
           include_private: z.boolean().optional().describe("Include all visibility levels (default: true)"),
           include_implementation: z.boolean().optional().describe("Include implementation details (default: true)"),
           include_patterns: z.string().optional().describe("File patterns to include"),
           exclude_patterns: z.string().optional().describe("File patterns to exclude")
-        }
+        })
       },
       async (params) => {
         const args = [
@@ -598,12 +601,12 @@ class AidDistillerServer {
       {
         title: "Performance Analysis",
         description: "Performance optimization prompt with complexity focus. Generates analysis prompts that guide AI agents to identify performance bottlenecks, analyze algorithmic complexity, and suggest optimization strategies.\n\nOUTPUT: Generates performance analysis prompt focusing on scalability issues, resource usage, and optimization opportunities.",
-        inputSchema: {
+        inputSchema: z.strictObject({
           target_path: z.string().describe("Path to analyze"),
           include_implementation: z.boolean().optional().describe("Include implementation details (default: true)"),
           include_patterns: z.string().optional().describe("File patterns to include"),
           exclude_patterns: z.string().optional().describe("File patterns to exclude")
-        }
+        })
       },
       async (params) => {
         const args = [
@@ -631,12 +634,12 @@ class AidDistillerServer {
       {
         title: "Best Practices Analysis",
         description: "Code quality prompt with industry standards. Generates analysis prompts that guide AI agents to assess code against best practices, design patterns, and clean code principles.\n\nOUTPUT: Generates best practices analysis prompt covering code quality metrics, pattern usage, and improvement suggestions.",
-        inputSchema: {
+        inputSchema: z.strictObject({
           target_path: z.string().describe("Path to analyze"),
           include_private: z.boolean().optional().describe("Include all visibility levels (default: true)"),
           include_patterns: z.string().optional().describe("File patterns to include"),
           exclude_patterns: z.string().optional().describe("File patterns to exclude")
-        }
+        })
       },
       async (params) => {
         const args = [
@@ -709,11 +712,11 @@ class AidDistillerServer {
       {
         title: "List Project Files",
         description: "Lists project files with language detection and statistics. Stops after 2000 entries and says so; pass a subdirectory or a pattern to narrow it. Useful for exploring project structure before distillation.",
-        inputSchema: {
+        inputSchema: z.strictObject({
           path: z.string().optional().describe("Path to list; relative paths resolve against the server root (default: the root)"),
           pattern: z.string().optional().describe("File pattern to match"),
           recursive: z.boolean().optional().describe("List recursively (default: true)")
-        }
+        })
       },
       async (params) => {
         const basePath = resolveBasePath(params.path, process.env.AID_ROOT || process.cwd());
@@ -733,7 +736,7 @@ class AidDistillerServer {
       {
         title: "Get AI Distiller Capabilities",
         description: "Returns comprehensive information about AI Distiller capabilities, supported languages, and available tools.",
-        inputSchema: {}
+        inputSchema: z.strictObject({})
       },
       async () => {
         const capabilities = {

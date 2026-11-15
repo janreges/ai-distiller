@@ -170,19 +170,22 @@ async function extractArchive(archivePath, destDir, platform) {
       });
     } catch (e) {
       console.log('System tar failed, falling back to node-tar library...');
-      // Fallback to node tar library
-      await tar.x({
-        file: archivePath,
-        cwd: destDir,
-        onentry: (entry) => {
-          // Log progress for debugging
-          if (entry.path.includes('aid')) {
-            console.log(`Extracting: ${entry.path}`);
-          }
-        }
-      });
+      await extractTarGz(archivePath, destDir);
     }
   }
+}
+
+async function extractTarGz(archivePath, destDir) {
+  await tar.x({
+    file: archivePath,
+    cwd: destDir,
+    onentry: (entry) => {
+      // Log progress for debugging
+      if (entry.path.includes('aid')) {
+        console.log(`Extracting: ${entry.path}`);
+      }
+    }
+  });
 }
 
 async function install() {
@@ -332,4 +335,4 @@ if (require.main === module) {
   install();
 }
 
-module.exports = { platformInfo, assetName, installedVersion, checksumFor, verifyFile, downloadError, manualDownloadFooter };
+module.exports = { platformInfo, assetName, installedVersion, checksumFor, verifyFile, downloadError, manualDownloadFooter, extractTarGz };

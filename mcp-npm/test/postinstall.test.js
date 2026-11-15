@@ -56,3 +56,27 @@ test('the manual-download footer is printed for download failures only', () => {
   assert.ok(unsupported, 'platformInfo throws for windows-arm64');
   assert.equal(p.manualDownloadFooter(unsupported, '1.4.0', '/pkg/bin'), '');
 });
+
+test('extractTarGz extracts a real archive', async () => {
+  const tar = require('tar');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'aid-targz-'));
+  try {
+    const src = path.join(tmp, 'src');
+    const dest = path.join(tmp, 'dest');
+    fs.mkdirSync(src);
+    fs.mkdirSync(dest);
+    const content = '#!/bin/sh\necho aid\n';
+    fs.writeFileSync(path.join(src, 'aid'), content, { mode: 0o755 });
+    fs.chmodSync(path.join(src, 'aid'), 0o755);
+    const archive = path.join(tmp, 'aid-linux-amd64-v0.0.0.tar.gz');
+    await tar.c({ gzip: true, file: archive, cwd: src }, ['aid']);
+    await p.extractTarGz(archive, dest);
+    const out = path.join(dest, 'aid');
+    assert.equal(fs.readFileSync(out, 'utf8'), content);
+    if (process.platform !== 'win32') {
+      assert.ok(fs.statSync(out).mode & 0o111, 'extracted file is executable');
+    }
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

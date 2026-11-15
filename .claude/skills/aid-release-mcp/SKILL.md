@@ -231,8 +231,8 @@ If it belongs:
    `aid_suggest_refactoring`, `aid_generate_diagram`, `aid_analyze_security`,
    `aid_generate_docs` and `aid_analyze`; inline in the `registerTool` call
    for the others. Snake_case, `.optional()`, a `.describe()` that states the
-   default. zod drops keys a schema does not declare, so a client sending a
-   parameter the schema lacks gets no error and no effect.
+   default, in a `z.strictObject({...})`: a key the schema lacks fails the call
+   with a `-32602` error naming it (`mcp-npm/test/tool-schemas.test.js`).
 3. In the handler, push the flag only when the parameter differs from the
    CLI default, like the existing ones: `--x=1` when a default-off boolean is
    true, `--x=0` when a default-on one is explicitly false, `--x=<value>` for

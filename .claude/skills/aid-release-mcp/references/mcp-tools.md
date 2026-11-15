@@ -18,7 +18,10 @@ Registered Tools", parameters per tool) and the root `README.md` (section
 - An optional flag is added only when the parameter differs from the CLI
   default. "true -> `--x=1`" means the flag is added only for `true`;
   "false -> `--x=0`" only for an explicit `false`.
-- Parameter names not in the schema are dropped without an error.
+- Every input schema is a `z.strictObject`: a parameter name not in the
+  schema fails the call with a `-32602` error that names it
+  (`Unrecognized key: "include_privat"`), and the advertised JSON schema has
+  `additionalProperties: false`.
 - The run goes through the serial queue, the timeout and the output cap
   (SKILL.md section 5). A non-zero exit of `aid` is a tool error with aid's
   stderr.
