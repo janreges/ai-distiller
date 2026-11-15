@@ -1,19 +1,23 @@
 # Kotlin Language Support
 
-AI Distiller provides comprehensive support for Kotlin codebases using the [tree-sitter-kotlin](https://github.com/fwcd/tree-sitter-kotlin) parser, with support for modern Kotlin features.
+AI Distiller supports Kotlin codebases through the [tree-sitter-kotlin](https://github.com/fwcd/tree-sitter-kotlin) grammar (fwcd, commit `d6af96d2`), compiled into the `aid` binary.
 
 ## Overview
 
-Kotlin support in AI Distiller is designed to extract the complete structure of Kotlin code while preserving null safety, immutability, and functional programming constructs. The distilled output maintains Kotlin's expressive syntax and type safety while optimizing for AI consumption.
+Kotlin support in AI Distiller is designed to extract the structure of Kotlin code while preserving null safety and functional programming constructs. The distilled output keeps Kotlin's syntax for declarations while optimizing for AI consumption.
 
-## Recent Improvements (2025-06-15)
+## Recent Improvements
 
-- **Val/Var Distinction**: Fixed critical issue where all properties were shown as `var` instead of preserving `val`
-- **Null Safety**: Fixed preservation of nullable types (`String?`, `T?`)
-- **Generic Functions**: Added support for generic type parameters in functions (`<T>`)
-- **Object Declarations**: Fixed formatting to show `object` keyword instead of `class`
-- **Enum Values**: Fixed to show all enum values (was only showing first)
-- **Const Properties**: Added support for `const val` declarations
+- **Function bodies**: `--implementation=1` prints block bodies in braces and expression bodies on one line (`fun area(): Double = r * r`)
+- **Comments**: KDoc (`/** */`) is printed by default; `//` and `/* */` comments with `--comments=1`
+- **Delegation**: a class that delegates an interface (`class D(s: Shape) : Shape by s`) keeps its members
+- **Annotated functions**: the KDoc above an annotated function is printed with it
+- **Locals**: variables declared inside a function body no longer appear as top-level properties
+- **Functional interfaces**: `fun interface Op` prints as `interface Op`, also when it is nested
+- **Nested types**: interfaces and enums nested in a class, object, interface or enum are printed; an interface prints its properties and nested types, an enum its companion object
+- **Object Declarations**: `object` keyword instead of `class`
+- **Enum Values**: all enum entries are printed
+- **Const Properties**: `const val` declarations
 
 ## Recent Fixes (2025-06-15)
 
@@ -33,21 +37,21 @@ Kotlin support in AI Distiller is designed to extract the complete structure of 
 
 | Construct | Support Level | Notes |
 |-----------|--------------|-------|
-| **Classes** | ✅ Full | Including nested and inner classes |
+| **Classes** | ⚠️ Partial | Including nested classes, objects, interfaces and enums, and inner classes; type parameters, supertypes and the `open` and `inner` modifiers are not printed |
 | **Data Classes** | ✅ Full | Primary constructor properties preserved |
 | **Sealed Classes** | ✅ Full | Including all variants |
-| **Objects** | ✅ Full | Singleton objects and companion objects |
-| **Interfaces** | ✅ Full | Including default methods |
-| **Enums** | ✅ Full | With constructor parameters and methods |
+| **Objects** | ✅ Full | Singleton objects and companion objects (printed as `object Name`) |
+| **Interfaces** | ⚠️ Partial | Functions, properties and nested types; default methods print as signatures; type parameters, supertypes and the `fun` and `sealed` modifiers are not printed |
+| **Enums** | ⚠️ Partial | Entries with their arguments, methods, a companion object and nested types; the enum's constructor parameters and the comments inside the enum body are not printed, and a property declared in the enum body prints as a bare name like an entry |
 | **Functions** | ✅ Full | Including suspend, inline, extension |
-| **Properties** | ✅ Full | Val/var distinction preserved |
-| **Generic Types** | ✅ Full | Type parameters and constraints |
+| **Properties** | ⚠️ Partial | Types kept; a `val` declared outside a primary constructor prints as `var` |
+| **Generic Types** | ⚠️ Partial | Function type parameters are kept (`reified` is dropped); class and interface type parameters are not printed |
 | **Nullable Types** | ✅ Full | `?` suffix preserved |
 | **Extension Functions** | ✅ Full | Receiver type shown in name |
 | **Extension Properties** | ⚠️ Partial | Missing receiver type and generics |
-| **Type Aliases** | ✅ Full | Type alias declarations |
-| **Annotations** | ✅ Full | Custom annotations preserved |
-| **Lambda Types** | ⚠️ Partial | Function types simplified |
+| **Type Aliases** | ❌ Not printed | Parsed, but the text output does not print them |
+| **Annotations** | ❌ Not printed | `@Serializable`, `@Deprecated` and other annotations are dropped |
+| **Lambda Types** | ✅ Full | Function types are kept as written (`f: (T) -> R`) |
 | **Coroutines** | ✅ Full | `suspend` modifier preserved |
 | **Inline Functions** | ✅ Full | `inline` modifier preserved |
 
@@ -55,11 +59,14 @@ Kotlin support in AI Distiller is designed to extract the complete structure of 
 
 Kotlin visibility in AI Distiller:
 - **public**: Default visibility (not shown explicitly)
-- **private**: Member-only access
-- **protected**: Class and subclass access
-- **internal**: Module-wide access
+- **private**: Member-only access, shown with `--private=1`
+- **protected**: Class and subclass access, shown with `--protected=1`
+- **internal**: Module-wide access, shown with `--internal=1`
 
 ## Known Issues
+
+### Supertypes and Type Parameters
+A class header prints without its supertypes and type parameters: `class A<T> : B(), C` prints as `class A`, `interface Repository<T>` as `interface Repository`.
 
 ### Extension Properties
 Extension properties are not fully supported. They appear as regular properties without the receiver type:
@@ -75,23 +82,20 @@ var secondOrNull: T?
 val <T> List<T>.secondOrNull: T?
 ```
 
-### Primary Constructor Syntax
-Primary constructors in data classes may show incorrect parameter order in some cases.
-
-### Generic Type Arguments
-Generic type arguments in some contexts (like base class declarations) may be incomplete or missing.
-
-### Companion Object Naming
-Companion objects always show as `Companion` even when they have custom names.
+### Val Properties
+A `val` declared outside a primary constructor prints as `var`: at the top level and in a class, object or interface body, with or without an initializer (`val size: Int = 1` prints as `var size: Int`, an abstract `val label: String` in an interface as `var label: String`). `const val` and primary constructor properties keep `val`.
 
 ### Default Parameter Values
 Default parameter values in functions are not extracted.
 
+### Annotations and Type Aliases
+Annotations and `typealias` declarations are not printed.
+
 ## Key Features
 
-### 1. **Immutability Preservation**
+### 1. **Constructor Properties**
 
-AI Distiller correctly distinguishes between `val` (immutable) and `var` (mutable):
+Primary constructor properties keep `val` and `var`:
 
 ```kotlin
 // Input
@@ -102,7 +106,8 @@ data class User(
 )
 
 // Output
-data class User(val id: Long, val name: String, var lastLoginTime: LocalDateTime?)
+data class User(val id: Long, val name: String, var lastLoginTime: LocalDateTime?) {
+}
 ```
 
 ### 2. **Null Safety**
@@ -121,7 +126,7 @@ fun findUser(id: Long): User?
 
 ### 3. **Sealed Class Hierarchies**
 
-Sealed classes and all their variants are properly extracted:
+Sealed classes and all their variants are extracted (without type parameters and supertypes):
 
 ```kotlin
 // Input
@@ -132,10 +137,13 @@ sealed class Result<out T> {
 }
 
 // Output
-sealed class Result<out T> {
-    data class Success<T>(val data: T)
-    data class Error(val message: String)
-    object Loading
+sealed class Result {
+    data class Success(val data: T) {
+    }
+    data class Error(val message: String) {
+    }
+    object Loading {
+    }
 }
 ```
 
@@ -155,7 +163,7 @@ object AppConfig {
 // Output
 object AppConfig {
     const val API_KEY
-    val baseUrl
+    var baseUrl
     fun initialize()
 }
 ```
@@ -164,7 +172,7 @@ object AppConfig {
 
 ### Text Format (Recommended for AI)
 
-The text format preserves idiomatic Kotlin syntax:
+The text format keeps Kotlin syntax for declarations:
 
 ```kotlin
 // Input file
@@ -197,14 +205,14 @@ class UserRepository : Repository<User> {
 
 // Output (default - public only, no implementation)
 <file path="UserRepository.kt">
-import kotlinx.coroutines.*
-interface Repository<T> {
+import kotlinx.coroutines
+interface Repository {
     suspend fun get(id: Long): T?
     suspend fun save(item: T)
 }
-class UserRepository : Repository<User> {
-    suspend fun get(id: Long): User?
-    suspend fun save(item: User)
+class UserRepository {
+    override suspend fun get(id: Long): User?
+    override suspend fun save(item: User)
 }
 </file>
 ```
@@ -257,13 +265,11 @@ fun String.isValidEmail(): Boolean =
 ### Direct CLI Usage
 
 ```bash
-# Generate optimal context for AI assistants
-aid ./src --format text \
-    --private=0 --protected=0 --internal=0 --implementation=0 \
-    --output context.txt
+# Generate context for AI assistants (public API, no implementation: the defaults)
+aid ./src -o context.txt
 
 # Include internal APIs
-aid ./src --format text --internal=1 --output full-api.txt
+aid ./src --internal=1 -o full-api.txt
 ```
 
 ### CI/CD Integration
@@ -272,7 +278,7 @@ aid ./src --format text --internal=1 --output full-api.txt
 # .github/workflows/api-check.yml
 - name: Extract Public API
   run: |
-    aid ./src --format text --private=0 --protected=0 --internal=0 > api.txt
+    aid ./src --stdout > api.txt
     
     # Check for breaking changes
     if ! diff api-baseline.txt api.txt; then
@@ -292,8 +298,10 @@ aid ./src --format text --internal=1 --output full-api.txt
 
 ## Future Enhancements
 
+- [ ] Supertypes and class type parameters in class headers
 - [ ] Full extension property support with receiver types
 - [ ] Default parameter value extraction
+- [ ] Annotations and type aliases in the text output
 - [ ] Inline class support
 - [ ] Contracts and experimental features
 - [ ] Multiplatform annotations
@@ -305,7 +313,3 @@ Help improve Kotlin support! Key areas:
 - Complex generic scenarios
 - Coroutine flow types
 - Inline/value classes
-
----
-
-<sub>Documentation generated for AI Distiller v0.2.0</sub>

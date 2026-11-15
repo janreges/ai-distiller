@@ -64,6 +64,10 @@ Example configuration:
 }
 ```
 
+### What the install does
+
+The package's install script downloads the `aid` binary for your platform from the GitHub release with the same version as the package and verifies its SHA-256 against that release's `checksums.txt`; the install fails when the checksum does not match or `checksums.txt` has no entry for the archive. Prebuilt binaries exist for Linux and macOS on x64 and arm64 and for Windows on x64. On any other platform the install stops with `No prebuilt aid binary for <platform>-<arch>` and a link to building from source.
+
 ## ✨ Features
 
 ### 🔑 How AI Distiller Works
@@ -71,7 +75,7 @@ Example configuration:
 AI Distiller (aid) **DOES NOT perform analysis** - it generates prompts with distilled code for AI agents to use:
 1. **aid extracts code structure** (distillation)
 2. **Generates specialized AI prompts** for your analysis goal
-3. **Outputs prompt + distilled code** to `.aid/` directory or stdout
+3. **Writes prompt + distilled code** to a markdown file under `.aid/` and returns its path
 4. **You or AI agents execute the prompts** to perform actual analysis
 
 **Important**: The output is always a prompt with distilled code - NOT the analysis itself!
@@ -80,7 +84,7 @@ AI Distiller (aid) **DOES NOT perform analysis** - it generates prompts with dis
 
 1. **User asks**: "Find bugs in my authentication module with aid"
 2. **Claude calls**: `aid_hunt_bugs({ target_path: "src/auth/" })`
-3. **aid generates**: Bug-hunting prompt + distilled code → `.aid/bug-hunting.md`
+3. **aid generates**: Bug-hunting prompt + distilled code → `.aid/BUG-HUNTING-ANALYSIS.<date>.<time>.auth.md` (the response states the absolute path)
 4. **Claude reads**: The generated file and follows the prompt instructions
 5. **Result**: Claude performs the actual bug analysis based on the prompt
 
@@ -93,9 +97,9 @@ AI Distiller (aid) **DOES NOT perform analysis** - it generates prompts with dis
 
 ### 💾 Output Formats
 
-- **Small analyses**: Return directly via stdout
-- **Large analyses**: Save to `.aid/` directory as markdown files
-- **File naming**: `.aid/ACTION.TIMESTAMP.FOLDER.md`
+- **Distill tools** (`distill_file`, `distill_directory`, `distill_with_dependencies`): return the distilled code directly; nothing is cached or written
+- **AI action tools**: always write a markdown file and return its path, whatever the size
+- **File naming**: `.aid/<ACTION>.<YYYY-MM-DD>.<HH-MM-SS>.<folder>.md` in the project root (for example `BUG-HUNTING-ANALYSIS`, `SECURITY-AUDIT`, `REFACTORING-ANALYSIS`, `DIAGRAMS-ANALYSIS`); the two flow actions write task lists and directories under `.aid/` in `AID_ROOT`
 - **Content**: AI prompt + distilled code in one file
 - **Tool usage**: AI agents call these tools via 'aid' command
 
@@ -119,7 +123,7 @@ AI Distiller (aid) **DOES NOT perform analysis** - it generates prompts with dis
 
 ### All Registered Tools
 
-Required parameters are marked with `*`. `include_patterns` and `exclude_patterns` are comma-separated globs.
+Required parameters are marked with `*`. `include_patterns` and `exclude_patterns` are comma-separated globs. A parameter that is not in this table fails the call with an error that names it (`Unrecognized key: "include_privat"`).
 
 | Tool | Parameters |
 |------|------------|
@@ -140,6 +144,8 @@ Required parameters are marked with `*`. `include_patterns` and `exclude_pattern
 | `list_files` | `path`, `pattern`, `recursive` (relative paths resolve against `AID_ROOT`; stops after 2000 entries and says so) |
 | `get_capabilities` | none |
 
+`output_format` of `aid_analyze` is passed to `aid`, but AI actions always distil as `text`, so it has no effect there.
+
 ## Configuration
 
 ### Environment Variables
@@ -147,6 +153,7 @@ Required parameters are marked with `*`. `include_patterns` and `exclude_pattern
 - `AID_ROOT` - **REQUIRED for user-scoped installation**: Root directory for analysis. Without this, the tool cannot determine which project to analyze.
 - `AID_MCP_TIMEOUT_MS` - Time limit for one `aid` run, in milliseconds (default: `120000`). When it is hit, `aid` is stopped and the tool returns an error saying the run did not finish; narrow the request or raise the limit.
 - `AID_MCP_MAX_OUTPUT_BYTES` - Cap on the stdout of one `aid` run, in bytes (default: `1000000`). When it is hit, `aid` is stopped and the result is returned marked incomplete, with the notice first and last.
+- `AID_MCP_DEBUG=true` (or `DEBUG=true`) - Debug logging of every tool call and the `aid` arguments, written to stderr.
 
 A value that is not a positive integer falls back to the default.
 
@@ -222,7 +229,7 @@ For large projects, aid's output may exceed AI context limits. Strategies:
    - Then analyze specific modules with full detail
 
 4. **Output to files**:
-   - Large analyses go to `.aid/` directory
+   - AI action prompts go to the `.aid/` directory
    - Can be read by AI agents or copied to tools like Gemini (1M context)
 
 ## 📖 Tool Examples
@@ -392,8 +399,7 @@ aid_analyze({
 aid_analyze({
   ai_action: "prompt-for-performance-analysis",
   target_path: "src/api/",
-  include_implementation: true,
-  output_format: "md"
+  include_implementation: true
 })
 
 aid_analyze({
@@ -505,7 +511,7 @@ distill_directory({
 ```
 User: "Use aid to check src/ for potential bugs"
 1. Claude calls aid_hunt_bugs(target_path="src/", include_private=true)
-2. aid generates bug-hunting PROMPT + distilled code → .aid/bug-hunting-*.md
+2. aid generates bug-hunting PROMPT + distilled code → .aid/BUG-HUNTING-ANALYSIS.*.md
 3. Claude reads the generated prompt file
 4. Claude executes the prompt instructions to find actual bugs
 5. Claude provides bug findings and fixes
@@ -515,7 +521,7 @@ User: "Use aid to check src/ for potential bugs"
 ```
 User: "Run aid security audit on src/api/ endpoints and analyze"
 1. Claude uses aid_analyze_security(target_path="src/api/", include_implementation=true)
-2. Reads .aid/security-analysis-*.md file
+2. Reads .aid/SECURITY-AUDIT.*.md file
 3. Reviews OWASP-categorized findings
 4. Suggests security improvements
 ```
@@ -524,7 +530,7 @@ User: "Run aid security audit on src/api/ endpoints and analyze"
 ```
 User: "Help me understand src/ architecture using aid diagrams"
 1. Claude uses aid_generate_diagram(target_path="src/")
-2. Reads .aid/diagrams-*.md file
+2. Reads .aid/DIAGRAMS-ANALYSIS.*.md file
 3. Presents 10 different architectural views
 4. Explains key components and relationships
 ```
@@ -533,7 +539,7 @@ User: "Help me understand src/ architecture using aid diagrams"
 ```
 User: "Apply aid refactoring analysis to src/services/ for complexity"
 1. Claude uses aid_suggest_refactoring(target_path="src/services/")
-2. Reads .aid/REFACTORING-SUGGESTION.*.md file
+2. Reads .aid/REFACTORING-ANALYSIS.*.md file
 3. Provides specific refactoring suggestions
 4. Shows before/after code examples
 ```
@@ -543,7 +549,7 @@ User: "Apply aid refactoring analysis to src/services/ for complexity"
 - **Pattern Filtering** - Include/exclude specific file patterns
 - **Visibility Control** - Include/exclude private, protected, internal members
 - **Implementation Details** - Optionally include function bodies
-- **Multi-format Output** - text, markdown, JSON formats
+- **Multi-format Output** - `text`, `md`, `jsonl`, `json-structured` and `xml` for the distill tools
 - **Direct CLI Integration** - Each tool directly calls the aid binary
 
 ## 📚 Supported Languages
@@ -556,7 +562,7 @@ If you encounter issues:
 
 1. **Check aid binary**: The server only uses the binary the install downloaded to its own `bin/` directory; it never looks in your PATH. If that file is missing or not executable, reinstall the package (`npm install @janreges/ai-distiller-mcp`) to download it again
 2. **Verify permissions**: The server needs read access to your project
-3. **Check logs**: Run with verbose logging to see detailed errors
+3. **Check logs**: Set `AID_MCP_DEBUG=true` (or `DEBUG=true`) in the server's `env`; the debug lines go to stderr, which MCP clients usually show in their server log
 4. **File patterns**: Use comma-separated patterns like `*.go,*.py`
 
 ## 📄 License

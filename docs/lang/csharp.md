@@ -1,27 +1,26 @@
 # C# Language Support
 
-AI Distiller provides comprehensive support for C# codebases using the [tree-sitter-c-sharp](https://github.com/tree-sitter/tree-sitter-c-sharp) parser, with full support for modern C# features up to C# 12.
+AI Distiller supports C# codebases through the [tree-sitter-c-sharp](https://github.com/tree-sitter/tree-sitter-c-sharp) grammar, compiled into the `aid` binary. It extracts namespaces, types, methods, properties and fields; the gaps are listed under Known Issues.
 
 ## Overview
 
-C# support in AI Distiller is designed to extract the complete structure of .NET code while preserving all type information, generic constraints, and modern language features. The distilled output maintains C#'s strong typing and object-oriented design while optimizing for AI consumption.
+C# support in AI Distiller extracts the structure of .NET code with method signatures, generic constraints and access modifiers. The distilled output keeps C# declaration syntax while optimizing for AI consumption.
 
-## Recent Improvements (2025-06-15)
+## Recent Improvements
 
-1. **Operator support** (✅ Fixed)
-   - **Issue**: User-defined operators were not extracted
-   - **Fix**: Added processOperatorDeclaration to handle operator parsing
-   - **Impact**: Operators now properly shown in output
+1. **Combined access modifiers** (✅ Fixed)
+   - `protected internal` and `private protected` are recognised and printed. A combined modifier shows when the flag of either of its words is on: `protected internal` with `--protected=1` or `--internal=1`, `private protected` with `--private=1` or `--protected=1`
+   - `--exclude-items=internal` removes `internal` members (it used to remove private ones)
 
-2. **Record struct syntax** (✅ Fixed)
-   - **Issue**: Record structs were displayed as regular records
-   - **Fix**: Added ModifierStruct to distinguish record structs from record classes
-   - **Impact**: Correct `record struct` syntax in output
+2. **Comments** (✅ Fixed)
+   - XML documentation comments (`///`) print by default and are removed with `--docstrings=0`; `//` and `/* */` comments print with `--comments=1`
 
-3. **Method Parameter Fix** (Previous fix)
-   - Fixed parameter name/type order for methods (was showing `instance T` instead of `T instance`)
-   - Fixed method generic constraints to show full type arguments (e.g., `INumber<T>` instead of just `INumber`)
-   - Improved formatting of nested record types and brace handling
+3. **Enum members** (✅ Fixed)
+   - Enum members print with their values
+
+4. **Operators and method parameters**
+   - User-defined operators such as `operator +` are extracted (conversion operators are not)
+   - Method parameters print type first (`T instance`) and method constraints keep their type arguments (`INumber<T>`)
 
 ## Supported C# Constructs
 
@@ -29,78 +28,86 @@ C# support in AI Distiller is designed to extract the complete structure of .NET
 
 | Construct | Support Level | Notes |
 |-----------|--------------|-------|
-| **Classes** | ⚠️ Partial | Basic support, generic parameters on type definitions may be missing |
-| **Interfaces** | ⚠️ Partial | Declaration works, but properties may be omitted |
-| **Structs** | ⚠️ Partial | Basic support, `readonly` modifier not preserved |
-| **Records** | ⚠️ Partial | Parameter order bug in primary constructors, calculated properties misidentified |
-| **Properties** | ⚠️ Partial | Basic support, accessor visibility not preserved |
-| **Methods** | ✅ Full | Including async, extension methods |
-| **Generic Constraints** | ⚠️ Partial | Method constraints work, type definition constraints may be missing |
-| **Nullable Reference Types** | ✅ Full | `#nullable enable/disable` directives |
-| **Attributes** | ✅ Full | Method, class, property, parameter attributes |
-| **Pattern Matching** | ❌ Not tested | Parser support unknown |
-| **Global Usings** | ❌ Not supported | Not recognized |
+| **Classes** | ⚠️ Partial | Type parameters and constraints are kept; generic arguments in the base list are dropped (`: IRepository<User>` prints as `: IRepository`) |
+| **Interfaces** | ⚠️ Partial | Methods are printed; properties and events count as private (shown only with `--private=1`, an event as `private dynamic Changed;`) and variance (`in`, `out`) is dropped |
+| **Structs** | ⚠️ Partial | Printed without `public` and `readonly` (`public readonly struct R` prints as `struct R`) |
+| **Records** | ⚠️ Partial | Primary constructor parameters are mangled in some cases and `record struct` prints as `record` (see Known Issues) |
+| **Properties** | ⚠️ Partial | The accessor list is kept; accessor visibility, `init` (printed as `set`), `required` and initializers are dropped |
+| **Methods** | ✅ Full | Including async and extension methods; default parameter values are dropped |
+| **Generic Constraints** | ✅ Full | On types and methods, with type arguments (`where T : INumber<T>`) |
+| **Nullable Reference Types** | ✅ Full | `#nullable` directives and `T?` types |
+| **Attributes** | ⚠️ Partial | Attributes on types and record parameters are printed (removed with `--annotations=0`); attributes on methods, properties and parameters are dropped |
+| **Pattern Matching** | ➖ In bodies | Printed as part of method bodies with `--implementation=1` |
+| **Global Usings** | ⚠️ Partial | Printed as a plain `using` |
 | **File-scoped Namespaces** | ✅ Full | `namespace Foo;` syntax |
-| **Enums** | ✅ Full | Including explicit base types |
-| **Delegates** | ⚠️ Partial | Type may show as `dynamic` |
-| **Events** | ❌ Not supported | Shows as `dynamic` fields |
-| **Operators** | ✅ Full | User-defined operators including conversion operators |
-| **Indexers** | ❌ Not tested | Support unknown |
+| **Enums** | ⚠️ Partial | Members with their values; the underlying type (`: byte`) and `[Flags]` are dropped |
+| **Delegates** | ❌ Not printed | Delegate declarations are dropped |
+| **Events** | ⚠️ Partial | A class event prints as a `dynamic` field (`public dynamic Updated;`); an interface event counts as private and prints only with `--private=1` (`private dynamic Changed;`) |
+| **Operators** | ⚠️ Partial | User-defined operators (`operator +`); conversion operators (`implicit operator int`) are dropped |
+| **Indexers** | ❌ Not printed | `this[...]` indexers are dropped |
 | **Tuple Types** | ✅ Full | Named and unnamed tuples |
-| **Local Functions** | ❌ Not supported | Not extracted |
-| **Init-only Properties** | ✅ Full | `{ get; init; }` |
+| **Local Functions** | ➖ In bodies | Printed as part of method bodies with `--implementation=1` |
+| **Init-only Properties** | ⚠️ Partial | `{ get; init; }` prints as `{ get; set; }` |
 
 ### Visibility Rules
 
 C# visibility in AI Distiller uses the full keyword representation:
-- **public**: Accessible from any code
-- **private**: Accessible only within the containing type
-- **protected**: Accessible within the type and derived types
-- **internal**: Accessible within the same assembly
-- **protected internal**: Accessible within assembly or derived types
-- **private protected**: Accessible within the containing class or derived types in the same assembly
+- **public**: Accessible from any code (shown by default)
+- **private**: Accessible only within the containing type (shown with `--private=1`)
+- **protected**: Accessible within the type and derived types (shown with `--protected=1`)
+- **internal**: Accessible within the same assembly (shown with `--internal=1`)
+- **protected internal**: Accessible within assembly or derived types (shown with `--protected=1` or `--internal=1`)
+- **private protected**: Accessible within the containing class or derived types in the same assembly (shown with `--private=1` or `--protected=1`)
 
 ## Known Issues
 
 ### 🔴 Critical Limitations
 
-**Record Parameter Order Bug**
-- Record primary constructors show parameters in wrong order (e.g., `Id T` instead of `T Id`)
-- This creates syntactically invalid C# code
+**Record Primary Constructors**
+- A parameter whose type is not a built-in type prints name first: `record P(Guid Id)` prints as `P(Id Guid)`
+- A nullable parameter type is dropped: `string? Name` prints as `Name`
+- `record struct` prints as `record`
+- An expression-bodied property declared in a record with a body (`public bool IsValid => ...;`) is added to the parameter list
 
-**Generic Type Parameters Missing**
-- Generic parameters are often missing from type definitions (e.g., `EntityBase` instead of `EntityBase<T>`)
-- Generic arguments in base class lists are dropped (e.g., `IEntity` instead of `IEntity<T>`)
+**Generic Arguments in Base Lists**
+- Generic arguments in base class and interface lists are dropped (e.g., `: IRepository` instead of `: IRepository<User>`)
 
-**Record Property Misidentification**
-- Calculated properties are incorrectly included as primary constructor parameters
-- Properties with bodies should not be in the parameter list
+**Interface Properties and Events**
+- Interface properties and events are treated as private, so the default output omits them (`--private=1` shows them, with a `private` keyword: `private int Count { get; }`, `private dynamic Changed;`)
 
-**Events**
-- Events are shown as `dynamic` fields instead of proper event declarations
+**Events, Delegates, Indexers and Conversion Operators**
+- A class event is shown as a `dynamic` field; delegates, indexers and conversion operators are not printed
 
 ### 🟡 Major Limitations
 
-**Property Accessor Visibility**
-- Different visibility on getters/setters is not preserved (e.g., `{ get; protected set; }`)
+**Properties**
+- Different visibility on getters/setters is not preserved (e.g., `{ get; protected set; }` prints as `{ get; set; }`)
+- `init` prints as `set`; `required` and property initializers (`= 30`) are dropped
+- An expression-bodied property prints garbled: `public string Name => "n";` prints as `public string Name = => "n" { get; }`
 
 **Struct Modifiers**
-- `readonly` modifier on structs is not preserved
+- `public` and `readonly` are not printed on structs
 
-**Interface Members**
-- Interface properties are sometimes omitted from output
+**Enums**
+- The underlying type (`: byte`) and `[Flags]` are dropped
 
 **Optional Parameters**
 - Default parameter values are not shown in method signatures
 
+**Attributes**
+- Attributes on methods, properties and parameters are dropped
+
 **Generic Variance**
 - Variance modifiers (`in`, `out`) on generic parameters are not preserved
 
+**Usings**
+- The text output drops a `using` whose namespace it does not find in the distilled text. The check is a heuristic: `using System;` and `using Microsoft.Extensions.Logging;` can disappear although `ILogger` is used. `--filter-imports=false` keeps every `using`
+
 ## Key Features
 
-### 1. **Complete Generic Type Information**
+### 1. **Generic Type Information**
 
-AI Distiller preserves all generic type information including constraints:
+Type parameters and constraints are kept; the generic argument in the base list is dropped:
 
 ```csharp
 // Input
@@ -118,21 +125,21 @@ public class UserRepository : IRepository<User>
 ```
 
 ```
-// Output (with --implementation=0)
+<file path="repo.cs">
 public interface IRepository<T> where T : class, IEntity, new() {
     public Task<T?> GetByIdAsync(int id);
     public IAsyncEnumerable<T> GetAllAsync();
 }
-
-public class UserRepository : IRepository<User> {
+public class UserRepository : IRepository {
     public async Task<User?> GetByIdAsync(int id);
     public async IAsyncEnumerable<User> GetAllAsync();
 }
+</file>
 ```
 
-### 2. **Modern C# Features Support**
+### 2. **Records and Nullable Context**
 
-Records, init-only properties, and nullable reference types:
+Records with attributed primary constructor parameters and `#nullable` directives are printed; the `init` accessor prints as `set` and the initializer is dropped:
 
 ```csharp
 // Input
@@ -147,19 +154,21 @@ public record UserDto(
 ```
 
 ```
-// Output
+<file path="dto.cs">
 #nullable enable
+
 
 public record UserDto(
     [property: Required] string Username,
     [property: EmailAddress] string Email) {
-    public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
+    public DateTime CreatedAt { get; set; }
 }
+</file>
 ```
 
-### 3. **Property Syntax Preservation**
+### 3. **Property Syntax**
 
-Properties are correctly displayed with their accessor syntax:
+Properties are displayed with their accessor list; the initializer, `required`, `init` and the accessor's `private` are lost:
 
 ```csharp
 // Input
@@ -173,20 +182,21 @@ public class Configuration
 ```
 
 ```
-// Output
+<file path="Configuration.cs">
 public class Configuration {
     public string ConnectionString { get; set; }
-    public int Timeout { get; } = 30;
+    public int Timeout { get; }
     public bool IsEnabled { get; set; }
-    public required string ApiKey { get; init; }
+    public string ApiKey { get; set; }
 }
+</file>
 ```
 
 ## Output Formats
 
 ### Text Format (Recommended for AI)
 
-The text format preserves idiomatic C# syntax with full visibility keywords:
+The text format preserves idiomatic C# syntax with full visibility keywords. In the first example the import filter drops `using System;` and `using Microsoft.Extensions.Logging;` (see Known Issues):
 
 <details open>
 <summary>Example: Repository Pattern with Dependency Injection</summary>
@@ -274,14 +284,12 @@ public sealed class UserService : IUserService
 </details>
 
 <details open>
-<summary>Default Output (`default output (public only, no implementation)`)</summary>
+<summary>Default output (public only, no implementation)</summary>
 <blockquote>
 
 ```
 <file path="UserService.cs">
-using System;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
 namespace MyApp.Services;
 public interface IUserService {
     public Task<User?> GetUserAsync(int id);
@@ -302,7 +310,7 @@ public sealed class UserService : IUserService {
 </details>
 
 <details>
-<summary>Example: Advanced Generic Constraints and Pattern Matching</summary>
+<summary>Example: Generic Constraints</summary>
 <blockquote>
 
 <details>
@@ -387,20 +395,20 @@ public class VectorProcessor<T> : IVectorOperations<T>
 <file path="MathProcessor.cs">
 #nullable enable
 
-using System;
-using System.Numerics;
 namespace AdvancedMath;
-public interface IVectorOperations<T> where T : INumber {
-    public T DotProduct<TVector>(TVector a, TVector b) where TVector : IVector;
-    public TVector Add<TVector>(TVector a, TVector b) where TVector : IVector, new();
+public interface IVectorOperations<T> where T : INumber<T> {
+    public T DotProduct<TVector>(TVector a, TVector b) where TVector : IVector<T>;
+    public TVector Add<TVector>(TVector a, TVector b) where TVector : IVector<T>, new();
 }
-public class VectorProcessor<T> : IVectorOperations<T> where T : INumber, IMinMaxValue {
-    public VectorProcessor(ILogger? logger = null);
-    public T DotProduct<TVector>(TVector a, TVector b) where TVector : IVector;
-    public TVector Add<TVector>(TVector a, TVector b) where TVector : IVector, new();
+public class VectorProcessor<T> : IVectorOperations where T : INumber<T>, IMinMaxValue<T> {
+    public VectorProcessor(ILogger? logger);
+    public T DotProduct<TVector>(TVector a, TVector b) where TVector : IVector<T>;
+    public TVector Add<TVector>(TVector a, TVector b) where TVector : IVector<T>, new();
 }
 </file>
 ```
+
+The constraints keep their type arguments; the default value `= null` and the generic argument of `IVectorOperations<T>` in the base list are dropped.
 
 </blockquote>
 </details>
@@ -409,7 +417,7 @@ public class VectorProcessor<T> : IVectorOperations<T> where T : INumber, IMinMa
 </details>
 
 <details>
-<summary>Example: Modern Records and Pattern Matching</summary>
+<summary>Example: Records (shows the record parameter bugs)</summary>
 <blockquote>
 
 <details>
@@ -498,36 +506,38 @@ public record CommandResult(bool IsSuccess, Guid? CommandId, string? Error)
 <file path="Commands.cs">
 #nullable enable
 
-using System;
-using System.ComponentModel.DataAnnotations;
 namespace MyApp.Commands;
 public abstract record Command {
-    public Guid Id { get; init; } = Guid.NewGuid();
-    public DateTime Timestamp { get; init; } = DateTime.UtcNow;
+    public Guid Id { get; set; }
+    public DateTime Timestamp { get; set; }
 }
 public sealed record CreateUserCommand(
     [property: Required] string Username,
     [property: EmailAddress] string Email,
-    [property: StringLength(100)] string? FullName = null) : Command {
-    public bool IsValid { get; }
-}
+    [property: StringLength(100)] FullName,
+    bool IsValid) : Command;
 public sealed record UpdateUserCommand(
-    [property: Required] Guid UserId,
-    [property: StringLength(100)] string? FullName,
-    [property: Phone] string? PhoneNumber) : Command;
+    [property: Required] UserId Guid,
+    [property: StringLength(100)] FullName,
+    [property: Phone] PhoneNumber) : Command;
 public sealed record DeleteUserCommand(
-    [property: Required] Guid UserId,
+    [property: Required] UserId Guid,
     [property: Required] string Reason) : Command;
 public static class CommandHandler {
     public static async Task<CommandResult> HandleAsync(Command command);
 }
-public record CommandResult(bool IsSuccess, Guid? CommandId, string? Error) {
+public record CommandResult(
+    bool IsSuccess,
+    CommandId,
+    Error) {
     public static CommandResult Success(Guid commandId);
     public static CommandResult ValidationFailed(string error);
     public static CommandResult NotSupported(string error);
 }
 </file>
 ```
+
+The initializers and `init` accessors of `Command` are lost; `Guid UserId` prints as `UserId Guid`, the nullable types (`string?`, `Guid?`) and the default `= null` are dropped, and the expression-bodied `IsValid` property of `CreateUserCommand` appears as a parameter (see Known Issues).
 
 </blockquote>
 </details>
@@ -539,7 +549,7 @@ public record CommandResult(bool IsSuccess, Guid? CommandId, string? Error) {
 
 ### 1. **Use Full Type Annotations**
 
-AI Distiller preserves all type information:
+AI Distiller keeps the declared types of methods and parameters (default values are dropped):
 
 ```csharp
 // Good - Complete type information
@@ -559,13 +569,13 @@ public async Task GetUserAsync(int id)
 
 ### 2. **Leverage Modern C# Features**
 
-Modern syntax is fully supported and recommended:
+Modern syntax parses; method bodies (pattern matching included) print with `--implementation=1`:
 
 ```csharp
 // File-scoped namespaces (C# 10+)
 namespace MyApp.Services;
 
-// Global usings (C# 10+)
+// Global usings (C# 10+), printed as a plain using
 global using System.Text.Json;
 
 // Records with primary constructors (C# 9+)
@@ -618,10 +628,8 @@ public class UserService : IUserService
 ### Direct CLI Usage
 
 ```bash
-# Generate optimal context for AI assistants
-aid ./src --format text \
-    --private=0 --protected=0 --internal=0 --implementation=0 \
-    --output context.txt
+# Generate context for AI assistants (public API, no implementation: the defaults)
+aid ./src --output context.txt
 
 # Include in your prompt
 cat <<EOF > prompt.txt
@@ -633,23 +641,12 @@ Please help me implement a new feature that...
 EOF
 ```
 
-### MCP Integration with Claude Desktop
+### MCP Integration
 
-When using AI Distiller through MCP, Claude can directly access your C# codebase:
+When using AI Distiller through MCP, Claude can directly access your C# codebase. The MCP server `@janreges/ai-distiller-mcp` provides tools such as `distill_directory`, `distill_file` and `list_files`; setup for Claude Code, Claude Desktop and other clients, and the parameters of every tool, are in [`mcp-npm/README.md`](../../mcp-npm/README.md):
 
-**Setup** (in Claude Desktop config.json):
-```json
-{
-  "mcpServers": {
-    "ai-distiller": {
-      "command": "/usr/local/bin/aid",
-      "args": ["--mcp-server"],
-      "env": {
-        "AID_ROOT": "/Users/you/projects/MyDotNetApp"
-      }
-    }
-  }
-}
+```bash
+claude mcp add aid -- npx -y @janreges/ai-distiller-mcp
 ```
 
 **Example Conversation:**
@@ -658,10 +655,10 @@ When using AI Distiller through MCP, Claude can directly access your C# codebase
 
 > **Claude**: I'll analyze your payment processing system using AI Distiller.
 
-*Claude automatically calls:*
+*Claude calls:*
 ```
-distillDirectory("Services/Payment/", include_implementation=false)
-listFiles("Services/Payment/", pattern="*.cs")
+list_files({ path: "Services/Payment/", pattern: "*.cs" })
+distill_directory({ directory_path: "Services/Payment/", include_implementation: false })
 ```
 
 *Claude receives the distilled structure and responds:*
@@ -681,12 +678,11 @@ listFiles("Services/Payment/", pattern="*.cs")
 > 
 > Here's how to implement these improvements...
 
-### With Source Generators
+### With jq
 
 ```bash
-# Extract metadata for source generators
-aid ./Models --format json-structured --private=0 --protected=0 --internal=0 | \
-  jq '.files[].symbols[] | select(.type == "class" and .attributes[] | contains("GenerateDto"))'
+# List the public class names of a directory (attributes are not part of the json-structured output)
+aid ./Models --format json-structured --stdout | jq -r '.files[].structure.classes[]?.name'
 ```
 
 ### CI/CD Integration
@@ -695,7 +691,7 @@ aid ./Models --format json-structured --private=0 --protected=0 --internal=0 | \
 # .github/workflows/api-surface-check.yml
 - name: Check Public API Surface
   run: |
-    aid ./src --format text --private=0 --protected=0 --internal=0 --implementation=0 > api-current.txt
+    aid ./src --stdout > api-current.txt
     
     # Compare with baseline
     if ! diff api-baseline.txt api-current.txt > api-changes.diff; then
@@ -706,7 +702,7 @@ aid ./Models --format json-structured --private=0 --protected=0 --internal=0 | \
 
 ## Language-Specific Tips
 
-1. **Nullable Reference Types**: Always include `#nullable enable` directives - they're preserved as raw content
+1. **Nullable Reference Types**: `#nullable enable` directives are printed as written
 
 2. **Generic Constraints**: Use meaningful constraints for better AI understanding:
    ```csharp
@@ -739,7 +735,7 @@ aid ./Models --format json-structured --private=0 --protected=0 --internal=0 | \
 
 | Tool | Purpose | C# Support | AI-Optimized |
 |------|---------|-----------|--------------|
-| **AI Distiller** | Code structure extraction | Full C# 12 | ✅ Yes |
+| **AI Distiller** | Code structure extraction | Modern C# (gaps above) | ✅ Yes |
 | Roslyn | Compiler/Analysis | Native | ❌ No |
 | dotnet-format | Code formatting | Full | ❌ No |
 | StyleCop | Style analysis | Full | ❌ No |
@@ -747,9 +743,9 @@ aid ./Models --format json-structured --private=0 --protected=0 --internal=0 | \
 
 ## Troubleshooting
 
-### "Parser failed with syntax error"
+### Output is empty or incomplete
 
-Ensure your C# code compiles:
+The parser is error-tolerant, but a file with syntax errors can lose declarations. Ensure your C# code compiles:
 ```bash
 dotnet build
 ```
@@ -767,15 +763,16 @@ public class ComplexService<T, U>
     where U : struct, IComparable<U>
 ```
 
-### "Properties showing as fields"
+### "A using statement is missing"
 
-This has been fixed in the latest version. Ensure you're using the latest AI Distiller build.
+The text output's import filter drops a `using` it considers unused. Add `--filter-imports=false` to keep all of them.
 
 ## Future Enhancements
 
 - [ ] Source generator support
 - [ ] Partial class merging
-- [ ] XML documentation extraction
+- [ ] Delegates, indexers, conversion operators, and interface properties and events as public members
+- [ ] Correct record primary constructor parameters
 - [ ] Analyzer/diagnostic integration
 - [ ] .NET Aspire integration
 - [ ] Primary constructor body support
@@ -789,7 +786,3 @@ Key areas needing help:
 - Source generator examples
 - Blazor component patterns
 - MAUI/WPF specific constructs
-
----
-
-<sub>Documentation generated for AI Distiller v0.2.0</sub>

@@ -12,25 +12,27 @@ Swift is a powerful and intuitive programming language developed by Apple for bu
 - Access control modifiers
 - Protocol conformances and inheritance
 - Extensions
-- Actors (Swift 5.5+)
+- Actors (Swift 5.5+), printed as classes
 
 ## Default Behavior
 
-When running `aid` on Swift files without any `--strip` options, you get the complete code structure including:
+When running `aid` on Swift files with the default flags, you get:
 
-- All declarations (public, internal, private, fileprivate)
-- Full implementations
-- Comments and documentation
+- `public` and `open` declarations only (Swift's default access level is `internal`, so a declaration without a modifier is left out)
+- Signatures without function bodies
+- Documentation comments (`///` and `/** */`)
 - Import statements
 
-## Stripping Options
+## Filtering Options
 
-The `--strip` flag allows you to control what gets removed:
-
-- `--private=0 --protected=0 --internal=0`: Removes private, fileprivate, and internal declarations
-- `--implementation=0`: Removes function/method bodies, keeping only signatures
-- `--comments=0`: Removes all comments including documentation comments
+- `--internal=1`: Includes `internal` declarations (no access modifier)
+- `--private=1`: Includes `private` and `fileprivate` declarations
+- `--implementation=1`: Includes function and method bodies
+- `--comments=1`: Includes regular `//` and `/* */` comments
+- `--docstrings=0`: Removes documentation comments (`--comments=0`, the default, keeps them)
 - `--imports=0`: Removes import statements
+
+All flags are described in [COMMAND-LINE-OPTIONS.md](../user/COMMAND-LINE-OPTIONS.md).
 
 ## Key Features
 
@@ -42,40 +44,37 @@ Swift has a sophisticated access control system:
 - `fileprivate`: Accessible within the defining file
 - `private`: Accessible within the enclosing declaration
 
-The text formatter uses symbols to indicate visibility:
-- `+` for public/open
-- `~` for internal
-- `-` for private/fileprivate
+AI Distiller maps `open` and `public` to public, a declaration without a modifier to internal, and `private` and `fileprivate` to private. The text output prints the access keyword in front of each declaration (`public func`, `internal func`, `private func`).
 
 ### Type Inference
 
-Swift's strong type inference means many declarations don't have explicit types. AI Distiller attempts to preserve type information where it's explicitly stated.
+Swift's strong type inference means many declarations don't have explicit types. AI Distiller keeps type information where it is explicitly stated; a stored property without a type annotation (`public var y = 0`) is not extracted.
 
 ### Protocol-Oriented Programming
 
 Swift emphasizes protocol-oriented programming. AI Distiller recognizes:
-- Protocol declarations
+- Protocol declarations with their method and property requirements
 - Protocol conformances
-- Protocol extensions with default implementations
+- Extensions, printed as `extension Name: Protocol { ... }` with their members
 
 ## Known Issues and Limitations
 
 ### Current Implementation Status
 
-⚠️ **Important**: Swift support currently uses a line-based parser due to tree-sitter stability issues. The following features are currently supported:
+⚠️ **Important**: Swift support uses a line-based parser (regular expressions), not tree-sitter. The following features are currently supported:
 
 **Supported Features:**
-- Enum declarations with raw values (String, Int)
-- Basic enum cases (associated values not fully supported)
+- Enum declarations with their cases (raw values and the raw type are not printed)
+- Basic enum cases with associated values
 - Class, struct, and enum type detection
 - Property declarations with type annotations
-- Computed properties with get/set accessors
 - Basic visibility modifiers (open, public, internal, fileprivate, private)
-- Comments and documentation
-- Protocol declarations (requirements extraction limited)
-- Extensions with naming
+- Documentation comments, and regular comments with `--comments=1`
+- Protocol declarations (method and property requirements)
+- Extensions with their conformances
 - Import statements
-- Actor declarations
+- Type aliases
+- Actor declarations (printed as `class`)
 
 ## Recent Fixes (2025-06-15)
 
@@ -96,18 +95,21 @@ Swift emphasizes protocol-oriented programming. AI Distiller recognizes:
 
 **Known Issues:**
 1. **Line-based parser limitations**
-   - Multi-line function signatures not fully captured
-   - Complex generic constraints may be missed
-   - Associated types in protocols not parsed
+   - A function whose signature spans several lines is not extracted
+   - A stored property without a type annotation (`var y = 0`) is not extracted
+   - Associated types in protocols are not parsed
+   - Members of an extension are internal unless they carry their own modifier, so `public extension X { var y: T }` shows `y` only with `--internal=1`
+   - Initializers (`init(...)`) are not extracted
+   - Argument labels are dropped: `f(with a: Int, _ b: Int)` prints as `f(a: Int, b: Int)`
+   - Property requirements of a protocol print without `{ get set }`
 
 2. **Not Yet Implemented**
-   - Property wrappers (@State, @Published, etc.)
+   - Property wrappers (@State, @Published, etc.): the wrapper is dropped, the property is kept
    - Result builders (@ViewBuilder, etc.)
-   - Async/await/throws modifiers (partially supported)
+   - `throws`: dropped; `async` prints before `func` (`public async func f()`)
    - Where clauses in extensions and generics
-   - Conditional compilation blocks (#if/#endif)
    - Subscripts
-   - Type aliases
+   - Enum raw types and raw values (`enum E: String { case a = "A" }` prints as `enum E { case a }`)
 
 3. **Minor Issues**
    - Some computed property syntax variations
@@ -115,7 +117,7 @@ Swift emphasizes protocol-oriented programming. AI Distiller recognizes:
 
 ### Parser Implementation
 
-Due to stability issues with the tree-sitter Swift parser, AI Distiller currently uses an improved line-based parser that provides reliable parsing with good coverage of common Swift constructs.
+Due to stability issues with the tree-sitter Swift parser, AI Distiller uses a line-based parser that covers the common Swift constructs. The tree-sitter grammar is still compiled in for a later migration but is not used.
 
 ## Examples
 
@@ -137,26 +139,28 @@ private func helperFunction() {
     
 ```
 <file path="input.swift">
-public calculateSum() -> Int
+public func calculateSum(a: Int, b: Int) -> Int
 </file>
 ```
     
   </blockquote></details>
-  <details><summary>With `--private=0 --protected=0 --internal=0`</summary><blockquote>
+  <details><summary>With `--private=1 --protected=1 --internal=1`</summary><blockquote>
     
 ```
 <file path="input.swift">
-public calculateSum() -> Int
+public func calculateSum(a: Int, b: Int) -> Int
+private func helperFunction()
 </file>
 ```
     
   </blockquote></details>
-  <details><summary>With `--implementation=0`</summary><blockquote>
+  <details><summary>With `--implementation=1`</summary><blockquote>
     
 ```
 <file path="input.swift">
-public calculateSum() -> Int
-private helperFunction()
+public func calculateSum(a: Int, b: Int) -> Int {
+    return a + b
+}
 </file>
 ```
     
@@ -192,37 +196,30 @@ public class User {
     
 ```
 <file path="User.swift">
-+class User {
-    +let id: String
-    -var name: String
-    ~var email: String?
-    
-    +init(id: String, name: String) {
-        self.id = id
-        self.name = name
-    }
-    
-    +updateName(_ newName: String) {
-        self.name = newName
-    }
-    
-    -validate() -> Bool {
-        return !name.isEmpty
-    }
+
+public class User {
+    public let id: String
+    public func updateName(newName: String)
 }
 </file>
 ```
     
   </blockquote></details>
-  <details><summary>With `--private=0 --protected=0 --internal=0,implementation`</summary><blockquote>
+  <details><summary>With `--private=1 --protected=1 --internal=1 --implementation=1`</summary><blockquote>
     
 ```
 <file path="User.swift">
-+class User {
-    +let id: String
-    
-    +init(id: String, name: String)
-    +updateName(_ newName: String)
+
+public class User {
+    public let id: String
+    private var name: String
+    internal var email: String?
+    public func updateName(newName: String) {
+        self.name = newName
+    }
+    private func validate() -> Bool {
+        return !name.isEmpty
+    }
 }
 </file>
 ```
@@ -254,18 +251,16 @@ public struct Circle: Drawable {
     
 ```
 <file path="Drawable.swift">
-+protocol Drawable {
-    func draw()
-    var color: String { get set }
+
+public protocol Drawable {
+    public func draw()
+    public var color: String
 }
 
-+struct Circle: Drawable {
-    +var radius: Double
-    +var color: String
-    
-    +draw() {
-        print("Drawing circle with radius \(radius)")
-    }
+public struct Circle: Drawable {
+    public var radius: Double
+    public var color: String
+    public func draw()
 }
 </file>
 ```
@@ -275,22 +270,23 @@ public struct Circle: Drawable {
 
 ## Best Practices
 
-1. **Type Annotations**: While Swift has excellent type inference, explicit type annotations help AI Distiller provide more accurate output
+1. **Type Annotations**: While Swift has excellent type inference, explicit type annotations help AI Distiller provide more accurate output (an untyped stored property is not extracted)
 2. **Access Control**: Use explicit access control modifiers to clearly indicate API boundaries
-3. **Documentation**: Use `///` documentation comments for public APIs - these are preserved unless stripped
-4. **Organization**: Use `// MARK:` comments to organize code sections
+3. **Documentation**: Use `///` documentation comments for public APIs - they are printed unless `--docstrings=0` is given
+4. **Organization**: Use `// MARK:` comments to organize code sections (printed with `--comments=1`)
 
 ## Integration Tips
 
 When using AI Distiller output with LLMs:
 
-1. **Use `--private=0 --protected=0 --internal=0,implementation`** for API overview
-2. **Include full output** when debugging implementation details
-3. **Consider file size** - Swift files can be large, especially with generics
+1. **Use the default flags** for an API overview (public declarations, no bodies)
+2. **Add `--internal=1`** for an app target, where most declarations have no access modifier
+3. **Include full output** (`--private=1 --internal=1 --implementation=1`) when debugging implementation details
+4. **Consider file size** - Swift files can be large, especially with generics
 
 ## Future Roadmap
 
-1. **Fix Critical Issues**: Function parameters, protocol requirements, generic constraints
+1. **Fix Critical Issues**: Multi-line signatures, untyped properties, associated types, generic constraints
 2. **Swift 6 Support**: Including new concurrency features and strict checking
 3. **SwiftUI Support**: Property wrappers, result builders, and view modifiers
 4. **Type Resolution**: Better handling of type inference and associated types

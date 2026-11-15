@@ -2,7 +2,7 @@
 
 ## Overview
 
-AI Distiller provides support for Go (Golang) source code analysis and distillation. The Go processor uses the standard `go/ast` parser to build a comprehensive Abstract Syntax Tree, which is then transformed into a simplified, AI-friendly format.
+AI Distiller provides support for Go (Golang) source code analysis and distillation. The Go processor uses the standard library parser (`go/parser`, `go/ast`) to build an Abstract Syntax Tree, which is then transformed into a simplified, AI-friendly format.
 
 ## Main Constructs
 
@@ -21,14 +21,42 @@ Go is a statically typed, compiled language with the following primary construct
 The Go distiller focuses on extracting the essential structure that helps AI understand:
 
 1. **Type System**: All types are preserved including custom types, built-in types, and generic type parameters
-2. **Interface Satisfaction**: Implicit interface implementation relationships (currently limited)
-3. **Method Receivers**: Distinction between value and pointer receivers
-4. **Visibility**: Uppercase = exported (public), lowercase = unexported (package-private)
-5. **Import Aliases**: Support for renamed imports (`import m "math"`)
+2. **Method Receivers**: Distinction between value and pointer receivers
+3. **Visibility**: Uppercase = exported (public), lowercase = unexported (internal: shown with `--internal=1`)
+4. **Import Aliases**: Support for renamed imports (`import m "math"`)
+5. **Function Bodies**: With `--implementation=1`, bodies are printed verbatim from the source, comments inside them included
 
 ## Text Format Output
 
-The default text format provides a Python-like representation optimized for AI consumption:
+The text format keeps Go syntax: types and functions print as in the source, methods stay at file level after their type with their receiver, and bodies (with `--implementation=1`) keep their braces. For this input:
+
+```go
+package main
+
+import (
+	"fmt"
+	m "math"
+)
+
+type Writer interface {
+	Write(p []byte) (int, error)
+}
+
+type Logger struct {
+	prefix string
+	writer Writer
+}
+
+func NewLogger(prefix string) *Logger {
+	return &Logger{prefix: prefix}
+}
+
+func (l *Logger) Log(message string) {
+	fmt.Printf("[%s] %s %f\n", l.prefix, message, m.Pi)
+}
+```
+
+`aid example.go --internal=1 --implementation=1` prints:
 
 ```
 <file path="example.go">
@@ -39,25 +67,28 @@ import (
     m "math"
 )
 
-type Writer interface
+type Writer interface {
     Write(p []byte) (int, error)
+}
 
-type Logger struct
+type Logger struct {
     prefix string
     writer Writer
+}
 
-func NewLogger(prefix string) *Logger
+func NewLogger(prefix string) *Logger {
     return &Logger{prefix: prefix}
-
-func (l *Logger) Log(message string)
-    fmt.Printf("[%s] %s\n", l.prefix, message)
+}
+func (l *Logger) Log(message string) {
+    fmt.Printf("[%s] %s %f\n", l.prefix, message, m.Pi)
+}
 </file>
 ```
 
 ## Known Issues
 
 ### 1. Parameter and Field Grouping
-**Status**: Expanded in AST  
+**Status**: Expanded  
 **Impact**: Low - Cosmetic difference
 
 Grouped parameters and fields are expanded:
@@ -68,9 +99,11 @@ type Point struct { X, Y int }
 
 // Distilled
 func Move(x int, y int)
-type Point struct
+
+type Point struct {
     X int
     Y int
+}
 ```
 
 ### 2. Single Import Formatting
@@ -88,19 +121,25 @@ import (
 )
 ```
 
-### 3. Implementation Details
-**Status**: Some simplification  
-**Impact**: Medium - Implementation may differ
+### 3. Function-Typed Parameters
+**Status**: Signature dropped  
+**Impact**: Medium - the parameter's type is incomplete
 
-Complex implementations may be simplified. For example, compound assignments like `+=` might appear as simple assignments.
+A parameter of function type prints as a bare `func`: `func Map[T, V any](input []T, f func(T) V) []V` prints as `func Map[T any, V any](input []T, f func) []V`.
 
-### 4. Generic Type Parameters
+### 4. Empty Import Block
+**Status**: Cosmetic  
+**Impact**: Low
+
+When the import filter drops every import of a file (the imports are used only in function bodies that are not printed), an empty `import (` `)` block remains.
+
+### 5. Generic Type Parameters
 **Status**: Basic support  
 **Impact**: Medium - Complex constraints may not be fully preserved
 
-Basic generic syntax is supported, but complex type constraints might be simplified.
+Type parameters and constraints are kept; grouped type parameters are expanded (`[T, V any]` prints as `[T any, V any]`).
 
-### 5. CGO Support
+### 6. CGO Support
 **Status**: Minimal  
 **Impact**: Low - C code blocks not properly preserved
 
@@ -152,15 +191,20 @@ func Add(x int, y int) int { // Line comment on the function signature
 package basic
 
 import (
-    "fmt"
-    m "math"
 )
 
+// Global constant Pi, a fundamental value.
+
 const Pi = 3.14159
+// var block for multiple declarations.
+// IsEnabled controls a feature. Doc comments for vars are important.
 
 var IsEnabled = true
+// UserCount is a package-level counter.
 
 var UserCount int64 = 100
+// Add sums two integers. A trivial function.
+// It tests basic function declaration and parameter parsing.
 
 func Add(x int, y int) int
 </file>
@@ -171,40 +215,34 @@ func Add(x int, y int) int
 
 ```
 <file path="construct_1_basic.go">
-//  Package basic provides fundamental Go constructs.
-//  It serves as the baseline for parser testing.
 package basic
 
 import (
     "fmt"
-// Standard library import
     m "math"
-// Aliased import
-// Global constant Pi, a fundamental value.
 )
 
-const Pi = 3.14159
+// Global constant Pi, a fundamental value.
 
+const Pi = 3.14159
 // var block for multiple declarations.
 // IsEnabled controls a feature. Doc comments for vars are important.
+
 var IsEnabled = true
-
 // UserCount is a package-level counter.
-var UserCount int64 = 100
 
+var UserCount int64 = 100
 // Add sums two integers. A trivial function.
 // It tests basic function declaration and parameter parsing.
-func Add(x int, y int) int
-    z := x + y
-    var result = z
-    _ = m.Abs(-1)
+
+func Add(x int, y int) int { // Line comment on the function signature
+    // A comment inside the function body.
+    z := x + y // Short variable declaration
+    var result = z // Standard variable declaration
+    _ = m.Abs(-1) // Using an aliased import
     fmt.Println(result)
     return result
-// Line comment on the function signature
-// A comment inside the function body.
-// Short variable declaration
-// Standard variable declaration
-// Using an aliased import
+}
 </file>
 ```
 
@@ -263,19 +301,26 @@ func (cw *customWriter) Write(p []byte) (n int, err error) { return 0, nil }
 package simple
 
 import (
-    "io"
 )
 
-type Writer interface
+// Writer defines a simple interface for writing data.
+
+type Writer interface {
     Write(p []byte) (n int, err error)
+}
+// Data represents a container for a piece of data.
+// It demonstrates a basic struct with a single field.
 
-type Data struct
-
-func (d Data) ReadValue() string
-
-func (d *Data) UpdateValue(v string)
+type Data struct {}
+// NewData is a constructor-like function, a common Go idiom.
 
 func NewData(v string) *Data
+// ReadValue returns the current value. This is a value receiver method.
+// It can be called on both Data and *Data types.
+func (d Data) ReadValue() string
+// UpdateValue modifies the value. This is a pointer receiver method.
+// It can only be called on a *Data type.
+func (d *Data) UpdateValue(v string)
 </file>
 ```
 
@@ -290,27 +335,39 @@ import (
     "io"
 )
 
-type Writer interface
+// Writer defines a simple interface for writing data.
+
+type Writer interface {
     Write(p []byte) (n int, err error)
+}
+// Data represents a container for a piece of data.
+// It demonstrates a basic struct with a single field.
 
-type Data struct
+type Data struct {
     value string
+}
+// NewData is a constructor-like function, a common Go idiom.
 
-func (d Data) ReadValue() string
+func NewData(v string) *Data {
+    return &Data{value: v}
+}
+// ReadValue returns the current value. This is a value receiver method.
+// It can be called on both Data and *Data types.
+func (d Data) ReadValue() string {
     return d.value
-
-func (d *Data) UpdateValue(v string)
+}
+// UpdateValue modifies the value. This is a pointer receiver method.
+// It can only be called on a *Data type.
+func (d *Data) UpdateValue(v string) {
     d.value = v
+}
+// Ensure Data does not satisfy the io.Writer interface, but we use it
+// to test how the distiller handles imported interfaces.
 
 var _ io.Writer = (*customWriter)(nil)
 
-type customWriter struct
-
-func (cw *customWriter) Write(p []byte) (n int, err error)
-    return 0, nil
-
-func NewData(v string) *Data
-    return &Data{value: v}
+type customWriter struct {}
+func (cw *customWriter) Write(p []byte) (n int, err error) { return 0, nil }
 </file>
 ```
 
@@ -365,15 +422,23 @@ func ProcessNumericChan[T Number](ch <-chan *Node[T]) T {
 ```
 <file path="construct_4_complex.go">
 package complex
+// Number is a constraint that permits any integer or floating-point type.
 
-type Number interface
+type Number interface {
     ~int | ~int64 | ~float32 | ~float64
+}
+// Node is a generic struct representing a node in a linked list.
 
-type Node[T any] struct
+type Node[T any] struct {
     Value T
     Next *Node[T]
+}
+// Map applies a function to each element of a slice, returning a new slice.
+// This is a generic function with a closure.
 
-func Map[T any, V any](input []T, f func(T) V) []V
+func Map[T any, V any](input []T, f func) []V
+// ProcessNumericChan processes a channel of generic Nodes.
+// It uses a type constraint.
 
 func ProcessNumericChan[T Number](ch <-chan *Node[T]) T
 </file>
@@ -389,25 +454,26 @@ func ProcessNumericChan[T Number](ch <-chan *Node[T]) T
    - **Fix**: Added proper extraction of type parameters from function declarations in AST parser
    - **Impact**: Generics now properly displayed for functions like `Map[T any, V any]`
 
-2. **Method association** (✅ Fixed)
-   - **Issue**: Methods were displayed separately from their types
-   - **Fix**: Implemented two-pass processing to properly associate methods with types
-   - **Impact**: Methods now correctly nested under their receiver types
+2. **Verbatim function bodies** (✅ Fixed)
+   - **Issue**: Function bodies were rebuilt as lossy pseudo-code (an `if` lost its body and `else` branch, a `for` its header)
+   - **Fix**: The body is copied verbatim from the source
+   - **Impact**: `--implementation=1` and `--expand` print the real code with braces
 
 ## Usage Notes
 
 1. **Visibility Rules**: Go's visibility is determined by the first character of identifiers:
    - Uppercase first letter = Exported (public)
-   - Lowercase first letter = Unexported (package-private)
+   - Lowercase first letter = Unexported (internal: `--internal=1` shows it; `--private=1` adds nothing for Go)
+   - A method is as visible as the less visible of its own name and its receiver type
 
-2. **Import Organization**: The distiller preserves import grouping and formatting.
+2. **Import Organization**: Imports print as one `import ( ... )` block; in text output, an import that the printed code does not use is dropped (`--filter-imports=false` keeps it).
 
-3. **Generic Support**: Full support for Go 1.18+ generics including type parameters, constraints, and type inference.
+3. **Generic Support**: Type parameters and constraints of Go 1.18+ generics are kept.
 
 4. **Best Practices**: 
    - Use appropriate visibility flags to focus on public API
    - The text format provides the most compact representation for AI consumption
-   - Being aware that methods may appear as standalone functions
+   - Methods print at file level with their receiver, after their type, not inside it
 
 ## Future Improvements
 
@@ -417,20 +483,16 @@ The following improvements are planned:
 2. **Import Formatting**: Distinguish between single and multi-import blocks
 3. **Generic Type Parameters**: Complete support for complex generic constraints
 4. **CGO Support**: Handle C code blocks in CGO files
-5. **Implementation Accuracy**: Preserve exact implementation details
+5. **Function-Typed Parameters**: Print the full signature of a `func(...)` parameter
 
 ## Technical Implementation
 
 The Go processor uses:
 - **Parser**: Standard `go/parser` with `ParseComments` mode
 - **AST Processing**: Native `go/ast` traversal
-- **Type Analysis**: Basic visibility detection based on naming conventions
+- **Visibility**: Detection based on naming conventions
 - **Formatter**: Custom text formatter with Go-specific syntax rules
 
-The implementation follows a two-pass approach:
-1. First pass: Collect types and functions
-2. Second pass: Associate methods with their receiver types
-3. Third pass: Analyze interface satisfaction
-4. Fourth pass: Extract and position comments
+A file with a syntax error produces no output: in a directory run `aid` prints `Warning: failed to process ...` on stderr and goes on with the other files; a single Go file or Go stdin with a syntax error makes `aid` exit 1. Declarations are emitted in source order; doc comments of functions and types are documentation (`--docstrings`), the package comment and other comments follow `--comments`.
 
 For more details, see the implementation in `internal/language/golang/`.

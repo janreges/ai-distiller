@@ -27,7 +27,7 @@ AI Distiller transforms source code into optimized formats for Large Language Mo
 | `aid - -o FILE`, or no path, piped stdin and `-o FILE` | `FILE` | output |
 | `aid .git` (git mode) | none | git log |
 | `aid .git -o FILE` | `FILE` | nothing (`-o FILE --stdout`: both) |
-| `aid PATH --ai-action ACTION` | the `--ai-output` path (default: under `.aid/` in the project root, see below) | status lines; with `--stdout` a prompt action prints its prompt instead |
+| `aid PATH --ai-action ACTION` | the `--ai-output` path (default: under `.aid/` in the project root for a prompt action, under `./.aid/` in the current directory for a flow action, see below) | status lines; with `--stdout` a prompt action prints its prompt instead |
 
 AI actions always write to `--ai-output` and reject `-o`: `aid PATH --ai-action ACTION -o FILE` exits 1. `--stdout` does not stop an AI action from writing its file.
 
@@ -47,6 +47,8 @@ Each flag takes `0` or `1`. Setting a flag to `0` removes members of that level,
 C# combined access modifiers show when the flag of either of their words is on: `protected internal` with `--protected=1` or `--internal=1`, `private protected` with `--private=1` or `--protected=1`.
 
 Valid categories for `--include-only` and `--exclude-items`: `public`, `protected`, `internal`, `private`, `comments`, `docstrings`, `implementation`, `imports`, `annotations`, `fields`, `methods`.
+
+`--include-only` starts from nothing: list `methods` and/or `fields`, or every class and interface is printed with an empty body. `--exclude-items` starts from everything (all visibility levels, comments, docstrings, bodies, imports) and removes the listed categories, so `--exclude-items=internal` prints private and protected members and bodies too. In `--exclude-items`, `docstrings` removes regular comments, not docstrings (a known bug); use `--docstrings=0` instead.
 
 ## Content
 
@@ -205,19 +207,32 @@ Pattern: `.aid/aid.<name>[.<options>].<ext>` in the project root
 - `.aid/aid.myproject.md` (`--format md`)
 
 #### AI Action Output Files
-Pattern: `./.aid/<ACTION-NAME>.YYYY-MM-DD.HH-MM-SS.<basename>.md`
+Pattern: `.aid/<ACTION-NAME>.YYYY-MM-DD.HH-MM-SS.<basename>.md` in the project root
+
+| Action | `<ACTION-NAME>` |
+|--------|-----------------|
+| `prompt-for-refactoring-suggestion` | `REFACTORING-ANALYSIS` |
+| `prompt-for-complex-codebase-analysis` | `COMPLEX-CODEBASE-ANALYSIS` |
+| `prompt-for-security-analysis` | `SECURITY-AUDIT` |
+| `prompt-for-performance-analysis` | `PERFORMANCE-ANALYSIS` |
+| `prompt-for-best-practices-analysis` | `BEST-PRACTICES-ANALYSIS` |
+| `prompt-for-bug-hunting` | `BUG-HUNTING-ANALYSIS` |
+| `prompt-for-single-file-docs` | `SINGLE-FILE-DOCS` |
+| `prompt-for-diagrams` | `DIAGRAMS-ANALYSIS` |
 
 **Examples:**
-- `./.aid/REFACTORING-SUGGESTION.2025-06-17.14-30-00.myproject.md`
-- `./.aid/SECURITY-ANALYSIS.2025-06-17.14-30-00.myproject.md`
+- `.aid/REFACTORING-ANALYSIS.2025-06-17.14-30-00.myproject.md`
+- `.aid/SECURITY-AUDIT.2025-06-17.14-30-00.myproject.md`
 
 #### Flow Action Output (Multiple Files)
-Pattern: `./.aid/` directory with subdirectories and multiple markdown files
+Pattern: files and subdirectories under `./.aid/` in the current directory (not the project root), named after the basename of the path and the date
 
-**Example:** `flow-for-deep-file-to-file-analysis` creates:
-- `./.aid/ANALYSIS-TASK-LIST.md` - Sequential task list
-- `./.aid/ANALYSIS-SUMMARY.md` - Analysis template
-- `./.aid/analysis/` - Directory for individual file analysis reports
+**Example:** `aid src --ai-action flow-for-deep-file-to-file-analysis` creates:
+- `.aid/ANALYSIS-TASK-LIST.src.2025-06-17.md` - Sequential task list
+- `.aid/ANALYSIS-SUMMARY.src.2025-06-17.md` - Analysis template
+- `.aid/analysis.src/2025-06-17/` - Directory for individual file analysis reports
+
+`flow-for-multi-file-docs` creates `.aid/DOCS-TASK-LIST.src.<date>.md`, `.aid/DOCS-INDEX.src.<date>.md` and `.aid/docs.src/<date>/` with `API-REFERENCE.md`, `README.md` and one template per source file under `files/`.
 
 ### Using --stdout
 
@@ -235,8 +250,8 @@ aid ./entire-project --stdout  # May generate MBs of text exceeding AI context
 ```
 
 **Flow actions behavior:**
-- Shows summary output to stdout
-- Full directory structure still created in `.aid/`
+- Print status lines to stdout, with or without `--stdout`
+- Full directory structure still created in `./.aid/`
 
 ### Git Integration
 
@@ -305,8 +320,8 @@ aid ./large-project -w 1            # Single-threaded processing
 
 | Code | Meaning |
 |------|---------|
-| 0 | Success. Source that does not parse does not fail the run; its output may be empty. |
-| 1 | Any error: nonexistent path, a file no language processor handles, unknown flag or more than one path, `--format` not in the list, a visibility or content flag (`--public`, `--protected`, `--internal`, `--private`, `--comments`, `--docstrings`, `--implementation`, `--imports`, `--annotations`) that is not `0`/`1` (or `true`/`false`), non-numeric `-w`, `--include-only` together with `--exclude-items`, unknown `--ai-action`, `--ai-output` outside the project, `-o` with `--ai-action`, stdin whose language is not detected, an unknown `--lang` on stdin, empty stdin without `--lang` |
+| 0 | Success. Source that does not parse does not fail the run; its output may be empty. The exception is Go: see `1`. |
+| 1 | Any error: nonexistent path, a single Go file or Go stdin that does not parse (in a directory run such a file is skipped with a `Warning: failed to process` line on stderr and the run goes on), a file no language processor handles, unknown flag or more than one path, `--format` not in the list, a visibility or content flag (`--public`, `--protected`, `--internal`, `--private`, `--comments`, `--docstrings`, `--implementation`, `--imports`, `--annotations`) that is not `0`/`1` (or `true`/`false`), non-numeric `-w`, `--include-only` together with `--exclude-items`, unknown `--ai-action`, `--ai-output` outside the project, `-o` with `--ai-action`, stdin whose language is not detected, an unknown `--lang` on stdin, empty stdin without `--lang` |
 
 These invalid values do not fail; `aid` exits 0 with a fallback:
 

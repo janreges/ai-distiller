@@ -26,8 +26,9 @@ Decided by `internal/language/rust/line_parser.go#LineParser.parseVisibility`:
 
 - no modifier: `private`;
 - `pub(crate)`: `internal`;
-- `pub(super)` and `pub(in path)`: `protected`;
-- `pub`: `public`.
+- `pub(super)` and `pub(in path)`: `protected` (the formatter prints both as
+  `pub(super)`);
+- `pub`: `public`, and so is `pub(self)`, which Rust treats as private.
 
 Methods inside `impl Trait for Type` have no modifier in the source but are
 `public`. Methods declared in a trait body are `public`. Enum variants are

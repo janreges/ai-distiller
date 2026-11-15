@@ -49,7 +49,10 @@
   declared name) with the modifier `static`.
 - An extension function `fun R.name()` is a function named `R.name` with the
   decorator `@Extension`. It stays where it is declared: at file level, or in
-  the class that declares it.
+  the class that declares it. The fwcd grammar wraps the receiver in a
+  `receiver_type` node, which
+  `internal/language/kotlin/tree_sitter_processor.go#TreeSitterProcessor.processFunctionDeclaration`
+  reads.
 - `typealias` is a `DistilledTypeAlias`.
 
 ## IR specifics

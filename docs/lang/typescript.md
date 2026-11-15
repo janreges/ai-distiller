@@ -13,25 +13,27 @@ TypeScript support in AI Distiller is designed to capture the rich type informat
 | Construct | Support Level | Notes |
 |-----------|--------------|-------|
 | **Classes** | ✅ Full | Including abstract classes, inheritance, generics |
-| **Interfaces** | ✅ Full | With extends, generics, index signatures |
-| **Functions** | ✅ Full | Regular, async, arrow functions, overloads |
+| **Interfaces** | ⚠️ Partial | With extends and generics; index signatures (`[key: string]: any`) are not printed |
+| **Functions** | ✅ Full | Regular, async, arrow functions, overloads (every signature is printed) |
 | **Methods** | ✅ Full | Public, private, protected, abstract, static |
 | **Type System** | ✅ Full | Union, intersection, conditional, mapped types |
 | **Generics** | ✅ Full | With constraints, defaults, inference |
 | **Type Aliases** | ✅ Full | Including complex utility types |
 | **Imports/Exports** | ✅ Full | ES6 modules, type-only imports, export modifiers |
-| **Enums** | ✅ Full | Const and regular enums |
-| **Decorators** | ⚠️ Partially supported | Applied to classes/methods but values not captured |
-| **Namespaces** | ❌ Not supported | Modern modules preferred |
-| **Parameter Properties** | ✅ Full | Constructor shorthand syntax |
+| **Enums** | ✅ Full | Members with their initialisers; `const enum` prints as `enum` |
+| **Decorators** | ⚠️ Partial | Method decorators are printed with their arguments; class and property decorators are dropped |
+| **Namespaces** | ✅ Full | `namespace X {}` and `declare module "x" {}` with their members |
+| **Parameter Properties** | ✅ Full | Constructor shorthand syntax (`readonly` and default values are dropped) |
 
 ### Visibility Rules
 
 TypeScript visibility in AI Distiller follows the language's access modifiers:
 - **Public**: Default visibility or explicit `public` keyword, exported declarations
-- **Private**: `private` keyword, `#` private fields, or underscore-prefixed non-exported members
+- **Private**: `private` keyword, `#` private fields and methods (the `#` stays in the name), or underscore-prefixed non-exported functions and variables
 - **Protected**: `protected` keyword
-- **Internal**: Non-exported top-level declarations (module-private)
+- **Internal**: Non-exported top-level declarations (module-private), shown with `--internal=1`
+
+The default output therefore shows exported declarations only. A file whose classes and functions are not exported prints nothing without `--internal=1`; the examples below that have no `export` use that flag. In an ambient declaration (`declare namespace`, `declare module "x"`) every member is public.
 
 ## Key Features
 
@@ -52,10 +54,10 @@ type Predicate<T> = T extends (...args: any[]) => infer R ? R : never;
 ```
 
 ```
-# Output
-class EventEmitter<TEventMap extends object>:
-    function emit<K extends keyof TEventMap>(event: K, payload: TEventMap[K]) -> void
-
+# Output (--internal=1)
+class EventEmitter<TEventMap extends object> {
+    public emit<K extends keyof TEventMap>(event: K, payload: TEventMap[K]): void
+}
 type Predicate<T> = T extends (...args: any[]) => infer R ? R : never
 ```
 
@@ -79,20 +81,22 @@ class EmailService extends BaseService implements INotifiable<EmailPayload> {
 ```
 
 ```
-# Output
-interface INotifiable<P>:
+# Output (--internal=1)
+interface INotifiable<P> {
     method handleNotification(payload: P): void
+}
 
-abstract class BaseService:
-    abstract function process<T extends {id: string}>(item: T) -> Promise<boolean>
+abstract class BaseService {
+    public abstract process<T extends {id: string}>(item: T): Promise<boolean>
+}
 
-class EmailService extends BaseService implements INotifiable<EmailPayload>:
-    # Members...
+class EmailService extends BaseService implements INotifiable<EmailPayload> {
+}
 ```
 
 ### 3. **Parameter Properties**
 
-TypeScript's constructor shorthand is intelligently processed:
+TypeScript's constructor shorthand becomes fields with the parameter's visibility:
 
 ```typescript
 // Input
@@ -106,19 +110,20 @@ class UserModel {
 ```
 
 ```
-# Output
-class UserModel:
-    field public readonly id: number
-    field private email: string
-    field protected lastLogin: Date
-    function constructor(id: number, email: string, lastLogin: Date)
+# Output (--internal=1 --private=1 --protected=1)
+class UserModel {
+    public id: number
+    private email: string
+    protected lastLogin: Date
+    public constructor(id: number, email: string, lastLogin: Date)
+}
 ```
 
 ## Output Formats
 
 ### Text Format (Recommended for AI)
 
-AI Distiller uses a TypeScript-specific formatter that preserves language-specific syntax while maintaining readability. The text format is optimized for AI comprehension:
+AI Distiller uses a TypeScript-specific formatter that keeps TypeScript syntax: `export` on top-level declarations, the access keyword on class members, `property` and `method` on interface members, and `: Type` return types. With `--implementation=1`, bodies are printed in braces:
 
 <details open>
 <summary>Example: Complex TypeScript Class</summary>
@@ -159,64 +164,83 @@ export class PluginManager {
 </details>
 
 <details>
-<summary>Output: Default (full)</summary>
+<summary>Output: Default (`aid plugin-manager.ts`)</summary>
 <blockquote>
 
 ```
-interface IPlugin:
+<file path="plugin-manager.ts">
+
+export interface IPlugin {
     property name: string
     method execute(data: any): void
+}
 
-class PluginManager:
-    field private plugins: Map<string, IPlugin> = new Map()
-    field private settings: PluginSettings
-    function constructor(settings: PluginSettings)
-        // implementation
-    function registerPlugin(plugin: IPlugin) -> void
-        // implementation
-    async function runAll(data: any) -> Promise<void>
-        // implementation
+export class PluginManager {
+    public constructor(settings: PluginSettings)
+    @LogExecution
+    public registerPlugin(plugin: IPlugin): void
+    public async runAll(data: any): Promise<void>
+}
+</file>
 ```
 
 </blockquote>
 </details>
 
 <details>
-<summary>Output: `--private=0 --protected=0 --internal=0`</summary>
+<summary>Output: `--private=1 --protected=1 --internal=1`</summary>
 <blockquote>
 
 ```
-interface IPlugin:
+<file path="plugin-manager.ts">
+
+export interface IPlugin {
     property name: string
     method execute(data: any): void
+}
 
-class PluginManager:
-    function constructor(settings: PluginSettings)
-        // implementation
-    function registerPlugin(plugin: IPlugin) -> void
-        // implementation
-    async function runAll(data: any) -> Promise<void>
-        // implementation
+export class PluginManager {
+    private plugins: Map<string, IPlugin> = new Map()
+    private settings: PluginSettings
+    public constructor(settings: PluginSettings)
+    @LogExecution
+    public registerPlugin(plugin: IPlugin): void
+    public async runAll(data: any): Promise<void>
+}
+</file>
 ```
 
 </blockquote>
 </details>
 
 <details>
-<summary>Output: `--implementation=0`</summary>
+<summary>Output: `--implementation=1`</summary>
 <blockquote>
 
 ```
-interface IPlugin:
+<file path="plugin-manager.ts">
+
+export interface IPlugin {
     property name: string
     method execute(data: any): void
+}
 
-class PluginManager:
-    field private plugins: Map<string, IPlugin> = new Map()
-    field private settings: PluginSettings
-    function constructor(settings: PluginSettings)
-    function registerPlugin(plugin: IPlugin) -> void
-    async function runAll(data: any) -> Promise<void>
+export class PluginManager {
+    public constructor(settings: PluginSettings) {}
+    @LogExecution
+    public registerPlugin(plugin: IPlugin): void {
+        if (this.plugins.has(plugin.name)) {
+          throw new Error(`Plugin "${plugin.name}" already registered`);
+        }
+        this.plugins.set(plugin.name, plugin);
+    }
+    public async runAll(data: any): Promise<void> {
+        for (const plugin of this.plugins.values()) {
+          await plugin.execute(data);
+        }
+    }
+}
+</file>
 ```
 
 </blockquote>
@@ -227,24 +251,26 @@ class PluginManager:
 
 ### Markdown Format
 
-The markdown format provides a hierarchical view with emojis for visual parsing:
+The markdown format (`--format md`) wraps the text output of each file in a fenced code block under a heading with the file path:
 
-```markdown
-# plugin-manager.ts
+````markdown
+### plugin-manager.ts
 
-## Structure
+```typescript
 
-📦 **Interface** `IPlugin`
-  📝 **Property** `name`: `string`
-  🔧 **Method** `execute`(`data`: `any`) → `void`
+export interface IPlugin {
+    property name: string
+    method execute(data: any): void
+}
 
-🏛️ **Class** `PluginManager`
-  🔒 **Field** `plugins`: `Map<string, IPlugin>` = `new Map()`
-  🔒 **Field** `settings`: `PluginSettings`
-  🔧 **Constructor** (`settings`: `PluginSettings`)
-  🔧 **Method** `registerPlugin`(`plugin`: `IPlugin`) → `void`
-  ⚡ **Async Method** `runAll`(`data`: `any`) → `Promise<void>`
+export class PluginManager {
+    public constructor(settings: PluginSettings)
+    @LogExecution
+    public registerPlugin(plugin: IPlugin): void
+    public async runAll(data: any): Promise<void>
+}
 ```
+````
 
 ## Advanced TypeScript Features
 
@@ -278,36 +304,37 @@ interface StringIndex {
 
 ### Optimizing for Context Windows
 
-TypeScript code often includes extensive type definitions. Use stripping options strategically:
+TypeScript code often includes extensive type definitions. Use the filtering flags strategically:
 
 ```bash
-# For implementation analysis - keep types, remove docs
-aid src/ --comments=0 --format text
+# For implementation analysis - keep bodies, remove docs
+aid src/ --implementation=1 --docstrings=0
 
-# For API understanding - keep signatures, remove implementation
-aid src/ --implementation=0 --format text
+# For API understanding - exported signatures only (the defaults)
+aid src/
 
-# For architecture overview - public API only
-aid src/ --private=0 --protected=0 --internal=0,implementation --format text
+# For architecture overview - include module-internal declarations too
+aid src/ --internal=1
 ```
 
 ### Framework-Specific Patterns
 
 AI Distiller recognizes common TypeScript framework patterns:
 
-- **Angular**: Components, services, decorators (decorator values not captured)
+- **Angular**: Components, services, method decorators (class and property decorators are dropped)
 - **React**: Function components, hooks, props interfaces
 - **Node.js**: Express middleware, async handlers
 - **NestJS**: Controllers, providers, modules
 
 ## Known Limitations
 
-1. **Decorators**: Decorator applications (e.g., `@Component()`) are detected but decorator arguments/values are not captured
-2. **Constructor Parameter Defaults**: Default values in constructor parameters are not shown
-3. **Function Overloads**: Multiple signatures are merged into a single signature
-4. **Namespaces**: Not supported (use ES6 modules instead)
-5. **Triple-slash Directives**: Reference comments are ignored
-6. **Const Arrow Functions**: Displayed as `const Name` instead of `const Name = () => {}`
+1. **Decorators**: Class decorators (`@Component({...})`) and property decorators (`@Input()`) are dropped; method decorators are printed with their arguments
+2. **Parameter Defaults and Rest Parameters**: Default values are not shown for any parameter (constructors, methods, functions and arrow functions: `greet(times: number = 1)` prints as `greet(times: number)`), a rest parameter (`...rest: string[]`) is dropped, and `readonly` is dropped from parameter properties
+3. **Index Signatures**: `[key: string]: T` members of interfaces are not printed
+4. **Triple-slash Directives**: Reference comments are ignored
+5. **Const Arrow Functions**: Displayed like a function signature (`export const handler(req: Request): Response`); the `=>` form is printed only with `--implementation=1`
+6. **`const enum`**: Printed as a plain `enum`
+7. **Optional and readonly markers**: The `?` of optional properties, methods and parameters and the `readonly` of interface members are dropped (`email?: string` prints as `property email: string`); class members keep `readonly` (`public readonly limit: number = 3`)
 
 ## Best Practices
 
@@ -380,30 +407,29 @@ class Service {
    - **Fix**: Updated formatter to use TypeScript-style colon syntax
    - **Impact**: More familiar syntax for TypeScript developers
 
-4. **Non-exported classes visibility** (✅ Fixed)
-   - **Issue**: Non-exported abstract classes were filtered out in default view
-   - **Fix**: Improved visibility handling for module-internal declarations
-   - **Impact**: Abstract base classes now properly appear in output
-
-5. **Underscore-prefixed members** (✅ Fixed)
+4. **Underscore-prefixed members** (✅ Fixed)
    - **Issue**: Functions like `_normalizeString` appeared in default output
    - **Fix**: Added convention-based private detection for underscore prefix
    - **Impact**: Better alignment with JavaScript/TypeScript conventions
 
-6. **Top-level function visibility** (✅ Fixed)
+5. **Top-level function visibility** (✅ Fixed)
    - **Issue**: Top-level functions showed "public" prefix incorrectly
    - **Fix**: Updated formatter to omit visibility for top-level declarations
    - **Impact**: Cleaner, more idiomatic output
 
+### Recently Fixed (hardening)
+
+1. **Enums** (✅ Fixed): enums were missing from the text output; they print with one member per line and their initialisers (`A = -1`, `B = 1 << 2`)
+2. **Namespaces and ambient modules** (✅ Fixed): `namespace X {}` and `declare module "x" {}` print with their members
+3. **Return and constant types** (✅ Fixed): top-level functions keep their return type, type guards (`x is number`, `asserts x is string`) are kept, constants keep their type and a short initialiser
+4. **`#private` members** (✅ Fixed): keep their `#name` and are private
+5. **Function bodies** (✅ Fixed): `--implementation=1` prints the real body instead of a placeholder
+6. **Comments and JSDoc** (✅ Fixed): JSDoc blocks print by default (`--docstrings=0` removes them), `//` and `/* */` comments with `--comments=1`
+7. **Exported type aliases** (✅ Fixed): keep their `export` keyword
+
 ### Current Limitations
 
-1. **Decorator values not captured** (🟡 Minor)
-   - Decorators are shown but their arguments/values aren't preserved
-   - Workaround: Decorator presence is sufficient for most AI use cases
-
-2. **Namespace support missing** (🟢 By design)
-   - Modern ES modules are preferred over legacy namespaces
-   - Workaround: Use ES6 modules instead
+See Known Limitations above.
 
 ## Performance Characteristics
 
@@ -420,9 +446,9 @@ TypeScript parsing performance with tree-sitter:
 
 TypeScript support is actively maintained. Key areas for contribution:
 
-1. **Decorator Support**: Implement decorator parsing in `ast_parser.go`
-2. **Parameter Defaults**: Capture default values in function parameters
-3. **JSDoc Integration**: Parse and include JSDoc type annotations
+1. **Decorator Support**: Class and property decorators in `internal/language/typescript/ast_parser.go`
+2. **Parameter Defaults**: Capture default values and rest parameters
+3. **Index Signatures**: Print them in interfaces
 4. **Performance**: Optimize tree-sitter grammar loading
 
 See [CONTRIBUTING.md](../../CONTRIBUTING.md) for development setup.

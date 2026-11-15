@@ -486,7 +486,7 @@ prompt-for-refactoring-suggestion
     
     EXAMPLE:
         aid ./src --ai-action prompt-for-refactoring-suggestion
-        # Creates ./.aid/REFACTORING-SUGGESTION.YYYY-MM-DD.HH-MM-SS.basename.md
+        # Creates .aid/REFACTORING-ANALYSIS.YYYY-MM-DD.HH-MM-SS.basename.md in the project root
         
         aid ./src --ai-action prompt-for-refactoring-suggestion --raw
         # Includes full source code bodies (for smaller codebases or large AI context)
@@ -506,7 +506,7 @@ prompt-for-complex-codebase-analysis
     
     EXAMPLE:
         aid ./ --ai-action prompt-for-complex-codebase-analysis
-        # Creates ./.aid/COMPLEX-CODEBASE-ANALYSIS.YYYY-MM-DD.HH-MM-SS.basename.md
+        # Creates .aid/COMPLEX-CODEBASE-ANALYSIS.YYYY-MM-DD.HH-MM-SS.basename.md in the project root
         
         aid ./lib --ai-action prompt-for-complex-codebase-analysis --raw
         # Includes full source code bodies (for smaller codebases or large AI context)
@@ -526,7 +526,7 @@ prompt-for-security-analysis
     
     EXAMPLE:
         aid ./src --ai-action prompt-for-security-analysis --private=1
-        # Creates ./.aid/SECURITY-ANALYSIS.YYYY-MM-DD.HH-MM-SS.basename.md
+        # Creates .aid/SECURITY-AUDIT.YYYY-MM-DD.HH-MM-SS.basename.md in the project root
         
         aid ./src --ai-action prompt-for-security-analysis --private=1 --raw
         # Includes full source code bodies (for comprehensive security analysis)
@@ -546,7 +546,7 @@ prompt-for-performance-analysis
     
     EXAMPLE:
         aid ./core --ai-action prompt-for-performance-analysis
-        # Creates ./.aid/PERFORMANCE-ANALYSIS.YYYY-MM-DD.HH-MM-SS.basename.md
+        # Creates .aid/PERFORMANCE-ANALYSIS.YYYY-MM-DD.HH-MM-SS.basename.md in the project root
         
         aid ./core --ai-action prompt-for-performance-analysis --raw
         # Includes full source code bodies (for detailed performance analysis)
@@ -566,7 +566,7 @@ prompt-for-best-practices-analysis
     
     EXAMPLE:
         aid ./src --ai-action prompt-for-best-practices-analysis
-        # Creates ./.aid/BEST-PRACTICES-ANALYSIS.YYYY-MM-DD.HH-MM-SS.basename.md
+        # Creates .aid/BEST-PRACTICES-ANALYSIS.YYYY-MM-DD.HH-MM-SS.basename.md in the project root
         
         aid ./src --ai-action prompt-for-best-practices-analysis --raw
         # Includes full source code bodies (for comprehensive best practices analysis)
@@ -586,7 +586,7 @@ prompt-for-bug-hunting
     
     EXAMPLE:
         aid ./src --ai-action prompt-for-bug-hunting --private=1
-        # Creates ./.aid/BUG-HUNTING-ANALYSIS.YYYY-MM-DD.HH-MM-SS.basename.md
+        # Creates .aid/BUG-HUNTING-ANALYSIS.YYYY-MM-DD.HH-MM-SS.basename.md in the project root
         
         aid ./src --ai-action prompt-for-bug-hunting --private=1 --raw
         # Includes full source code bodies (for comprehensive bug detection)
@@ -606,7 +606,7 @@ prompt-for-single-file-docs
     
     EXAMPLE:
         aid ./src/main.py --ai-action prompt-for-single-file-docs
-        # Creates ./.aid/SINGLE-FILE-DOCS.YYYY-MM-DD.HH-MM-SS.basename.md
+        # Creates .aid/SINGLE-FILE-DOCS.YYYY-MM-DD.HH-MM-SS.basename.md in the project root
         
         aid ./src/api.ts --ai-action prompt-for-single-file-docs --raw
         # Includes full source code bodies (for detailed file documentation)
@@ -626,7 +626,7 @@ prompt-for-diagrams
     
     EXAMPLE:
         aid ./src --ai-action prompt-for-diagrams
-        # Creates ./.aid/DIAGRAMS-ANALYSIS.YYYY-MM-DD.HH-MM-SS.basename.md
+        # Creates .aid/DIAGRAMS-ANALYSIS.YYYY-MM-DD.HH-MM-SS.basename.md in the project root
         
         aid ./docs --ai-action prompt-for-diagrams --raw
         # Includes full content for comprehensive diagram analysis from documentation
@@ -636,7 +636,7 @@ flow-for-deep-file-to-file-analysis
     
     WHAT IT INCLUDES:
     • Creates .aid/ directory with analysis infrastructure
-    • Generates ANALYSIS-TASK-LIST.md with sequential file-by-file tasks
+    • Generates ANALYSIS-TASK-LIST.<basename>.<date>.md with sequential file-by-file tasks
     • Template files for comprehensive project analysis workflow
     • Ensures consistent analysis methodology across all files
     
@@ -645,7 +645,7 @@ flow-for-deep-file-to-file-analysis
     
     EXAMPLE:
         aid ./src --ai-action flow-for-deep-file-to-file-analysis
-        # Creates ./.aid/ directory with ANALYSIS-TASK-LIST.md and templates
+        # Creates ./.aid/ANALYSIS-TASK-LIST.src.<date>.md, ANALYSIS-SUMMARY.src.<date>.md and analysis.src/<date>/
         
         aid ./src --ai-action flow-for-deep-file-to-file-analysis --raw
         # Full source code in workflow (for comprehensive file-by-file analysis)
@@ -665,7 +665,7 @@ flow-for-multi-file-docs
     
     EXAMPLE:
         aid ./src --ai-action flow-for-multi-file-docs
-        # Creates ./.aid/ directory with DOCS-TASK-LIST.md and documentation templates
+        # Creates ./.aid/DOCS-TASK-LIST.src.<date>.md, DOCS-INDEX.src.<date>.md and docs.src/<date>/
         
         aid ./src --ai-action flow-for-multi-file-docs --raw
         # Full source code in documentation workflow (for detailed docs)
@@ -729,8 +729,8 @@ AI Distiller uses intelligent file naming to avoid conflicts and enable easy man
 
 DEFAULT FILE PATTERNS:
     Regular distillation: .aid/aid.<name>[.<options>].<ext> in the project root
-    AI actions: .aid/{ACTION-NAME}.{timestamp}.{basename}.md
-    Flow actions: .aid/ directory with multiple files and subdirectories
+    Prompt actions: .aid/{ACTION-NAME}.{timestamp}.{basename}.md in the project root
+    Flow actions: ./.aid/ in the current directory, with multiple files and subdirectories
 
 RATIONALE:
     • .aid prefix ensures easy recognition in git status
@@ -748,8 +748,8 @@ STDOUT CONSIDERATIONS:
 EXAMPLES:
     aid ./src                    → .aid/aid.src.txt
     aid ./src --implementation=1 → .aid/aid.src.impl.txt
-    aid ./src --ai-action prompt-for-refactoring-suggestion → .aid/REFACTORING-SUGGESTION.2025-06-17.14-30-00.src.md
-    aid ./src --ai-action flow-for-deep-file-to-file-analysis → .aid/ directory with task lists and templates
+    aid ./src --ai-action prompt-for-refactoring-suggestion → .aid/REFACTORING-ANALYSIS.2025-06-17.14-30-00.src.md
+    aid ./src --ai-action flow-for-deep-file-to-file-analysis → ./.aid/ with task lists and templates
 
 For more examples: aid --help-extended
 

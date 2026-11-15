@@ -1,6 +1,6 @@
 # PHP Language Support
 
-AI Distiller provides comprehensive support for PHP 7.4+ codebases using the [tree-sitter-php](https://github.com/tree-sitter/tree-sitter-php) parser, with full support for PHP 8.x features including enums, attributes, union types, and PSR-19 PHPDoc standards.
+AI Distiller supports PHP 7.4+ codebases through the [tree-sitter-php](https://github.com/tree-sitter/tree-sitter-php) grammar, compiled into the `aid` binary. It handles PHP 8.x features including enums, attributes and union types, and reads PSR-19 PHPDoc tags; the gaps are listed under Known Issues.
 
 ## Overview
 
@@ -14,14 +14,14 @@ PHP support in AI Distiller is designed to extract the essential structure of PH
 |-----------|--------------|-------|
 | **Classes** | ✅ Full | Including abstract, final, readonly (8.2+) |
 | **Interfaces** | ✅ Full | Multiple inheritance supported |
-| **Traits** | ✅ Full | Full support with proper `trait` keyword and `use` statements |
-| **Enums** | ✅ Full | Pure and backed enums (8.1+) with values |
+| **Traits** | ⚠️ Partial | Printed with the `trait` keyword; a class's `use TraitName;` lines are printed but the default import filter removes them (see Known Issues) |
+| **Enums** | ⚠️ Partial | Pure and backed enums (8.1+) with their case values; enum constants and methods print after the enum at file level |
 | **Functions** | ✅ Full | Global functions with type hints |
 | **Methods** | ✅ Full | Including magic methods, final, abstract |
-| **Properties** | ✅ Full | Typed, readonly, promoted, magic via @property |
-| **Constants** | ✅ Full | Class constants with visibility, proper `const` syntax |
-| **Namespaces** | ✅ Full | Including grouped use statements |
-| **Attributes** | ✅ Full | PHP 8.0+ attributes/annotations |
+| **Properties** | ✅ Full | Typed, readonly and promoted properties; `@property` tags stay in the class docblock |
+| **Constants** | ⚠️ Partial | Class constants with visibility and value; interface constants are not printed |
+| **Namespaces** | ✅ Full | Grouped use statements are split into one `use` per name |
+| **Attributes** | ✅ Full | PHP 8.0+ attributes on classes and methods |
 
 ### Type System Features
 
@@ -31,43 +31,42 @@ PHP support in AI Distiller is designed to extract the essential structure of PH
 | **Union types** | ✅ Full | PHP 8.0+ `string\|int` |
 | **Intersection types** | ✅ Full | PHP 8.1+ `Countable&Iterator` |
 | **Nullable types** | ✅ Full | `?string` syntax |
-| **Array types** | ✅ Full | Via PHPDoc: `array<K,V>`, `list<T>`, shapes |
-| **Advanced types** | ✅ Full | `class-string<T>`, `key-of<>`, `value-of<>` |
+| **Array types** | ✅ Full | Via PHPDoc: `array<K,V>`, `list<T>` (printed as `T[]`); a one-line array shape (`array{id: int}`) prints in the signature, a multi-line one stays in the docblock |
+| **Advanced types** | ✅ Full | `class-string<T>`, `key-of<>`, `value-of<>` from `@param` and `@return` |
 | **Default values** | ✅ Full | Parameter defaults preserved |
 
 ### PSR-19 PHPDoc Support
 
 | Annotation | Support Level | Notes |
 |------------|--------------|-------|
-| **@property** | ✅ Full | Creates virtual public properties |
-| **@property-read** | ✅ Full | Creates virtual read-only properties |
-| **@property-write** | ✅ Full | Creates virtual write-only properties |
+| **@property** | ✅ Full | Read into virtual properties; the output shows them in the class docblock, not as separate lines |
+| **@property-read** | ✅ Full | As `@property` |
+| **@property-write** | ✅ Full | As `@property` |
 | **@method** | ✅ Full | Creates virtual methods (shown as actual methods in output) |
-| **@deprecated** | ✅ Full | Marks elements as deprecated |
-| **@internal** | ✅ Full | API documentation preserved |
+| **@deprecated** | ✅ Full | Makes the class docblock an API docblock (see below) |
+| **@api** / **@internal** | ✅ Full | On a class: sets public or internal visibility |
 | **@param** | ✅ Full | Enhanced parameter types |
 | **@return** | ✅ Full | Enhanced return types |
-| **@throws** | ✅ Full | Exception documentation |
-| **@template** | ⚠️ Partial | Preserved but not in API tags |
-| **@psalm-type** | ❌ Excluded | User preference |
-| **@phpstan-type** | ❌ Excluded | User preference |
+| **@throws** | ✅ Full | Kept in the docblock |
+| **@template** | ⚠️ Partial | Kept in the docblock only |
+| **@psalm-type** / **@phpstan-type** | ⚠️ Partial | Kept in the docblock only |
 
 ### Visibility Rules
 
 PHP visibility in AI Distiller follows standard PHP conventions:
-- **Public**: `public` keyword or default (methods), dunder methods (`__init__`, `__toString__`)
-- **Protected**: `protected` keyword
-- **Private**: `private` keyword
-- **Internal**: Package-private (no PHP equivalent, unused)
+- **Public**: `public` keyword, or no modifier (`function f()` and `var $x` are public); shown by default
+- **Protected**: `protected` keyword (shown with `--protected=1`)
+- **Private**: `private` keyword (shown with `--private=1`)
+- **Internal**: no PHP keyword; a class whose docblock has `@internal` counts as internal (shown with `--internal=1`)
 
 ## Key Features
 
 ### 1. **Magic Property Support (PSR-19)**
 
-AI Distiller transforms PHPDoc `@property*` annotations into virtual properties displayed directly in the class body:
+AI Distiller reads PHPDoc `@property*` annotations as virtual properties. The class docblock that declares them is always printed, so the magic properties are visible even when `__get`/`__set` are not:
 
 ```php
-// Input
+<?php
 /**
  * @property-read int $id Auto-generated ID
  * @property string $name User's full name
@@ -80,7 +79,7 @@ class User {
 ```
 
 ```
-// Output (magic methods hidden when @property exists)
+<file path="user.php">
 /**
  * @property-read int $id Auto-generated ID
  * @property string $name User's full name
@@ -88,6 +87,7 @@ class User {
  */
 class User {
 }
+</file>
 ```
 
 ### 2. **Enum Support with Values**
@@ -95,7 +95,7 @@ class User {
 PHP 8.1+ enums are properly displayed with the `enum` keyword and their case values are always shown:
 
 ```php
-// Input
+<?php
 enum Status: string {
     case DRAFT = 'draft';
     case PUBLISHED = 'published';
@@ -104,12 +104,13 @@ enum Status: string {
 ```
 
 ```
-// Output (values always shown, even with --implementation=0)
+<file path="status.php">
 enum Status: string {
     case DRAFT = 'draft';
     case PUBLISHED = 'published';
     case ARCHIVED = 'archived';
 }
+</file>
 ```
 
 ### 3. **Advanced Type Preservation**
@@ -117,33 +118,44 @@ enum Status: string {
 Complex PHPDoc types are fully preserved for AI understanding:
 
 ```php
-// Input
-/**
- * @param array{
- *   id: int,
- *   name: non-empty-string,
- *   tags: non-empty-list<string>,
- *   meta?: array<string, mixed>
- * } $data
- * @return class-string<Model>
- */
-public function process(array $data): string
+<?php
+class Processor {
+    /**
+     * @param array{
+     *   id: int,
+     *   name: non-empty-string,
+     *   tags: non-empty-list<string>,
+     *   meta?: array<string, mixed>
+     * } $data
+     * @return class-string<Model>
+     */
+    public function process(array $data): string {}
+}
 ```
 
 ```
-// Output
-public process(array $data): class-string<Model>
+<file path="process.php">
+class Processor {
+    /**
+     * @param array{
+     * id: int,
+     * name: non-empty-string,
+     * tags: non-empty-list<string>,
+     * meta?: array<string, mixed>
+     * } $data
+     * @return class-string<Model>
+     */
+    public process(array $data): class-string<Model>
+}
+</file>
 ```
 
 ### 4. **Trait Support**
 
-PHP traits are fully supported with proper syntax:
-- Displayed with `trait` keyword (not as classes)
-- `use` statements shown inside classes that use traits
-- Multiple trait usage supported
+PHP traits are displayed with the `trait` keyword (not as classes). The `use Timestampable, Loggable;` line inside the class is printed as one `use` per trait, but the import filter of the text format removes those lines; `--filter-imports=false` keeps them (see Known Issues):
 
 ```php
-// Input
+<?php
 trait Timestampable {
     private ?DateTime $createdAt = null;
     
@@ -160,34 +172,32 @@ class User {
 ```
 
 ```
-// Output
+<file path="trait.php">
 trait Timestampable {
     public touch(): void
 }
-
 class User {
-    use Timestampable;
-    use Loggable;
-    public name: string
+    public string $name;
 }
+</file>
 ```
 
-### 5. **Smart Docblock Handling**
+### 5. **Docblock Handling**
 
-API-defining docblocks are shown even when `--comments=0`:
-- Classes with `@property*`, `@method`, `@deprecated` annotations
-- Methods with enhanced type information
-- Docstrings and comments are properly separated
+- Class, method, property and function docblocks print by default; `--docstrings=0` removes them
+- A class docblock with an API-defining tag (`@property*`, `@method`, `@deprecated`, `@api`, `@internal`, `@throws`) is printed even with `--docstrings=0`
+- A docblock whose text fits on one line prints on one line (`/** User service */`)
+- Regular `//`, `#` and `/* */` comments print with `--comments=1`
 
 ## Output Formats
 
 ### Text Format (Recommended for AI)
 
 The text format is optimized for AI comprehension with minimal syntax:
-- No visibility prefixes (unlike other languages)
-- Clear type information
-- Compact representation
-- API docblocks preserved when relevant
+- Visibility keyword on every member (`public`, `protected`, `private`)
+- Methods without the `function` keyword (`public send(...): Result|false`)
+- Properties and constants in PHP syntax (`public readonly string $name;`)
+- A constructor without parameters is not printed
 
 <details open>
 <summary>Example: PSR-19 Magic Properties</summary>
@@ -253,13 +263,12 @@ class User extends ActiveRecord {
 </details>
 
 <details open>
-<summary>Default Output (`public only, no implementation`)</summary>
+<summary>Default output (public only, no implementation)</summary>
 <blockquote>
 
 ```
 <file path="magic_properties.php">
 namespace App\Models;
-
 /**
  * Active Record model with magic properties
  * 
@@ -275,12 +284,11 @@ namespace App\Models;
  * @method bool save()
  */
 abstract class ActiveRecord {
-    public __construct(array $attributes = [])
     public static find(int $id): self|null
     public static findAll(): self[]
     public save(): bool
+    public __construct(array $attributes = [])
 }
-
 class User extends ActiveRecord {
     public getFullName(): string
     public isAdmin(): bool
@@ -383,53 +391,42 @@ interface CacheInterface {
 </details>
 
 <details open>
-<summary>Default Output (`public only, no implementation`)</summary>
+<summary>Default output (public only, no implementation)</summary>
 <blockquote>
 
 ```
 <file path="modern_features.php">
 namespace App\Services;
-use App\Contracts\Cacheable;
-use App\Contracts\Loggable;
-use App\Traits\TimestampableTrait;
-use App\Traits\ValidatableTrait;
 use App\Enums\Permission;
-
-/**
- * User service with modern PHP 8 features
- */
+/** User service with modern PHP 8 features */
 #[\Attribute(\Attribute::TARGET_CLASS)]
 class Service {
-    public readonly name: string
-    public readonly version: int
+    public readonly string $name;
+    public readonly int $version;
     public __construct(string $name, int $version = 1)
 }
-
 trait TimestampableTrait {
     public touch(): void
 }
-
 #[Service(name: 'notifications', version: 2)]
 class NotificationService implements Cacheable, Loggable {
-    use TimestampableTrait;
-    use ValidatableTrait;
     public __construct(DatabaseConnection $db, CacheInterface $cache, LoggerInterface $logger, bool $debug = false)
     public send(string|Email $message, User|string $recipient, ?array $options = null): Result|false
     public hasPermission(User $user, Permission $permission): bool
 }
-
 enum Permission: string {
     case READ = 'read';
     case WRITE = 'write';
     case DELETE = 'delete';
 }
-
 interface CacheInterface {
     public get(string $key): mixed
     public set(string $key, mixed $value, ?int $ttl = null): bool
 }
 </file>
 ```
+
+The import filter removed the `use App\Contracts\...` and `use App\Traits\...` lines and the trait `use` lines of `NotificationService` (see Known Issues); `--filter-imports=false` keeps them. The private promoted properties of `NotificationService` are hidden by default.
 
 </blockquote>
 </details>
@@ -527,23 +524,47 @@ class Repository {
 ```
 <file path="complex_types.php">
 namespace App\Types;
-
-/**
- * Repository with complex type annotations
- */
+/** Repository with complex type annotations */
 class Repository {
-    public findBy(array $criteria): list<Entity>
+    /**
+     * Find entities by criteria
+     *
+     * @param array{
+     * where?: array<string, mixed>,
+     * orderBy?: array<string, 'ASC'|'DESC'>,
+     * limit?: positive-int,
+     * offset?: non-negative-int
+     * } $criteria
+     * @return list<Entity>
+     */
+    public findBy(array $criteria): Entity[]
+    /**
+     * @param class-string<T> $className
+     * @param array<string, mixed> $data
+     * @return T
+     * @template T of Entity
+     */
     public hydrate(class-string<T> $className, array<string, mixed> $data): T
+    /**
+     * @param callable(Entity): bool $predicate
+     * @return Entity|null
+     */
     public findOneBy(callable(Entity): bool $predicate): ?Entity
+    /**
+     * @param non-empty-array<int> $ids
+     * @return array<int, Entity>
+     */
     public findByIds(non-empty-array<int> $ids): array<int, Entity>
+    /**
+     * @param key-of<self::ALLOWED_FIELDS> $field
+     * @param value-of<self::ALLOWED_VALUES> $value
+     */
     public validateField(key-of<self::ALLOWED_FIELDS> $field, value-of<self::ALLOWED_VALUES> $value): bool
-    
     public const ALLOWED_FIELDS = [
         'name' => true,
         'email' => true,
         'status' => true
     ];
-    
     public const ALLOWED_VALUES = [
         'active',
         'inactive',
@@ -563,22 +584,30 @@ class Repository {
 
 ### Critical Issues
 
-1. **Empty constructors hidden** (🟢 Intentional)
+1. **The import filter removes used names and trait uses** (🔴 Bug)
+   - **Issue**: The text format's unused-import filter drops `use` statements whose name appears only in `implements` (`use App\Contracts\Cacheable;` with `class S implements Cacheable`) and drops a class's `use TraitName;` lines
+   - **Workaround**: `--filter-imports=false` keeps every `use`
+
+2. **Interface and enum members** (🔴 Bug)
+   - **Issue**: Interface constants are not printed; an enum's constants and methods are printed after the enum, at file level and without visibility
+   - **Example**: `enum E: int { case A = 1; const D = self::A; public function label(): string {} }` prints `enum E: int { case A = 1; }` followed by `const D = self::A` and `label(): string`
+
+3. **Empty constructors hidden** (🟢 Intentional)
    - **Behavior**: Constructors without parameters are not shown
    - **Rationale**: Reduces noise in output
-   - **Impact**: Minimal - empty constructors have no API significance
 
 ### Minor Issues
 
-2. **Template annotations excluded** (🟢 Minor)
-   - **Issue**: `@template` tags not in API-defining list
+4. **Template annotations** (🟢 Minor)
+   - **Issue**: `@template` tags stay in the docblock; they do not change the signature
    - **Impact**: Generic type information in docblock only
-   - **Workaround**: Templates are rarely used in PHP
 
-3. **Complex array shapes in parameters** (🟡 Minor)
-   - **Issue**: Array shape types shown in docblock, not signature
-   - **Example**: `@param array{id: int, name: string} $data`
-   - **Status**: Preserving PHPDoc is sufficient for AI
+5. **Multi-line array shapes** (🟡 Minor)
+   - **Issue**: An array shape written over several docblock lines stays in the docblock; the signature keeps the native type (`array $data`, see the `process.php` example above)
+   - **Example**: a one-line shape is used instead: `@param array{id: int, name: string} $data` prints `save(array{id: int, name: string} $data)`
+
+6. **Docblock indentation** (🟡 Minor)
+   - **Issue**: A member docblock loses the indentation inside its lines (`*   id: int` prints as `* id: int`)
 
 ## Best Practices
 
@@ -634,7 +663,7 @@ Use PHPDoc to specify array structures:
 
 ### 4. **Use Traits for Code Reuse**
 
-Traits are fully supported and clearly displayed:
+Traits are displayed with the `trait` keyword:
 
 ```php
 trait Timestampable {
@@ -658,43 +687,32 @@ class User {
 - Use meaningful names (preserved in output!)
 - Group related functionality in namespaces
 - Document complex types in PHPDoc
-- Hide implementation details with `--implementation=0`
+- Implementation details are hidden by default (`--implementation=0`)
 
 ## Integration Examples
 
 ### Direct CLI Usage
 
 ```bash
-# Extract public API for AI context
-aid ./src --format text --implementation=0 --output api.txt
+# Extract public API for AI context (the defaults)
+aid ./src --output api.txt
 
 # Include all members but no implementation
-aid ./src --private=1 --protected=1 --implementation=0
+aid ./src --private=1 --protected=1
 
 # Full extraction with implementations
 aid ./src --private=1 --protected=1 --implementation=1
 
 # Extract specific directory
-aid ./src/Models --format text > models.txt
+aid ./src/Models --stdout > models.txt
 ```
 
-### MCP Integration with Claude Desktop
+### MCP Integration
 
-When using AI Distiller through MCP, Claude can directly access your PHP codebase:
+When using AI Distiller through MCP, Claude can directly access your PHP codebase. The MCP server `@janreges/ai-distiller-mcp` provides tools such as `distill_directory`, `distill_file` and `list_files`; setup for Claude Code, Claude Desktop and other clients, and the parameters of every tool, are in [`mcp-npm/README.md`](../../mcp-npm/README.md):
 
-**Setup** (in Claude Desktop config.json):
-```json
-{
-  "mcpServers": {
-    "ai-distiller": {
-      "command": "/usr/local/bin/aid",
-      "args": ["--mcp-server"],
-      "env": {
-        "AID_ROOT": "/home/user/projects/my-php-app"
-      }
-    }
-  }
-}
+```bash
+claude mcp add aid -- npx -y @janreges/ai-distiller-mcp
 ```
 
 **Example Conversation:**
@@ -703,11 +721,10 @@ When using AI Distiller through MCP, Claude can directly access your PHP codebas
 
 > **Claude**: I'll analyze your authentication system structure using AI Distiller.
 
-*Claude automatically calls:*
+*Claude calls:*
 ```
-distillDirectory("src/Auth", include_private=false, include_implementation=false)
-search("OAuth|oauth", is_regex=true)
-distillFile("src/Auth/AuthManager.php")
+distill_directory({ directory_path: "src/Auth", include_private: false, include_implementation: false })
+distill_file({ file_path: "src/Auth/AuthManager.php" })
 ```
 
 *Claude receives the distilled structure and responds:*
@@ -717,15 +734,15 @@ distillFile("src/Auth/AuthManager.php")
 > **Current Structure:**
 > ```
 > AuthManager:
->   + authenticate(string $username, string $password): ?User
->   + createSession(User $user): Session
->   + validateToken(string $token): bool
+>   public authenticate(string $username, string $password): ?User
+>   public createSession(User $user): Session
+>   public validateToken(string $token): bool
 >   
 > User:
 >   @property-read int $id
 >   @property string $email
 >   @property-write string $password
->   + verifyPassword(string $password): bool
+>   public verifyPassword(string $password): bool
 > ```
 >
 > **OAuth Integration Recommendations:**
@@ -750,13 +767,13 @@ distillFile("src/Auth/AuthManager.php")
 
 ```bash
 # Extract Laravel models structure
-aid app/Models --format text --implementation=0 > models-api.txt
+aid app/Models --stdout > models-api.txt
 
-# Symfony entities with full details  
-aid src/Entity --private=1 --protected=1 > entities-full.txt
+# Symfony entities with private and protected members
+aid src/Entity --private=1 --protected=1 --stdout > entities-full.txt
 
 # Controllers public API only
-aid src/Controller --implementation=0 > controllers-api.txt
+aid src/Controller --stdout > controllers-api.txt
 ```
 
 ### CI/CD Integration
@@ -765,7 +782,7 @@ aid src/Controller --implementation=0 > controllers-api.txt
 # .github/workflows/api-check.yml
 - name: Check API Surface
   run: |
-    aid src/ --implementation=0 --format text > api-current.txt
+    aid src/ --stdout > api-current.txt
     diff api-baseline.txt api-current.txt || {
       echo "API surface changed! Review the differences:"
       diff -u api-baseline.txt api-current.txt
@@ -778,9 +795,9 @@ aid src/Controller --implementation=0 > controllers-api.txt
 ```json
 {
   "scripts": {
-    "analyze": "aid src/ --format text > structure.txt",
-    "analyze:api": "aid src/ --implementation=0 > api.txt",
-    "analyze:full": "aid src/ --private=1 --protected=1 --implementation=1 > full.txt"
+    "analyze": "aid src/ --stdout > structure.txt",
+    "analyze:api": "aid src/ -o api.txt",
+    "analyze:full": "aid src/ --private=1 --protected=1 --implementation=1 -o full.txt"
   }
 }
 ```
@@ -821,9 +838,7 @@ aid src/Controller --implementation=0 > controllers-api.txt
     */
    ```
 
-## Known Issues
-
-### @method Tag Behavior
+## @method Tag Behavior
 
 The `@method` PHPDoc tags are parsed and displayed as actual methods in the output. This is by design to make magic methods visible to AI systems, but it means:
 
@@ -832,6 +847,7 @@ The `@method` PHPDoc tags are parsed and displayed as actual methods in the outp
 
 Example:
 ```php
+<?php
 /**
  * @method static User|null find(int $id)
  * @method void sendNotification(string $message, array $options = [])
@@ -841,10 +857,16 @@ class User { }
 
 Will output:
 ```
+<file path="user.php">
+/**
+ * @method static User|null find(int $id)
+ * @method void sendNotification(string $message, array $options = [])
+ */
 class User {
     public static find(int $id): User|null
     public sendNotification(string $message, array $options = $[]): void
 }
+</file>
 ```
 
 This is considered a feature for AI comprehension, as it makes magic methods explicit in the API surface.
@@ -853,7 +875,7 @@ This is considered a feature for AI comprehension, as it makes magic methods exp
 
 | Tool | Purpose | PHP Support | AI-Optimized |
 |------|---------|-------------|--------------|
-| **AI Distiller** | Code structure extraction | Full 7.4-8.3 | ✅ Yes |
+| **AI Distiller** | Code structure extraction | PHP 7.4-8.3 (gaps above) | ✅ Yes |
 | PHPStan | Static analysis | Full | ❌ No |
 | PHP-Parser | AST generation | Full | ❌ No |
 | phpDocumentor | Documentation | Partial | ❌ No |
@@ -871,26 +893,22 @@ Ensure your class has @property annotations in its docblock:
 class Model { }
 ```
 
-### "Enum showing as class"
+### "A use statement is missing"
 
-Update to latest version. Enums now display with proper `enum` keyword.
+The text format's import filter removes `use` lines it considers unused, including some that are used (see Known Issues). Add `--filter-imports=false`.
 
-### "Missing parameter defaults"
+### "Docblocks missing"
 
-Default values are now preserved. Update if seeing issues.
-
-### "Complex types not preserved"
-
-PHPDoc types like `array<K,V>`, `class-string<T>` are fully supported in latest version.
+Docblocks print by default. Check that the command does not pass `--docstrings=0`.
 
 ## Future Enhancements
 
-- [ ] Capture `@param` array shapes in method signatures
+- [ ] Capture multi-line `@param` array shapes in method signatures
 - [ ] Anonymous class support
 - [ ] Closure and arrow function type extraction
 - [ ] `@template` as API-defining tag
 - [ ] Trait conflict resolution (`as`, `insteadof`)
-- [x] ~~Trait support~~ ✅ Implemented in v0.2.x
+- [ ] Interface constants, and enum constants and methods inside the enum
 - [ ] Property hooks (PHP 8.4+)
 
 ## Contributing
@@ -902,7 +920,3 @@ Key areas needing help:
 - Framework-specific patterns
 - Performance optimizations
 - Real-world test cases
-
----
-
-<sub>Documentation generated for AI Distiller v0.2.0</sub>

@@ -66,9 +66,8 @@ the signature's indentation (section 3 of `SKILL.md`).
 | swift | `//` for every comment node (`internal/formatter/swift_formatter.go#SwiftFormatter.formatComment`) | `// CONF_DOC_COMMENT` | `public class ConfWidget {` ... `}` | `import Foundation` unchanged |
 | typescript | `// CONF_LINE_COMMENT` | `/** CONF_DOC_COMMENT */` | `export class ConfWidget {` ... `}`; `namespace ConfSpace {`, `declare module "conf-ambient" {`; `export enum ConfColor {`, one member per line without commas | `import { sep } from "path";` prints `import 'path'` |
 
-Where a fixture prints no comment of a kind or drops a declaration line (PHP
-class and method docblocks, Swift `//` comments, the C++ namespace and Kotlin
-package lines), the reason is listed in
+Where a fixture drops a declaration line (the C++ namespace line, the Kotlin
+package line, a C# `using` alias), the reason is listed in
 `internal/conformance/known_gaps_test.go` or in
 `internal/conformance/unhandled_test.go#knownUnhandled`; read those lists
 rather than this table for what is missing.

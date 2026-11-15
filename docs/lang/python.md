@@ -1,6 +1,6 @@
 # Python Language Support
 
-AI Distiller provides comprehensive support for Python 3.x codebases using the [tree-sitter-python](https://github.com/tree-sitter/tree-sitter-python) parser.
+AI Distiller supports Python 3.x code through the official [tree-sitter-python](https://github.com/tree-sitter/tree-sitter-python) grammar (v0.23.6), compiled into the `aid` binary.
 
 ## Overview
 
@@ -12,34 +12,36 @@ Python support in AI Distiller is designed to extract the essential structure of
 
 | Construct | Support Level | Notes |
 |-----------|--------------|-------|
-| **Classes** | ✅ Full | Including inheritance, metaclasses, decorators |
-| **Functions** | ✅ Full | Regular, async, generators, decorators |
-| **Methods** | ✅ Full | Instance, class, static, properties |
-| **Type Hints** | ✅ Full | PEP 484, 526, 544, 585, 604 |
-| **Decorators** | ✅ Full | Function and class decorators |
-| **Imports** | ✅ Full | Regular, from, aliases |
-| **Docstrings** | ✅ Full | Preserved or stripped based on options |
-| **Async/Await** | ⚠️ Partial | `async` keyword currently missing in output |
-| **Dataclasses** | ✅ Full | Recognized via decorator |
+| **Classes** | ✅ Full | Base classes and class decorators are kept; a subscripted base (`Generic[T]`) and `metaclass=` are dropped |
+| **Functions** | ⚠️ Partial | Regular functions, generators and decorators; the `async` keyword is dropped |
+| **Methods** | ✅ Full | Instance, class, static methods and properties |
+| **Type Hints** | ⚠️ Partial | Parameter, return and variable annotations are kept; PEP 695 type parameters (`def f[T]`, `class Box[T]`) and `*args: *Ts` are dropped |
+| **Decorators** | ✅ Full | Function and class decorators (`--annotations=0` removes them) |
+| **Imports** | ✅ Full | Regular, from, aliases; in text output, imports the distilled code does not use are dropped |
+| **Docstrings** | ✅ Full | Printed by default under the class or function they document; `--docstrings=0` removes them |
+| **Async/Await** | ⚠️ Partial | `async def` prints without `async` |
+| **Dataclasses** | ✅ Full | Annotated class attributes (`name: str = "x"`) are kept |
 | **Enums** | ✅ Full | Treated as classes |
-| **Metaclasses** | ⚠️ Partial | Detected but not shown in output |
-| **Nested Classes** | ❌ Not supported | Line parser limitation |
+| **Metaclasses** | ⚠️ Partial | `metaclass=Meta` is dropped from the class header |
+| **Nested Classes** | ✅ Full | Printed inside their class |
 
 ### Visibility Rules
 
 Python visibility in AI Distiller follows these conventions:
-- **Public**: No underscore prefix, or dunder methods (`__init__`, `__str__`, etc.)
-- **Protected**: Single underscore prefix (`_method`)
-- **Private**: Double underscore prefix (`__method`), except dunders
+- **Public**: no underscore prefix, or a dunder name (`__init__`, `__str__`, etc.)
+- **Private**: any other name that starts with an underscore, `_method` as well as `__method`
+
+Python has no protected or internal level in AI Distiller: `--private=1` shows the underscore members, while `--protected=1` and `--internal=1` change nothing.
+
+Attributes assigned in a method (`self.name = name`) are listed as fields of the class, before the method that assigns them.
 
 ## Key Features
 
 ### 1. **Type Information Extraction**
 
-AI Distiller maximizes type information extraction, even from loosely typed Python code:
+AI Distiller keeps the type annotations exactly as written:
 
 ```python
-# Input
 def process_data(items: List[Dict[str, Any]], 
                  callback: Callable[[str], None] = None) -> Optional[DataFrame]:
     """Process items and optionally notify via callback."""
@@ -47,24 +49,32 @@ def process_data(items: List[Dict[str, Any]],
 ```
 
 ```
-# Output (with --implementation=0)
-+def process_data(items: List[Dict[str, Any]], callback: Callable[[str], None] = None) -> Optional[DataFrame]
+<file path="process.py">
+process_data(items: List[Dict[str, Any]], callback: Callable[[str], None] = None) -> Optional[DataFrame]
+    """Process items and optionally notify via callback."""
+</file>
 ```
 
-### 2. **Smart Docstring Handling**
+### 2. **Docstring Handling**
 
-Docstrings are preserved as documentation, not implementation:
+Docstrings are documentation, not implementation: they are printed by default, also with `--implementation=0`, and `--docstrings=0` removes them. A function's docstring is printed under its signature, indented one level deeper, where Python has it:
 
 ```python
-# Even with --implementation=0, docstrings remain
 def calculate(x: float) -> float:
     """Calculate the square root of x."""
     return math.sqrt(x)
 ```
 
-### 3. **Import Graph Analysis**
+```
+<file path="calculate.py">
+calculate(x: float) -> float
+    """Calculate the square root of x."""
+</file>
+```
 
-AI Distiller tracks import relationships for dependency understanding:
+### 3. **Imports**
+
+Imports are printed as written. In text output, an import that the distilled code no longer uses (for example one used only inside a function body that is not printed) is dropped; `--filter-imports=false` keeps every import and `--imports=0` removes them all.
 
 ```python
 from typing import List, Optional
@@ -77,11 +87,10 @@ from .utils import helper
 
 ### Text Format (Recommended for AI)
 
-The text format uses UML-inspired visibility prefixes:
-- `+` public members
-- `#` protected members  
-- `-` private members
-- `~` internal/package-private
+In the text format:
+- a public function or method prints as its signature without `def` and without the colon (`get_display_name(self) -> str`); with its body (`--implementation=1`) it prints as `def name(...):` followed by the body
+- a private member (name starting with `_`) is prefixed with `-` (`-def _generate_id(self) -> str:`)
+- classes print as `class Name(Base):` with their members indented
 
 <details open>
 <summary>Example: Basic Class</summary>
@@ -113,14 +122,19 @@ class User:
 </details>
 
 <details open>
-<summary>Default Output (`default output (public only, no implementation)`)</summary>
+<summary>Default output (`aid user.py`: public only, no implementation)</summary>
 <blockquote>
 
 ```
 <file path="user.py">
+
 class User:
-    +def __init__(self, name: str, email: str)
-    +def get_display_name(self) -> str
+    """Represents a user in the system."""
+    name = name
+    email = email
+    __init__(self, name: str, email: str)
+    get_display_name(self) -> str
+        """Returns the user's display name."""
 </file>
 ```
 
@@ -128,21 +142,25 @@ class User:
 </details>
 
 <details>
-<summary>Full Output (no stripping)</summary>
+<summary>Full output (`aid user.py --private=1 --protected=1 --internal=1 --implementation=1`)</summary>
 <blockquote>
 
 ```
 <file path="user.py">
+
 class User:
     """Represents a user in the system."""
-    +def __init__(self, name: str, email: str):
+    name = name
+    email = email
+    -_id = self._generate_id()
+    def __init__(self, name: str, email: str):
         self.name = name
         self.email = email
         self._id = self._generate_id()
-    +def get_display_name(self) -> str:
+    def get_display_name(self) -> str:
         """Returns the user's display name."""
         return self.name.title()
-    #def _generate_id(self) -> str:
+    -def _generate_id(self) -> str:
         """Internal method to generate user ID."""
         return f"usr_{hash(self.email)}"
 </file>
@@ -214,24 +232,32 @@ class AsyncService(ABC):
 </details>
 
 <details open>
-<summary>Default Output (`default output (public only, no implementation)`)</summary>
+<summary>Default output (`aid service.py`: public only, no implementation)</summary>
 <blockquote>
 
 ```
 <file path="service.py">
 from typing import AsyncIterator, Optional
 from abc import ABC, abstractmethod
-import asyncio
 
 class AsyncService(ABC):
-    +def __init__(self, name: str, timeout: float = 30.0)
+    """Abstract base class for async services."""
+    name = name
+    timeout = timeout
+    __init__(self, name: str, timeout: float = 30.0)
     @abstractmethod
-    +async def process(self, data: bytes) -> bytes
-    +async def start(self) -> None
-    +async def stop(self) -> None
-    +async def stream_data(self) -> AsyncIterator[bytes]
+    process(self, data: bytes) -> bytes
+        """Process data asynchronously."""
+    start(self) -> None
+        """Start the service."""
+    stop(self) -> None
+        """Stop the service."""
+    stream_data(self) -> AsyncIterator[bytes]
+        """Stream processed data."""
 </file>
 ```
+
+The `async` keyword is missing (see Known Issues), and `import asyncio` is dropped because only the bodies, which are not printed, use it.
 
 </blockquote>
 </details>
@@ -306,40 +332,47 @@ def process_config(config: ConfigDict,
 </details>
 
 <details open>
-<summary>Default Output (`default output (public only, no implementation)`)</summary>
+<summary>Default output (`aid advanced_types.py`: public only, no implementation)</summary>
 <blockquote>
 
 ```
 <file path="advanced_types.py">
 from typing import TypeVar, Generic, Protocol, Union, Literal, TypedDict
 from typing import overload
-
 T = TypeVar('T')
 K = TypeVar('K')
 V = TypeVar('V')
 
 class Comparable(Protocol):
-    +def __lt__(self, other: 'Comparable') -> bool
-    +def __le__(self, other: 'Comparable') -> bool
+    """Protocol for comparable objects."""
+    __lt__(self, other: 'Comparable') -> bool
+    __le__(self, other: 'Comparable') -> bool
 
 class ConfigDict(TypedDict):
+    """Configuration dictionary structure."""
     host: str
     port: int
     debug: bool
     features: list[str]
 
-class Cache(Generic[K, V]):
-    +def __init__(self, max_size: int = 100)
+class Cache:
+    """Generic cache implementation."""
+    max_size = max_size
+    __init__(self, max_size: int = 100)
     @overload
-    +def get(self, key: K, default: None = None) -> Union[V, None]
+    get(self, key: K, default: None = None) -> Union[V, None]
     @overload
-    +def get(self, key: K, default: V) -> V
-    +def get(self, key: K, default: Union[V, None] = None) -> Union[V, None]
-    +def put(self, key: K, value: V) -> None
-
-+def process_config(config: ConfigDict, mode: Literal['dev', 'prod'] = 'prod') -> bool
+    get(self, key: K, default: V) -> V
+    get(self, key: K, default: Union[V, None] = None) -> Union[V, None]
+        """Get value from cache."""
+    put(self, key: K, value: V) -> None
+        """Put value in cache."""
+process_config(config: ConfigDict, mode: Literal['dev', 'prod'] = 'prod') -> bool
+    """Process configuration based on mode."""
 </file>
 ```
+
+`class Cache(Generic[K, V])` prints as `class Cache:` (see Known Issues).
 
 </blockquote>
 </details>
@@ -349,41 +382,24 @@ class Cache(Generic[K, V]):
 
 ## Known Issues
 
-### Critical Issues
+1. **Missing `async` keyword**
+   - **Issue**: `async def` functions and methods print without `async`
+   - **Impact**: the output does not show which functions are coroutines
 
-1. **Missing `async` keyword** (🔴 Critical)
-   - **Issue**: `async def` functions appear as regular `def`
-   - **Impact**: Breaks async code semantics completely
-   - **Status**: Fix in progress (#101)
+2. **Missing metaclass parameters**
+   - **Issue**: `class MyClass(Base, metaclass=Meta)` prints as `class MyClass(Base):`
+   - **Workaround**: Document metaclass usage in the docstring
 
-2. **Missing metaclass parameters** (🔴 Critical)
-   - **Issue**: `class MyClass(Base, metaclass=Meta)` loses metaclass
-   - **Impact**: Metaclass behavior lost
-   - **Workaround**: Document metaclass usage in docstring
+3. **Subscripted base classes are dropped**
+   - **Issue**: `class Cache(Generic[K, V])` prints as `class Cache:`
 
-### Major Issues
+4. **PEP 695 type parameters and `*args: *Ts` are dropped**
+   - **Issue**: `def first[T](xs: list[T]) -> T` prints as `first(xs: list[T]) -> T`, `class Box[T]` as `class Box:`, and `def star(*a: *Ts)` as `star()`
 
-3. **Nested classes not captured** (🟡 Major)
-   - **Issue**: Inner classes are completely omitted
-   - **Impact**: Loses important structural information
-   - **Workaround**: Refactor to module-level classes
-
-4. **Docstring format changes** (🟡 Major)
-   - **Issue**: Multi-line docstrings converted to comments
-   - **Impact**: Docstrings are runtime-accessible, comments aren't
-   - **Status**: Requires parser enhancement
-
-### Minor Issues
-
-5. **Complex f-string parsing** (🟢 Minor)
-   - **Issue**: f-strings with nested braces may fail
-   - **Example**: `f"{x:.{precision}f}"` 
-   - **Workaround**: Use `.format()` method
-
-6. **Type comment support** (🟢 Minor)
-   - **Issue**: PEP 484 type comments not extracted
-   - **Example**: `x = []  # type: List[int]`
-   - **Workaround**: Use PEP 526 annotations
+5. **Type comment support**
+   - **Issue**: PEP 484 type comments are not extracted
+   - **Example**: `x = []  # type: List[int]` prints as `x = []`
+   - **Workaround**: Use PEP 526 annotations (`x: List[int] = []`)
 
 ## Best Practices
 
@@ -404,17 +420,17 @@ def process(data, options=None):
 
 ### 2. **Use Explicit Visibility**
 
-Make your intentions clear:
+Make your intentions clear. AI Distiller treats every name that starts with an underscore (except dunders) as private, so both helpers below are left out of the default output:
 
 ```python
 class Service:
-    def public_method(self):  # Clearly public
+    def public_method(self):  # Public
         pass
     
-    def _internal_method(self):  # Clearly internal
+    def _internal_method(self):  # Private in aid output
         pass
     
-    def __private_method(self):  # Clearly private
+    def __private_method(self):  # Private in aid output
         pass
 ```
 
@@ -445,10 +461,9 @@ detect-secrets scan --baseline .secrets.baseline
 ### Direct CLI Usage
 
 ```bash
-# Generate optimal context for AI assistants
-aid ./myproject --format text \
-    --strip "non-public,implementation,comments" \
-    --output context.txt
+# Generate context for AI assistants (the defaults already keep only the public API,
+# without implementation and comments)
+aid ./myproject -o context.txt
 
 # Include in your prompt
 cat <<EOF > prompt.txt
@@ -460,23 +475,12 @@ Please help me implement a new feature that...
 EOF
 ```
 
-### MCP Integration with Claude Desktop
+### MCP Integration
 
-When using AI Distiller through MCP, Claude can directly access your codebase:
+The MCP server `@janreges/ai-distiller-mcp` gives Claude and other MCP clients tools such as `distill_file`, `distill_directory` and `list_files`. Setup and the full tool list are in [`mcp-npm/README.md`](../../mcp-npm/README.md):
 
-**Setup** (in Claude Desktop config.json):
-```json
-{
-  "mcpServers": {
-    "ai-distiller": {
-      "command": "/usr/local/bin/aid",
-      "args": ["--mcp-server"],
-      "env": {
-        "AID_ROOT": "/Users/you/projects/myapp"
-      }
-    }
-  }
-}
+```bash
+claude mcp add aid -- npx -y @janreges/ai-distiller-mcp
 ```
 
 **Example Conversation:**
@@ -485,87 +489,32 @@ When using AI Distiller through MCP, Claude can directly access your codebase:
 
 > **Claude**: I'll analyze your authentication module structure using AI Distiller.
 
-*Claude automatically calls:*
+*Claude calls:*
 ```
-distillFile("auth/authenticator.py", strip_implementation=true)
-listFiles("auth/", pattern="*.py")
+list_files({ path: "auth/", pattern: "*.py" })
+distill_file({ file_path: "auth/authenticator.py" })
 ```
 
-*Claude receives the distilled structure and responds:*
+*Claude receives the distilled structure (public signatures, types and docstrings) and plans the change from the real API of the module.*
 
-> Based on the analysis, your authentication module has:
-> - `Authenticator` class with methods: `authenticate()`, `validate_token()`, `refresh_token()`
-> - `TokenManager` class handling JWT operations
-> - `UserSession` dataclass for session management
->
-> I can see that adding a caching layer would benefit the `validate_token()` method which currently makes database calls. Here's my implementation plan...
-
-**Advanced Example - Feature Implementation:**
+**Feature implementation across a directory:**
 
 > **You**: We need to implement API rate limiting. Show me all middleware classes and where request handling happens.
 
-> **Claude**: Let me analyze your middleware architecture comprehensively.
-
-*Claude calls multiple MCP tools:*
+*Claude calls:*
 ```
-distillDirectory("middleware/", strip_implementation=true)
-search("class.*Middleware", is_regex=true)
-distillFile("app.py", strip_implementation=true)
+distill_directory({ directory_path: "middleware/" })
+distill_file({ file_path: "app.py" })
 ```
 
-> I found your complete middleware architecture:
->
-> From `distillDirectory` on `middleware/`:
-> ```
-> BaseMiddleware (abstract):
->   + process_request(request: Request) -> Optional[Response]
->   + process_response(request: Request, response: Response) -> Response
->
-> AuthMiddleware(BaseMiddleware):
->   + __init__(jwt_secret: str, excluded_paths: List[str])
->   + process_request(request: Request) -> Optional[Response]
->
-> CORSMiddleware(BaseMiddleware):
->   + __init__(allowed_origins: List[str], allowed_methods: List[str])
->   + process_response(request: Request, response: Response) -> Response
->
-> LoggingMiddleware(BaseMiddleware):
->   + __init__(logger: Logger, log_body: bool = False)
->   + process_request(request: Request) -> Optional[Response]
->   + process_response(request: Request, response: Response) -> Response
-> ```
->
-> Your request flow: `app.py:handle_request()` → middleware chain (ordered list)
->
-> Here's a rate limiting middleware that fits your established patterns:
->
-> ```python
-> class RateLimitMiddleware(BaseMiddleware):
->     def __init__(self, requests_per_minute: int = 60, 
->                  redis_client: Optional[Redis] = None):
->         self.limit = requests_per_minute
->         self.redis = redis_client or {}  # Fallback to memory
->     
->     def process_request(self, request: Request) -> Optional[Response]:
->         client_id = self._get_client_id(request)
->         if self._is_rate_limited(client_id):
->             return Response(
->                 status=429, 
->                 body={"error": "Rate limit exceeded"},
->                 headers={"Retry-After": str(self._get_retry_after(client_id))}
->             )
->         return None
-> ```
-
-**Power of distillDirectory**: Notice how `distillDirectory` gave us the complete middleware namespace structure in one call, showing all classes with their methods and signatures. This is much more efficient than calling `distillFile` on each file separately!
+`distill_directory` returns every class and method signature of the directory in one call, which is cheaper than calling `distill_file` on each file.
 
 ### With Documentation Tools
 
 ```bash
-# Extract public API for docs
-aid ./src --strip "non-public,implementation" \
-    --format json-structured | \
-    jq '.files[].symbols[] | select(.visibility == "public")'
+# List the public classes as JSON
+aid ./src --format json-structured --stdout | \
+    jq -r '.files[].structure.classes[]?.name'
 ```
 
 ### CI/CD Integration
@@ -574,7 +523,7 @@ aid ./src --strip "non-public,implementation" \
 # .github/workflows/api-check.yml
 - name: Check API surface
   run: |
-    aid . --strip "non-public,implementation" > api-new.txt
+    aid . --stdout > api-new.txt
     diff api-baseline.txt api-new.txt || exit 1
 ```
 
@@ -615,53 +564,31 @@ aid ./src --strip "non-public,implementation" \
 
 ## Troubleshooting
 
-### "Parser failed with syntax error"
+### Missing or incomplete output for a file
 
-Python code must be syntactically valid. Run:
+AI Distiller does not stop on a syntax error, but a file that does not parse can come out incomplete. Check it with:
 ```bash
 python -m py_compile yourfile.py
 ```
 
 ### "Missing async keyword in output"
 
-Known issue. Workaround: Add comment markers:
-```python
-async def fetch_data():  # async
-    pass
-```
-
-### "Type information lost"
-
-Ensure you're using Python 3.9+ type hint syntax:
-```python
-# Old (may not parse correctly)
-from typing import List
-items: List[str]
-
-# New (better support)
-items: list[str]
-```
+Known issue (see Known Issues): `async def` prints as a plain function.
 
 ## Future Enhancements
 
 - [ ] Full `async`/`await` support
 - [ ] Metaclass parameter preservation  
-- [ ] Nested class extraction
 - [ ] Type comment (PEP 484) support
+- [ ] PEP 695 type parameters
 - [ ] Protocol implementation detection
 - [ ] Import cycle detection
-- [ ] Stub file (.pyi) support
 
 ## Contributing
 
 Help improve Python support! See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
 
 Key areas needing help:
-- Tree-sitter grammar improvements
 - Complex type annotation examples
 - Real-world test cases
 - Performance optimization
-
----
-
-<sub>Documentation generated for AI Distiller v0.2.0</sub>

@@ -6,9 +6,11 @@ This guide shows how to effectively use AI Distiller (aid) MCP server. Remember:
 
 1. **aid generates AI prompts** with distilled code attached
 2. **Output goes to**:
-   - stdout (when using `--stdout`)
-   - `.aid/` directory as markdown files
+   - the tool response, for the distill tools (`distill_file`, `distill_directory`)
+   - a markdown file under `.aid/`, for the AI action tools; the response states its path
 3. **AI agents or users** then execute these prompts with the distilled code
+
+Each tool accepts only the parameters listed in [`../README.md`](../README.md#all-registered-tools); any other key fails the call with an error that names it.
 
 ## 🎯 Using Specialized Tools (Recommended)
 
@@ -21,41 +23,38 @@ What happens:
 - Claude can then execute this prompt to find actual bugs
 
 Example with specific scope:
-> "Generate a bug-hunting prompt for the src/auth module only, including private methods and full implementation"
+> "Generate a bug-hunting prompt for the src/auth module only, including private methods"
 
 ```
 aid_hunt_bugs({
   target_path: "src/auth/",
-  include_private: true,
-  include_implementation: true  // Include method bodies for deep analysis
+  include_private: true  // Private, protected and internal members (the default)
 })
 ```
 
 ### Refactoring Analysis
-> "Can aid generate a refactoring analysis prompt for our payment module? Focus on public APIs only to keep the context small."
+> "Can aid generate a refactoring analysis prompt for our payment module? Signatures only, to keep the context small."
 
 ```
 aid_suggest_refactoring({
   target_path: "src/payment/",
-  refactoring_goal: "reduce complexity and improve testability",
-  include_implementation: false,  // Only signatures, no method bodies
-  include_private: false         // Public APIs only
+  include_implementation: false  // Only signatures, no method bodies
 })
 ```
 
+The goal of the refactoring (for example "reduce complexity and improve testability") is not a tool parameter: tell it to the agent that executes the generated prompt.
+
 ### Architecture Visualization
-> "Generate a prompt to create architecture diagrams for the services/ directory. Include all visibility levels but no implementations."
+> "Generate a prompt to create architecture diagrams for the services/ directory, without test files."
 
 ```
 aid_generate_diagram({
   target_path: "services/",
-  diagram_focus: "microservice communication",
-  include_private: true,
-  include_protected: true,
-  include_internal: true,
-  include_implementation: false  // Structure only
+  exclude_patterns: "*test*"
 })
 ```
+
+`aid_generate_diagram` takes only the path and the file patterns; a focus such as "microservice communication" goes into your request to the agent that executes the prompt.
 
 ### Security Analysis
 > "Create a security analysis prompt for our API handlers. Include full implementation since we need to check for injection vulnerabilities."
@@ -63,7 +62,6 @@ aid_generate_diagram({
 ```
 aid_analyze_security({
   target_path: "api/handlers/",
-  security_focus: "input validation and SQL injection",
   include_implementation: true,  // Need to see actual code
   include_patterns: "*.py",
   exclude_patterns: "*test*"
@@ -73,7 +71,7 @@ aid_analyze_security({
 ## 📊 Controlling Output Size
 
 ### Minimal Context (Public APIs Only)
-> "Generate a documentation prompt for the models/ directory, public interfaces only"
+> "Distill the models/ directory, public interfaces only"
 
 ```
 distill_directory({
@@ -107,8 +105,7 @@ aid_analyze({
   ai_action: "flow-for-deep-file-to-file-analysis",
   target_path: "src/auth/",
   include_private: true,
-  include_implementation: true,  // Full method bodies
-  user_query: "analyze authentication flow with all implementation details"
+  include_implementation: true  // Full method bodies
 })
 ```
 
@@ -151,8 +148,10 @@ distill_directory({
 
 Then specific module with full details:
 ```
-aid_hunt_bugs({
+aid_analyze({
+  ai_action: "prompt-for-bug-hunting",
   target_path: "src/problematic_module/",
+  include_private: true,
   include_implementation: true
 })
 ```
@@ -185,7 +184,7 @@ include_implementation: true
 ## 📁 Working with Generated Files
 
 ### Reading Generated Prompts
-> "aid generated a file at .aid/bug-hunting-prompt.md. Can you read and execute it?"
+> "aid generated a file at .aid/BUG-HUNTING-ANALYSIS.2026-11-15.10-30-00.src.md. Can you read and execute it?"
 
 Claude will:
 1. Read the generated file containing the AI prompt

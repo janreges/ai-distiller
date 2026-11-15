@@ -1,12 +1,17 @@
 # Ruby Language Support
 
-AI Distiller provides comprehensive support for Ruby codebases using the [tree-sitter-ruby](https://github.com/tree-sitter/tree-sitter-ruby) parser, with full support for Ruby's dynamic nature, metaprogramming features, and modern syntax.
+AI Distiller supports Ruby codebases through the [tree-sitter-ruby](https://github.com/tree-sitter/tree-sitter-ruby) grammar, compiled into the `aid` binary. It extracts classes, modules, methods, attribute accessors, constants and mixins; metaprogramming is not expanded.
 
 ## Overview
 
-Ruby support in AI Distiller captures the essential structure of Ruby code including classes, modules, methods, and constants. The distilled output preserves Ruby's object-oriented design and metaprogramming capabilities while optimizing for AI consumption.
+Ruby support in AI Distiller captures the essential structure of Ruby code including classes, modules, methods, and constants. The text output uses Ruby keywords (`class`, `module`, `def`) with members indented under their class, and prints no `end`.
 
-## Recent Fixes (2025-06-15)
+## Recent Fixes
+
+- **Visibility sections**: `private`, `protected` and `public` sections apply to the methods below them; `private :name`, `private_class_method :name` and `private attr_reader :x` are honoured
+- **require, attr_\* and include**: `require` lines, `attr_*` accessors and `include` are kept
+- **Comments**: a run of `#` comments directly above a `class`, `module` or `def` is its documentation and prints by default (`--docstrings=0` removes it); other comments print with `--comments=1`
+- **Signatures**: splat (`*args`), double splat (`**opts`) and block (`&blk`) parameters, and scoped class names (`class Api::V1::Users`)
 
 1. **Missing `def` keyword** (✅ Fixed)
    - **Issue**: Methods were displayed without the `def` keyword
@@ -24,37 +29,38 @@ Ruby support in AI Distiller captures the essential structure of Ruby code inclu
 
 | Construct | Support Level | Notes |
 |-----------|--------------|-------|
-| **Classes** | ✅ Full | Including nested classes |
+| **Classes** | ✅ Full | Including nested classes and scoped names (`class Api::V1::Users`) |
 | **Modules** | ✅ Full | Including module nesting |
-| **Methods** | ✅ Full | Instance, class methods (self.), module methods |
-| **Attr Accessors** | ✅ Full | attr_reader, attr_writer, attr_accessor |
-| **Constants** | ✅ Full | Class and module constants |
-| **Instance Variables** | ✅ Full | @instance_var |
-| **Class Variables** | ✅ Full | @@class_var |
-| **Singleton Methods** | ✅ Full | def self.method |
-| **Private/Protected** | ✅ Full | Visibility modifiers |
-| **Include/Extend** | ✅ Full | Module mixins |
-| **Alias** | ✅ Full | Method aliasing |
+| **Methods** | ⚠️ Partial | Instance and class methods (`self.`); default values print as `...` (`b = ...`, `opt:`) |
+| **Attr Accessors** | ✅ Full | `attr_reader :id` prints as `def id`, `attr_writer :price` as `def price=(value)` |
+| **Constants** | ⚠️ Partial | Name only, without the value |
+| **Instance Variables** | ✅ Full | `@id` from `attr_*`, shown as private (with `--private=1`) |
+| **Class Variables** | ✅ Full | `@@class_var` |
+| **Singleton Methods** | ⚠️ Partial | `def self.method` works; methods in a `class << self` block print under `class <<self>>` without `self.` |
+| **Private/Protected** | ✅ Full | Sections, `private :name`, `private_class_method :name`, `private attr_reader :x` |
+| **Include/Extend** | ⚠️ Partial | `include` is printed; `extend` and `prepend` are not |
+| **Alias** | ✅ Full | `alias` and `alias_method` print as a method (`def run`) |
 | **Inheritance** | ✅ Full | Class < SuperClass |
-| **Blocks** | ⚠️ Partial | Block parameters in method signatures |
-| **Metaprogramming** | ⚠️ Partial | define_method, method_missing |
+| **Blocks** | ✅ Full | `&block` parameters in method signatures |
+| **Metaprogramming** | ❌ Not expanded | `define_method`, `method_missing` and DSL calls (`included do`, `scope`) are not printed |
 
 ### Visibility Rules
 
 Ruby visibility in AI Distiller:
-- **public**: Default visibility (not marked)
-- **private**: Methods below `private` keyword
-- **protected**: Methods below `protected` keyword
-- **module_function**: Module methods that become instance methods
+- **public**: Default visibility (not marked); methods below `public` are public again
+- **private**: Methods below `private`, or named by `private :name` / `private_class_method :name` (shown with `--private=1`)
+- **protected**: Methods below `protected` (shown with `--protected=1`)
+- **module_function**: The methods stay plain instance methods (`def helper`, not `def self.helper`)
+
+With `--private=1` or `--protected=1`, the output marks each such method with a `# private` or `# protected` line above it.
 
 ## Key Features
 
 ### 1. **Method Visibility**
 
-AI Distiller correctly handles Ruby's visibility modifiers:
+AI Distiller handles Ruby's visibility sections:
 
 ```ruby
-// Input
 class User
   def public_method
     "public"
@@ -75,18 +81,18 @@ end
 ```
 
 ```
-// Output (default - public only)
+<file path="user.rb">
+
 class User
-  def public_method
-end
+    def public_method
+</file>
 ```
 
 ### 2. **Module Mixins**
 
-Includes and extends are preserved:
+`include` is preserved; `extend` is not printed:
 
 ```ruby
-// Input
 module Trackable
   def track(event)
     # tracking logic
@@ -104,25 +110,22 @@ end
 ```
 
 ```
-// Output
+<file path="order.rb">
+
 module Trackable
-  def track(event)
-end
+    def track(event)
 
 class Order
-  include Trackable
-  extend ActiveModel::Naming
-  
-  def process
-end
+    include Trackable
+    def process
+</file>
 ```
 
 ### 3. **Class Methods**
 
-Different ways of defining class methods are supported:
+`def self.name` prints as a class method; a `class << self` block prints as a nested `class <<self>>` whose methods lack `self.`:
 
 ```ruby
-// Input
 class Calculator
   def self.add(a, b)
     a + b
@@ -137,19 +140,21 @@ end
 ```
 
 ```
-// Output
+<file path="calculator.rb">
+
 class Calculator
-  def self.add(a, b)
-  def self.multiply(a, b)
-end
+    def self.add(a, b)
+
+    class <<self>>
+        def multiply(a, b)
+</file>
 ```
 
 ### 4. **Attr Accessors**
 
-Ruby's attr_* methods are properly displayed:
+Ruby's `attr_*` declarations print as the methods they define:
 
 ```ruby
-// Input
 class Product
   attr_reader :id, :name
   attr_writer :price
@@ -163,24 +168,25 @@ end
 ```
 
 ```
-// Output
+<file path="product.rb">
+
 class Product
-  attr_reader :id, :name
-  attr_writer :price
-  attr_accessor :quantity
-  
-  def initialize(id, name)
-end
+    def id
+    def name
+    def price=(value)
+    def quantity
+    def quantity=(value)
+    def initialize(id, name)
+</file>
 ```
 
 ## Output Format
 
 ### Text Format (Recommended for AI)
 
-The text format preserves idiomatic Ruby syntax:
+The text format uses Ruby keywords. The `extend` line, the `included do` block, the class-level DSL calls (`protect_from_forgery`, `rescue_from`) and the private methods are left out of the default output:
 
 ```ruby
-// Input file
 module Authentication
   extend ActiveSupport::Concern
   
@@ -219,29 +225,30 @@ class ApplicationController < ActionController::Base
     render file: 'public/404.html', status: :not_found
   end
 end
+```
 
-// Output (default - public only, no implementation)
+Output (default - public only, no implementation):
+
+```
 <file path="auth.rb">
+
 module Authentication
-  extend ActiveSupport::Concern
-  
-  def authenticate_user!
-  def current_user
-end
+    def authenticate_user!
+    def current_user
 
 class ApplicationController < ActionController::Base
-  include Authentication
-end
+    include Authentication
 </file>
 ```
 
 ## Known Limitations
 
-1. **Block Syntax**: Complex block parameters may not be fully captured
-2. **Metaprogramming**: Dynamic method definitions are not expanded
-3. **String Interpolation**: Not parsed within method implementations
-4. **Heredocs**: May not be properly formatted
-5. **Lambda/Proc**: Type information limited
+1. **`extend` and `prepend`**: not printed
+2. **`class << self`**: printed as a nested `class <<self>>` whose methods lack `self.`
+3. **Metaprogramming**: `define_method`, `method_missing` and DSL calls (`included do`, `scope`, `has_many`) are not printed
+4. **Default values**: a default argument prints as `...` (`b = ...`) and a keyword default is dropped (`opt: 1` prints as `opt:`)
+5. **Constants**: printed without their value
+6. **`require`**: the text format's import filter removes a `require` whose name does not appear in the distilled output; `--filter-imports=false` keeps every `require`
 
 ## Best Practices
 
@@ -294,7 +301,7 @@ end
 
 ### 3. **Documentation**
 
-Use YARD-style comments for better AI understanding:
+Use YARD-style comments for better AI understanding; a `#` comment block directly above a `def`, `class` or `module` prints by default:
 
 ```ruby
 # Processes payment for an order
@@ -311,32 +318,32 @@ end
 ### Direct CLI Usage
 
 ```bash
-# Extract public API
-aid app/ --format text --private=0 --protected=0 --internal=0 > api.txt
+# Extract public API (the defaults)
+aid app/ --stdout > api.txt
 
 # Include all methods
-aid app/ --format text --output full.txt
+aid app/ --private=1 --protected=1 --output full.txt
 
 # Rails models only
-aid app/models --format text --implementation=0 > models.txt
+aid app/models --stdout > models.txt
 ```
 
 ### Rails Projects
 
 ```bash
 # Controllers API
-aid app/controllers --private=0 --protected=0 --internal=0 --implementation=0 > controllers-api.txt
+aid app/controllers --stdout > controllers-api.txt
 
-# Models with associations
-aid app/models --format text > models.txt
+# Models (associations such as has_many are DSL calls and are not printed)
+aid app/models --stdout > models.txt
 
-# Service objects
-aid app/services --format text --implementation=0 > services.txt
+# Service objects with their method bodies
+aid app/services --implementation=1 --stdout > services.txt
 ```
 
 ## Future Improvements
 
-- Full block syntax support
+- `extend`, `prepend` and `class << self`
 - Metaprogramming expansion
 - Better heredoc handling
 - DSL recognition (RSpec, Rails, etc.)
@@ -351,7 +358,3 @@ Ruby support is actively maintained. Key areas for contribution:
 - Performance optimizations
 
 See [CONTRIBUTING.md](../../CONTRIBUTING.md) for development setup.
-
----
-
-<sub>Documentation generated for AI Distiller v0.2.0</sub>

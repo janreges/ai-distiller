@@ -37,7 +37,7 @@ Very simply, it can be said that `aid`, within the distillation process, will le
 - [📖 Example Output](#-example-output)
 - [📖 Guides & Examples](#-guides--examples)
   - [Deep Code Analysis Prompt Generation](#deep-code-analysis-prompt-generation)
-  - [🤖 Use with Claude Desktop (MCP)](#-use-with-claude-desktop-mcp)
+  - [🤖 Use with Claude Code/Desktop (MCP)](#-use-with-claude-codedesktop-mcp)
 - [📖 Complete CLI Reference](#-complete-cli-reference)
 - [🛠️ Advanced Usage](#-advanced-usage)
   - [🚫 Ignoring Files with .aidignore](#-ignoring-files-with-aidignore)
@@ -86,7 +86,7 @@ AI Distiller generates specialized prompts combined with distilled code for AI-d
 
 - **`--ai-action=flow-for-deep-file-to-file-analysis`** - Generates task lists and prompts for systematic file-by-file analysis
 - **`--ai-action=flow-for-multi-file-docs`** - Creates documentation workflow prompts with code structure
-- **Output to files** - Prompts are saved to `.aid/` directory (or use `--stdout` for small codebases)
+- **Output to files** - Prompts are saved to the `.aid/` directory (with `--stdout` the prompt is also printed)
 - **Ready for AI execution** - Generated files contain both the analysis prompt and distilled code
 - **AI agent instructions** - Output includes guidance for AI agents to read and process the generated files
 - **Gemini advantage** - 1M token context window perfect for larger codebase analysis
@@ -105,30 +105,32 @@ AI Distiller generates specialized prompts combined with distilled code for AI-d
 After each distillation, AI Distiller displays a summary showing compression efficiency and processing speed:
 
 ```bash
-# Default: Visual progress bar for interactive terminals (green dots = saved, red dots = remaining)
-✨ Distilled 970 files [░░░░░░░░░░░░░░░] 98% (10M → 256K) in 231ms 💰 ~2.4M tokens saved (~64k remaining)
+# Default: Visual progress bar for interactive terminals (green blocks = saved, red blocks = remaining)
+🚀 Distilled 241 files [░░░░░░░░░░░░░░░] 93% (2.4 MB → 166 kB) in 163ms 💰 ~570k tokens saved (~42k remaining)
 
 # Choose your preferred format with --summary-type
 aid ./src --summary-type=stock-ticker
-📊 AID 97.6% ▲ │ SIZE: 10M→256K │ TIME: 231ms │ EST: ~2.4M tokens saved
+📊 AID 93.2% ▲ │ SIZE: 2.4 MB→166 kB │ TIME: 161ms │ EST: ~570k tokens saved
 
 # JSON output
 aid ./src --summary-type=json
 
 {
-  "original_bytes": 70020,
-  "distilled_bytes": 8244,
-  "savings_pct": 88.22622107969151,
-  "duration_ms": 6,
-  "tokens_before": 17505,
-  "tokens_after": 2061,
-  "tokens_saved": 15444,
-  "token_savings_pct": 88.22622107969151,
-  "file_count": 9,
-  "output_path": "/home/user/project/.aid/aid.processor.txt",
+  "original_bytes": 2445701,
+  "distilled_bytes": 166012,
+  "savings_pct": 93.21208929464395,
+  "duration_ms": 182,
+  "tokens_before": 611425,
+  "tokens_after": 41503,
+  "tokens_saved": 569922,
+  "token_savings_pct": 93.21208651919696,
+  "file_count": 241,
+  "output_path": "/home/user/project/.aid/aid.src.txt",
   "tokenizer": "estimate (bytes/4)"
 }
 ```
+
+The summary goes to stderr. `output_path` is present when a file was written (not with `--stdout` alone).
 
 **Available formats:**
 - `visual-progress-bar` (default) - Shows compression as a progress bar
@@ -145,17 +147,16 @@ Use `--no-emoji` to remove emojis from any format.
 
 AI Distiller automatically detects your project root and centralizes all outputs in a `.aid/` directory:
 
-- **Automatic detection**: Searches upward for `.aidrc`, `go.mod`, `package.json`, `.git`, etc.
-- **Consistent location**: All outputs go to `<project-root>/.aid/` regardless of where you run `aid`
-- **Cache management**: MCP cache stored in `.aid/cache/` for better organization
+- **Automatic detection**: Searches upward from the working directory for `.aidrc`, `go.mod`, `package.json`, `.git`, etc.
+- **Consistent location**: All outputs go to `<project-root>/.aid/` from anywhere inside the project
 - **Easy cleanup**: Add `.aid/` to `.gitignore` to keep outputs out of version control
 
-**Detection priority:**
+**Detection order:** the nearest directory at or above the working directory (at most 12 levels, not above your home directory) that holds one of these markers is the root; within one directory they are checked in this order:
 1. **`.aidrc` file** - Create this empty file to explicitly mark your project root
 2. **Language markers** - `go.mod`, `package.json`, `pyproject.toml`, etc.
 3. **Version control** - `.git` directory
-4. **Environment variable** - `AID_PROJECT_ROOT` (fallback if no markers found)
-5. **Current directory** - Final fallback with warning
+
+Without a marker, `AID_PROJECT_ROOT` is used, and without that the current directory (with a warning). Details: [project-root-detection.md](docs/user/project-root-detection.md).
 
 ```bash
 # Mark a specific directory as project root (recommended)
@@ -176,17 +177,17 @@ Currently supports 12 languages:
 - **Coming Soon**: Zig, Scala, Clojure
 
 #### Language-Specific Documentation:
-- [C++](docs/lang/cpp.md) - C++11/14/17/20 support with templates, namespaces, modern features
-- [C#](docs/lang/csharp.md) - Complete C# 12 support with records, nullable reference types, pattern matching
+- [C++](docs/lang/cpp.md) - Classes, templates, out-of-class definitions, Doxygen docs
+- [C#](docs/lang/csharp.md) - Classes, records, generics with constraints, nullable reference types
 - [Go](docs/lang/go.md) - Full Go support with interfaces, goroutines, generics (1.18+)
 - [Java](docs/lang/java.md) - Java 8-21 support with records, sealed classes, pattern matching
 - [JavaScript](docs/lang/javascript.md) - ES6+ support with classes, modules, async/await
 - [Kotlin](docs/lang/kotlin.md) - Kotlin 1.x support with coroutines, data classes, sealed classes
 - [PHP](docs/lang/php.md) - PHP 7.4+ with PHP 8.x features (attributes, union types, enums)
-- [Python](docs/lang/python.md) - Full Python 3.x support with type hints, async/await, decorators
-- [Ruby](docs/lang/ruby.md) - Ruby 2.x/3.x support with blocks, modules, metaprogramming
+- [Python](docs/lang/python.md) - Python 3.x support with type hints, decorators, dataclasses, docstrings
+- [Ruby](docs/lang/ruby.md) - Ruby 2.x/3.x support with modules, mixins, visibility sections
 - [Rust](docs/lang/rust.md) - Rust 2018/2021 editions with traits, lifetimes, async
-- [Swift](docs/lang/swift.md) - Swift 5.x support with protocols, extensions, property wrappers
+- [Swift](docs/lang/swift.md) - Swift 5.x support with protocols, extensions, access control
 - [TypeScript](docs/lang/typescript.md) - TypeScript 4.x/5.x with generics, decorators, type system
 
 ## 🎯 How It Works
@@ -470,13 +471,16 @@ The installer will:
 - Download the appropriate pre-built binary
 - Install to `~/.aid/bin/aid` by default (no sudo required)
 - Or to `/usr/local/bin/aid` with `--sudo` flag
+- Verify the download against the release's `checksums.txt`
 - Guide you through PATH configuration if needed
+
+The installer resolves the latest release when it runs. To pin a version, pass it to `install.sh` (`bash -s -- v1.4.0`, also with `--sudo`) or set `$env:AID_VERSION` before running `install.ps1`. `AID_INSTALL_ROOT` changes the install root (default `~/.aid`).
 
 ### Basic Usage
 
 ```bash
 # Basic usage
-aid .                                   # Current directory, output is saved to file in ./aid
+aid .                                   # Current directory, output is saved to .aid/aid.<name>.txt in the project root
 aid . --stdout                          # Current directory, output is printed to STDOUT
 aid src/                                # Specific directory
 aid main.py                             # Specific file
@@ -504,12 +508,17 @@ class Car:
             self._mileage += distance
 ```
 
-**Output** (`aid car.py --format text --implementation=0`):
+**Output** (`aid car.py --stdout`):
 ```
 <file path="car.py">
+
 class Car:
-    +def __init__(self, make: str, model: str)
-    +def drive(self, distance: int) -> None
+    """A car with basic attributes and methods."""
+    make = make
+    model = model
+    __init__(self, make: str, model: str)
+    drive(self, distance: int) -> None
+        """Drive the car."""
 </file>
 ```
 
@@ -535,20 +544,23 @@ export class UserService {
 }
 ```
 
-**Output** (`aid api.ts --format text --implementation=0`):
+**Output** (`aid api.ts --stdout`):
 ```
 <file path="api.ts">
+
 export interface User {
-  id: number;
-  name: string;
-  email?: string;
+    property id: number
+    property name: string
+    property email: string
 }
 
 export class UserService {
-  +async getUser(id: number): Promise<User | null>
+    public async getUser(id: number): Promise<User | null>
 }
 </file>
 ```
+
+The private `cache` field is hidden by default; the `?` of `email` is not printed (see [TypeScript limitations](docs/lang/typescript.md#known-limitations)).
 
 </details>
 
@@ -582,7 +594,7 @@ aid internal \
 **How to use the generated prompts**:
 1. **For AI agents**: Direct the agent to read the generated task list file and follow instructions
 2. **For web AI tools**: Copy the content of generated files and paste into Gemini (best for large codebases due to 1M context)
-3. **For small codebases**: Use `--stdout` to get prompt directly without saving to file
+3. **For small codebases**: Add `--stdout` to also print the prompt (the file is written either way)
 
 **Note**: The analysis dimensions (Security, Performance, Maintainability, Readability) are part of the prompts that guide the AI - AI Distiller itself doesn't perform any analysis.
 
@@ -635,7 +647,7 @@ aid <path> [OPTIONS]
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `-o, --output` | String | `.aid/<dirname>.[options].txt` | Output file path. Auto-generated based on input directory basename and options if not specified |
+| `-o, --output` | String | `.aid/aid.<name>[.<options>].<ext>` | Output file path. Without `-o`, the name is built from the input's basename and the non-default options (`aid.src.priv.impl.txt`), in the project root |
 | `--stdout` | Flag | `false` | Print to stdout; no file is written unless `-o` is also given; AI actions always write to `--ai-output` and reject `-o` |
 | `--format` | String | `text` | Output format: `text` (ultra-compact), `md` (clean Markdown), `jsonl` (one JSON per file), `json-structured` (rich semantic data), `xml` (structured XML) |
 
@@ -644,7 +656,7 @@ aid <path> [OPTIONS]
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `--ai-action` | String | *(none)* | Generate pre-configured prompts with distilled code for AI analysis. See [AI Actions](#ai-actions-detailed) section below |
-| `--ai-output` | String | `./.aid/<action>.<timestamp>.<dirname>.md` | Custom output path for generated AI prompt files |
+| `--ai-output` | String | `.aid/<ACTION>.<YYYY-MM-DD>.<HH-MM-SS>.<basename>.md` | Custom output path for generated AI prompt files (for example `.aid/BUG-HUNTING-ANALYSIS.2026-11-15.19-03-24.src.md`); must be inside the project |
 
 #### 👁️ Visibility Filtering
 
@@ -672,8 +684,8 @@ aid <path> [OPTIONS]
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--include-only` | String | *(none)* | Include ONLY these categories (comma-separated: `public,protected,imports`) |
-| `--exclude-items` | String | *(none)* | Exclude these categories (comma-separated: `private,comments,implementation`) |
+| `--include-only` | String | *(none)* | Include ONLY these categories (comma-separated: `public,methods,fields,imports`); starts from nothing, so list `methods` and/or `fields` or classes print empty |
+| `--exclude-items` | String | *(none)* | Start from everything (all visibility levels, comments, bodies) and exclude these categories (comma-separated: `private,comments,implementation`) |
 
 #### 📂 File Selection
 
@@ -688,7 +700,7 @@ aid <path> [OPTIONS]
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `--raw` | Flag | `false` | Process all text files without language parsing. Overrides all content filters |
-| `--lang` | String | `auto` | Force language detection: `auto`, `python`, `typescript`, `javascript`, `go`, `rust`, `java`, `csharp`, `kotlin`, `cpp`, `php`, `ruby`, `swift` |
+| `--lang` | String | `auto` | Language of stdin input (ignored with a file or directory path): `auto`, `python`, `typescript`, `javascript`, `go`, `rust`, `java`, `csharp`, `kotlin`, `cpp`, `php`, `ruby`, `swift`; aliases `c#`, `c++`, `cc`, `cs`, `cxx`, `golang`, `js`, `jsx`, `kt`, `py`, `rb`, `rs`, `ts`, `tsx` |
 
 #### 📍 Path Control
 
@@ -748,21 +760,20 @@ AI actions generate pre-configured prompts combined with distilled code that AI 
 
 | Type | Description | Example Output |
 |------|-------------|----------------|
-| `visual-progress-bar` | Default. Shows compression progress bar with colors | `✅ Distilled 150 files [████████░░] 85% (5MB → 750KB)` |
-| `stock-ticker` | Compact stock market style | `📊 AID 97.5% ▲ \| 5MB→128KB \| ~1.2M tokens saved` |
-| `speedometer-dashboard` | Multi-line dashboard with detailed metrics | Shows files, size, tokens, processing time in box format |
-| `minimalist-sparkline` | Single line with sparkline visualization | `▁▃▅▇█ 150 files → 97.5% reduction (750KB) ✓` |
-| `ci-friendly` | Clean format for CI/CD pipelines | `[aid] ✓ 85.9% saved \| 21 kB → 2.9 kB \| 4ms` |
-| `json` | Machine-readable JSON output | `{"original_bytes":5242880,"distilled_bytes":131072,...}` |
+| `visual-progress-bar` | Default. Shows compression progress bar with colors | `🚀 Distilled 241 files [░░░░░░░░░░░░░░░] 93% (2.4 MB → 166 kB) in 163ms 💰 ~570k tokens saved (~42k remaining)` |
+| `stock-ticker` | Compact stock market style | `📊 AID 93.2% ▲ │ SIZE: 2.4 MB→166 kB │ TIME: 161ms │ EST: ~570k tokens saved` |
+| `speedometer-dashboard` | Multi-line dashboard with detailed metrics | Speed, saved percentage and sizes, and tokens saved in a box |
+| `minimalist-sparkline` | Single line with all essential info | `✨ Distilled in 160ms. 📦 2.4 MB → 166 kB (93.2% saved). 🎟️ Tokens: ~611k → ~42k.` |
+| `ci-friendly` | Clean format for CI/CD pipelines | `[aid] ✓ 93.2% saved \| 2.4 MB → 166 kB \| 163ms \| ~570k tokens saved` |
+| `json` | Machine-readable JSON output | `{"original_bytes":2445701,"distilled_bytes":166012,...}` |
 | `off` | Disable summary output | No summary displayed |
 
 ### Exit Codes
 
 | Code | Meaning |
 |------|---------|
-| `0` | Success |
-| `1` | General error (file not found, parse error, etc.) |
-| `2` | Invalid arguments or conflicting options |
+| `0` | Success. A file that does not parse does not fail the run (its output may be empty), except Go: see `1` |
+| `1` | Any error: nonexistent path, a single Go file or Go stdin that does not parse (in a directory run such a file is skipped with a warning), invalid or conflicting options, undetected stdin language, etc. The full list is in [COMMAND-LINE-OPTIONS.md](docs/user/COMMAND-LINE-OPTIONS.md#exit-codes) |
 
 ### Examples
 
@@ -814,7 +825,7 @@ aid ./internal --summary-type=ci-friendly --no-emoji
 
 **Recommendations**:
 1. Always review output before sending to external services
-2. Use `--comments=0` to remove potentially sensitive documentation
+2. Use `--docstrings=0` to remove potentially sensitive documentation (regular comments are already off by default, `--comments=0`)
 3. Consider running a secrets scanner on your codebase first
 4. For maximum security, run AI Distiller in an isolated environment
 5. Future: We're exploring an `--obfuscate` flag to anonymize sensitive identifiers
@@ -837,7 +848,7 @@ aid ./src -w 1
 aid ./src -w 16
 
 # Check performance with verbose output
-aid ./src -v  # Shows: "Using 25 parallel workers (32 CPU cores available)"
+aid ./src -v  # Shows on stderr: "INFO: Using 25 parallel workers (32 CPU cores available)"
 ```
 
 **Performance Benefits**:
@@ -855,40 +866,42 @@ AI Distiller can process code directly from stdin, perfect for:
 
 ```bash
 # Auto-detect language from stdin
-echo 'class User { getName() { return this.name; } }' | aid --format text
+printf 'class User:\n    def get_name(self) -> str:\n        return self.name\n' | aid
 
 # Explicit language specification
-cat mycode.php | aid --lang php --private=0 --protected=0
+cat mycode.php | aid --lang php --private=1
 
 # Use "-" to explicitly read from stdin
 aid - --lang python < snippet.py
 
 # Pipeline example: extract structure from generated code
-generate-code.sh | aid --lang typescript --format json
+generate-code.sh | aid --lang typescript --format json-structured
 ```
 
-**Language Detection**: When using stdin without `--lang`, AI Distiller automatically detects the language based on syntax patterns. Supported languages for auto-detection: python, typescript, javascript, go, ruby, swift, rust, java, c#, kotlin, c++, php.
+Stdin output goes to stdout. A path argument wins over piped stdin, so detach stdin (`</dev/null`) when you script `aid` on a path.
+
+**Language Detection**: When using stdin without `--lang`, AI Distiller detects the language from syntax patterns; supported languages: python, typescript, javascript, go, ruby, swift, rust, java, csharp, kotlin, cpp, php. When detection fails (a short snippet such as `class User { getName() { ... } }` fits several languages), `aid` exits with 1 and asks for `--lang`.
 
 ### Integration with AI Tools
 
 ```bash
 # Create a context file for Claude or GPT
-aid ./src --format text --implementation=0 > context.txt
+aid ./src -o context.txt
 
-# Generate a codebase summary for RAG systems
-aid . --format json-structured | jq -r '.files[].symbols[].name' > symbols.txt
+# Generate a list of class names for RAG systems
+aid . --format json-structured --stdout | jq -r '.files[].structure.classes[]?.name' > classes.txt
 
 # Extract API surface for documentation
-aid ./api --comments=0 --implementation=0 --format md > api-ref.md
+aid ./api --docstrings=0 --format md -o api-ref.md
 
 # Extract only method signatures (no fields/properties) - great for large codebases
-aid ./src --fields=0 --implementation=0 > methods-only.txt
+aid ./src --fields=0 -o methods-only.txt
 
-# Extract only data structures (no method noise)  
-aid ./models --methods=0 > data-structures.txt
+# Extract only data structures (no method noise)
+aid ./models --methods=0 --stdout > data-structures.txt
 
 # Focus on public API methods only
-aid ./services --fields=0 --private=0 --protected=0 --internal=0
+aid ./services --fields=0 --stdout
 ```
 
 ### 🚫 Ignoring Files with .aidignore

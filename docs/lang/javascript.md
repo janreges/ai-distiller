@@ -14,7 +14,7 @@ JavaScript is a dynamically-typed language with several key constructs:
 
 ## Primary Goal of Text Format
 
-The default text format (without stripping) aims to provide AI systems with a complete understanding of available functions, classes, and their signatures. When using `--private=0 --protected=0 --internal=0,comments,implementation`, the output focuses on:
+The text format aims to provide AI systems with a complete understanding of available functions, classes, and their signatures. With the default flags (public members only, no comments, no implementation) the output focuses on:
 
 - Public API surface (exported functions, classes, methods)
 - Function and method signatures with parameter names
@@ -45,23 +45,25 @@ function createUser(name, age) { ... }
 async function fetchData(options) { ... }
 ```
 
-This appears in the distilled output with type annotations:
-- `+createUser(name: string, age: number) -> User`
-- `+async fetchData(options: Object) -> Promise<Data>`
+This appears in the distilled output with type annotations (the JSDoc block itself is printed above the function, `--docstrings=0` removes it):
+- `function createUser(name: string, age: number) -> User`
+- `async function fetchData(options: Object) -> Promise<Data>`
 
 ### Function Parameter Extraction
 
-The parser extracts all function parameters including:
+The parser extracts the parameters of functions, arrow functions and class methods, including:
 - Parameter names and types from JSDoc
-- Default parameter values
+- Default parameter values (`a = 1`)
 - Rest parameters (`...args`)
-- Destructured parameters (shown as patterns)
+- Destructured parameters (shown as patterns); one with a default value is dropped (`function d({p} = {}, z = 1)` prints as `function d(z = 1)`)
+
+Object-literal methods print their parameter names only: defaults and rest parameters are dropped (`call(x = 4)` prints as `call(x)`, `m(...xs)` as `m()`).
 
 ### Modern JavaScript Support
 
 The parser supports modern JavaScript features including:
 - ES6+ syntax (arrow functions, destructuring, template literals)
-- Async/await and Promises (with automatic `Promise` return type detection)
+- Async/await and Promises (async methods of object literals get a `-> Promise` return type)
 - Generators and iterators (marked with `*` prefix)
 - ES6 modules and dynamic imports
 - JSX syntax for React components
@@ -90,25 +92,27 @@ const extended = {
 ```
 
 Distills to:
-- `+final api = { name, getData(id), async processData(input, options), *generateItems(count), get status(), set status(value) }`
-- `+final extended = { ...api, cache, async getCached(key) -> Promise }`
+- `const api = { name, getData(id), async processData(input, options) -> Promise, *generateItems(count), get status(), set status(value) }`
+- `const extended = { ...api, cache, async getCached(key) -> Promise }`
 
 ## What Works Well
 
 ### Fully Supported Features
-- ✅ **Function signatures** with all parameters and default values
+- ✅ **Function signatures** with all parameters and default values (object-literal methods: names only, see above)
 - ✅ **Return types** from JSDoc `@returns` annotations
-- ✅ **Async/generator detection** with proper prefixes
+- ✅ **Async/generator detection** with proper prefixes for functions, class methods and object-literal methods
 - ✅ **Object literal analysis** including methods and spread syntax
 - ✅ **ES6 classes** with constructors, methods, getters/setters
-- ✅ **Module exports** (both ES6 and CommonJS `module.exports`)
+- ✅ **Exported declarations** are printed (ES6 and CommonJS); the `export` keyword and `module.exports` / `export default` statements themselves are not shown
 - ✅ **JSDoc type extraction** for parameters and return values
-- ✅ **Private members** detection (`#private` and `_convention`)
+- ✅ **Private members** detection: `#private` names, and class members whose name starts with `_` unless their JSDoc says `@public`
+- ✅ **JSDoc blocks** printed by default above the declaration they document; `//` and `/* */` comments with `--comments=1`
 
 ### Partially Supported Features
 - ⚠️ **Nested objects** - Only first level is analyzed
 - ⚠️ **Complex destructuring** - Shown as patterns, not fully expanded
-- ⚠️ **CommonJS patterns** - Basic `module.exports` works, complex patterns may not
+- ⚠️ **Arrow functions assigned to a constant** - printed with their parameters (`const createClient = (apiKey)`); the `async` keyword is dropped
+- ⚠️ **Top-level visibility** - JavaScript has no visibility keyword for top-level declarations, so non-exported functions and constants are printed too
 
 ### Known Limitations
 
@@ -164,14 +168,16 @@ module.exports = { greet, User };
     
 ```
 <file path="basic.js">
-+greet(message: string) -> string
+/**
+ * @param {string} message - The greeting message
+ * @returns {string} Formatted greeting
+ */
+function greet(message: string) -> string
 
-class User
-    +constructor(name, email)
-    +getName()
-    +async sendEmail(subject, body)
-
-# module.exports = { greet, User }
+class User:
+    constructor(name, email)
+    getName()
+    async sendEmail(subject, body)
 </file>
 ```
     
@@ -180,31 +186,27 @@ class User
     
 ```
 <file path="basic.js">
-+greet(message: string) -> string:
-    {
-        return `Hello, ${message}!`;
+/**
+ * @param {string} message - The greeting message
+ * @returns {string} Formatted greeting
+ */
+function greet(message: string) -> string {
+    return `Hello, ${message}!`;
+}
+
+class User:
+    constructor(name, email) {
+        this.name = name;
+        this.email = email;
+        this._id = Math.random();
     }
-
-class User
-    +constructor(name, email):
-        {
-            this.name = name;
-            this.email = email;
-            this._id = Math.random();
-        }
-    
-    +getName():
-        {
-            return this.name;
-        }
-    
-    +async sendEmail(subject, body):
-        {
-            console.log(`Sending email to ${this.email}`);
-            // Implementation here
-        }
-
-# module.exports = { greet, User }
+    getName() {
+        return this.name;
+    }
+    async sendEmail(subject, body) {
+        console.log(`Sending email to ${this.email}`);
+        // Implementation here
+    }
 </file>
 ```
     
@@ -270,16 +272,18 @@ export default UserList;
     
 ```
 <file path="UserList.jsx">
-import React as react from react
-import PropTypes as PropTypes from prop-types
-
-+final useUsers() -> Array
-
-+UserList({ title, onUserClick }: Object)
-
-+final UserList.propTypes = { title, onUserClick }
-
-# Exports: UserList
+/**
+ * Custom hook for fetching users
+ * @returns {Array} List of users
+ */
+const useUsers = ()
+/**
+ * User list component
+ * @param {Object} props - Component props
+ * @param {string} props.title - List title
+ * @param {Function} props.onUserClick - Click handler
+ */
+function UserList({ title, onUserClick })
 </file>
 ```
     
@@ -338,19 +342,15 @@ export default ApiClient;
     
 ```
 <file path="api-client.js">
-import axios from axios
-
-+final API_BASE = 'https://api.example.com'
-
+const API_BASE = 'https://api.example.com'
+function buildUrl(endpoint)
+/** API client with authentication */
 class ApiClient:
-    +constructor(apiKey)
-    +async get(endpoint) -> Promise
-    +async post(endpoint, data) -> Promise
-
-+final createClient = (apiKey) => new ApiClient(apiKey)
-+final async quickGet = async (endpoint) -> Promise
-
-# Exports: createClient, quickGet, ApiClient
+    constructor(apiKey)
+    async get(endpoint)
+    async post(endpoint, data)
+const createClient = (apiKey)
+const quickGet = (endpoint)
 </file>
 ```
     
@@ -428,14 +428,18 @@ async function processItems(items, callback) {
     
 ```
 <file path="advanced-features.js">
-+final baseApi = { timeout, retry }
-+final dataService = { ...baseApi, cache, async getData(id, options) -> Promise, *generateBatch(count), get cacheSize(), set maxCacheSize(value) }
+const baseApi = { timeout, retry }
+const dataService = { ...baseApi, cache, async getData(id, options) -> Promise, *generateBatch(count), get cacheSize(), set maxCacheSize(value) }
 
 class SecureStore:
-    +constructor(key)
-    +async store(key, value) -> Promise
-
-+async processItems(items: string[], callback: Function) -> Promise<void>
+    constructor(key)
+    async store(key, value)
+/**
+ * @param {string[]} items - Array of items
+ * @param {Function} callback - Processing callback
+ * @returns {Promise<void>}
+ */
+async function processItems(items: string[], callback: Function) -> Promise<void>
 </file>
 ```
     
@@ -456,8 +460,8 @@ class SecureStore:
 # Analyze a single JavaScript file
 aid app.js
 
-# Analyze a React project, showing only public APIs
-aid src/ --private=0 --protected=0 --internal=0,implementation
+# Analyze a React project, showing only public APIs (the defaults)
+aid src/ --include "*.js,*.jsx"
 
 # Generate JSON output for tooling integration
 aid src/ --format json-structured --output structure.json
