@@ -49,7 +49,7 @@ pub trait Animal: Display + Clone {
 
     async fn fetch(&self) -> u32;
 
-    fn raw(&self) -> *const u8;
+    unsafe fn raw(&self) -> *const u8;
 }
 
 pub trait Container<T> where T: Clone {
@@ -87,13 +87,13 @@ impl std::fmt::Display for Point {
 
 pub async fn fetch_data(url: &str) -> Result<String, io::Error>
 
-pub fn dangerous(ptr: *mut u8)
+pub unsafe fn dangerous(ptr: *mut u8)
 
-pub fn square(x: u32) -> u32
+pub const fn square(x: u32) -> u32
 
-pub fn callback(code: i32) -> i32
+pub extern "C" fn callback(code: i32) -> i32
 
-pub fn longest<'a, T>(x: &'a str, y: &'a str, _t: T) -> &'a str where T: Display,
+pub fn longest<'a, T>(x: &'a str, y: &'a str, _t: T) -> &'a str where T: Display
 
 pub fn multi_line_params(first: u32, second: String) -> bool
 
@@ -109,8 +109,6 @@ macro_rules! exported {
 }
 
 pub union IntOrFloat;
-
-pub fn self_vis()
 
 pub struct Arr<const N: usize> {
     pub data: [u8; N],

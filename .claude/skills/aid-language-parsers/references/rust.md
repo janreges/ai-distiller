@@ -71,11 +71,13 @@
 
 Decided by `internal/language/rust/tree_sitter_processor.go#walker.visibility`:
 
-- no modifier, and the 2015 `crate`: `private`;
+- no modifier: `private`;
 - `pub(crate)`: `internal`;
-- `pub(super)` and `pub(in path)`: `protected` (the formatter prints both as
-  `pub(super)`);
-- `pub`: `public`, and so is `pub(self)`, which Rust treats as private.
+- `pub(super)` and `pub(in path)`: `protected`; the path of `pub(in path)` is
+  `Extensions.Rust.VisibilityPath` (`crate::outer`) and the formatter prints
+  `pub(in crate::outer)`, any other protected one `pub(super)`;
+- `pub(self)`: `private`; the 2015 `crate` (no `pub`): `internal`;
+- `pub`: `public`.
 
 The members of `impl Trait for Type` (methods, `type`, `const`) have no
 modifier in the source but are `public`, and so is every member declared in a
@@ -135,9 +137,13 @@ items has its own visibility. A `macro_rules!` is `public` with
   `type_alias`.
 - Generics stay in `Name` as written (`longest<'a, T>`); `TypeParams` is empty.
   `Returns` holds the return type followed by the `where` clause
-  (`bool where T: Clone,`).
-- `async` becomes the modifier `async`; a `const fn` gets `final`; `unsafe`,
-  `extern "ABI"` and `default` are not represented. A self parameter keeps its
+  (`bool where T: Clone`, without the trailing comma).
+- `const`, `async` and `extern` become the modifiers `const`, `async` and
+  `extern` (printed in Rust's order); `unsafe` is `Extensions.Rust.IsUnsafe` and
+  the ABI of `extern "C" fn` is `Extensions.Rust.ABI` (empty for a bare
+  `extern`); `default` is not represented. `unsafe impl`, `unsafe trait` and
+  `unsafe extern` blocks carry `IsUnsafe` on the class; `static mut` is a field
+  with the modifiers `static` and `mut`. A self parameter keeps its
   whole text as its name (`&mut self`, `mut self`) and has no type; any other
   parameter's name is its pattern (`mut x`, `(a, b)`).
 

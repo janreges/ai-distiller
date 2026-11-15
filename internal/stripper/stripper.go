@@ -30,26 +30,55 @@ type Options struct {
 // shouldExpand reports whether a symbol name matches any --expand glob pattern.
 // A qualified name such as a C++ out-of-class definition ("Bar::vis") also
 // matches by its member part after the last "::", the way a Go receiver method
-// matches by its method name.
+// matches by its method name. A name that carries generic parameters
+// ("longest<'a, T>", "Foo::longest<T>") also matches by its member cut at the
+// first "<". Every candidate the name had before the generic cut stays one.
 func (o Options) shouldExpand(name string) bool {
-	member := name
+	candidates := []string{name}
 	if i := strings.LastIndex(name, "::"); i >= 0 {
-		member = name[i+2:]
+		candidates = append(candidates, name[i+2:])
+	}
+	member := memberName(name)
+	if member != name {
+		candidates = append(candidates, member)
+	}
+	if strings.HasSuffix(member, ">") {
+		if i := strings.Index(member, "<"); i > 0 {
+			candidates = append(candidates, member[:i])
+		}
 	}
 	for _, pattern := range o.ExpandSymbols {
 		if pattern == "" {
 			continue
 		}
-		if matched, _ := filepath.Match(pattern, name); matched {
-			return true
-		}
-		if member != name {
-			if matched, _ := filepath.Match(pattern, member); matched {
+		for _, candidate := range candidates {
+			if matched, _ := filepath.Match(pattern, candidate); matched {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// memberName returns name after its last "::" that is outside angle brackets
+// ("Foo::longest<std::string>" gives "longest<std::string>"), or name itself.
+func memberName(name string) string {
+	depth := 0
+	for i := len(name) - 1; i > 0; i-- {
+		switch name[i] {
+		case '>':
+			depth++
+		case '<':
+			if depth > 0 {
+				depth--
+			}
+		case ':':
+			if depth == 0 && name[i-1] == ':' {
+				return name[i+1:]
+			}
+		}
+	}
+	return name
 }
 
 // HasAnyOption returns true if any stripping option is enabled

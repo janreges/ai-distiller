@@ -843,3 +843,34 @@ func TestCommentsAboveKeptDeclarationStay(t *testing.T) {
 	got := New(Options{}).Visit(file).(*ir.DistilledFile)
 	assert.Equal(t, []string{"doc:note", "doc:hidden doc", "fn:hidden", "fn:api"}, childLabels(got.Children))
 }
+
+func TestShouldExpand_GenericName(t *testing.T) {
+	cases := []struct {
+		pattern string
+		name    string
+		want    bool
+	}{
+		{"longest", "longest<'a, T>", true},
+		{"longest", "Foo::longest<T>", true},
+		{"longest", "Foo::longest<std::string>", true},
+		{"long*", "longest<T>", true},
+		{"long", "longest<T>", false},
+		{"Foo", "Foo::longest<T>", false},
+		{"longest<T>", "longest<T>", true},
+		// Names the code matched before the generic cut was added.
+		{"operator>", "Foo::operator>", true},
+		{"operator->", "Foo::operator->", true},
+		{"operator>>", "Foo::operator>>", true},
+		{"vis", "Bar::vis", true},
+		{"Bar::vis", "Bar::vis", true},
+		{"plain", "plain", true},
+		{"pl*", "plain", true},
+		{"method", "Type.method", false},
+		{"Type.method", "Type.method", true},
+		{"Type.*", "Type.method", true},
+	}
+	for _, tc := range cases {
+		o := Options{ExpandSymbols: []string{tc.pattern}}
+		assert.Equal(t, tc.want, o.shouldExpand(tc.name), "--expand=%s on %s", tc.pattern, tc.name)
+	}
+}

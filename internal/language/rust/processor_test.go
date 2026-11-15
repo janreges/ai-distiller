@@ -566,7 +566,7 @@ func TestRust_MultiLineSignature(t *testing.T) {
 	f := findRustFn(t, file, "f")
 	assert.Equal(t, []ir.Parameter{{Name: "a", Type: ir.TypeRef{Name: "u32"}}, {Name: "b", Type: ir.TypeRef{Name: "u32"}}}, f.Parameters)
 	require.NotNil(t, f.Returns)
-	assert.Equal(t, "bool where u32: Copy,", f.Returns.Name)
+	assert.Equal(t, "bool where u32: Copy", f.Returns.Name)
 }
 
 func TestRust_ImplGenericsInName(t *testing.T) {
@@ -732,7 +732,7 @@ func TestRust_CRLFAndUnicode(t *testing.T) {
 		}
 	})
 
-	assert.Equal(t, "bool where u32: Copy,", findRustFn(t, file, "f").Returns.Name)
+	assert.Equal(t, "bool where u32: Copy", findRustFn(t, file, "f").Returns.Name)
 	s := findRustClass(t, file, "Žluť")
 	assert.Equal(t, []string{"ü"}, childNames(s))
 	var comments []string
@@ -1275,4 +1275,98 @@ func TestRust_TraitImplAssociatedItemsArePublic(t *testing.T) {
 	for _, field := range fieldsOf(findRustClass(t, file, "impl Counter")) {
 		assert.Equal(t, ir.VisibilityPrivate, field.Visibility, "members of an inherent impl keep their own visibility: %s", field.Name)
 	}
+}
+
+func TestRust_FunctionQualifiers(t *testing.T) {
+	src := "pub const async unsafe extern \"C\" fn all() {}\n" +
+		"pub const fn c() -> u8 { 1 }\n" +
+		"pub async fn a() {}\n" +
+		"pub unsafe fn u() {}\n" +
+		"pub extern fn bare() {}\n" +
+		"pub extern \"system\" fn sys() {}\n" +
+		"pub fn plain() {}\n"
+	file := parseRust(t, src)
+	all := findRustFn(t, file, "all")
+	assert.Equal(t, []ir.Modifier{ir.ModifierConst, ir.ModifierAsync, ir.ModifierExtern}, all.Modifiers)
+	require.NotNil(t, all.Extensions)
+	require.NotNil(t, all.Extensions.Rust)
+	assert.True(t, all.Extensions.Rust.IsUnsafe)
+	assert.Equal(t, "C", all.Extensions.Rust.ABI)
+
+	assert.Equal(t, []ir.Modifier{ir.ModifierConst}, findRustFn(t, file, "c").Modifiers)
+	assert.Equal(t, []ir.Modifier{ir.ModifierAsync}, findRustFn(t, file, "a").Modifiers)
+	assert.Empty(t, findRustFn(t, file, "u").Modifiers)
+	assert.True(t, findRustFn(t, file, "u").Extensions.Rust.IsUnsafe)
+	bare := findRustFn(t, file, "bare")
+	assert.Equal(t, []ir.Modifier{ir.ModifierExtern}, bare.Modifiers)
+	assert.Nil(t, bare.Extensions)
+	assert.Equal(t, "system", findRustFn(t, file, "sys").Extensions.Rust.ABI)
+	assert.Nil(t, findRustFn(t, file, "plain").Extensions)
+}
+
+func TestRust_UnsafeImplAndTrait(t *testing.T) {
+	src := "unsafe impl Send for X {}\npub unsafe trait Z {}\nimpl Sync for X {}\npub trait Safe {}\n" +
+		"unsafe extern \"C\" { fn f(); }\nextern \"C\" { fn g(); }\n"
+	file := parseRust(t, src)
+	assert.True(t, rustExt(findRustClass(t, file, "impl Send for X")).IsUnsafe)
+	assert.True(t, rustExt(findRustClass(t, file, "Z")).IsUnsafe)
+	assert.False(t, rustExt(findRustClass(t, file, "impl Sync for X")).IsUnsafe)
+	assert.False(t, rustExt(findRustClass(t, file, "Safe")).IsUnsafe)
+}
+
+func TestRust_UnsafeExternBlock(t *testing.T) {
+	file := parseRust(t, "unsafe extern \"C\" { fn f(); }\nextern \"C\" { fn g(); }\n")
+	var unsafeBlocks, safeBlocks int
+	for _, node := range file.Children {
+		if class, ok := node.(*ir.DistilledClass); ok && hasMod(class.Modifiers, ir.ModifierExtern) {
+			if rustExt(class).IsUnsafe {
+				unsafeBlocks++
+			} else {
+				safeBlocks++
+			}
+		}
+	}
+	assert.Equal(t, 1, unsafeBlocks)
+	assert.Equal(t, 1, safeBlocks)
+}
+
+func hasMod(modifiers []ir.Modifier, m ir.Modifier) bool {
+	for _, x := range modifiers {
+		if x == m {
+			return true
+		}
+	}
+	return false
+}
+
+func TestRust_StaticMut(t *testing.T) {
+	file := parseRust(t, "pub static mut C: u64 = 0;\nstatic S: u8 = 1;\n")
+	var fields []*ir.DistilledField
+	for _, node := range file.Children {
+		if f, ok := node.(*ir.DistilledField); ok {
+			fields = append(fields, f)
+		}
+	}
+	require.Len(t, fields, 2)
+	assert.Equal(t, []ir.Modifier{ir.ModifierStatic, ir.ModifierMutable}, fields[0].Modifiers)
+	assert.Equal(t, []ir.Modifier{ir.ModifierStatic}, fields[1].Modifiers)
+}
+
+func TestRust_RestrictedVisibility(t *testing.T) {
+	src := "pub(in crate::outer) fn a() {}\npub(self) fn b() {}\ncrate fn c() {}\npub(crate) fn d() {}\n" +
+		"pub(super) fn e() {}\npub(in crate::m) struct S { pub(in crate::m) x: u8 }\n"
+	file := parseRust(t, src)
+	a := findRustFn(t, file, "a")
+	assert.Equal(t, ir.VisibilityProtected, a.Visibility)
+	assert.Equal(t, "crate::outer", a.Extensions.Rust.VisibilityPath)
+	assert.Equal(t, ir.VisibilityPrivate, findRustFn(t, file, "b").Visibility)
+	assert.Equal(t, ir.VisibilityInternal, findRustFn(t, file, "c").Visibility)
+	assert.Equal(t, ir.VisibilityInternal, findRustFn(t, file, "d").Visibility)
+	assert.Equal(t, ir.VisibilityProtected, findRustFn(t, file, "e").Visibility)
+	assert.Nil(t, findRustFn(t, file, "e").Extensions)
+	s := findRustClass(t, file, "S")
+	assert.Equal(t, "crate::m", rustExt(s).VisibilityPath)
+	x := fieldsOf(s)[0]
+	require.NotNil(t, x.Extensions)
+	assert.Equal(t, "crate::m", x.Extensions.Rust.VisibilityPath)
 }

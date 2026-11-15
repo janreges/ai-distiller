@@ -16,7 +16,7 @@ const SECRET: &str = "s3cr3t";
 
 pub static GREETING: &str = "hello";
 
-static COUNTER: u64 = 0;
+static mut COUNTER: u64 = 0;
 // Result alias.
 
 pub type Res<T> = Result<T, io::Error>;
@@ -72,7 +72,7 @@ pub trait Animal: Display + Clone {
 
     async fn fetch(&self) -> u32;
 
-    fn raw(&self) -> *const u8;
+    unsafe fn raw(&self) -> *const u8;
 }
 
 pub trait Container<T> where T: Clone {
@@ -89,7 +89,7 @@ impl Point {
 
     pub(super) fn parent_only(&self)
 
-    pub(super) fn path_only(&self)
+    pub(in crate::outer) fn path_only(&self)
 
     fn private_helper(&mut self)
 }
@@ -118,13 +118,13 @@ impl std::fmt::Display for Point {
 
 pub async fn fetch_data(url: &str) -> Result<String, io::Error>
 
-pub fn dangerous(ptr: *mut u8)
+pub unsafe fn dangerous(ptr: *mut u8)
 
-pub fn square(x: u32) -> u32
+pub const fn square(x: u32) -> u32
 
-pub fn callback(code: i32) -> i32
+pub extern "C" fn callback(code: i32) -> i32
 
-pub fn longest<'a, T>(x: &'a str, y: &'a str, _t: T) -> &'a str where T: Display,
+pub fn longest<'a, T>(x: &'a str, y: &'a str, _t: T) -> &'a str where T: Display
 
 pub fn multi_line_params(first: u32, second: String) -> bool
 
@@ -159,9 +159,9 @@ pub union IntOrFloat {
     f: f32,
 }
 
-pub fn self_vis()
+fn self_vis()
 
-pub(super) fn in_path()
+pub(in crate::a) fn in_path()
 
 pub struct Arr<const N: usize> {
     pub data: [u8; N],

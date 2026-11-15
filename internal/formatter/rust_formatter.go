@@ -186,10 +186,16 @@ func (f *RustFormatter) formatStruct(w io.Writer, class *ir.DistilledClass, inde
 	fmt.Fprint(w, indentStr)
 	switch kind {
 	case "impl", "extern":
+		if ext.IsUnsafe {
+			fmt.Fprint(w, "unsafe ")
+		}
 		fmt.Fprint(w, class.Name)
 	default:
-		if visKeyword := f.getRustVisibilityKeyword(class.Visibility); visKeyword != "" {
+		if visKeyword := f.getRustVisibilityKeyword(class.Visibility, &class.BaseNode); visKeyword != "" {
 			fmt.Fprintf(w, "%s ", visKeyword)
+		}
+		if ext.IsUnsafe && kind == "trait" {
+			fmt.Fprint(w, "unsafe ")
 		}
 		fmt.Fprintf(w, "%s %s", kind, class.Name)
 	}
@@ -267,7 +273,7 @@ func (f *RustFormatter) tupleFields(class *ir.DistilledClass, arity int) []strin
 		if field.Type != nil {
 			fields[i] = field.Type.Name
 		}
-		if visKeyword := f.getRustVisibilityKeyword(field.Visibility); visKeyword != "" {
+		if visKeyword := f.getRustVisibilityKeyword(field.Visibility, &field.BaseNode); visKeyword != "" {
 			fields[i] = visKeyword + " " + fields[i]
 		}
 	}
@@ -400,7 +406,7 @@ func (f *RustFormatter) formatStructField(w io.Writer, field *ir.DistilledField,
 	indentStr := strings.Repeat("    ", indent)
 
 	// Get visibility keyword
-	visKeyword := f.getRustVisibilityKeyword(field.Visibility)
+	visKeyword := f.getRustVisibilityKeyword(field.Visibility, &field.BaseNode)
 
 	typeName := ""
 	if field.Type != nil {
@@ -421,7 +427,7 @@ func (f *RustFormatter) formatTrait(w io.Writer, trait *ir.DistilledInterface, i
 	fmt.Fprintln(w)
 
 	// Get visibility keyword
-	visKeyword := f.getRustVisibilityKeyword(trait.Visibility)
+	visKeyword := f.getRustVisibilityKeyword(trait.Visibility, &trait.BaseNode)
 
 	// Format trait declaration
 	if visKeyword != "" {
@@ -475,36 +481,34 @@ func (f *RustFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, in
 		return f.formatMacro(w, fn, indent)
 	}
 
-	// Check for async
-	isAsync := false
-	isAbstract := false
-	for _, mod := range fn.Modifiers {
-		if mod == ir.ModifierAsync {
-			isAsync = true
-		} else if mod == ir.ModifierAbstract {
-			isAbstract = true
-		}
-	}
+	isAbstract := hasModifier(fn.Modifiers, ir.ModifierAbstract)
+	ext := rustExtensions(&fn.BaseNode)
 
-	visKeyword := ""
+	// The signature starts with the visibility, then the qualifiers in
+	// Rust's order: const async unsafe extern "ABI".
+	var head []string
 	if withVisibility {
-		visKeyword = f.getRustVisibilityKeyword(fn.Visibility)
-	}
-
-	// Format function signature
-	if visKeyword != "" {
-		if isAsync {
-			fmt.Fprintf(w, "\n%s%s async fn %s", indent, visKeyword, fn.Name)
-		} else {
-			fmt.Fprintf(w, "\n%s%s fn %s", indent, visKeyword, fn.Name)
-		}
-	} else {
-		if isAsync {
-			fmt.Fprintf(w, "\n%sasync fn %s", indent, fn.Name)
-		} else {
-			fmt.Fprintf(w, "\n%sfn %s", indent, fn.Name)
+		if visKeyword := f.getRustVisibilityKeyword(fn.Visibility, &fn.BaseNode); visKeyword != "" {
+			head = append(head, visKeyword)
 		}
 	}
+	if hasModifier(fn.Modifiers, ir.ModifierConst) {
+		head = append(head, "const")
+	}
+	if hasModifier(fn.Modifiers, ir.ModifierAsync) {
+		head = append(head, "async")
+	}
+	if ext.IsUnsafe {
+		head = append(head, "unsafe")
+	}
+	if hasModifier(fn.Modifiers, ir.ModifierExtern) {
+		head = append(head, "extern")
+		if ext.ABI != "" {
+			head = append(head, strconv.Quote(ext.ABI))
+		}
+	}
+	head = append(head, "fn")
+	fmt.Fprintf(w, "\n%s%s %s", indent, strings.Join(head, " "), fn.Name)
 
 	// Add generic type parameters
 	if len(fn.TypeParams) > 0 {
@@ -567,7 +571,7 @@ func (f *RustFormatter) formatImplMethod(w io.Writer, fn *ir.DistilledFunction, 
 	indentStr := strings.Repeat("    ", indent)
 
 	// Get visibility keyword
-	visKeyword := f.getRustVisibilityKeyword(fn.Visibility)
+	visKeyword := f.getRustVisibilityKeyword(fn.Visibility, &fn.BaseNode)
 
 	// Check for async
 	isAsync := false
@@ -696,7 +700,7 @@ func (f *RustFormatter) formatField(w io.Writer, field *ir.DistilledField, inden
 func (f *RustFormatter) formatFieldWithVisibility(w io.Writer, field *ir.DistilledField, indent string, withVisibility bool) error {
 	visKeyword := ""
 	if withVisibility {
-		visKeyword = f.getRustVisibilityKeyword(field.Visibility)
+		visKeyword = f.getRustVisibilityKeyword(field.Visibility, &field.BaseNode)
 	}
 
 	// Check if it's a constant, static, or type alias
@@ -736,10 +740,14 @@ func (f *RustFormatter) formatFieldWithVisibility(w io.Writer, field *ir.Distill
 			fmt.Fprintf(w, "\n%sconst %s: %s", indent, field.Name, typeName)
 		}
 	} else if isStatic {
+		static := "static"
+		if hasModifier(field.Modifiers, ir.ModifierMutable) {
+			static = "static mut"
+		}
 		if visKeyword != "" {
-			fmt.Fprintf(w, "\n%s%s static %s: %s", indent, visKeyword, field.Name, typeName)
+			fmt.Fprintf(w, "\n%s%s %s %s: %s", indent, visKeyword, static, field.Name, typeName)
 		} else {
-			fmt.Fprintf(w, "\n%sstatic %s: %s", indent, field.Name, typeName)
+			fmt.Fprintf(w, "\n%s%s %s: %s", indent, static, field.Name, typeName)
 		}
 	} else {
 		// Regular field (shouldn't appear at top level in Rust)
@@ -764,7 +772,7 @@ func (f *RustFormatter) formatFieldWithVisibility(w io.Writer, field *ir.Distill
 
 func (f *RustFormatter) formatTypeAlias(w io.Writer, alias *ir.DistilledTypeAlias, indent string) error {
 	// Get visibility keyword
-	visKeyword := f.getRustVisibilityKeyword(alias.Visibility)
+	visKeyword := f.getRustVisibilityKeyword(alias.Visibility, &alias.BaseNode)
 
 	if visKeyword != "" {
 		fmt.Fprintf(w, "\n%s%s type %s", indent, visKeyword, alias.Name)
@@ -821,11 +829,16 @@ func hasModifier(modifiers []ir.Modifier, m ir.Modifier) bool {
 	return false
 }
 
-func (f *RustFormatter) getRustVisibilityKeyword(visibility ir.Visibility) string {
+// getRustVisibilityKeyword returns the keyword of visibility, as written in
+// the source: pub(in path) when base records a path, otherwise pub(super).
+func (f *RustFormatter) getRustVisibilityKeyword(visibility ir.Visibility, base *ir.BaseNode) string {
 	switch visibility {
 	case ir.VisibilityPrivate:
 		return "" // No keyword for private in Rust
 	case ir.VisibilityProtected:
+		if path := rustExtensions(base).VisibilityPath; path != "" {
+			return "pub(in " + path + ")"
+		}
 		return "pub(super)"
 	case ir.VisibilityPublic:
 		return "pub"

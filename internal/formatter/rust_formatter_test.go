@@ -297,3 +297,52 @@ func TestRustFormatter_TraitImplAssociatedItems(t *testing.T) {
 	assert.Equal(t, []string{"", "impl Iterator for Counter {", "", "    type Item = u32;", "",
 		"    fn next(&mut self) -> Option<u32>", "}"}, distillRust(t, src, rustDefault))
 }
+
+func TestRustFormatter_FunctionQualifiers(t *testing.T) {
+	src := "pub const async unsafe extern \"C\" fn all() {}\npub const fn c() -> u8 { 1 }\npub unsafe fn u() {}\n" +
+		"pub extern fn bare() {}\npub async fn a() {}\nfn p() where u32: Copy {}\n" +
+		"pub fn w<T>(x: T)\nwhere\n    T: Clone,\n{}\n"
+	got := distillRust(t, src, rustAll)
+	assert.Equal(t, []string{
+		"", "pub const async unsafe extern \"C\" fn all()",
+		"", "pub const fn c() -> u8",
+		"", "pub unsafe fn u()",
+		"", "pub extern fn bare()",
+		"", "pub async fn a()",
+		"", "fn p() where u32: Copy",
+		"", "pub fn w<T>(x: T) where T: Clone",
+	}, got)
+
+	fn := &ir.DistilledFunction{BaseNode: withRustExtensions(ir.RustExtensions{IsUnsafe: true, ABI: "C"}), Name: "f",
+		Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{ir.ModifierConst, ir.ModifierAsync, ir.ModifierExtern}}
+	assert.Equal(t, "\npub const async unsafe extern \"C\" fn f()\n", formatRust(t, fn, 0))
+}
+
+func TestRustFormatter_UnsafeImplAndTrait(t *testing.T) {
+	src := "unsafe impl Send for X {}\npub unsafe trait Z {}\nunsafe extern \"C\" { fn f(); }\n"
+	got := distillRust(t, src, rustAll)
+	assert.Contains(t, got, "unsafe impl Send for X {")
+	assert.Contains(t, got, "pub unsafe trait Z {")
+	assert.Contains(t, got, "unsafe extern \"C\" {")
+}
+
+func TestRustFormatter_StaticMut(t *testing.T) {
+	got := distillRust(t, "pub static mut C: u64 = 0;\n", rustDefault)
+	assert.Equal(t, []string{"", "pub static mut C: u64 = 0;"}, got)
+}
+
+func TestRustFormatter_RestrictedVisibility(t *testing.T) {
+	src := "pub(in crate::outer) fn a() {}\npub(self) fn b() {}\ncrate fn c() {}\n" +
+		"pub(in crate::m) struct S { pub(in crate::m) x: u8, pub(self) y: u8 }\n" +
+		"pub struct T(pub(in crate::m) u8);\n"
+	assert.Equal(t, []string{
+		"", "pub(in crate::outer) fn a()",
+		"", "fn b()",
+		"", "pub(crate) fn c()",
+		"", "pub(in crate::m) struct S {", "    pub(in crate::m) x: u8,", "    y: u8,", "}",
+		"", "pub struct T(pub(in crate::m) u8);",
+	}, distillRust(t, src, rustAll))
+
+	// pub(self) is private: hidden by default.
+	assert.Equal(t, []string{"", "pub struct T(_);"}, distillRust(t, src, rustDefault))
+}

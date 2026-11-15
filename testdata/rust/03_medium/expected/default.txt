@@ -31,10 +31,10 @@ impl<T: Display> AnalysisResult<T> {
 // A generic function with a lifetime `'a` and trait bounds.
 // It analyzes a data source and returns a result.
 
-pub fn analyze<'a, S>(source: &'a S) -> Result<AnalysisResult<String>, AnalysisError> where S: DataSource + ?Sized,
+pub fn analyze<'a, S>(source: &'a S) -> Result<AnalysisResult<String>, AnalysisError> where S: DataSource + ?Sized
 // Advanced generic function with multiple lifetime parameters
 
-pub fn compare_sources<'a, 'b, S1, S2>(source1: &'a S1, source2: &'b S2) -> Result<bool, AnalysisError> where S1: DataSource + Debug, S2: DataSource + Debug,
+pub fn compare_sources<'a, 'b, S1, S2>(source1: &'a S1, source2: &'b S2) -> Result<bool, AnalysisError> where S1: DataSource + Debug, S2: DataSource + Debug
 
 impl DataSource for InMemorySource {
 

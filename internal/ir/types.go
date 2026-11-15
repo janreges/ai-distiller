@@ -192,8 +192,12 @@ type CSharpExtensions struct {
 }
 
 type RustExtensions struct {
-	IsUnsafe bool   `json:"is_unsafe,omitempty"`
-	Lifetime string `json:"lifetime,omitempty"`
+	IsUnsafe bool `json:"is_unsafe,omitempty"`
+	// ABI is the ABI string of an extern function ("C"); empty for a bare extern.
+	ABI string `json:"abi,omitempty"`
+	// VisibilityPath is the path of a pub(in path) visibility ("crate::outer").
+	VisibilityPath string `json:"visibility_path,omitempty"`
+	Lifetime       string `json:"lifetime,omitempty"`
 	// TupleArity is the number of fields of a tuple struct; its fields are
 	// named "0" to "TupleArity-1", and the ones the stripper removed print as
 	// "_".

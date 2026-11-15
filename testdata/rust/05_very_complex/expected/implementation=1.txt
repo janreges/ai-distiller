@@ -41,7 +41,7 @@ impl Configurable for ServerConfig {
 // A function with a Higher-Rank Trait Bound (HRTB).
 // The `F` closure must work for *any* lifetime `'a`.
 
-pub fn process_all_sources<F>(sources: Vec<&dyn DataSource>, mut processor: F) where F: for<'a> FnMut(Box<dyn std::io::Read + 'a>), {
+pub fn process_all_sources<F>(sources: Vec<&dyn DataSource>, mut processor: F) where F: for<'a> FnMut(Box<dyn std::io::Read + 'a>) {
     for source in sources {
         let reader = source.get_reader();
         // The type of `reader` is tied to the lifetime of `source` in this loop iteration.
@@ -66,7 +66,7 @@ pub struct FixedArray<T: Clone, const N: usize>;
 impl<T: Clone, const N: usize> FixedArray<T, N> {
     // Create new fixed array
 
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             data: [None; N],
         }
@@ -100,7 +100,7 @@ pub trait AsyncDataProcessor {
     async fn process_async<'a>(&'a self, data: &'a [u8]) -> Result<Self::Output<'a>, Self::Error>;
     // Default implementation with complex bounds
 
-    async fn batch_process<'a, I>(&'a self, inputs: I) -> Vec<Result<Self::Output<'a>, Self::Error>> where I: IntoIterator<Item = &'a [u8]> + Send, I::IntoIter: Send, {
+    async fn batch_process<'a, I>(&'a self, inputs: I) -> Vec<Result<Self::Output<'a>, Self::Error>> where I: IntoIterator<Item = &'a [u8]> + Send, I::IntoIter: Send {
         let mut results = Vec::new();
         for input in inputs {
             results.push(self.process_async(input).await);

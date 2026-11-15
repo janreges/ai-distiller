@@ -55,6 +55,6 @@ impl FFIData {
     pub fn new_integer(value: i64) -> Self
     // Unsafe getter
 
-    pub fn get_integer(&self) -> i64
+    pub unsafe fn get_integer(&self) -> i64
 }
 </file>

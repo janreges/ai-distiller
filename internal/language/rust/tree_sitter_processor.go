@@ -465,6 +465,38 @@ func appendStatement(list []ir.DistilledNode, node ir.DistilledNode) []ir.Distil
 // that yields none in this list (a macro call statement such as m!(...);, an
 // inner attribute, a type with a default in a trait).
 func (w *walker) item(node *sitter.Node, in container) ir.DistilledNode {
+	result := w.itemNode(node, in)
+	w.setVisibilityPath(result, node)
+	return result
+}
+
+// setVisibilityPath records the path of a pub(in path) visibility of node on
+// result, the item it became.
+func (w *walker) setVisibilityPath(result ir.DistilledNode, node *sitter.Node) {
+	modifier := w.visibilityModifier(node)
+	if modifier == nil {
+		return
+	}
+	switch n := result.(type) {
+	case *ir.DistilledFunction:
+		w.recordVisibilityPath(&n.BaseNode, modifier)
+	case *ir.DistilledClass:
+		w.recordVisibilityPath(&n.BaseNode, modifier)
+	case *ir.DistilledField:
+		w.recordVisibilityPath(&n.BaseNode, modifier)
+	}
+}
+
+// recordVisibilityPath stores the path of visibility_modifier modifier, when
+// it has one, in the Rust extensions of base.
+func (w *walker) recordVisibilityPath(base *ir.BaseNode, modifier *sitter.Node) {
+	if path := w.visibilityPath(modifier); path != "" {
+		rustExtensions(base).VisibilityPath = path
+	}
+}
+
+// itemNode returns the IR of one item, without its visibility path.
+func (w *walker) itemNode(node *sitter.Node, in container) ir.DistilledNode {
 	switch node.Kind() {
 	case "function_item", "function_signature_item":
 		return w.function(node, in)
@@ -512,16 +544,16 @@ func (w *walker) function(node *sitter.Node, in container) ir.DistilledNode {
 		BaseNode:   ir.BaseNode{Location: w.location(node)},
 		Name:       name,
 		Visibility: w.memberVisibility(node, in),
-		Modifiers:  w.functionModifiers(node),
 		Parameters: w.parameters(node.ChildByFieldName("parameters")),
 	}
+	fn.Modifiers = w.functionModifiers(node, &fn.BaseNode)
 
 	returns := ""
 	if ret := node.ChildByFieldName("return_type"); ret != nil {
 		returns = w.flat(ret)
 	}
 	if where := w.whereClause(node); where != "" {
-		returns = strings.TrimSpace(returns + " " + where)
+		returns = strings.TrimSpace(returns + " " + strings.TrimSuffix(where, ","))
 	}
 	if returns != "" {
 		fn.Returns = &ir.TypeRef{Name: returns}
@@ -535,10 +567,12 @@ func (w *walker) function(node *sitter.Node, in container) ir.DistilledNode {
 	return fn
 }
 
-// functionModifiers returns async for an async fn and final for a const fn;
-// unsafe, extern and default are not represented.
-func (w *walker) functionModifiers(node *sitter.Node) []ir.Modifier {
-	var async, constant bool
+// functionModifiers returns the qualifiers of a function in Rust's order:
+// const, async and extern. unsafe is IsUnsafe and the ABI string of an extern
+// function is ABI, both in the Rust extensions of base. default and safe are
+// not represented.
+func (w *walker) functionModifiers(node *sitter.Node, base *ir.BaseNode) []ir.Modifier {
+	var async, constant, extern bool
 	for _, child := range w.children(node) {
 		if child.Kind() != "function_modifiers" {
 			continue
@@ -549,17 +583,49 @@ func (w *walker) functionModifiers(node *sitter.Node) []ir.Modifier {
 				async = true
 			case "const":
 				constant = true
+			case "unsafe":
+				rustExtensions(base).IsUnsafe = true
+			case "extern_modifier":
+				extern = true
+				if abi := w.abi(&keyword); abi != "" {
+					rustExtensions(base).ABI = abi
+				}
 			}
 		}
 	}
 	var modifiers []ir.Modifier
+	if constant {
+		modifiers = append(modifiers, ir.ModifierConst)
+	}
 	if async {
 		modifiers = append(modifiers, ir.ModifierAsync)
 	}
-	if constant {
-		modifiers = append(modifiers, ir.ModifierFinal)
+	if extern {
+		modifiers = append(modifiers, ir.ModifierExtern)
 	}
 	return modifiers
+}
+
+// abi returns the ABI string of an extern_modifier without its quotes
+// (extern "C" is C), or "" for a bare extern.
+func (w *walker) abi(modifier *sitter.Node) string {
+	for _, child := range w.children(modifier) {
+		if child.Kind() == "string_literal" || child.Kind() == "raw_string_literal" {
+			return strings.Trim(w.text(&child), `"`)
+		}
+	}
+	return ""
+}
+
+// hasKeyword reports whether node has an anonymous child of kind keyword
+// (unsafe) before its body.
+func (w *walker) hasKeyword(node *sitter.Node, keyword string) bool {
+	for _, child := range w.children(node) {
+		if child.Kind() == keyword {
+			return true
+		}
+	}
+	return false
 }
 
 // parameters returns the parameters of a parameters node. A self parameter
@@ -631,6 +697,9 @@ func (w *walker) structItem(node *sitter.Node, kind ir.Modifier) ir.DistilledNod
 			Name:       w.text(fieldName),
 			Visibility: w.visibility(&child),
 		}
+		if modifier := w.visibilityModifier(&child); modifier != nil {
+			w.recordVisibilityPath(&field.BaseNode, modifier)
+		}
 		if typ := child.ChildByFieldName("type"); typ != nil {
 			field.Type = &ir.TypeRef{Name: w.flat(typ)}
 		}
@@ -662,13 +731,14 @@ func (w *walker) tupleFields(class *ir.DistilledClass, body *sitter.Node) {
 				start := w.location(vis)
 				field.Location.StartLine, field.Location.StartColumn = start.StartLine, start.StartColumn
 				field.Visibility = w.visibilityOf(vis)
+				w.recordVisibilityPath(&field.BaseNode, vis)
 			}
 			class.Children = append(class.Children, field)
 			vis = nil
 			n++
 		}
 	}
-	rustExtensions(class).TupleArity = n
+	rustExtensions(&class.BaseNode).TupleArity = n
 }
 
 // enumItem returns an enum whose variants are public fields: the payload as
@@ -739,6 +809,9 @@ func (w *walker) traitItem(node *sitter.Node) ir.DistilledNode {
 		}
 	}
 	w.setWhere(class, node)
+	if w.hasKeyword(node, "unsafe") {
+		rustExtensions(&class.BaseNode).IsUnsafe = true
+	}
 	if body := node.ChildByFieldName("body"); body != nil {
 		w.items(body, class, inTrait)
 	}
@@ -777,6 +850,9 @@ func (w *walker) implItem(node *sitter.Node) ir.DistilledNode {
 		Children:   []ir.DistilledNode{},
 	}
 	w.setWhere(class, node)
+	if w.hasKeyword(node, "unsafe") {
+		rustExtensions(&class.BaseNode).IsUnsafe = true
+	}
 	if body := node.ChildByFieldName("body"); body != nil {
 		w.items(body, class, in)
 	}
@@ -819,6 +895,9 @@ func (w *walker) externBlock(node *sitter.Node) ir.DistilledNode {
 		if child.Kind() == "extern_modifier" {
 			class.Name = collapse(w.code(&child))
 		}
+	}
+	if w.hasKeyword(node, "unsafe") {
+		rustExtensions(&class.BaseNode).IsUnsafe = true
 	}
 	if body := node.ChildByFieldName("body"); body != nil {
 		w.items(body, class, inExtern)
@@ -981,6 +1060,13 @@ func (w *walker) valueItem(node *sitter.Node, kind ir.Modifier, in container) ir
 		Modifiers:  []ir.Modifier{kind},
 		Type:       &ir.TypeRef{},
 	}
+	if kind == ir.ModifierStatic {
+		for _, child := range w.children(node) {
+			if child.Kind() == "mutable_specifier" {
+				field.Modifiers = append(field.Modifiers, ir.ModifierMutable)
+			}
+		}
+	}
 	if typ := node.ChildByFieldName("type"); typ != nil {
 		field.Type.Name = w.flat(typ)
 	}
@@ -1108,20 +1194,34 @@ func (w *walker) memberVisibility(node *sitter.Node, in container) ir.Visibility
 	return w.visibility(node)
 }
 
-// visibilityOf maps a visibility_modifier: pub(crate) is internal, pub(super)
-// and pub(in path) protected, any other pub (also pub(self)) public, and the
-// 2015 crate private.
+// visibilityOf maps a visibility_modifier: pub(crate) and the 2015 crate are
+// internal, pub(super) and pub(in path) protected, pub(self) private, and
+// any other pub public.
 func (w *walker) visibilityOf(modifier *sitter.Node) ir.Visibility {
 	vis := strings.Join(strings.Fields(w.code(modifier)), "")
 	switch {
-	case strings.HasPrefix(vis, "pub(crate)"):
+	case vis == "crate", strings.HasPrefix(vis, "pub(crate)"):
 		return ir.VisibilityInternal
 	case strings.HasPrefix(vis, "pub(super)"), strings.HasPrefix(vis, "pub(in"):
 		return ir.VisibilityProtected
+	case strings.HasPrefix(vis, "pub(self)"):
+		return ir.VisibilityPrivate
 	case strings.HasPrefix(vis, "pub"):
 		return ir.VisibilityPublic
 	}
 	return ir.VisibilityPrivate
+}
+
+// visibilityPath returns the path of a pub(in path) modifier ("crate::outer"),
+// or "" for any other visibility.
+func (w *walker) visibilityPath(modifier *sitter.Node) string {
+	text := strings.Join(strings.Fields(w.code(modifier)), " ")
+	text = strings.TrimSpace(strings.TrimPrefix(text, "pub"))
+	text = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(text, "("), ")"))
+	if !strings.HasPrefix(text, "in ") {
+		return ""
+	}
+	return strings.Join(strings.Fields(text[3:]), "")
 }
 
 // nameWithGenerics returns the name of node followed by its generic
@@ -1166,20 +1266,20 @@ func (w *walker) whereClause(node *sitter.Node) string {
 // ";".
 func (w *walker) setWhere(class *ir.DistilledClass, node *sitter.Node) {
 	if where := w.whereClause(node); where != "" {
-		rustExtensions(class).Where = strings.TrimSuffix(where, ",")
+		rustExtensions(&class.BaseNode).Where = strings.TrimSuffix(where, ",")
 	}
 }
 
-// rustExtensions returns the Rust extensions of class, created when it has
+// rustExtensions returns the Rust extensions of base, created when it has
 // none.
-func rustExtensions(class *ir.DistilledClass) *ir.RustExtensions {
-	if class.Extensions == nil {
-		class.Extensions = &ir.NodeExtensions{}
+func rustExtensions(base *ir.BaseNode) *ir.RustExtensions {
+	if base.Extensions == nil {
+		base.Extensions = &ir.NodeExtensions{}
 	}
-	if class.Extensions.Rust == nil {
-		class.Extensions.Rust = &ir.RustExtensions{}
+	if base.Extensions.Rust == nil {
+		base.Extensions.Rust = &ir.RustExtensions{}
 	}
-	return class.Extensions.Rust
+	return base.Extensions.Rust
 }
 
 // text returns the source text of node.

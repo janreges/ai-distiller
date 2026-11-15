@@ -49,7 +49,7 @@ impl AnalysisService {
     fn name_from_code(&self, code: &str) -> String
     // Internal unsafe method for advanced operations
 
-    pub(crate) fn direct_memory_access(&self, ptr: *mut u8, len: usize) -> Option<String>
+    pub(crate) unsafe fn direct_memory_access(&self, ptr: *mut u8, len: usize) -> Option<String>
     // Private async method
 
     async fn process_cache(&self) -> usize
@@ -89,10 +89,10 @@ impl FFIData {
     pub fn new_integer(value: i64) -> Self
     // Unsafe getter
 
-    pub fn get_integer(&self) -> i64
+    pub unsafe fn get_integer(&self) -> i64
     // Private unsafe method
 
-    fn get_bytes(&self) -> &[u8; 8]
+    unsafe fn get_bytes(&self) -> &[u8; 8]
 }
 
 fn main()

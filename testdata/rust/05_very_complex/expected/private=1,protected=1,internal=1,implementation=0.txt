@@ -34,7 +34,7 @@ impl Configurable for ServerConfig {
 // A function with a Higher-Rank Trait Bound (HRTB).
 // The `F` closure must work for *any* lifetime `'a`.
 
-pub fn process_all_sources<F>(sources: Vec<&dyn DataSource>, mut processor: F) where F: for<'a> FnMut(Box<dyn std::io::Read + 'a>),
+pub fn process_all_sources<F>(sources: Vec<&dyn DataSource>, mut processor: F) where F: for<'a> FnMut(Box<dyn std::io::Read + 'a>)
 // Advanced trait with const generics and GATs
 
 pub trait AdvancedContainer<const N: usize> {
@@ -54,13 +54,13 @@ pub struct FixedArray<T: Clone, const N: usize> {
 impl<T: Clone, const N: usize> FixedArray<T, N> {
     // Create new fixed array
 
-    pub fn new() -> Self
+    pub const fn new() -> Self
     // Private validation method
 
     fn is_valid_index(&self, index: usize) -> bool
     // Internal method for unsafe operations
 
-    pub(crate) fn get_unchecked(&self, index: usize) -> Option<&T>
+    pub(crate) unsafe fn get_unchecked(&self, index: usize) -> Option<&T>
 }
 
 impl<T: Clone, const N: usize> AdvancedContainer<N> for FixedArray<T, N> {
@@ -82,7 +82,7 @@ pub trait AsyncDataProcessor {
     async fn process_async<'a>(&'a self, data: &'a [u8]) -> Result<Self::Output<'a>, Self::Error>;
     // Default implementation with complex bounds
 
-    async fn batch_process<'a, I>(&'a self, inputs: I) -> Vec<Result<Self::Output<'a>, Self::Error>> where I: IntoIterator<Item = &'a [u8]> + Send, I::IntoIter: Send,
+    async fn batch_process<'a, I>(&'a self, inputs: I) -> Vec<Result<Self::Output<'a>, Self::Error>> where I: IntoIterator<Item = &'a [u8]> + Send, I::IntoIter: Send
 }
 
 fn main()
