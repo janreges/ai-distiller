@@ -35,3 +35,11 @@ func TestTypeScriptFormatter_FunctionBody(t *testing.T) {
 		assert.Equal(t, "function f(a: number): number\n", tsFormat(t, fn, 0))
 	})
 }
+
+func TestTypeScriptFormatter_Enum(t *testing.T) {
+	e := &ir.DistilledEnum{Name: "Color", Visibility: ir.VisibilityPublic, Children: []ir.DistilledNode{
+		&ir.DistilledField{Name: "Red"},
+		&ir.DistilledField{Name: "Green", DefaultValue: `"green"`},
+	}}
+	assert.Equal(t, "export enum Color {\n    Red\n    Green = \"green\"\n}\n", tsFormat(t, e, 0))
+}

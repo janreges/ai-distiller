@@ -33,6 +33,8 @@ func (f *TypeScriptFormatter) FormatNode(w io.Writer, node ir.DistilledNode, ind
 		return f.formatField(w, n, indent)
 	case *ir.DistilledTypeAlias:
 		return f.formatTypeAlias(w, n)
+	case *ir.DistilledEnum:
+		return f.formatEnum(w, n, indent)
 	default:
 		// Fallback for unknown nodes
 		reportUnhandled("typescript", node)
@@ -414,4 +416,28 @@ func (f *TypeScriptFormatter) getTypeScriptVisibilityKeyword(visibility ir.Visib
 	default:
 		return ""
 	}
+}
+
+// formatEnum prints a TypeScript enum with one member per line. A
+// DistilledEnum has no modifiers, so "export" follows its visibility.
+func (f *TypeScriptFormatter) formatEnum(w io.Writer, enum *ir.DistilledEnum, indent int) error {
+	pad := strings.Repeat("    ", indent)
+	export := ""
+	if enum.Visibility == ir.VisibilityPublic {
+		export = "export "
+	}
+	fmt.Fprintf(w, "%s%senum %s {\n", pad, export, enum.Name)
+	for _, child := range enum.Children {
+		member, ok := child.(*ir.DistilledField)
+		if !ok {
+			continue
+		}
+		fmt.Fprintf(w, "%s    %s", pad, member.Name)
+		if member.DefaultValue != "" {
+			fmt.Fprintf(w, " = %s", member.DefaultValue)
+		}
+		fmt.Fprintln(w)
+	}
+	fmt.Fprintf(w, "%s}\n", pad)
+	return nil
 }

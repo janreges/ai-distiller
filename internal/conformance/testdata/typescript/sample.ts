@@ -23,3 +23,5 @@ export class ConfWidget {
 }
 
 export type ConfId = string;
+
+export enum ConfColor { ConfRed, ConfGreen = "green" }

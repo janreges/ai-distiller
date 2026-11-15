@@ -52,6 +52,7 @@ var fixtures = []fixture{
 		Private:   []string{"confPrivate"},
 		ExpandSym: "confPublic",
 	}), check{Cap: "export-type-alias", Contains: []string{"export type ConfId = string"}},
+		check{Cap: "decl-enum", Contains: []string{"export enum ConfColor {", "ConfRed", `ConfGreen = "green"`}},
 		check{Cap: "body-indent", Flags: []string{"--implementation=1"},
 			Contains: []string{"        const a = \"CONF_BODY_A\";\n        return a;\n    }\n"}})},
 	{Lang: "javascript", File: "javascript/sample.js", Checks: append(standard(markers{
