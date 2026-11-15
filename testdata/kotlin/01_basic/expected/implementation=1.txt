@@ -2,11 +2,11 @@
 import kotlin.collections.List
 import java.time.LocalDateTime
 data class User(val id: Long, val name: String, val email: String?) {
-    fun getDisplayName(): String {
-= name.takeIf { it.isNotBlank() } ?: "Anonymous"
-    }
+    fun getDisplayName(): String = name.takeIf { it.isNotBlank() } ?: "Anonymous"
     object Companion {
-        fun createUser(name: String, email: String?): User
+        fun createUser(name: String, email: String?): User {
+            return User(System.currentTimeMillis(), name, email)
+        }
     }
 }
 sealed class UserState {
@@ -19,27 +19,68 @@ sealed class UserState {
     object PendingVerification {
     }
 }
-fun String.isValidEmail(): Boolean
+fun String.isValidEmail(): Boolean {
+    return contains("@") && contains(".")
+}
 var secondOrNull: T?
 class UserService {
-    fun addUser(user: User): Boolean
-    fun findUserById(id: Long): User?
-    fun getUserState(userId: Long): String
+    fun addUser(user: User): Boolean {
+        return when {
+            users.any { it.id == user.id } -> false
+            user.email?.isValidEmail() != false -> {
+                users.add(user)
+                true
+            }
+            else -> false
+        }
+    }
+    fun findUserById(id: Long): User? {
+        return users.find { it.id == id }
+    }
+    fun getUserState(userId: Long): String {
+        val user = findUserById(userId) ?: return "User not found"
+
+        return when (determineUserState(user)) {
+            is UserState.Active -> "User is active"
+            is UserState.Suspended -> "User is suspended"
+            is UserState.Banned -> "User is banned"
+            is UserState.PendingVerification -> "Verification pending"
+        }
+    }
 }
 enum class UserRole {
     ADMIN("Administrator", setOf("read", "write", "delete", "manage"))
     MODERATOR("Moderator", setOf("read", "write", "moderate"))
     USER("User", setOf("read", "write_own"))
-    fun hasPermission(permission: String): Boolean {
-= permission in permissions
-    }
+    fun hasPermission(permission: String): Boolean = permission in permissions
 }
 object UserConstants {
     const val MAX_USERNAME_LENGTH
     const val MIN_PASSWORD_LENGTH
     var ALLOWED_EMAIL_DOMAINS
-    fun isAllowedEmailDomain(email: String): Boolean
+    fun isAllowedEmailDomain(email: String): Boolean {
+        val domain = email.substringAfter("@")
+        return domain in ALLOWED_EMAIL_DOMAINS
+    }
 }
-inline fun <T> T.applyIf(condition: Boolean, block: T.() -> T): T
-fun main()
+inline fun <T> T.applyIf(condition: Boolean, block: T.() -> T): T {
+    return if (condition) block() else this
+}
+fun main() {
+    val service = UserService()
+    val user = User.createUser("John Doe", "john@example.com")
+
+    service.addUser(user)
+
+    val foundUser = service.findUserById(user.id)
+    println("Found user: ${foundUser?.getDisplayName()}")
+
+    // Extension function usage
+    val emails = listOf("test@gmail.com", "invalid-email", "user@yahoo.com")
+    val validEmails = emails.filter { it.isValidEmail() }
+
+    // Extension property usage
+    val secondEmail = validEmails.secondOrNull
+    println("Second valid email: $secondEmail")
+}
 </file>

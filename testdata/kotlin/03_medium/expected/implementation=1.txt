@@ -20,26 +20,26 @@ interface MutableRepository {
 }
 abstract class BaseService {
     fun constructor(repository: R)
-    inline fun <U> findByType(): Flow<U> {
-= flow {
+    inline fun <U> findByType(): Flow<U> = flow {
         repository.findAll()
             .filterIsInstance<U>()
             .forEach { emit(it) }
     }
+    suspend fun <K> processEntities(transformer: (T) -> K, filter: (K) -> Boolean): List<K> {
+        return repository.findAll()
+            .map { transformer(it) }
+            .filter(filter)
     }
-    suspend fun <K> processEntities(transformer: (T) -> K, filter: (K) -> Boolean): List<K>
-    suspend fun <U> findAndMap(id: String, mapper: (T) -> U): U?
+    suspend fun <U> findAndMap(id: String, mapper: (T) -> U): U? {
+        return repository.findById(id)?.let { mapper(it) }
+    }
     abstract suspend fun validateEntity(entity: T): ValidationResult
 }
 interface Entity {
-    override fun compareTo(other: Entity): Int {
-= id.compareTo(other.id)
-    }
+    override fun compareTo(other: Entity): Int = id.compareTo(other.id)
 }
 data class User(val id: String, val version: Long, val name: String, val email: String, val role: UserRole) {
-    fun compareByName(other: User): Int {
-= name.compareTo(other.name)
-    }
+    fun compareByName(other: User): Int = name.compareTo(other.name)
 }
 enum class UserRole {
     ADMIN
@@ -52,88 +52,86 @@ sealed class ValidationResult {
     }
     data class Invalid(val errors: List) {
     }
-    fun isValid(): Boolean {
-= this is Valid
-    }
-    fun getErrors(): List<String> {
-= when (this) {
+    fun isValid(): Boolean = this is Valid
+    fun getErrors(): List<String> = when (this) {
         is Valid -> emptyList()
         is Invalid -> errors
     }
-    }
 }
 class UserRepository {
-    override suspend fun findById(id: String): User? {
-= withContext(Dispatchers.IO) {
+    override suspend fun findById(id: String): User? = withContext(Dispatchers.IO) {
         delay(10) // Simulate database delay
         mutex.withLock { users[id] }
     }
-    }
-    override suspend fun findAll(): List<User> {
-= withContext(Dispatchers.IO) {
+    override suspend fun findAll(): List<User> = withContext(Dispatchers.IO) {
         delay(20)
         mutex.withLock { users.values.toList() }
     }
-    }
-    override suspend fun count(): Long {
-= withContext(Dispatchers.IO) {
+    override suspend fun count(): Long = withContext(Dispatchers.IO) {
         mutex.withLock { users.size.toLong() }
     }
-    }
-    override suspend fun save(entity: User): User {
-= withContext(Dispatchers.IO) {
+    override suspend fun save(entity: User): User = withContext(Dispatchers.IO) {
         delay(15)
         mutex.withLock {
             users[entity.id] = entity
             entity
         }
     }
-    }
-    override suspend fun update(entity: User): User {
-= withContext(Dispatchers.IO) {
+    override suspend fun update(entity: User): User = withContext(Dispatchers.IO) {
         delay(15)
         mutex.withLock {
             users[entity.id] = entity.copy(version = entity.version + 1)
             users[entity.id]!!
         }
     }
-    }
-    override suspend fun delete(id: String): Boolean {
-= withContext(Dispatchers.IO) {
+    override suspend fun delete(id: String): Boolean = withContext(Dispatchers.IO) {
         delay(10)
         mutex.withLock { users.remove(id) != null }
     }
-    }
-    override suspend fun saveAll(entities: List): List<User> {
-= withContext(Dispatchers.IO) {
+    override suspend fun saveAll(entities: List): List<User> = withContext(Dispatchers.IO) {
         delay(entities.size * 5L)
         mutex.withLock {
             entities.forEach { users[it.id] = it }
             entities
         }
     }
-    }
-    fun findByRoleFlow(role: UserRole): Flow<User> {
-= flow {
+    fun findByRoleFlow(role: UserRole): Flow<User> = flow {
         findAll()
             .filter { it.role == role }
             .forEach { emit(it) }
     }
-    }
 }
 class UserService {
     fun constructor(repository: UserRepository)
-    override suspend fun validateEntity(entity: User): ValidationResult
-    inline fun <T> getEventsOfType(): Flow<T> {
-= flow {
+    override suspend fun validateEntity(entity: User): ValidationResult {
+        val errors = mutableListOf<String>()
+
+        if (entity.name.isBlank()) {
+            errors.add("Name cannot be blank")
+        }
+
+        if (!entity.email.contains("@")) {
+            errors.add("Invalid email format")
+        }
+
+        return if (errors.isEmpty()) {
+            ValidationResult.Valid
+        } else {
+            ValidationResult.Invalid(errors)
+        }
+    }
+    inline fun <T> getEventsOfType(): Flow<T> = flow {
         for (event in eventChannel) {
             if (event is T) emit(event)
         }
     }
+    suspend fun processUsersInBatches(batchSize: Int, processor: (List<User>) -> Unit) {
+        val allUsers = repository.findAll()
+        allUsers.chunked(batchSize).forEach { batch ->
+            processor(batch)
+        }
     }
-    suspend fun processUsersInBatches(batchSize: Int, processor: (List<User>) -> Unit)
-    suspend fun createUsersAsync(userDtos: List): List<User> {
-= coroutineScope {
+    suspend fun createUsersAsync(userDtos: List): List<User> = coroutineScope {
         userDtos.map { dto ->
             async(Dispatchers.IO) {
                 val user = User(
@@ -157,7 +155,6 @@ class UserService {
             }
         }.awaitAll()
     }
-    }
 }
 sealed class UserEvent {
     data class Created(val userId: String) {
@@ -171,20 +168,60 @@ data class UserDto(val name: String, val email: String, val role: UserRole) {
 }
 class Cache {
     fun constructor(maxSize: Int)
-    fun get(key: K): V?
-    fun put(key: K, value: V, ttlMillis: Long)
-    fun clearExpired()
+    fun get(key: K): V? {
+        val entry = data[key] ?: return null
+
+        if (entry.isExpired()) {
+            data.remove(key)
+            accessOrder.remove(key)
+            return null
+        }
+
+        // Update access order
+        accessOrder.remove(key)
+        accessOrder.add(key)
+
+        return entry.value
+    }
+    fun put(key: K, value: V, ttlMillis: Long) {
+        // Evict if necessary
+        if (data.size >= maxSize && key !in data) {
+            val oldestKey = accessOrder.firstOrNull()
+            if (oldestKey != null) {
+                data.remove(oldestKey)
+                accessOrder.remove(oldestKey)
+            }
+        }
+
+        data[key] = CacheEntry(value, System.currentTimeMillis() + ttlMillis)
+        accessOrder.remove(key)
+        accessOrder.add(key)
+    }
+    fun clearExpired() {
+        val currentTime = System.currentTimeMillis()
+        val expiredKeys = data.filterValues { it.isExpired(currentTime) }.keys
+        expiredKeys.forEach { key ->
+            data.remove(key)
+            accessOrder.remove(key)
+        }
+    }
 }
-inline fun <T> T?.requireNotNull(message: () -> String): T
-inline fun <T, R, S> combineAndTransform(first: T, second: R, transformer: (T, R) -> S): S
-inline fun <T> Any.safeCast(): T?
-suspend fun <T> List<T>.forEachAsync(dispatcher: CoroutineDispatcher, action: (T) -> Unit) {
-= coroutineScope {
+inline fun <T> T?.requireNotNull(message: () -> String): T {
+    contract {
+        returns() implies (this@requireNotNull != null)
+    }
+    return this ?: throw IllegalArgumentException(message())
+}
+inline fun <T, R, S> combineAndTransform(first: T, second: R, transformer: (T, R) -> S): S {
+    return transformer(first, second)
+}
+inline fun <T> Any.safeCast(): T? {
+    return this as? T
+}
+suspend fun <T> List<T>.forEachAsync(dispatcher: CoroutineDispatcher, action: (T) -> Unit) = coroutineScope {
     map { async(dispatcher) { action(it) } }.awaitAll()
 }
-}
-fun main() {
-= runBlocking {
+fun main() = runBlocking {
     val userRepository = UserRepository()
     val userService = UserService(userRepository)
     val cache = Cache<String, User>()
@@ -223,6 +260,5 @@ fun main() {
         println("Processing $it asynchronously")
         delay(100)
     }
-}
 }
 </file>

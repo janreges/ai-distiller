@@ -396,48 +396,13 @@ func (f *KotlinFormatter) formatFunction(fn *ir.DistilledFunction, indent int) s
 		signature += ": " + f.formatTypeRef(fn.Returns)
 	}
 
-	// Add implementation if present
-	if fn.Implementation != "" {
-		signature += " {\n"
-		// Strip leading and trailing braces from implementation if present
-		impl := fn.Implementation
-		lines := strings.Split(impl, "\n")
-
-		// Find first and last non-empty lines
-		firstNonEmpty := -1
-		lastNonEmpty := -1
-		for i, line := range lines {
-			if strings.TrimSpace(line) != "" {
-				if firstNonEmpty == -1 {
-					firstNonEmpty = i
-				}
-				lastNonEmpty = i
-			}
-		}
-
-		// Check if first and last lines are braces
-		if firstNonEmpty >= 0 && lastNonEmpty >= 0 && firstNonEmpty < lastNonEmpty {
-			firstLine := strings.TrimSpace(lines[firstNonEmpty])
-			lastLine := strings.TrimSpace(lines[lastNonEmpty])
-			if firstLine == "{" && lastLine == "}" {
-				// Remove brace lines
-				lines = lines[firstNonEmpty+1 : lastNonEmpty]
-			}
-		}
-
-		// Join back and add
-		impl = strings.Join(lines, "\n")
-		impl = strings.TrimSpace(impl)
-
-		// If implementation is empty after stripping braces, don't add anything
-		if impl == "" {
-			// Don't add implementation block
+	// Add implementation if present: "= expr" stays on the signature line,
+	// a braced block is re-indented under it.
+	if impl := strings.TrimSpace(fn.Implementation); impl != "" {
+		if strings.HasPrefix(impl, "{") {
+			signature += strings.TrimRight(renderBody(impl, indentStr), "\n")
 		} else {
-			signature += impl
-			if !strings.HasSuffix(impl, "\n") {
-				signature += "\n"
-			}
-			signature += indentStr + "}"
+			signature += " " + impl
 		}
 	}
 

@@ -2,21 +2,26 @@
 import kotlin.properties.Delegates
 import kotlin.random.Random
 interface Entity {
-    fun getAge(): Long {
-= System.currentTimeMillis() - createdAt
-    }
+    fun getAge(): Long = System.currentTimeMillis() - createdAt
     fun getEntityType(): String
 }
 interface Auditable {
-    fun markModified(by: String)
+    fun markModified(by: String) {
+        lastModified = System.currentTimeMillis()
+        modifiedBy = by
+    }
 }
 abstract class BaseEntity {
     val id: String
     val createdAt: Long
     fun constructor(id: String, createdAt: Long)
-    fun setActive(active: Boolean)
+    fun setActive(active: Boolean) {
+        isActive = active
+    }
     abstract fun validate(): Boolean
-    fun getStatusMessage(): String
+    fun getStatusMessage(): String {
+        return if (isActive) "Active" else "Inactive"
+    }
 }
 class Product {
     val name: String
@@ -28,14 +33,27 @@ class Product {
     var description: String
     var stock: Int
     var discount: Double
-    override fun getEntityType(): String {
-= "Product"
+    override fun getEntityType(): String = "Product"
+    override fun validate(): Boolean {
+        return name.isNotBlank() && 
+               category.isNotBlank() && 
+               price >= 0 &&
+               stock >= 0
     }
-    override fun validate(): Boolean
-    override fun getStatusMessage(): String
-    fun applyDiscount(discountPercent: Double): Double
+    override fun getStatusMessage(): String {
+        return super.getStatusMessage() + " - Stock: $stock"
+    }
+    fun applyDiscount(discountPercent: Double): Double {
+        return if (discountPercent in 0.0..1.0) {
+            price * (1 - discountPercent)
+        } else {
+            price
+        }
+    }
     object Companion {
-        fun create(name: String, category: String, price: Double): Product
+        fun create(name: String, category: String, price: Double): Product {
+            return Product("PROD_${nextId++}", name, category, price)
+        }
         const val MAX_NAME_LENGTH
         const val MIN_PRICE
     }
@@ -50,35 +68,86 @@ class AuditImpl {
 }
 class ProductService {
     fun constructor(auditService: AuditService)
-    fun addProduct(product: Product): Result<Unit>
-    fun findProduct(id: String): Product? {
-= products[id]
+    fun addProduct(product: Product): Result<Unit> {
+        return try {
+            if (product.validate()) {
+                products[product.id] = product
+                auditService.logAction("ADD_PRODUCT", product.id)
+                Result.success(Unit)
+            } else {
+                Result.failure(IllegalArgumentException("Invalid product data"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
-    fun getProductsInCategory(categoryName: String): List<Product>
+    fun findProduct(id: String): Product? = products[id]
+    fun getProductsInCategory(categoryName: String): List<Product> {
+        return products.values.filter { it.category == categoryName }
+    }
 }
 class AuditService {
-    fun logAction(action: String, entityId: String)
-    fun getAuditLog(): List<AuditEntry> {
-= auditLog.toList()
+    fun logAction(action: String, entityId: String) {
+        auditLog.add(AuditEntry(action, entityId, System.currentTimeMillis()))
     }
+    fun getAuditLog(): List<AuditEntry> = auditLog.toList()
     data class AuditEntry(val action: String, val entityId: String, val timestamp: Long) {
     }
 }
 object ConfigManager {
-    fun setConfig(key: String, value: String)
-    fun getConfig(key: String): String? {
-= config[key]
+    fun setConfig(key: String, value: String) {
+        config[key] = value
     }
-    fun getConfigOrDefault(key: String, default: String): String
+    fun getConfig(key: String): String? = config[key]
+    fun getConfigOrDefault(key: String, default: String): String {
+        return config[key] ?: default
+    }
 }
 class ShoppingCart {
     fun constructor()
     fun constructor(customerId: String)
     var customerId: String?
-    fun addItem(product: Product, quantity: Int)
-    fun calculateTotal(): Double
+    fun addItem(product: Product, quantity: Int) {
+        val existingItem = items.find { it.product.id == product.id }
+        if (existingItem != null) {
+            existingItem.quantity += quantity
+        } else {
+            items.add(CartItem(product, quantity))
+        }
+    }
+    fun calculateTotal(): Double {
+        return items.sumOf { it.product.price * it.quantity }
+    }
     data class CartItem(val product: Product, var quantity: Int) {
     }
 }
-fun main()
+fun main() {
+    val auditService = AuditService()
+    val productService = ProductService(auditService)
+
+    // Create products
+    val laptop = Product.create("Gaming Laptop", "Electronics", 1299.99)
+    laptop.stock = 50
+    laptop.discount = 0.1
+
+    val phone = Product.create("Smartphone", "Electronics", 699.99)
+    phone.stock = 100
+
+    // Add products to service
+    productService.addProduct(laptop)
+    productService.addProduct(phone)
+
+    // Create category with delegation
+    val electronics = Category("CAT_1", "Electronics", AuditImpl())
+    electronics.addProduct(laptop)
+    electronics.addProduct(phone)
+
+    // Use shopping cart
+    val cart = ShoppingCart("CUSTOMER_123")
+    cart.addItem(laptop, 1)
+    cart.addItem(phone, 2)
+
+    println("Cart total: ${cart.calculateTotal()}")
+    println("Electronics category has ${electronics.productCount} products")
+}
 </file>

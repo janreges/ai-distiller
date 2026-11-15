@@ -40,7 +40,9 @@ interface ConnectionPool {
 abstract class AdvancedGenericRepository {
     abstract suspend fun <T> findWithProjection(query: Q, projector: (E) -> T): Flow<T>
     abstract suspend fun <K, V> aggregateBy(query: Q, keySelector: (E) -> K, valueSelector: (E) -> V, aggregator: (K, List<V>) -> V): Map<K, V>
-    inline fun <T, U> transformAndValidate(entities: List, transformer: (E) -> T, validator: (T) -> U): List<U>
+    inline fun <T, U> transformAndValidate(entities: List, transformer: (E) -> T, validator: (T) -> U): List<U> {
+        return entities.map(transformer).map(validator)
+    }
 }
 interface Entity {
 }
@@ -59,7 +61,9 @@ interface ServiceLocator {
 }
 class ManagedProperty {
     fun constructor(factory, lifecycle: PropertyLifecycle)
-    override fun provideDelegate(thisRef: Any?, property: KProperty): ReadOnlyProperty<Any?, T>
+    override fun provideDelegate(thisRef: Any?, property: KProperty): ReadOnlyProperty<Any?, T> {
+        return ManagedPropertyDelegate(property.name, factory, lifecycle)
+    }
 }
 interface PropertyLifecycle {
     suspend fun onCreate(name: String, value: T): T
@@ -67,13 +71,9 @@ interface PropertyLifecycle {
     suspend fun onDestroy(name: String, value: T)
 }
 class DefaultPropertyLifecycle {
-    override suspend fun onCreate(name: String, value: T): T {
-= value
-    }
-    override suspend fun onAccess(name: String, value: T): T {
-= value
-    }
-    override suspend fun onDestroy(name: String, value: T)
+    override suspend fun onCreate(name: String, value: T): T = value
+    override suspend fun onAccess(name: String, value: T): T = value
+    override suspend fun onDestroy(name: String, value: T) {}
 }
 class PlatformSpecificRepository {
     fun constructor()
@@ -105,8 +105,7 @@ sealed class ProcessingState {
 class AdvancedCoroutineScope {
     fun constructor(context: CoroutineContext)
     var coroutineContext: CoroutineContext
-    fun <T> asyncWithTimeout(timeout: kotlin.time.Duration, block: CoroutineScope.() -> T): Deferred<Result<T>> {
-= async {
+    fun <T> asyncWithTimeout(timeout: kotlin.time.Duration, block: CoroutineScope.() -> T): Deferred<Result<T>> = async {
         try {
             withTimeout(timeout) {
                 Result.success(block())
@@ -117,37 +116,91 @@ class AdvancedCoroutineScope {
             Result.failure(e)
         }
     }
-    }
 }
 class ProcessingPipelineBuilder {
-    inline fun <R> transform(transformer: (T) -> R): ProcessingPipelineBuilder<R>
-    fun filter(predicate: (T) -> Boolean): ProcessingPipelineBuilder<T>
-    fun validate(validator: (T) -> ValidationResult): ProcessingPipelineBuilder<T>
-    fun build(): ProcessingPipeline<T>
+    inline fun <R> transform(transformer: (T) -> R): ProcessingPipelineBuilder<R> {
+        val newBuilder = ProcessingPipelineBuilder<R>()
+        newBuilder.stages.addAll(this.stages)
+        newBuilder.stages.add(TransformationStage(transformer))
+        return newBuilder.copy()
+    }
+    fun filter(predicate: (T) -> Boolean): ProcessingPipelineBuilder<T> {
+        stages.add(FilterStage(predicate))
+        return this
+    }
+    fun validate(validator: (T) -> ValidationResult): ProcessingPipelineBuilder<T> {
+        stages.add(ValidationStage(validator))
+        return this
+    }
+    fun build(): ProcessingPipeline<T> {
+        return ProcessingPipeline(stages.toList())
+    }
 }
 sealed class ProcessingStage {
     abstract suspend fun process(input: I): O
 }
 class TransformationStage {
     fun constructor(transformer)
-    override suspend fun process(input: I): O {
-= transformer(input)
-    }
+    override suspend fun process(input: I): O = transformer(input)
 }
 class FilterStage {
     fun constructor(predicate)
-    override suspend fun process(input: T): T?
+    override suspend fun process(input: T): T? {
+        return if (predicate(input)) input else null
+    }
 }
 class ValidationStage {
     fun constructor(validator)
-    override suspend fun process(input: T): T
+    override suspend fun process(input: T): T {
+        val result = validator(input)
+        if (result is ValidationResult.Invalid) {
+            throw ValidationException("Validation failed: ${result.errors}")
+        }
+        return input
+    }
 }
 class ProcessingPipeline {
     fun constructor(stages: List)
-    suspend fun execute(input: T): ProcessingState<T, Exception>
+    suspend fun execute(input: T): ProcessingState<T, Exception> {
+        return try {
+            var current: Any? = input
+            for (stage in stages) {
+                @Suppress("UNCHECKED_CAST")
+                current = (stage as ProcessingStage<Any?, Any?>).process(current)
+                if (current == null) break
+            }
+            @Suppress("UNCHECKED_CAST")
+            ProcessingState.Success(
+                current as T,
+                ProcessingState.ProcessingMetadata.TimingInfo(0L, System.currentTimeMillis())
+            )
+        } catch (e: Exception) {
+            ProcessingState.Failure(e, e is ValidationException)
+        }
+    }
 }
 class MetaEntityProcessor {
-    suspend fun <T> processEntity(entity: T): ProcessedEntity<T>
+    suspend fun <T> processEntity(entity: T): ProcessedEntity<T> {
+        val kClass = entity::class
+        val autoGenerateAnnotation = kClass.findAnnotation<AutoGenerate>()
+
+        val generatedMethods = if (autoGenerateAnnotation != null) {
+            generateMethods(entity, autoGenerateAnnotation)
+        } else {
+            emptyMap()
+        }
+
+        val properties = kClass.memberProperties.map { property ->
+            ProcessedProperty(
+                name = property.name,
+                type = property.returnType,
+                value = property.getter.call(entity),
+                annotations = property.annotations
+            )
+        }
+
+        return ProcessedEntity(entity, properties, generatedMethods)
+    }
 }
 data class ProcessedEntity(val original: T, val properties: List, val generatedMethods: Map) {
 }
@@ -192,8 +245,7 @@ sealed class SnapshotResult {
     data class Error(val message: String) {
     }
 }
-fun main() {
-= runBlocking {
+fun main() = runBlocking {
     println("=== Very Complex Kotlin Features Demo ===")
     
     // Advanced coroutine scope usage
@@ -248,7 +300,6 @@ fun main() {
     
     println("=== Demo completed ===")
 }
-}
 data class SampleEntity(val name: String, val value: Int) {
 }
 class ConfigurationWithManagedProperties {
@@ -282,7 +333,5 @@ data class PoolStatistics(val activeConnections: Int, val idleConnections: Int) 
 }
 interface DatabaseConnection {
 }
-fun String.capitalize(): String {
-= this.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
-}
+fun String.capitalize(): String = this.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
 </file>

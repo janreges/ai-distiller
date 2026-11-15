@@ -13,19 +13,47 @@ annotation class DatabaseDsl {
 }
 class QueryBuilder {
     fun constructor(entityClass: KClass)
-    fun where(condition: ConditionBuilder<T>.() -> Unit)
-    fun orderBy(column: KProperty, direction: SortDirection)
-    fun limit(count: Int)
-    fun offset(count: Int)
+    fun where(condition: ConditionBuilder<T>.() -> Unit) {
+        val builder = ConditionBuilder<T>()
+        builder.condition()
+        conditions.addAll(builder.getConditions())
+    }
+    fun orderBy(column: KProperty, direction: SortDirection) {
+        orderByClauses.add(OrderBy(column.name, direction))
+    }
+    fun limit(count: Int) {
+        limitValue = count
+    }
+    fun offset(count: Int) {
+        offsetValue = count
+    }
 }
 class ConditionBuilder {
-    fun <V> KProperty<V>.eq(value: V)
-    fun <V> KProperty<V>.ne(value: V)
-    fun <V> KProperty<V>.gt(value: V)
-    fun <V> KProperty<V>.lt(value: V)
-    fun <V> KProperty<V>.isIn(values: Collection)
-    fun ConditionBuilder<T>.and(other: ConditionBuilder<T>.() -> Unit)
-    fun ConditionBuilder<T>.or(other: ConditionBuilder<T>.() -> Unit)
+    fun <V> KProperty<V>.eq(value: V) {
+        conditions.add(Condition.Equals(this.name, value))
+    }
+    fun <V> KProperty<V>.ne(value: V) {
+        conditions.add(Condition.NotEquals(this.name, value))
+    }
+    fun <V> KProperty<V>.gt(value: V) {
+        conditions.add(Condition.GreaterThan(this.name, value))
+    }
+    fun <V> KProperty<V>.lt(value: V) {
+        conditions.add(Condition.LessThan(this.name, value))
+    }
+    fun <V> KProperty<V>.isIn(values: Collection) {
+        conditions.add(Condition.In(this.name, values))
+    }
+    fun ConditionBuilder<T>.and(other: ConditionBuilder<T>.() -> Unit) {
+        val otherBuilder = ConditionBuilder<T>()
+        otherBuilder.other()
+        conditions.add(Condition.And(this.conditions.toList(), otherBuilder.conditions))
+    }
+    fun ConditionBuilder<T>.or(other: ConditionBuilder<T>.() -> Unit) {
+        val otherBuilder = ConditionBuilder<T>()
+        otherBuilder.other()
+        conditions.add(Condition.Or(this.conditions.toList(), otherBuilder.conditions))
+    }
 }
 sealed class Condition {
     data class Equals(val column: String, val value: Any?) {
@@ -59,8 +87,7 @@ data class Product(val id: String, val name: String, val price: Double, val cate
 }
 class ProductRepository {
     var productUpdates: SharedFlow
-    override suspend fun findByQuery(query: Query): Flow<Product> {
-= flow {
+    override suspend fun findByQuery(query: Query): Flow<Product> = flow {
         products.asSequence()
             .filter { product -> evaluateConditions(product, query.conditions) }
             .sortedWith { a, b -> compareByOrderBy(a, b, query.orderBy) }
@@ -72,10 +99,27 @@ class ProductRepository {
             }
             .forEach { emit(it) }
     }
+    override suspend fun executeQuery(builder: QueryBuilder<Product>.() -> Unit): Flow<Product> {
+        val queryBuilder = QueryBuilder(Product::class)
+        queryBuilder.builder()
+        return findByQuery(queryBuilder.build())
     }
-    override suspend fun executeQuery(builder: QueryBuilder<Product>.() -> Unit): Flow<Product>
-    suspend fun addProduct(product: Product)
-    suspend fun updateProduct(id: String, updater: (Product) -> Product): Product?
+    suspend fun addProduct(product: Product) {
+        products.add(product)
+        _productUpdates.emit(ProductUpdate.Added(product))
+    }
+    suspend fun updateProduct(id: String, updater: (Product) -> Product): Product? {
+        val index = products.indexOfFirst { it.id == id }
+        return if (index >= 0) {
+            val oldProduct = products[index]
+            val newProduct = updater(oldProduct)
+            products[index] = newProduct
+            _productUpdates.emit(ProductUpdate.Modified(oldProduct, newProduct))
+            newProduct
+        } else {
+            null
+        }
+    }
 }
 sealed class ProductUpdate {
     data class Added(val product: Product) {
@@ -87,8 +131,7 @@ sealed class ProductUpdate {
 }
 class ProductNotificationService {
     fun constructor(repository: ProductRepository)
-    fun start(): Job {
-= GlobalScope.launch {
+    fun start(): Job = GlobalScope.launch {
         // Collect product updates
         launch {
             repository.productUpdates.collect { update ->
@@ -114,10 +157,17 @@ class ProductNotificationService {
             }
         }
     }
+    suspend fun subscribe(subscriberId: String): ReceiveChannel<Notification> {
+        val channel = Channel<Notification>(Channel.BUFFERED)
+        subscriptions[subscriberId] = channel
+        return channel
     }
-    suspend fun subscribe(subscriberId: String): ReceiveChannel<Notification>
-    suspend fun unsubscribe(subscriberId: String)
-    suspend fun sendNotification(notification: Notification)
+    suspend fun unsubscribe(subscriberId: String) {
+        subscriptions.remove(subscriberId)?.close()
+    }
+    suspend fun sendNotification(notification: Notification) {
+        notificationChannel.send(notification)
+    }
 }
 sealed class Notification {
     data class ProductAdded(val productName: String) {
@@ -131,14 +181,27 @@ sealed class Notification {
 }
 class CachedProperty {
     fun constructor(initialValue: T, validator, ttl: Duration)
-    override fun getValue(thisRef: Any?, property: KProperty): T
-    override fun setValue(thisRef: Any?, property: KProperty, value: T)
+    override fun getValue(thisRef: Any?, property: KProperty): T {
+        val now = System.currentTimeMillis()
+        if (now - lastUpdated > ttl.inWholeMilliseconds) {
+            // Value expired, return initial value
+            value = initialValue
+            lastUpdated = now
+        }
+        return value
+    }
+    override fun setValue(thisRef: Any?, property: KProperty, value: T) {
+        if (validator(value)) {
+            this.value = value
+            this.lastUpdated = System.currentTimeMillis()
+        } else {
+            throw IllegalArgumentException("Invalid value for property ${property.name}: $value")
+        }
+    }
 }
 class AsyncLazy {
     fun constructor(initializer)
-    override fun getValue(thisRef: Any?, property: KProperty): Deferred<T> {
-= deferred
-    }
+    override fun getValue(thisRef: Any?, property: KProperty): Deferred<T> = deferred
 }
 class ServiceConfiguration {
     var maxConcurrentRequests: Int
@@ -146,8 +209,7 @@ class ServiceConfiguration {
     var isEnabled: Boolean
 }
 class DataProcessingOrchestrator {
-    fun startProcessing(workerCount: Int): Job {
-= GlobalScope.launch {
+    fun startProcessing(workerCount: Int): Job = GlobalScope.launch {
         // Start worker coroutines
         repeat(workerCount) { workerId ->
             launch {
@@ -175,8 +237,9 @@ class DataProcessingOrchestrator {
             }
         }
     }
+    suspend fun addItem(item: DataItem) {
+        inputChannel.send(item)
     }
-    suspend fun addItem(item: DataItem)
     data class DataItem(val id: String, val data: String) {
     }
     data class ProcessingResult(val workerId: Int, val result: String) {
@@ -184,8 +247,7 @@ class DataProcessingOrchestrator {
     data class ProcessingError(val workerId: Int, val message: String) {
     }
 }
-fun main() {
-= runBlocking {
+fun main() = runBlocking {
     // DSL Query example
     val repository = ProductRepository()
     
@@ -201,7 +263,6 @@ fun main() {
     }.collect { product ->
         println("Found: ${product.name} - $${product.price}")
     }
-}
 var notificationService
 var serviceJob
 var subscription

@@ -1109,20 +1109,16 @@ func (p *TreeSitterProcessor) extractVariableDeclaration(node *sitter.Node, sour
 
 // extractFunctionBody extracts function implementation
 func (p *TreeSitterProcessor) extractFunctionBody(node *sitter.Node, source []byte, function *ir.DistilledFunction) {
-	// Check if it's a block or expression body
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
-		case "block":
-			function.Implementation = string(source[child.StartByte():child.EndByte()])
-		case "=":
-			// Expression body - get the next node
-			if i+1 < int(node.ChildCount()) {
-				expr := node.Child(i + 1)
-				function.Implementation = "= " + string(source[expr.StartByte():expr.EndByte()])
-			}
+	// Expression body ("= expr") or braced block; the grammar has no separate
+	// block node, so a braced body is the whole function_body text.
+	for i := 0; i < int(node.ChildCount())-1; i++ {
+		if node.Child(i).Type() == "=" {
+			expr := node.Child(i + 1)
+			function.Implementation = "= " + string(source[expr.StartByte():expr.EndByte()])
+			return
 		}
 	}
+	function.Implementation = strings.TrimSpace(string(source[node.StartByte():node.EndByte()]))
 }
 
 // processClassBody processes the body of a class

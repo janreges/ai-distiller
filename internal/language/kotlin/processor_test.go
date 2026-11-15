@@ -549,3 +549,26 @@ func convertToString(file *ir.DistilledFile) string {
 
 	return sb.String()
 }
+
+func parseKotlin(t *testing.T, src string) *ir.DistilledFile {
+	t.Helper()
+	file, err := NewProcessor().Process(context.Background(), strings.NewReader(src), "test.kt")
+	require.NoError(t, err)
+	require.NotNil(t, file)
+	return file
+}
+
+func TestKotlin_FunctionBodies(t *testing.T) {
+	src := "class R {\n    fun find(id: Int): String {\n        val x = load(id)\n        return x\n    }\n    fun quick(id: Int): String = load(id)\n}\n"
+	file := parseKotlin(t, src)
+	fns := map[string]*ir.DistilledFunction{}
+	for _, c := range file.Children[0].(*ir.DistilledClass).Children {
+		if fn, ok := c.(*ir.DistilledFunction); ok {
+			fns[fn.Name] = fn
+		}
+	}
+	require.Contains(t, fns, "find")
+	require.Contains(t, fns, "quick")
+	assert.Equal(t, "{\n        val x = load(id)\n        return x\n    }", fns["find"].Implementation)
+	assert.Equal(t, "= load(id)", fns["quick"].Implementation)
+}

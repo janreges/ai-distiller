@@ -90,11 +90,12 @@ var fixtures = []fixture{
 		Private:   []string{"ConfPrivate"},
 		ExpandSym: "ConfPublic",
 	})},
-	{Lang: "kotlin", File: "kotlin/ConfWidget.kt", Checks: standard(markers{
+	{Lang: "kotlin", File: "kotlin/ConfWidget.kt", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
 		Private:   []string{"confPrivate"},
 		ExpandSym: "confPublic",
-	})},
+	}), check{Cap: "body-indent", Flags: []string{"--implementation=1"},
+		Contains: []string{"        val a = \"CONF_BODY_A\"\n        return a\n    }\n"}})},
 	{Lang: "cpp", File: "cpp/sample.cpp", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
 		Private:   []string{"confPrivate"},
