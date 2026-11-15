@@ -1,38 +1,56 @@
 <file path="source.rb">
 
+# Advanced metaprogramming with define_method, class_eval, and hooks
 module MetaProgrammingUtils
+    # Hook called when module is included
     def self.included(base)
 
     module ClassMethods
+        # Dynamically define getter methods
         def add_dynamic_accessor(name, default_value = ...)
+        # Create methods that delegate to another object
         def delegate_to(target, *methods*)
+        # Class method to track dynamic methods
         def dynamic_methods
 
+# Module demonstrating eigenclass manipulation
 module EigenclassDemo
     def self.extended(base)
+    # This becomes a class method when extended
     def custom_new(*args*, &block)
 
+# Advanced module with hooks and callbacks
 module Trackable
     def self.included(base)
 
     module ClassMethods
+        # Method to track calls to specific methods
         def track_method(method_name)
         def tracked_methods
 
+# Class demonstrating advanced metaprogramming
 class ConfigurableModel
     include MetaProgrammingUtils
     include Trackable
     def initialize(initial_config = ...)
+    # Method using class_eval for dynamic method definition
     def self.add_validation(field, &validation_block)
+    # Method demonstrating eval usage (carefully controlled)
     def evaluate_expression(expression, context = ...)
+    # Method using define_singleton_method
     def add_instance_method(method_name, &block)
+    # Hook method called when methods are added
     def self.method_added(method_name)
 
+# Class demonstrating const_missing hook
 class DynamicConstants
+    # Hook called when a constant is missing
     def self.const_missing(const_name)
+    # Class method that uses const_get and const_set
     def self.create_constant(name, value)
     def self.list_constants
 
+# Example usage class
 class SmartDocument < ConfigurableModel
     def initialize(config = ...)
 </file>

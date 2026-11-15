@@ -51,6 +51,12 @@ func writeCStyleComment(w io.Writer, c *ir.DistilledComment, indent string) {
 // run are dropped with it, so they do not appear to document whatever is
 // printed next. Line and block comments and inner docs keep their place.
 func formatCStyleNodes(nodes []ir.DistilledNode, indent string, format func(ir.DistilledNode) (text string, printed bool)) []string {
+	return formatCommentedNodes(nodes, indent, writeCStyleComment, format)
+}
+
+// formatCommentedNodes is formatCStyleNodes with the comment writer of the
+// language.
+func formatCommentedNodes(nodes []ir.DistilledNode, indent string, writeComment func(io.Writer, *ir.DistilledComment, string), format func(ir.DistilledNode) (text string, printed bool)) []string {
 	var parts []string
 	var run []*ir.DistilledComment
 	flush := func(keepDocs bool) {
@@ -59,7 +65,7 @@ func formatCStyleNodes(nodes []ir.DistilledNode, indent string, format func(ir.D
 				continue
 			}
 			var b strings.Builder
-			writeCStyleComment(&b, c, indent)
+			writeComment(&b, c, indent)
 			parts = append(parts, strings.TrimSuffix(b.String(), "\n"))
 		}
 		run = nil
@@ -77,4 +83,12 @@ func formatCStyleNodes(nodes []ir.DistilledNode, indent string, format func(ir.D
 	}
 	flush(false)
 	return parts
+}
+
+// isShebang reports whether c is a script's "#!" interpreter line (Python,
+// Ruby): a line comment on the first line of the file whose text (after the
+// "#") starts with "!". It prints as written, "#!/usr/bin/env ruby", not as
+// "# !...".
+func isShebang(c *ir.DistilledComment) bool {
+	return c.Format == ir.CommentLine && c.Location.StartLine == 1 && strings.HasPrefix(c.Text, "!")
 }

@@ -22,6 +22,72 @@ func NewRubyFormatter() LanguageFormatter {
 
 // FormatNode implements LanguageFormatter
 func (f *RubyFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent int) error {
+	return f.FormatNodes(w, []ir.DistilledNode{node}, indent)
+}
+
+// FormatNodes formats sibling nodes. A class or module is set off from what
+// comes before it by a blank line; when a doc comment documents it, the blank
+// line goes above the doc, so the doc stays next to the declaration. For the
+// same reason the "# private" / "# protected" marker of a method goes above
+// the method's doc, not between the doc and the def.
+func (f *RubyFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, indent int) error {
+	indentStr := strings.Repeat("    ", indent)
+	for i, node := range nodes {
+		if opensRubyBlock(nodes, i) {
+			fmt.Fprintln(w)
+		}
+		if fn := startsRubyMethod(nodes, i); fn != nil {
+			if marker := f.getRubyVisibilityComment(fn.Visibility); marker != "" {
+				fmt.Fprintf(w, "%s# %s\n", indentStr, marker)
+			}
+		}
+		if err := f.formatNode(w, node, indent); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// startsRubyMethod returns the method that nodes[i] starts: the method itself,
+// or the method that the doc comment nodes[i] documents. Otherwise nil.
+func startsRubyMethod(nodes []ir.DistilledNode, i int) *ir.DistilledFunction {
+	if fn, ok := nodes[i].(*ir.DistilledFunction); ok {
+		if i == 0 || !isDocComment(nodes[i-1]) {
+			return fn
+		}
+		return nil
+	}
+	if isDocComment(nodes[i]) && i+1 < len(nodes) {
+		if fn, ok := nodes[i+1].(*ir.DistilledFunction); ok {
+			return fn
+		}
+	}
+	return nil
+}
+
+// opensRubyBlock reports whether nodes[i] starts a class or module block: the
+// class or module itself, or the doc comment right before it.
+func opensRubyBlock(nodes []ir.DistilledNode, i int) bool {
+	if isRubyBlock(nodes[i]) {
+		return i == 0 || !isDocComment(nodes[i-1])
+	}
+	return isDocComment(nodes[i]) && i+1 < len(nodes) && isRubyBlock(nodes[i+1])
+}
+
+func isRubyBlock(node ir.DistilledNode) bool {
+	switch node.(type) {
+	case *ir.DistilledClass, *ir.DistilledInterface:
+		return true
+	}
+	return false
+}
+
+func isDocComment(node ir.DistilledNode) bool {
+	c, ok := node.(*ir.DistilledComment)
+	return ok && c.IsDoc()
+}
+
+func (f *RubyFormatter) formatNode(w io.Writer, node ir.DistilledNode, indent int) error {
 	indentStr := strings.Repeat("    ", indent)
 
 	switch n := node.(type) {
@@ -54,14 +120,15 @@ func (f *RubyFormatter) formatImport(w io.Writer, imp *ir.DistilledImport, inden
 	return nil
 }
 
+// formatComment writes any comment, line, block (=begin/=end) or doc, as one
+// "# " line per text line. The shebang line is written as it is in the source.
 func (f *RubyFormatter) formatComment(w io.Writer, comment *ir.DistilledComment, indent string) error {
-	lines := strings.Split(comment.Text, "\n")
-	for _, line := range lines {
-		if line != "" {
-			fmt.Fprintf(w, "%s# %s\n", indent, line)
-		} else {
-			fmt.Fprintf(w, "%s#\n", indent)
-		}
+	if isShebang(comment) {
+		fmt.Fprintf(w, "#%s\n", comment.Text)
+		return nil
+	}
+	for _, line := range strings.Split(comment.Text, "\n") {
+		fmt.Fprintf(w, "%s%s\n", indent, strings.TrimRight("# "+line, " "))
 	}
 	return nil
 }
@@ -69,10 +136,7 @@ func (f *RubyFormatter) formatComment(w io.Writer, comment *ir.DistilledComment,
 func (f *RubyFormatter) formatClass(w io.Writer, class *ir.DistilledClass, indent int) error {
 	indentStr := strings.Repeat("    ", indent)
 
-	// Add blank line before class
-	fmt.Fprintln(w)
-
-	// Format class declaration
+	// Format class declaration (FormatNodes sets it off by a blank line)
 	fmt.Fprintf(w, "%sclass %s", indentStr, class.Name)
 
 	// Add inheritance
@@ -89,8 +153,8 @@ func (f *RubyFormatter) formatClass(w io.Writer, class *ir.DistilledClass, inden
 	}
 
 	// Format class members
-	for _, child := range class.Children {
-		f.FormatNode(w, child, indent+1)
+	if err := f.FormatNodes(w, class.Children, indent+1); err != nil {
+		return err
 	}
 
 	// No 'end' in text format
@@ -101,10 +165,7 @@ func (f *RubyFormatter) formatClass(w io.Writer, class *ir.DistilledClass, inden
 func (f *RubyFormatter) formatModule(w io.Writer, mod *ir.DistilledInterface, indent int) error {
 	indentStr := strings.Repeat("    ", indent)
 
-	// Add blank line before module
-	fmt.Fprintln(w)
-
-	// Format module declaration
+	// Format module declaration (FormatNodes sets it off by a blank line)
 	fmt.Fprintf(w, "%smodule %s\n", indentStr, mod.Name)
 
 	// Included modules (the parser records `include X` in a module as Extends)
@@ -114,8 +175,8 @@ func (f *RubyFormatter) formatModule(w io.Writer, mod *ir.DistilledInterface, in
 	}
 
 	// Format module members
-	for _, child := range mod.Children {
-		f.FormatNode(w, child, indent+1)
+	if err := f.FormatNodes(w, mod.Children, indent+1); err != nil {
+		return err
 	}
 
 	// No 'end' in text format
@@ -123,11 +184,9 @@ func (f *RubyFormatter) formatModule(w io.Writer, mod *ir.DistilledInterface, in
 	return nil
 }
 
+// formatMethod writes a method. Its visibility marker ("# private") is
+// written by FormatNodes.
 func (f *RubyFormatter) formatMethod(w io.Writer, fn *ir.DistilledFunction, indent string) error {
-	// Ruby uses visibility method calls (private, protected, public)
-	// For text format, we'll show visibility as a comment
-	visComment := f.getRubyVisibilityComment(fn.Visibility)
-
 	// Check for special method types
 	isClassMethod := false
 	for _, mod := range fn.Modifiers {
@@ -135,11 +194,6 @@ func (f *RubyFormatter) formatMethod(w io.Writer, fn *ir.DistilledFunction, inde
 			isClassMethod = true
 			break
 		}
-	}
-
-	// Add visibility comment if not public
-	if visComment != "" {
-		fmt.Fprintf(w, "%s# %s\n", indent, visComment)
 	}
 
 	// Format method declaration

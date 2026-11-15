@@ -3,26 +3,56 @@
 
 using System.Collections.Generic;
 namespace Constructs.VeryComplex05;
+/// <summary>
+/// N-dimensional immutable vector leveraging generic math (C# 11).
+/// </summary>
 public record VectorN(
     T[] Components,
     int Dim) {
     public static VectorN<T> operator +(VectorN<T> a, VectorN<T> b);
     public T Dot(VectorN<T> other);
     public override string ToString();
+    /// <summary>
+    /// Private validation method
+    /// </summary>
     private bool _isValid();
+    /// <summary>
+    /// Internal normalization method
+    /// </summary>
     internal VectorN<T> Normalize();
+    /// <summary>
+    /// Private magnitude calculation
+    /// </summary>
     private T _calculateMagnitude();
 }
+/// <summary>
+/// Algebra service demonstrating DI and default interface implementation.
+/// </summary>
 public interface IAlgebraService {
     public VectorN<T> Add<T>(VectorN<T> a, VectorN<T> b) where T : INumber<T>;
     public T Dot<T>(VectorN<T> a, VectorN<T> b) where T : INumber<T>;
+    /// <summary>
+    /// Advanced operation with constraints
+    /// </summary>
     public VectorN<T> Normalize<T>(VectorN<T> vector) where T : IFloatingPointIeee754<T>;
 }
+/// <summary>
+/// Concrete implementation overriding only parts of the default interface.
+/// </summary>
 public sealed class AlgebraService : IAlgebraService {
     public VectorN<T> Add<T>(VectorN<T> a, VectorN<T> b) where T : INumber<T>;
+    /// <summary>
+    /// Private logging method
+    /// </summary>
     private void _logOperation(string operation, object result);
+    /// <summary>
+    /// Internal performance tracking
+    /// </summary>
     internal void TrackPerformance(string operation, TimeSpan duration);
 }
+/// <summary>
+/// Discriminated-union-style command model using record inheritance.
+/// </summary>
 public abstract record CalcCommand(bool IsValid) {
     public sealed record AddCommand(
         VectorN<double> A,
@@ -33,22 +63,56 @@ public abstract record CalcCommand(bool IsValid) {
     public sealed record NormalizeCommand(VectorN<double> Vector) : CalcCommand;
     public sealed record UnknownCommand : CalcCommand {
     }
+    /// <summary>
+    /// Internal command metadata
+    /// </summary>
     internal DateTime CreatedAt { get; set; }
 }
+/// <summary>Command dispatcher using exhaustive pattern matching.</summary>
 public static class CalcDispatcher {
     public static double Execute(CalcCommand cmd, IAlgebraService svc);
+    /// <summary>
+    /// Private command validation
+    /// </summary>
     private static bool ValidateCommand(CalcCommand command);
+    /// <summary>
+    /// Internal command processing statistics
+    /// </summary>
     internal static Dictionary<Type, int> GetCommandStats();
 }
+/// <summary>
+/// Advanced generic constraint demonstration
+/// </summary>
 public class MathProcessor<T> where T : INumber<T>, IMinMaxValue<T> {
+    /// <summary>
+    /// Process values with advanced constraints
+    /// </summary>
     public T ProcessValue(T input);
+    /// <summary>
+    /// Private bounds checking
+    /// </summary>
     private static bool _isInBounds(T value);
+    /// <summary>
+    /// Protected virtual method for derived classes
+    /// </summary>
     protected virtual T TransformValue(T input);
+    /// <summary>
+    /// Internal factory method
+    /// </summary>
     internal static MathProcessor<T> CreateProcessor();
 }
+/// <summary>
+/// Bootstrapper illustrating Microsoft.Extensions.DependencyInjection usage.
+/// </summary>
 public static class Program {
     public static void Main();
+    /// <summary>
+    /// Private initialization helper
+    /// </summary>
     private static IServiceCollection ConfigureServices();
+    /// <summary>
+    /// Internal configuration method
+    /// </summary>
     internal static void ConfigureLogging(IServiceCollection services);
 }
 </file>

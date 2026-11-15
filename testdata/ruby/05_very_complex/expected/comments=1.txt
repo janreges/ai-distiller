@@ -1,48 +1,69 @@
 <file path="source.rb">
+# frozen_string_literal: true
 
+# Very advanced metaprogramming with eval, complex DSLs, method dispatch customization
 module AdvancedMetaprogramming
+    # Custom method dispatch using method_missing and const_missing
     def self.included(base)
 
     module ClassMethods
+        # Method chain interception
         def intercept_method_chain(*method_names*, &interceptor)
+        # Create method chains that can be dynamically extended
         def method_chain(name, &definition)
 
+    # Context for method chains
     class MethodChainContext
         def initialize(target, chain_name)
         def step(name, &block)
         def execute(&final_block)
 
+# Advanced DSL with eval-based code generation
 module CodeGenerator
+    # Generate methods from templates using eval
     def self.generate_crud_methods(class_name, table_name)
+    # Generate validation methods using binding
     def self.generate_validators(target_class, validations)
     def self.build_validation_code(field, rules)
 
+# Complex reflection and runtime code modification
 class RuntimeCodeModifier
     include AdvancedMetaprogramming
     def initialize
+    # Modify method implementations at runtime
     def modify_method(target, method_name, &new_implementation)
+    # Restore original method
     def restore_method(target, method_name)
+    # Create a proxy that intercepts all method calls
     def create_method_proxy(target)
     def should_intercept?(method_name)
     def intercept_call(target, method_name, args, block)
 
+# DSL that compiles to Ruby code
 class QueryDSL
     def initialize
+    # DSL methods
     def where(condition)
     def join(table, on:)
     def order(field, direction:)
     def limit(count)
+    # Compile DSL to executable Ruby code
     def compile_to_ruby
+    # Execute the compiled code
     def execute
 
+# Meta-class that can redefine itself at runtime
 class SelfModifyingClass
     @modifications
     def self.add_modification(&block)
     def self.apply_modifications
+    # Method that can redefine the class
     def self.evolve(&evolution_block)
+    # Instance method that can modify its own class
     def modify_self_class(&block)
     def inspect_modifications
 
+# Factory that creates classes with custom method dispatch
 class CustomDispatchFactory
     def self.create_class_with_dispatch(class_name, &dispatch_logic)
 </file>

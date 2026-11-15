@@ -1,37 +1,52 @@
 <file path="source.rb">
 
+# Complex DSL creation, method chaining, advanced metaprogramming
 module DSLBuilder
     def self.included(base)
 
     module ClassMethods
+        # Create a DSL method that accepts a block
         def dsl_method(name, &default_block)
+        # Create chainable setter methods
         def chainable_attr(*names*)
 
+    # Internal DSL context class
     class DSLContext
         def initialize(target)
+        # Forward missing methods to target
         def method_missing(method_name, *args*, &block)
         def respond_to_missing?(method_name, include_private = ...)
 
+# Module for creating fluent interfaces
 module FluentInterface
     def self.included(base)
 
     module ClassMethods
+        # Create a fluent builder pattern
         def fluent_builder(*method_names*)
 
+# Advanced reflection and dynamic class creation
 module ReflectionUtils
+    # Dynamically create classes at runtime
     def self.create_class(class_name, parent_class = ..., &block)
+    # Analyze class structure
     def self.analyze_class(klass)
 
+# Complex DSL for building configurations
 class ConfigurationBuilder
     include DSLBuilder
     include FluentInterface
     def initialize
+    # Method chaining for array operations
     def add_middleware(middleware_class, *options*)
     def add_plugin(plugin_name, &configuration_block)
+    # Dynamic method creation based on patterns
     def method_missing(method_name, *args*, &block)
     def respond_to_missing?(method_name, include_private = ...)
+    # Convert configuration to hash
     def to_hash
 
+# Plugin configuration DSL
 class PluginConfiguration
     def initialize
     def option(key, value)
@@ -41,6 +56,7 @@ class PluginConfiguration
     def respond_to_missing?(method_name, include_private = ...)
     def to_hash
 
+# Factory for creating dynamic classes with DSL
 class DynamicClassFactory
     def self.create_model(name, &definition)
 </file>

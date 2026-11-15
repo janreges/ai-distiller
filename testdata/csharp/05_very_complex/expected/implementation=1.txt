@@ -2,6 +2,9 @@
 #nullable enable
 
 namespace Constructs.VeryComplex05;
+/// <summary>
+/// N-dimensional immutable vector leveraging generic math (C# 11).
+/// </summary>
 public record VectorN(
     T[] Components,
     int Dim) {
@@ -21,17 +24,29 @@ public record VectorN(
     }
     public override string ToString() => $"[{string.Join(", ", Components)}]";
 }
+/// <summary>
+/// Algebra service demonstrating DI and default interface implementation.
+/// </summary>
 public interface IAlgebraService {
     public VectorN<T> Add<T>(VectorN<T> a, VectorN<T> b) where T : INumber<T> => a + b;
     public T Dot<T>(VectorN<T> a, VectorN<T> b) where T : INumber<T> => a.Dot(b);
+    /// <summary>
+    /// Advanced operation with constraints
+    /// </summary>
     public VectorN<T> Normalize<T>(VectorN<T> vector) where T : IFloatingPointIeee754<T> => vector.Normalize();
 }
+/// <summary>
+/// Concrete implementation overriding only parts of the default interface.
+/// </summary>
 public sealed class AlgebraService : IAlgebraService {
     public VectorN<T> Add<T>(VectorN<T> a, VectorN<T> b) where T : INumber<T> {
         Console.WriteLine($"Adding {a} and {b}");
         return a + b;
     }
 }
+/// <summary>
+/// Discriminated-union-style command model using record inheritance.
+/// </summary>
 public abstract record CalcCommand {
     public sealed record AddCommand(
         VectorN<double> A,
@@ -43,6 +58,7 @@ public abstract record CalcCommand {
     public sealed record UnknownCommand : CalcCommand {
     }
 }
+/// <summary>Command dispatcher using exhaustive pattern matching.</summary>
 public static class CalcDispatcher {
     public static double Execute(CalcCommand cmd, IAlgebraService svc) => cmd switch
     {
@@ -52,7 +68,13 @@ public static class CalcDispatcher {
         _                                     => throw new NotSupportedException($"Unhandled {cmd.GetType().Name}")
     };
 }
+/// <summary>
+/// Advanced generic constraint demonstration
+/// </summary>
 public class MathProcessor<T> where T : INumber<T>, IMinMaxValue<T> {
+    /// <summary>
+    /// Process values with advanced constraints
+    /// </summary>
     public T ProcessValue(T input) {
         if (input > T.MaxValue / (T.One + T.One))
             return T.MaxValue;
@@ -61,6 +83,9 @@ public class MathProcessor<T> where T : INumber<T>, IMinMaxValue<T> {
         return input * (T.One + T.One);
     }
 }
+/// <summary>
+/// Bootstrapper illustrating Microsoft.Extensions.DependencyInjection usage.
+/// </summary>
 public static class Program {
     public static void Main() {
         // Build DI container.

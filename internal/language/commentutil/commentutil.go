@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/janreges/ai-distiller/internal/ir"
+	sitter "github.com/smacker/go-tree-sitter"
 )
 
 // StripCStyle classifies a raw C-family comment token and removes its delimiters.
@@ -88,6 +89,45 @@ func AppendStatement(list, parsed []ir.DistilledNode) []ir.DistilledNode {
 	}
 	kept := WithoutDocs(append(append([]ir.DistilledNode(nil), list[start:]...), parsed...))
 	return append(list[:start], kept...)
+}
+
+// IsTripleSlashDoc reports whether a raw comment is a "///" doc line (a
+// "////" line is a line comment).
+func IsTripleSlashDoc(raw string) bool {
+	_, format := StripCStyle(raw)
+	return format == ir.CommentDoc && strings.HasPrefix(strings.TrimSpace(raw), "///")
+}
+
+// JoinLineDoc joins one line of a line doc run ("///" lines, which the
+// grammars give one token each) to the doc parsed from the lines above it.
+// token is the comment token c was parsed from. When the token before it is a
+// comment of the same type that ends on the line above, isLineDoc accepts the
+// text of both, and list ends with a doc comment, c's text is appended to that
+// doc as a new line, the doc now ends where c ends, and the doc is returned.
+// Otherwise nothing changes and nil is returned.
+func JoinLineDoc(list []ir.DistilledNode, c *ir.DistilledComment, token *sitter.Node, source []byte, isLineDoc func(raw string) bool) *ir.DistilledComment {
+	prev := token.PrevSibling()
+	if len(list) == 0 || prev == nil || prev.Type() != token.Type() ||
+		prev.EndPoint().Row+1 != token.StartPoint().Row ||
+		!isLineDoc(tokenText(token, source)) || !isLineDoc(tokenText(prev, source)) {
+		return nil
+	}
+	doc, ok := list[len(list)-1].(*ir.DistilledComment)
+	if !ok || !doc.IsDoc() {
+		return nil
+	}
+	doc.Text += "\n" + c.Text
+	doc.Location.EndLine = c.Location.EndLine
+	doc.Location.EndColumn = c.Location.EndColumn
+	return doc
+}
+
+func tokenText(token *sitter.Node, source []byte) string {
+	start, end := token.StartByte(), token.EndByte()
+	if start > end || end > uint32(len(source)) {
+		return ""
+	}
+	return string(source[start:end])
 }
 
 // WithoutDocs returns the nodes that are not doc comments.

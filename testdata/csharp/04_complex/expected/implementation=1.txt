@@ -4,6 +4,9 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 namespace Constructs.Complex04;
+/// <summary>
+/// Attribute declaring a required string length range.
+/// </summary>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false)]
 public sealed class StringRangeAttribute : ValidationAttribute {
     public int Min { get; }
@@ -12,7 +15,13 @@ public sealed class StringRangeAttribute : ValidationAttribute {
     public override bool IsValid(object? value) => value is string s && s.Length is >= 0 and var len
                              && len >= Min && len <= Max;
 }
+/// <summary>
+/// Builds compiled validation delegates for any annotated model using reflection.
+/// </summary>
 public static class ModelValidatorBuilder {
+    /// <summary>
+    /// Creates a highly-optimized validation function at runtime.
+    /// </summary>
     public static Func<TModel, bool> Build<TModel>() {
         // Parameter representing the object to validate.
         var param = Expression.Parameter(typeof(TModel), "model");
@@ -38,13 +47,18 @@ public static class ModelValidatorBuilder {
         return lambda.Compile();
     }
 }
+/// <summary>Sample DTO to validate.</summary>
 public record SignupRequest(
     [property: StringRange(3,12)] string Username,
     [property: StringRange(8,64)] string Password) {
+    /// <summary>
+    /// Additional validation method
+    /// </summary>
     public bool IsPasswordStrong() {
         return _hasUpperCase() && _hasLowerCase() && _hasNumber();
     }
 }
+/// <summary>Example usage with async stream.</summary>
 public static class Demo {
     public static async Task ConsumeAsync(IAsyncEnumerable<SignupRequest> inputs) {
         var isValid = ModelValidatorBuilder.Build<SignupRequest>();
@@ -56,10 +70,19 @@ public static class Demo {
         }
     }
 }
+/// <summary>
+/// Advanced reflection-based service locator
+/// </summary>
 public class ServiceLocator {
+    /// <summary>
+    /// Register a service instance
+    /// </summary>
     public void Register<T>(T instance) where T : class {
         _services[typeof(T)] = instance;
     }
+    /// <summary>
+    /// Resolve a service using reflection
+    /// </summary>
     public T Resolve<T>() where T : class {
         if (_services.TryGetValue(typeof(T), out var service))
             return (T)service;

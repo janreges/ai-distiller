@@ -41,10 +41,8 @@ func (f *CSharpFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent 
 			return err
 		}
 		// Format struct members
-		for _, child := range n.Children {
-			if err := f.FormatNode(w, child, indent+1); err != nil {
-				return err
-			}
+		if err := f.FormatNodes(w, n.Children, indent+1); err != nil {
+			return err
 		}
 		// Closing brace
 		indentStr := strings.Repeat("    ", indent)
@@ -69,9 +67,15 @@ func (f *CSharpFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent 
 			}
 		}
 
+		members := 0
 		if isRecord {
-			// Check if all children are readonly properties (record parameters)
+			// Check if all members are readonly properties (record parameters);
+			// comments are not members.
 			for _, child := range n.Children {
+				if _, ok := child.(*ir.DistilledComment); ok {
+					continue
+				}
+				members++
 				if field, ok := child.(*ir.DistilledField); !ok || !field.IsProperty || field.HasSetter {
 					onlyProperties = false
 					break
@@ -79,7 +83,7 @@ func (f *CSharpFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent 
 			}
 		}
 
-		if isRecord && onlyProperties && len(n.Children) > 0 {
+		if isRecord && onlyProperties && members > 0 {
 			// Record with only parameters - don't print body
 			fmt.Fprintln(w, classDecl+";")
 			return nil
@@ -90,17 +94,14 @@ func (f *CSharpFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent 
 		if err != nil {
 			return err
 		}
-		// Format class members (but skip record parameters)
-		for _, child := range n.Children {
-			if isRecord {
-				// Skip record parameters - they're already in the declaration
-				if field, ok := child.(*ir.DistilledField); ok && field.IsProperty && !field.HasSetter {
-					continue
-				}
-			}
-			if err := f.FormatNode(w, child, indent+1); err != nil {
-				return err
-			}
+		// Format class members (but skip record parameters - they're already
+		// in the declaration)
+		err = f.formatSiblings(w, n.Children, indent+1, func(child ir.DistilledNode) bool {
+			field, ok := child.(*ir.DistilledField)
+			return isRecord && ok && field.IsProperty && !field.HasSetter
+		})
+		if err != nil {
+			return err
 		}
 		// Closing brace
 		fmt.Fprintf(w, "%s}\n", indentStr)
@@ -112,10 +113,8 @@ func (f *CSharpFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent 
 			return err
 		}
 		// Format interface members
-		for _, child := range n.Children {
-			if err := f.FormatNode(w, child, indent+1); err != nil {
-				return err
-			}
+		if err := f.FormatNodes(w, n.Children, indent+1); err != nil {
+			return err
 		}
 		// Closing brace
 		indentStr := strings.Repeat("    ", indent)
@@ -128,10 +127,8 @@ func (f *CSharpFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent 
 			return err
 		}
 		// Format enum members
-		for _, child := range n.Children {
-			if err := f.FormatNode(w, child, indent+1); err != nil {
-				return err
-			}
+		if err := f.FormatNodes(w, n.Children, indent+1); err != nil {
+			return err
 		}
 		// Closing brace
 		indentStr := strings.Repeat("    ", indent)
@@ -148,26 +145,63 @@ func (f *CSharpFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent 
 		indentStr := strings.Repeat("    ", indent)
 		fmt.Fprintf(w, "%snamespace %s;\n", indentStr, n.Name)
 		// Format package members
-		for _, child := range n.Children {
-			if err := f.FormatNode(w, child, indent); err != nil {
-				return err
-			}
-		}
-		return nil
+		return f.FormatNodes(w, n.Children, indent)
 	case *ir.DistilledRawContent:
 		// Output raw content as-is (e.g., #nullable directives)
 		fmt.Fprint(w, n.Content)
 		return nil
+	case *ir.DistilledComment:
+		writeCSharpComment(w, n, strings.Repeat("    ", indent))
+		return nil
 	default:
 		// Report the node, then process any children recursively
 		reportUnhandled("csharp", node)
-		children := node.GetChildren()
-		for _, child := range children {
-			if err := f.FormatNode(w, child, indent); err != nil {
-				return err
-			}
+		return f.FormatNodes(w, node.GetChildren(), indent)
+	}
+}
+
+// FormatNodes formats sibling nodes. A doc comment documents the declaration
+// after it; when the formatter does not print that node (a delegate, which it
+// cannot render yet) or the node is no declaration (a using directive, a
+// preprocessor directive), the doc is dropped, so it does not appear to
+// document whatever is printed next.
+func (f *CSharpFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, indent int) error {
+	return f.formatSiblings(w, nodes, indent, func(ir.DistilledNode) bool { return false })
+}
+
+// formatSiblings is FormatNodes for a body that leaves out the nodes skip
+// reports, together with their doc comments.
+func (f *CSharpFormatter) formatSiblings(w io.Writer, nodes []ir.DistilledNode, indent int, skip func(ir.DistilledNode) bool) error {
+	parts := formatCommentedNodes(nodes, strings.Repeat("    ", indent), writeCSharpComment, func(node ir.DistilledNode) (string, bool) {
+		if skip(node) {
+			return "", false
 		}
-		return nil
+		var b strings.Builder
+		_ = f.FormatNode(&b, node, indent) // a strings.Builder does not fail
+		switch node.(type) {
+		case *ir.DistilledClass, *ir.DistilledInterface, *ir.DistilledStruct, *ir.DistilledEnum,
+			*ir.DistilledFunction, *ir.DistilledField, *ir.DistilledPackage:
+			return strings.TrimSuffix(b.String(), "\n"), true
+		}
+		return strings.TrimSuffix(b.String(), "\n"), false
+	})
+	for _, part := range parts {
+		if _, err := fmt.Fprintln(w, part); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeCSharpComment writes a doc comment as one "/// " line per text line,
+// the C# convention, and any other comment as writeCStyleComment does.
+func writeCSharpComment(w io.Writer, c *ir.DistilledComment, indent string) {
+	if !c.IsDoc() {
+		writeCStyleComment(w, c, indent)
+		return
+	}
+	for _, line := range strings.Split(c.Text, "\n") {
+		fmt.Fprintf(w, "%s%s\n", indent, strings.TrimRight("/// "+line, " "))
 	}
 }
 

@@ -1,8 +1,14 @@
 <file path="source.cs">
+// 04_complex.cs
+// Reflective validator that discovers attributes at runtime and builds
+// expression-tree delegates for performance. Also shows async streams.
 #nullable enable
 
 using System.Threading.Tasks;
 namespace Constructs.Complex04;
+/// <summary>
+/// Attribute declaring a required string length range.
+/// </summary>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false)]
 public sealed class StringRangeAttribute : ValidationAttribute {
     public int Min { get; }
@@ -10,19 +16,39 @@ public sealed class StringRangeAttribute : ValidationAttribute {
     public StringRangeAttribute(int min, int max);
     public override bool IsValid(object? value);
 }
+/// <summary>
+/// Builds compiled validation delegates for any annotated model using reflection.
+/// </summary>
 public static class ModelValidatorBuilder {
+    /// <summary>
+    /// Creates a highly-optimized validation function at runtime.
+    /// </summary>
     public static Func<TModel, bool> Build<TModel>();
 }
+/// <summary>Sample DTO to validate.</summary>
 public record SignupRequest(
     [property: StringRange(3,12)] string Username,
     [property: StringRange(8,64)] string Password) {
+    /// <summary>
+    /// Additional validation method
+    /// </summary>
     public bool IsPasswordStrong();
 }
+/// <summary>Example usage with async stream.</summary>
 public static class Demo {
     public static async Task ConsumeAsync(IAsyncEnumerable<SignupRequest> inputs);
 }
+/// <summary>
+/// Advanced reflection-based service locator
+/// </summary>
 public class ServiceLocator {
+    /// <summary>
+    /// Register a service instance
+    /// </summary>
     public void Register<T>(T instance) where T : class;
+    /// <summary>
+    /// Resolve a service using reflection
+    /// </summary>
     public T Resolve<T>() where T : class;
 }
 </file>

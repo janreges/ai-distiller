@@ -163,3 +163,107 @@ func TestRuby_ModuleInclude(t *testing.T) {
 	require.Len(t, mod.Extends, 1)
 	assert.Equal(t, "Comparable", mod.Extends[0].Name)
 }
+
+func TestRuby_Comments(t *testing.T) {
+	file := parseRuby(t, "# line c\n\n# Doc c\n# second\nclass A\n  # inner\n\n  # m doc\n  def m; end\nend\n")
+	top := []*ir.DistilledComment{}
+	for _, c := range file.Children {
+		if cm, ok := c.(*ir.DistilledComment); ok {
+			top = append(top, cm)
+		}
+	}
+	require.Len(t, top, 2)
+	assert.Equal(t, [2]string{ir.CommentLine, "line c"}, [2]string{top[0].Format, top[0].Text})
+	assert.Equal(t, [2]string{ir.CommentDoc, "Doc c\nsecond"}, [2]string{top[1].Format, top[1].Text})
+	cls := findRubyClass(t, file, "A")
+	assert.Equal(t, ir.CommentLine, cls.Children[0].(*ir.DistilledComment).Format)
+	assert.Equal(t, ir.CommentDoc, cls.Children[1].(*ir.DistilledComment).Format)
+}
+
+// rubyOutline returns "<format>:<text>" for each comment of nodes and the name
+// of every declaration.
+func rubyOutline(nodes []ir.DistilledNode) []string {
+	var out []string
+	for _, n := range nodes {
+		switch v := n.(type) {
+		case *ir.DistilledComment:
+			out = append(out, v.Format+":"+v.Text)
+		case *ir.DistilledClass:
+			out = append(out, v.Name)
+		case *ir.DistilledInterface:
+			out = append(out, v.Name)
+		case *ir.DistilledFunction:
+			out = append(out, v.Name)
+		case *ir.DistilledField:
+			out = append(out, v.Name)
+		case *ir.DistilledImport:
+			out = append(out, "require "+v.Module)
+		}
+	}
+	return out
+}
+
+// Only a run of "#" lines right above a class, module or def is a doc: a
+// comment after code is a line comment and is not part of a run, and a
+// comment above anything else is a line comment.
+func TestRuby_DocCommentRules(t *testing.T) {
+	src := `#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# above require
+require 'json'
+=begin
+block
+  indented
+=end
+# M doc
+module M # trailing on the module line
+  # only a comment in this body
+end
+class A
+  # Example:
+  #
+  #   A.new.m
+  def m; end # after m
+  # name attr
+  attr_reader :name
+  # MAX const
+  MAX = 10
+  # private def doc
+  private def p1; end
+  # dropped: private_class_method adds nothing
+  private_class_method def self.hidden; end
+  def after; end
+  # singleton doc
+  class << self
+    # s doc
+    def s; end
+  end
+end
+`
+	file := parseRuby(t, src)
+	assert.Equal(t, []string{
+		"line:!/usr/bin/env ruby", "line:frozen_string_literal: true", "line:above require", "require json",
+		"block:block\n  indented", "doc:M doc", "M", "A",
+	}, rubyOutline(file.Children))
+	assert.Equal(t, []string{"line:trailing on the module line", "line:only a comment in this body"},
+		rubyOutline(file.Children[6].(*ir.DistilledInterface).Children))
+	cls := findRubyClass(t, file, "A")
+	assert.Equal(t, []string{
+		"doc:Example:\n\n  A.new.m", "m", "line:after m",
+		"line:name attr", "name", "@name",
+		"line:MAX const", "MAX",
+		"doc:private def doc", "p1",
+		"after",
+		"doc:singleton doc", "<<self>>",
+	}, rubyOutline(cls.Children))
+	assert.Equal(t, []string{"doc:s doc", "s"}, rubyOutline(cls.Children[len(cls.Children)-1].(*ir.DistilledClass).Children))
+}
+
+// The "#!" line is a line comment of its own, never a line of the doc below it.
+func TestRuby_ShebangIsNotADocLine(t *testing.T) {
+	file := parseRuby(t, "#!/usr/bin/env ruby\n# K doc\nclass K; end\n")
+	assert.Equal(t, []string{"line:!/usr/bin/env ruby", "doc:K doc", "K"}, rubyOutline(file.Children))
+	file = parseRuby(t, "#!/usr/bin/env ruby\nclass K; end\n")
+	assert.Equal(t, []string{"line:!/usr/bin/env ruby", "K"}, rubyOutline(file.Children))
+}

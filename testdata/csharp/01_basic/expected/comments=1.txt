@@ -1,8 +1,16 @@
 <file path="source.cs">
+// 01_basic.cs
+// Demonstrates constants, local functions, tuples and basic control-flow.
 #nullable enable
 
 namespace Constructs.Basic01;
+/// <summary>
+/// Extension methods for string manipulation
+/// </summary>
 public static class StringExtensions {
+    /// <summary>
+    /// Converts string to title case
+    /// </summary>
     public static string ToTitleCase(string input);
 }
 </file>

@@ -4,6 +4,9 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 namespace Constructs.Complex04;
+/// <summary>
+/// Attribute declaring a required string length range.
+/// </summary>
 [AttributeUsage(AttributeTargets.Property, AllowMultiple = false)]
 public sealed class StringRangeAttribute : ValidationAttribute {
     public int Min { get; }
@@ -11,30 +14,74 @@ public sealed class StringRangeAttribute : ValidationAttribute {
     public StringRangeAttribute(int min, int max);
     public override bool IsValid(object? value);
 }
+/// <summary>
+/// Builds compiled validation delegates for any annotated model using reflection.
+/// </summary>
 public static class ModelValidatorBuilder {
+    /// <summary>
+    /// Creates a highly-optimized validation function at runtime.
+    /// </summary>
     public static Func<TModel, bool> Build<TModel>();
+    /// <summary>
+    /// Private method to cache compiled validators
+    /// </summary>
     private static readonly Dictionary<Type, Delegate> _validatorCache = new();
+    /// <summary>
+    /// Internal method for managing validator cache
+    /// </summary>
     internal static void ClearCache();
+    /// <summary>
+    /// Protected method for building complex expressions
+    /// </summary>
     private static Expression BuildComplexValidation<T>(ParameterExpression param, PropertyInfo property);
 }
+/// <summary>Sample DTO to validate.</summary>
 public record SignupRequest(
     [property: StringRange(3,12)] string Username,
     [property: StringRange(8,64)] string Password) {
+    /// <summary>
+    /// Additional validation method
+    /// </summary>
     public bool IsPasswordStrong();
+    /// <summary>
+    /// Private validation helpers
+    /// </summary>
     private bool _hasUpperCase();
     private bool _hasLowerCase();
     private bool _hasNumber();
 }
+/// <summary>Example usage with async stream.</summary>
 public static class Demo {
     public static async Task ConsumeAsync(IAsyncEnumerable<SignupRequest> inputs);
+    /// <summary>
+    /// Private method to generate test data
+    /// </summary>
     private static async IAsyncEnumerable<SignupRequest> GenerateTestRequests();
 }
+/// <summary>
+/// Advanced reflection-based service locator
+/// </summary>
 public class ServiceLocator {
     private readonly Dictionary<Type, object> _services = new();
+    /// <summary>
+    /// Register a service instance
+    /// </summary>
     public void Register<T>(T instance) where T : class;
+    /// <summary>
+    /// Resolve a service using reflection
+    /// </summary>
     public T Resolve<T>() where T : class;
+    /// <summary>
+    /// Private factory method using reflection
+    /// </summary>
     private T CreateInstance<T>() where T : class;
+    /// <summary>
+    /// Internal service discovery
+    /// </summary>
     internal Type[] GetRegisteredTypes();
+    /// <summary>
+    /// Protected method for service validation
+    /// </summary>
     protected virtual bool ValidateService(Type serviceType);
 }
 </file>

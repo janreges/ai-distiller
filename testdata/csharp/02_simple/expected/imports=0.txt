@@ -2,15 +2,26 @@
 #nullable enable
 
 namespace Constructs.Simple02;
+/// <summary>
+/// Represents a bank account with rudimentary business logic.
+/// </summary>
 public class BankAccount {
+    /// <summary>Raised whenever money is deposited or withdrawn.</summary>
     public dynamic BalanceChanged;
+    /// <summary>Unique, read-only account number.</summary>
     public string AccountNumber { get; }
+    /// <summary>Current balance (read-only outside the class).</summary>
     public decimal Balance { get; set; }
     public BankAccount(string accountNumber, decimal openingBalance);
+    /// <exception cref="ArgumentOutOfRangeException"/>
     public void Deposit(decimal amount);
+    /// <exception cref="InvalidOperationException"/>
     public void Withdraw(decimal amount);
     public override string ToString();
 }
+/// <summary>
+/// Immutable value object using readonly struct.
+/// </summary>
 struct Money {
     public Money(decimal amount, string currency);
     public decimal Amount { get; }
@@ -18,11 +29,23 @@ struct Money {
     public bool Equals(Money other);
     public override int GetHashCode();
     public override string ToString();
+    /// <summary>
+    /// Addition operator for money
+    /// </summary>
     public static Money operator +(Money left, Money right);
 }
+/// <summary>
+/// Savings account with interest calculation
+/// </summary>
 public class SavingsAccount : BankAccount {
+    /// <summary>
+    /// Interest rate as percentage
+    /// </summary>
     public decimal InterestRate { get; set; }
     public SavingsAccount(string accountNumber, decimal interestRate, decimal openingBalance);
+    /// <summary>
+    /// Calculate and add monthly interest
+    /// </summary>
     public void AddMonthlyInterest();
 }
 </file>

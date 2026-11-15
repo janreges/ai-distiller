@@ -2,7 +2,13 @@
 #nullable enable
 
 namespace Constructs.Basic01;
+/// <summary>
+/// Extension methods for string manipulation
+/// </summary>
 public static class StringExtensions {
+    /// <summary>
+    /// Converts string to title case
+    /// </summary>
     public static string ToTitleCase(string input);
 }
 </file>

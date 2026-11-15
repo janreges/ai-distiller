@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/janreges/ai-distiller/internal/ir"
+	"github.com/janreges/ai-distiller/internal/language/commentutil"
 	sitter "github.com/smacker/go-tree-sitter"
 	tree_sitter_ruby "github.com/tree-sitter/tree-sitter-ruby/bindings/go"
 )
@@ -63,6 +64,8 @@ func (p *TreeSitterProcessor) processNode(node *sitter.Node, source []byte, file
 	nodeType := node.Type()
 
 	switch nodeType {
+	case "program":
+		p.processStatements(childNodes(node), source, file, parent)
 	case "class":
 		p.processClass(node, source, file, parent)
 	case "singleton_class":
@@ -112,11 +115,9 @@ func (p *TreeSitterProcessor) processClass(node *sitter.Node, source []byte, fil
 					break
 				}
 			}
-		case "body_statement", "statements":
-			// Process class body
-			p.processClassBody(child, source, file, class)
 		}
 	}
+	p.processClassBody(node, source, file, class)
 
 	p.addToParent(file, parent, class)
 }
@@ -135,12 +136,7 @@ func (p *TreeSitterProcessor) processSingletonClass(node *sitter.Node, source []
 	}
 
 	// Process singleton class body
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "body_statement" || child.Type() == "statements" {
-			p.processClassBody(child, source, file, class)
-		}
-	}
+	p.processClassBody(node, source, file, class)
 
 	p.addToParent(file, parent, class)
 }
@@ -162,11 +158,9 @@ func (p *TreeSitterProcessor) processModule(node *sitter.Node, source []byte, fi
 		switch child.Type() {
 		case "constant", "scope_resolution":
 			module.Name = string(source[child.StartByte():child.EndByte()])
-		case "body_statement", "statements":
-			// Process module body
-			p.processModuleBody(child, source, file, module)
 		}
 	}
+	p.processModuleBody(node, source, file, module)
 
 	p.addToParent(file, parent, module)
 }
@@ -427,23 +421,186 @@ func childrenOf(parent ir.DistilledNode) *[]ir.DistilledNode {
 	return nil
 }
 
-// processBody walks a class or module body with a fresh `public` section. A
-// bare `private`, `protected` or `public` (an identifier statement) switches
-// the section for the definitions that follow.
+// processBody walks the body of a class, module or singleton class (node)
+// with a fresh `public` section.
 func (p *TreeSitterProcessor) processBody(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
 	p.visibility = append(p.visibility, ir.VisibilityPublic)
 	defer func() { p.visibility = p.visibility[:len(p.visibility)-1] }()
+	p.processStatements(bodyStatements(node), source, file, parent)
+}
+
+// bodyStatements returns the statements of a class, module or singleton class
+// body in source order. The grammar puts the comments between the header and
+// the first statement (all comments of a body without statements) on the
+// definition node itself, not on its body_statement.
+func bodyStatements(node *sitter.Node) []*sitter.Node {
+	var stmts []*sitter.Node
+	for _, child := range childNodes(node) {
+		switch child.Type() {
+		case "comment":
+			stmts = append(stmts, child)
+		case "body_statement", "statements":
+			stmts = append(stmts, childNodes(child)...)
+		}
+	}
+	return stmts
+}
+
+func childNodes(node *sitter.Node) []*sitter.Node {
+	nodes := make([]*sitter.Node, 0, node.ChildCount())
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "identifier" {
-			switch name := string(source[child.StartByte():child.EndByte()]); name {
+		nodes = append(nodes, node.Child(i))
+	}
+	return nodes
+}
+
+// processStatements processes the statements of the file or of a body. In a
+// body, a bare `private`, `protected` or `public` (an identifier statement)
+// switches the section for the definitions that follow.
+//
+// A run of "#" comments, each on a line of its own and on the line right
+// below the one before, that ends on the line directly above a class, module
+// or def is one doc comment of that definition; every other comment is a line
+// comment (=begin/=end a block comment). The doc comments right before a
+// statement that adds no declaration (`private_class_method def self.x`) are
+// dropped, so they do not document the next declaration
+// (commentutil.AppendStatement).
+func (p *TreeSitterProcessor) processStatements(stmts []*sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
+	list := p.childList(file, parent)
+	for i := 0; i < len(stmts); i++ {
+		stmt := stmts[i]
+		switch {
+		case stmt.Type() == "comment":
+			end := commentRunEnd(stmts, i, source)
+			p.processComments(stmts[i:end], end < len(stmts) && documents(stmts[i:end], stmts[end], source), source, file, parent)
+			i = end - 1
+			continue
+		case !stmt.IsNamed():
+			continue
+		case len(p.visibility) > 0 && stmt.Type() == "identifier":
+			switch name := string(source[stmt.StartByte():stmt.EndByte()]); name {
 			case "private", "protected", "public":
 				p.visibility[len(p.visibility)-1] = ir.Visibility(name)
 				continue
 			}
 		}
-		p.processNode(child, source, file, parent)
+		before := len(*list)
+		p.processNode(stmt, source, file, parent)
+		added := append([]ir.DistilledNode(nil), (*list)[before:]...)
+		*list = commentutil.AppendStatement((*list)[:before], added)
 	}
+}
+
+// commentRunEnd returns the end (exclusive) of the comment run that starts at
+// stmts[i]: the "#" comments on lines of their own that follow it line by
+// line. Any other comment is a run of one.
+func commentRunEnd(stmts []*sitter.Node, i int, source []byte) int {
+	end := i + 1
+	if !isOwnLineHashComment(stmts[i], source) {
+		return end
+	}
+	for end < len(stmts) && stmts[end].Type() == "comment" && isOwnLineHashComment(stmts[end], source) &&
+		stmts[end].StartPoint().Row == stmts[end-1].EndPoint().Row+1 {
+		end++
+	}
+	return end
+}
+
+// documents reports whether a comment run is the doc of next: a run of "#"
+// lines that ends on the line directly above a class, module or def (also a
+// def passed to a call, as in `private def x`).
+func documents(run []*sitter.Node, next *sitter.Node, source []byte) bool {
+	last := run[len(run)-1]
+	if !isOwnLineHashComment(last, source) || next.StartPoint().Row != last.EndPoint().Row+1 {
+		return false
+	}
+	switch next.Type() {
+	case "class", "module", "singleton_class", "method", "singleton_method":
+		return true
+	case "call":
+		if args := next.ChildByFieldName("arguments"); args != nil {
+			for i := 0; i < int(args.NamedChildCount()); i++ {
+				if t := args.NamedChild(i).Type(); t == "method" || t == "singleton_method" {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// isOwnLineHashComment reports whether a comment is a "#" comment with only
+// indentation before it on its line (not a comment after code, not
+// =begin/=end, not the "#!" line that starts a script).
+func isOwnLineHashComment(comment *sitter.Node, source []byte) bool {
+	start := int(comment.StartByte())
+	if start >= len(source) || source[start] != '#' {
+		return false
+	}
+	if start == 0 && strings.HasPrefix(string(source), "#!") {
+		return false
+	}
+	for i := start - 1; i >= 0 && source[i] != '\n'; i-- {
+		if source[i] != ' ' && source[i] != '\t' {
+			return false
+		}
+	}
+	return true
+}
+
+// processComments adds the comments of a run: one doc comment whose text
+// lines are those of the run when isDoc is set, otherwise one comment per
+// token.
+func (p *TreeSitterProcessor) processComments(run []*sitter.Node, isDoc bool, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
+	if isDoc {
+		lines := make([]string, len(run))
+		for i, token := range run {
+			lines[i], _ = stripComment(string(source[token.StartByte():token.EndByte()]))
+		}
+		location := p.nodeLocation(run[0])
+		last := p.nodeLocation(run[len(run)-1])
+		location.EndLine, location.EndColumn = last.EndLine, last.EndColumn
+		p.addToParent(file, parent, &ir.DistilledComment{
+			BaseNode: ir.BaseNode{Location: location},
+			Text:     strings.Join(lines, "\n"),
+			Format:   ir.CommentDoc,
+		})
+		return
+	}
+	for _, token := range run {
+		text, format := stripComment(string(source[token.StartByte():token.EndByte()]))
+		p.addToParent(file, parent, &ir.DistilledComment{
+			BaseNode: ir.BaseNode{Location: p.nodeLocation(token)},
+			Text:     text,
+			Format:   format,
+		})
+	}
+}
+
+// stripComment removes the delimiters of a Ruby comment: "#" and the space
+// after it (further indentation is kept), or the =begin and =end lines of a
+// block comment.
+func stripComment(raw string) (text, format string) {
+	raw = strings.TrimRight(raw, " \t\r\n")
+	if !strings.HasPrefix(raw, "=begin") {
+		text = strings.TrimPrefix(strings.TrimPrefix(raw, "#"), " ")
+		return text, ir.CommentLine
+	}
+	lines := strings.Split(raw, "\n")
+	lines = lines[1:] // =begin and its optional label
+	if n := len(lines); n > 0 && strings.HasPrefix(strings.TrimSpace(lines[n-1]), "=end") {
+		lines = lines[:n-1]
+	}
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], " \t\r")
+	}
+	for len(lines) > 0 && lines[0] == "" {
+		lines = lines[1:]
+	}
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return strings.Join(lines, "\n"), ir.CommentBlock
 }
 
 // processAlias handles alias statements
@@ -523,12 +680,12 @@ func plainStringLiteral(node *sitter.Node, source []byte) (string, bool) {
 	return content, content != ""
 }
 
-// processClassBody processes the body of a class
+// processClassBody processes the body of a class or singleton class (node)
 func (p *TreeSitterProcessor) processClassBody(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
 	p.processBody(node, source, file, parent)
 }
 
-// processModuleBody processes the body of a module
+// processModuleBody processes the body of a module (node)
 func (p *TreeSitterProcessor) processModuleBody(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
 	p.processBody(node, source, file, parent)
 }
@@ -642,6 +799,14 @@ func (p *TreeSitterProcessor) getCurrentVisibility(parent ir.DistilledNode) ir.V
 		return p.visibility[n-1]
 	}
 	return ir.VisibilityPublic
+}
+
+// childList returns the list addToParent adds the children of parent to.
+func (p *TreeSitterProcessor) childList(file *ir.DistilledFile, parent ir.DistilledNode) *[]ir.DistilledNode {
+	if children := childrenOf(parent); children != nil {
+		return children
+	}
+	return &file.Children
 }
 
 // addToParent adds a node to its parent or to the file

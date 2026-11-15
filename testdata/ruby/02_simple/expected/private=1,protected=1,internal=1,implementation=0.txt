@@ -1,26 +1,35 @@
 <file path="source.rb">
 
+# Module demonstrating mixins, include/extend, blocks and basic metaprogramming
 module Loggable
+    # Method added to instances when included
     def log(message, level:)
+    # Module method for class-level functionality
     def self.included(base)
 
+    # Methods added to class when module is included
     module ClassMethods
         def enable_logging
 
+# Module for JSON serialization mixin
 module Serializable
     def to_json(*args*)
     def from_json(json_string)
     # private
+    # Abstract method to be implemented by including classes
     def serializable_hash
     # private
     def load_from_hash(hash)
 
+# Enumerable module usage with blocks and yield
 module RoleManager
     VALID_ROLES
     def self.each_role
     def self.find_role(pattern)
+    # Demonstrate various block syntaxes
     def self.role_stats
 
+# Class demonstrating mixins and blocks
 class Document
     include Loggable
     include Serializable
@@ -33,8 +42,11 @@ class Document
     def created_at
     @created_at
     def initialize(title, content, author)
+    # Method using blocks with yield
     def process_content
+    # Method with different block patterns
     def find_sections(pattern = ...)
+    # Basic method_missing metaprogramming
     def method_missing(method_name, *args*, &block)
     def respond_to_missing?(method_name, include_private = ...)
     # private
@@ -42,10 +54,13 @@ class Document
     # private
     def load_from_hash(hash)
 
+# Class with extend usage (adds module methods as class methods)
 class DocumentRepository
     def initialize
     def add_document(document)
+    # Method using blocks for filtering
     def filter_documents(&block)
+    # Method with proc/lambda demonstration
     def sort_documents(sort_proc = ...)
     # protected
     def log_action(message)

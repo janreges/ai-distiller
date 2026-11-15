@@ -2,21 +2,32 @@
 #nullable enable
 
 namespace Constructs.Medium03;
+/// <summary>
+/// Contract describing CRUD operations for entities.
+/// </summary>
 public interface IRepository<TEntity, TKey> where TEntity : IEntity<TKey> where TKey : notnull {
     public Task AddAsync(TEntity entity, CancellationToken ct);
     public Task<TEntity?> GetAsync(TKey id, CancellationToken ct);
     public Task<bool> RemoveAsync(TKey id, CancellationToken ct);
     public IAsyncEnumerable<TEntity> QueryAsync(Func<TEntity, bool> predicate, CancellationToken ct);
 }
+/// <summary>Marker for entities.</summary>
 public interface IEntity<TKey> {
 }
+/// <summary>Base class implementing common <see cref="IEntity{TKey}"/> plumbing.</summary>
 public abstract record EntityBase(Id T) : IEntity;
+/// <summary>
+/// Thread-safe in-memory repository using <see cref="ConcurrentDictionary{TKey,TValue}"/>.
+/// </summary>
 public class InMemoryRepository<TEntity, TKey> : IRepository where TEntity : EntityBase<TKey> where TKey : notnull {
     public Task AddAsync(TEntity entity, CancellationToken ct);
     public Task<TEntity?> GetAsync(TKey id, CancellationToken ct);
     public Task<bool> RemoveAsync(TKey id, CancellationToken ct);
     public async IAsyncEnumerable<TEntity> QueryAsync(Func<TEntity, bool> predicate, CancellationToken ct);
 }
+/// <summary>
+/// Cached repository decorator implementing caching layer
+/// </summary>
 public class CachedRepository<TEntity, TKey> : IRepository where TEntity : EntityBase<TKey> where TKey : notnull {
     public CachedRepository(IRepository<TEntity, TKey> innerRepository, TimeSpan cacheExpiry);
     public async Task AddAsync(TEntity entity, CancellationToken ct);
@@ -24,11 +35,17 @@ public class CachedRepository<TEntity, TKey> : IRepository where TEntity : Entit
     public async Task<bool> RemoveAsync(TKey id, CancellationToken ct);
     public IAsyncEnumerable<TEntity> QueryAsync(Func<TEntity, bool> predicate, CancellationToken ct);
 }
+/// <summary>
+/// Example entity for testing
+/// </summary>
 public record User(
     Id Guid,
     string Name,
     string Email,
     bool IsValid) : EntityBase<Guid>(Id);
+/// <summary>
+/// Service layer demonstrating dependency injection pattern
+/// </summary>
 public class UserService {
     public UserService(IRepository<User, Guid> userRepository);
     public async Task<User?> CreateUserAsync(string name, string email);

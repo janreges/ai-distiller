@@ -1,6 +1,8 @@
 <file path="source.rb">
 
+# Very advanced metaprogramming with eval, complex DSLs, method dispatch customization
 module AdvancedMetaprogramming
+    # Custom method dispatch using method_missing and const_missing
     def self.included(base)
         base.extend(ClassMethods)
         base.class_eval do
@@ -9,6 +11,7 @@ module AdvancedMetaprogramming
         end
 
     module ClassMethods
+        # Method chain interception
         def intercept_method_chain(*method_names*, &interceptor)
             method_names.each do |method_name|
               @intercepted_methods[method_name] = interceptor
@@ -31,6 +34,7 @@ module AdvancedMetaprogramming
                 end
               end
             end
+        # Create method chains that can be dynamically extended
         def method_chain(name, &definition)
             @method_chains[name] = definition
 
@@ -40,6 +44,7 @@ module AdvancedMetaprogramming
               chain_context.execute(&block)
             end
 
+    # Context for method chains
     class MethodChainContext
         def initialize(target, chain_name)
             @target = target
@@ -58,7 +63,9 @@ module AdvancedMetaprogramming
             @target.instance_eval(&final_block) if final_block
             result
 
+# Advanced DSL with eval-based code generation
 module CodeGenerator
+    # Generate methods from templates using eval
     def self.generate_crud_methods(class_name, table_name)
         crud_template = <<~RUBY
           class #{class_name}
@@ -109,6 +116,7 @@ module CodeGenerator
 
         # Use eval to create the class dynamically
         eval(crud_template)
+    # Generate validation methods using binding
     def self.generate_validators(target_class, validations)
         validations.each do |field, rules|
           validation_code = build_validation_code(field, rules)
@@ -147,11 +155,13 @@ module CodeGenerator
           end
         RUBY
 
+# Complex reflection and runtime code modification
 class RuntimeCodeModifier
     include AdvancedMetaprogramming
     def initialize
         @original_methods = {}
         @modified_methods = {}
+    # Modify method implementations at runtime
     def modify_method(target, method_name, &new_implementation)
         if target.respond_to?(method_name)
           original_method = target.method(method_name)
@@ -166,6 +176,7 @@ class RuntimeCodeModifier
         end
 
         @modified_methods["#{target.class}##{method_name}"] = new_implementation
+    # Restore original method
     def restore_method(target, method_name)
         key = "#{target.class}##{method_name}"
         original_method = @original_methods[key]
@@ -174,6 +185,7 @@ class RuntimeCodeModifier
           target.define_method(method_name, original_method)
           @modified_methods.delete(key)
         end
+    # Create a proxy that intercepts all method calls
     def create_method_proxy(target)
         proxy_class = Class.new do
           def initialize(target, modifier)
@@ -230,12 +242,14 @@ class RuntimeCodeModifier
           target.send(method_name, *args, &block)
         end
 
+# DSL that compiles to Ruby code
 class QueryDSL
     def initialize
         @conditions = []
         @joins = []
         @order_by = []
         @limit_value = nil
+    # DSL methods
     def where(condition)
         @conditions << condition
         self
@@ -248,6 +262,7 @@ class QueryDSL
     def limit(count)
         @limit_value = count
         self
+    # Compile DSL to executable Ruby code
     def compile_to_ruby
         code_parts = []
 
@@ -283,6 +298,7 @@ class QueryDSL
         code_parts << "end"
 
         code_parts.join("\n")
+    # Execute the compiled code
     def execute
         compiled_code = compile_to_ruby
 
@@ -291,6 +307,7 @@ class QueryDSL
         execution_context.instance_eval(compiled_code)
         execution_context.execute_query
 
+# Meta-class that can redefine itself at runtime
 class SelfModifyingClass
     @modifications
     def self.add_modification(&block)
@@ -300,6 +317,7 @@ class SelfModifyingClass
         @modifications.each do |modification|
           class_eval(&modification)
         end
+    # Method that can redefine the class
     def self.evolve(&evolution_block)
         new_class = Class.new(self) do
           class_eval(&evolution_block)
@@ -313,11 +331,13 @@ class SelfModifyingClass
         parent_module.const_set(class_name, new_class)
 
         new_class
+    # Instance method that can modify its own class
     def modify_self_class(&block)
         self.class.class_eval(&block)
     def inspect_modifications
         self.class.instance_variable_get(:@modifications)
 
+# Factory that creates classes with custom method dispatch
 class CustomDispatchFactory
     def self.create_class_with_dispatch(class_name, &dispatch_logic)
         new_class = Class.new do

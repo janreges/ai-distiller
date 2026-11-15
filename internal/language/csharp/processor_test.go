@@ -582,3 +582,129 @@ func TestCSharp_CompoundVisibilityOnMembers(t *testing.T) {
 	assert.Equal(t, ir.VisibilityPrivateProtected, vis["F1"])
 	assert.Equal(t, ir.VisibilityInternal, vis["M2"])
 }
+
+func TestCSharp_Comments(t *testing.T) {
+	file := parseCSharp(t, "// line c\n\n/// <summary>Doc c</summary>\n/// second\npublic class A {}\n")
+	var got [][2]string
+	for _, c := range file.Children {
+		if cm, ok := c.(*ir.DistilledComment); ok {
+			got = append(got, [2]string{cm.Format, cm.Text})
+		}
+	}
+	assert.Equal(t, [][2]string{{ir.CommentLine, "line c"}, {ir.CommentDoc, "<summary>Doc c</summary>\nsecond"}}, got)
+}
+
+// csharpOutline returns "<format>:<text>" for each comment of nodes, the
+// first line of raw content, and the name of every declaration.
+func csharpOutline(nodes []ir.DistilledNode) []string {
+	var out []string
+	for _, n := range nodes {
+		switch v := n.(type) {
+		case *ir.DistilledComment:
+			out = append(out, v.Format+":"+v.Text)
+		case *ir.DistilledRawContent:
+			out = append(out, strings.SplitN(v.Content, "\n", 2)[0])
+		case *ir.DistilledImport:
+			out = append(out, "using "+v.Module)
+		case *ir.DistilledPackage:
+			out = append(out, "namespace "+v.Name)
+		case *ir.DistilledClass:
+			out = append(out, v.Name)
+		case *ir.DistilledStruct:
+			out = append(out, v.Name)
+		case *ir.DistilledInterface:
+			out = append(out, v.Name)
+		case *ir.DistilledEnum:
+			out = append(out, v.Name)
+		case *ir.DistilledFunction:
+			out = append(out, v.Name)
+		case *ir.DistilledField:
+			out = append(out, v.Name)
+		case *ir.DistilledTypeAlias:
+			out = append(out, v.Name)
+		}
+	}
+	return out
+}
+
+func TestCSharp_CommentsInBodies(t *testing.T) {
+	src := `// kept line
+/// <summary>A</summary>
+public class A {
+    /// <summary>
+    /// M doc
+    /// </summary>
+    public void M() {}
+
+    /// first run
+
+    /// second run
+    public int F;
+    /** p doc */
+    public int P { get; }
+    //// four
+    /* block */
+    public void N() {} // trailing
+}
+namespace B {
+    /// s doc
+    public struct S {
+        /// sf doc
+        public int SF;
+    }
+    public enum E {
+        /// a doc
+        X,
+        // b
+        Y
+    }
+    public interface I {
+        /// im doc
+        void IM();
+    }
+}
+`
+	file := parseCSharp(t, src)
+	assert.Equal(t, []string{"line:kept line", "doc:<summary>A</summary>", "A", "namespace B"}, csharpOutline(file.Children))
+	assert.Equal(t, []string{
+		"doc:<summary>\nM doc\n</summary>", "M",
+		"doc:first run", "doc:second run", "F",
+		"doc:p doc", "P",
+		"line:four", "block:block", "N", "line:trailing",
+	}, csharpOutline(findCSharpClass(t, file, "A").Children))
+
+	ns := file.Children[3].(*ir.DistilledPackage)
+	assert.Equal(t, []string{"doc:s doc", "S", "E", "I"}, csharpOutline(ns.Children))
+	assert.Equal(t, []string{"doc:sf doc", "SF"}, csharpOutline(ns.Children[1].(*ir.DistilledStruct).Children))
+	assert.Equal(t, []string{"doc:a doc", "X", "line:b", "Y"}, csharpOutline(ns.Children[2].(*ir.DistilledEnum).Children))
+	assert.Equal(t, []string{"doc:im doc", "IM"}, csharpOutline(ns.Children[3].(*ir.DistilledInterface).Children))
+}
+
+// A doc comment above a statement that adds no declaration to its list (an
+// assembly attribute, a using directive in a namespace body) is dropped, so it
+// does not document the next declaration; other comments stay. A directive
+// stays in the body it is in, so the doc of a type with a #region in its body
+// still comes right before the type.
+func TestCSharp_DocOfStatementWithoutDeclarationIsDropped(t *testing.T) {
+	src := `/// asm doc
+[assembly: Foo]
+namespace N {
+    /// using doc
+    // line
+    using X;
+}
+/// c doc
+public class C {
+    /// region doc
+    #region R
+    /// m doc
+    public void M() {}
+    #endregion
+}
+`
+	file := parseCSharp(t, src)
+	assert.Equal(t, []string{"using X", "namespace N", "doc:c doc", "C"}, csharpOutline(file.Children))
+	assert.Equal(t, []string{"line:line"}, csharpOutline(file.Children[1].(*ir.DistilledPackage).Children))
+	assert.Equal(t, []string{"doc:region doc", "#region R", "doc:m doc", "M", "#endregion"},
+		csharpOutline(findCSharpClass(t, file, "C").Children))
+}

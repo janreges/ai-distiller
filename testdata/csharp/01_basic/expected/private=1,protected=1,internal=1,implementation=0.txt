@@ -2,20 +2,58 @@
 #nullable enable
 
 namespace Constructs.Basic01;
+/// <summary>
+/// Collection of elementary math helpers.
+/// </summary>
 internal static class MathHelpers {
+    /// <summary>Mathematical π (double-precision).</summary>
     public const double Pi = 3.1415926535897931;
+    /// <summary>
+    /// Calculates the circumference and area of a circle.
+    /// </summary>
+    /// <param name="radius">Radius >= 0.</param>
+    /// <returns>
+    /// Tuple (circumference, area).
+    /// </returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// Thrown when <paramref name="radius"/> is negative.
+    /// </exception>
     public static (double C, double A) Circle(double radius);
+    /// <summary>
+    /// Maps an array of radii to their areas using a local function.
+    /// </summary>
     public static double[] Areas(double[] radii);
+    /// <summary>
+    /// Private helper for advanced calculations
+    /// </summary>
     private static double _calculateAdvanced(double input);
+    /// <summary>
+    /// Internal helper for geometry calculations
+    /// </summary>
     internal static double GetVolume(double radius);
 }
+/// <summary>
+/// String utility demonstrating interpolated strings and null-coalescing operators.
+/// </summary>
 internal static class Greeting {
     private const string DefaultName = "world";
     public static string Hello(string? name);
+    /// <summary>
+    /// Private method for name validation
+    /// </summary>
     private static bool IsValidName(string? name);
+    /// <summary>
+    /// Internal method for formatting names
+    /// </summary>
     internal static string FormatName(string name);
 }
+/// <summary>
+/// Extension methods for string manipulation
+/// </summary>
 public static class StringExtensions {
+    /// <summary>
+    /// Converts string to title case
+    /// </summary>
     public static string ToTitleCase(string input);
 }
 </file>

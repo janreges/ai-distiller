@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/janreges/ai-distiller/internal/ir"
+	"github.com/janreges/ai-distiller/internal/language/commentutil"
 	sitter "github.com/smacker/go-tree-sitter"
 	tree_sitter_c_sharp "github.com/tree-sitter/tree-sitter-c-sharp/bindings/go"
 )
@@ -61,11 +62,7 @@ func (p *TreeSitterProcessor) processNode(node *sitter.Node, source []byte, file
 
 	switch nodeType {
 	case "compilation_unit":
-		// Root node - process all children
-		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
-			p.processNode(child, source, file, parent)
-		}
+		p.processStatements(node, source, file, parent)
 	case "namespace_declaration", "file_scoped_namespace_declaration":
 		p.processNamespaceDeclaration(node, source, file, parent)
 	case "using_directive", "global_using_directive":
@@ -102,7 +99,7 @@ func (p *TreeSitterProcessor) processNode(node *sitter.Node, source []byte, file
 			},
 			Content: string(source[node.StartByte():node.EndByte()]) + "\n",
 		}
-		file.Children = append(file.Children, rawContent)
+		p.addToParent(file, parent, rawContent)
 	default:
 		// Check if this could be a preprocessor directive
 		if strings.HasPrefix(node.Type(), "preproc_") || node.Type() == "ERROR" {
@@ -115,7 +112,11 @@ func (p *TreeSitterProcessor) processNode(node *sitter.Node, source []byte, file
 					},
 					Content: nodeText + "\n",
 				}
-				file.Children = append(file.Children, rawContent)
+				// A directive in a type body stays in that body. Added to the
+				// file, it would land between the type's doc comment and the
+				// type (which is added after its body), and the doc would no
+				// longer document the type.
+				p.addToParent(file, parent, rawContent)
 				return
 			}
 		}
@@ -1372,41 +1373,74 @@ func (p *TreeSitterProcessor) extractDelegateParameters(node *sitter.Node, sourc
 
 // processNamespaceBody processes the body of a namespace
 func (p *TreeSitterProcessor) processNamespaceBody(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		p.processNode(child, source, file, parent)
-	}
+	p.processStatements(node, source, file, parent)
 }
 
 // processClassBody processes the body of a class
 func (p *TreeSitterProcessor) processClassBody(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		p.processNode(child, source, file, parent)
-	}
+	p.processStatements(node, source, file, parent)
 }
 
 // processInterfaceBody processes the body of an interface
 func (p *TreeSitterProcessor) processInterfaceBody(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		p.processNode(child, source, file, parent)
-	}
+	p.processStatements(node, source, file, parent)
 }
 
 // processStructBody processes the body of a struct
 func (p *TreeSitterProcessor) processStructBody(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
+	p.processStatements(node, source, file, parent)
+}
+
+// processStatements processes the children of the compilation unit, a
+// namespace body or a type body. Comments are added where they are. The doc
+// comments right before a statement that adds nothing to this list (an
+// assembly attribute, a using directive in a namespace body, which goes to
+// the file, a declaration kind the parser does not handle) are dropped, so
+// they do not document the next declaration (commentutil.AppendStatement).
+func (p *TreeSitterProcessor) processStatements(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
+	list := p.childList(file, parent)
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
+		switch {
+		case child.Type() == "comment":
+			p.processComment(child, source, file, parent)
+			continue
+		case !child.IsNamed():
+			continue
+		}
+		before := len(*list)
 		p.processNode(child, source, file, parent)
+		added := append([]ir.DistilledNode(nil), (*list)[before:]...)
+		*list = commentutil.AppendStatement((*list)[:before], added)
 	}
+}
+
+// processComment adds a comment. "///" lines are XML doc comments, and a run
+// of them on consecutive lines is one doc whose text lines are joined with
+// "\n"; "/** */" is a doc comment too. XML tags stay in the text as written.
+func (p *TreeSitterProcessor) processComment(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
+	text, format := commentutil.StripCStyle(string(source[node.StartByte():node.EndByte()]))
+	comment := &ir.DistilledComment{
+		BaseNode: ir.BaseNode{
+			Location: p.nodeLocation(node),
+		},
+		Text:   text,
+		Format: format,
+	}
+	if commentutil.JoinLineDoc(*p.childList(file, parent), comment, node, source, commentutil.IsTripleSlashDoc) != nil {
+		return
+	}
+	p.addToParent(file, parent, comment)
 }
 
 // processEnumBody processes the body of an enum
 func (p *TreeSitterProcessor) processEnumBody(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
-		if child.Type() == "enum_member_declaration" {
+		switch child.Type() {
+		case "comment":
+			p.processComment(child, source, file, parent)
+		case "enum_member_declaration":
 			p.processEnumMember(child, source, file, parent)
 		}
 	}
@@ -1457,6 +1491,23 @@ func (p *TreeSitterProcessor) nodeLocation(node *sitter.Node) ir.Location {
 		EndLine:     int(node.EndPoint().Row) + 1,
 		EndColumn:   int(node.EndPoint().Column) + 1,
 	}
+}
+
+// childList returns the list addToParent adds the children of parent to.
+func (p *TreeSitterProcessor) childList(file *ir.DistilledFile, parent ir.DistilledNode) *[]ir.DistilledNode {
+	switch n := parent.(type) {
+	case *ir.DistilledClass:
+		return &n.Children
+	case *ir.DistilledInterface:
+		return &n.Children
+	case *ir.DistilledStruct:
+		return &n.Children
+	case *ir.DistilledEnum:
+		return &n.Children
+	case *ir.DistilledPackage:
+		return &n.Children
+	}
+	return &file.Children
 }
 
 // addToParent adds a node to its parent or to the file

@@ -1430,12 +1430,9 @@ func (p *TreeSitterProcessor) processComment(node *sitter.Node, source []byte, f
 		}
 	}
 
-	if list != nil && len(*list) > 0 && p.continuesLineDoc(node, source) {
-		if prev, ok := (*list)[len(*list)-1].(*ir.DistilledComment); ok && prev.IsDoc() {
-			prev.Text += "\n" + text
-			prev.Location.EndLine = comment.Location.EndLine
-			prev.Location.EndColumn = comment.Location.EndColumn
-			prev.Inner = prev.Inner || parent == nil && documentsFile(prev.Text)
+	if list != nil {
+		if doc := commentutil.JoinLineDoc(*list, comment, node, source, isLineDoc); doc != nil {
+			doc.Inner = doc.Inner || parent == nil && documentsFile(doc.Text)
 			return
 		}
 	}
@@ -1451,15 +1448,6 @@ func (p *TreeSitterProcessor) processComment(node *sitter.Node, source []byte, f
 func isLineDoc(raw string) bool {
 	_, format, trailing := commentutil.StripDoxygen(raw)
 	return format == ir.CommentDoc && !trailing && strings.HasPrefix(raw, "//")
-}
-
-// continuesLineDoc reports whether the comment node is a doc line directly
-// below another doc line.
-func (p *TreeSitterProcessor) continuesLineDoc(node *sitter.Node, source []byte) bool {
-	prev := node.PrevSibling()
-	return prev != nil && prev.Type() == "comment" &&
-		prev.EndPoint().Row+1 == node.StartPoint().Row &&
-		isLineDoc(p.nodeText(node, source)) && isLineDoc(p.nodeText(prev, source))
 }
 
 // documentsFile reports whether a doc's text has a Doxygen @file or \file

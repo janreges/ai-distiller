@@ -1,12 +1,17 @@
 <file path="source.rb">
 
+# Module containing utility functions and constants
 module UserUtils
     MIN_PASSWORD_LENGTH
     EMAIL_REGEX
+    # Public module method for email validation
     def self.valid_email?(email)
+    # Public module method for password validation
     def self.strong_password?(password)
+    # Private module method (not commonly used but valid Ruby)
     def self.internal_helper
 
+# Basic class demonstrating Ruby conventions
 class User
     def name
     def name=(value)
@@ -15,14 +20,21 @@ class User
     def id
     def created_at
     @@user_count
+    # Public class method to get user count
     def self.count
+    # Constructor method
     def initialize(name, email)
+    # Public instance method
     def to_s
+    # Public instance method with validation
     def valid?
 
+# Subclass demonstrating inheritance
 class AdminUser < User
     def permissions
     def initialize(name, email, permissions = ...)
+    # Override parent method
     def to_s
+    # Public method specific to AdminUser
     def has_permission?(permission)
 </file>

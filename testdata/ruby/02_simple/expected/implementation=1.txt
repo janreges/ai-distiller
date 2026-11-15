@@ -1,20 +1,25 @@
 <file path="source.rb">
 require 'time'
 
+# Module demonstrating mixins, include/extend, blocks and basic metaprogramming
 module Loggable
+    # Method added to instances when included
     def log(message, level:)
         timestamp = Time.now.iso8601
         puts "[#{timestamp}] #{level.upcase}: #{message}"
+    # Module method for class-level functionality
     def self.included(base)
         base.extend(ClassMethods)
         base.class_eval do
           attr_accessor :logger_enabled
         end
 
+    # Methods added to class when module is included
     module ClassMethods
         def enable_logging
             define_method(:log_enabled?) { @logger_enabled || false }
 
+# Module for JSON serialization mixin
 module Serializable
     def to_json(*args*)
         JSON.generate(serializable_hash, *args)
@@ -22,6 +27,7 @@ module Serializable
         data = JSON.parse(json_string)
         load_from_hash(data)
 
+# Enumerable module usage with blocks and yield
 module RoleManager
     VALID_ROLES
     def self.each_role
@@ -32,10 +38,12 @@ module RoleManager
         end
     def self.find_role(pattern)
         VALID_ROLES.find { |role| role.match?(pattern) }
+    # Demonstrate various block syntaxes
     def self.role_stats
         roles_with_lengths = VALID_ROLES.map { |role| [role, role.length] }
         roles_with_lengths.select { |_, length| length > 4 }
 
+# Class demonstrating mixins and blocks
 class Document
     include Loggable
     include Serializable
@@ -49,6 +57,7 @@ class Document
         @author = author
         @created_at = Time.now
         @logger_enabled = true
+    # Method using blocks with yield
     def process_content
         return enum_for(:process_content) unless block_given?
 
@@ -61,6 +70,7 @@ class Document
         end
 
         @content = lines.join("\n")
+    # Method with different block patterns
     def find_sections(pattern = ...)
         sections = []
         @content.each_line.with_index do |line, index|
@@ -72,6 +82,7 @@ class Document
         else
           sections
         end
+    # Basic method_missing metaprogramming
     def method_missing(method_name, *args*, &block)
         if method_name.to_s.start_with?('find_by_')
           attribute = method_name.to_s.sub('find_by_', '')
@@ -91,15 +102,18 @@ class Document
     def respond_to_missing?(method_name, include_private = ...)
         method_name.to_s.start_with?('find_by_') || super
 
+# Class with extend usage (adds module methods as class methods)
 class DocumentRepository
     def initialize
         @documents = []
     def add_document(document)
         @documents << document
         log_action("Added document: #{document.title}")
+    # Method using blocks for filtering
     def filter_documents(&block)
         return @documents.dup unless block_given?
         @documents.select(&block)
+    # Method with proc/lambda demonstration
     def sort_documents(sort_proc = ...)
         sort_logic = sort_proc || lambda { |a, b| a.created_at <=> b.created_at }
         @documents.sort(&sort_logic)

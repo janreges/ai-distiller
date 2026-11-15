@@ -1253,31 +1253,10 @@ func (p *TreeSitterProcessor) processComment(node *sitter.Node, source []byte, f
 		Text:   text,
 		Format: format,
 	}
-	if list := p.childList(file, parent); len(*list) > 0 && p.continuesLineDoc(node, source) {
-		if prev, ok := (*list)[len(*list)-1].(*ir.DistilledComment); ok && prev.IsDoc() {
-			prev.Text += "\n" + text
-			prev.Location.EndLine = comment.Location.EndLine
-			prev.Location.EndColumn = comment.Location.EndColumn
-			return
-		}
+	if commentutil.JoinLineDoc(*p.childList(file, parent), comment, node, source, commentutil.IsTripleSlashDoc) != nil {
+		return
 	}
 	p.addToParent(file, parent, comment)
-}
-
-// continuesLineDoc reports whether the comment node is a "///" doc line
-// directly below another one.
-func (p *TreeSitterProcessor) continuesLineDoc(node *sitter.Node, source []byte) bool {
-	prev := node.PrevSibling()
-	return prev != nil && prev.Type() == "line_comment" &&
-		prev.EndPoint().Row+1 == node.StartPoint().Row &&
-		isLineDoc(string(source[node.StartByte():node.EndByte()])) &&
-		isLineDoc(string(source[prev.StartByte():prev.EndByte()]))
-}
-
-// isLineDoc reports whether a raw comment is a "///" doc line.
-func isLineDoc(raw string) bool {
-	_, format := commentutil.StripCStyle(raw)
-	return format == ir.CommentDoc && strings.HasPrefix(raw, "///")
 }
 
 // parseJavaDoc parses a JavaDoc comment and extracts structured information

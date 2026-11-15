@@ -319,10 +319,3 @@ func (f *PythonFormatter) formatClass(w io.Writer, class *ir.DistilledClass, ind
 
 	return nil
 }
-
-// isShebang reports whether c is a script's "#!" interpreter line: a line
-// comment on the first line of the file whose text (after the "#") starts
-// with "!". It prints as written, "#!/usr/bin/env python", not as "# !...".
-func isShebang(c *ir.DistilledComment) bool {
-	return c.Format == ir.CommentLine && c.Location.StartLine == 1 && strings.HasPrefix(c.Text, "!")
-}

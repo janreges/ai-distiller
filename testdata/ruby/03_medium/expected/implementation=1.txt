@@ -1,6 +1,8 @@
 <file path="source.rb">
 
+# Advanced metaprogramming with define_method, class_eval, and hooks
 module MetaProgrammingUtils
+    # Hook called when module is included
     def self.included(base)
         base.extend(ClassMethods)
         base.class_eval do
@@ -12,6 +14,7 @@ module MetaProgrammingUtils
         end
 
     module ClassMethods
+        # Dynamically define getter methods
         def add_dynamic_accessor(name, default_value = ...)
             @dynamic_methods ||= []
             @dynamic_methods << name
@@ -30,6 +33,7 @@ module MetaProgrammingUtils
             define_method("#{name}?") do
               !!instance_variable_get("@#{name}")
             end
+        # Create methods that delegate to another object
         def delegate_to(target, *methods*)
             methods.each do |method|
               define_method(method) do |*args, &block|
@@ -37,9 +41,11 @@ module MetaProgrammingUtils
                 target_obj.send(method, *args, &block)
               end
             end
+        # Class method to track dynamic methods
         def dynamic_methods
             @dynamic_methods || []
 
+# Module demonstrating eigenclass manipulation
 module EigenclassDemo
     def self.extended(base)
         base.instance_eval do
@@ -48,6 +54,7 @@ module EigenclassDemo
             super
           end
         end
+    # This becomes a class method when extended
     def custom_new(*args*, &block)
         instance = allocate
         instance.send(:initialize, *args, &block) if instance.respond_to?(:initialize, true)
@@ -57,6 +64,7 @@ module EigenclassDemo
 
         instance
 
+# Advanced module with hooks and callbacks
 module Trackable
     def self.included(base)
         base.extend(ClassMethods)
@@ -65,6 +73,7 @@ module Trackable
         end
 
     module ClassMethods
+        # Method to track calls to specific methods
         def track_method(method_name)
             @tracked_methods ||= []
             @tracked_methods << method_name
@@ -78,6 +87,7 @@ module Trackable
         def tracked_methods
             @tracked_methods || []
 
+# Class demonstrating advanced metaprogramming
 class ConfigurableModel
     include MetaProgrammingUtils
     include Trackable
@@ -90,6 +100,7 @@ class ConfigurableModel
           self.class.add_dynamic_accessor(key, value)
           instance_variable_set("@#{key}", value)
         end
+    # Method using class_eval for dynamic method definition
     def self.add_validation(field, &validation_block)
         class_eval do
           define_method("validate_#{field}") do
@@ -99,6 +110,7 @@ class ConfigurableModel
 
           alias_method "#{field}_valid?", "validate_#{field}"
         end
+    # Method demonstrating eval usage (carefully controlled)
     def evaluate_expression(expression, context = ...)
         binding_context = binding
         context.each do |key, value|
@@ -111,13 +123,17 @@ class ConfigurableModel
         else
           raise ArgumentError, "Invalid expression"
         end
+    # Method using define_singleton_method
     def add_instance_method(method_name, &block)
         define_singleton_method(method_name, &block)
+    # Hook method called when methods are added
     def self.method_added(method_name)
         puts "Method '#{method_name}' added to class #{self}"
         super
 
+# Class demonstrating const_missing hook
 class DynamicConstants
+    # Hook called when a constant is missing
     def self.const_missing(const_name)
         if const_name.to_s.start_with?('DYNAMIC_')
           # Dynamically create constants
@@ -126,11 +142,13 @@ class DynamicConstants
         else
           super
         end
+    # Class method that uses const_get and const_set
     def self.create_constant(name, value)
         const_set(name.to_s.upcase, value)
     def self.list_constants
         constants.map { |const| [const, const_get(const)] }.to_h
 
+# Example usage class
 class SmartDocument < ConfigurableModel
     def initialize(config = ...)
         super(config)

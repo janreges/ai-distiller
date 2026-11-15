@@ -1,28 +1,50 @@
 <file path="source.rb">
+# frozen_string_literal: true
+# A collection of simple utilities for user management
+# Demonstrates basic Ruby features: classes, modules, constants, visibility
 
+# Module containing utility functions and constants
 module UserUtils
+    # Public constant for minimum password length
     MIN_PASSWORD_LENGTH
+    # Public constant with email regex
     EMAIL_REGEX
+    # Public module method for email validation
     def self.valid_email?(email)
+    # Public module method for password validation
     def self.strong_password?(password)
+    # Private module method (not commonly used but valid Ruby)
     def self.internal_helper
 
+# Basic class demonstrating Ruby conventions
 class User
+    # Use attr_accessor for public read/write access
     def name
     def name=(value)
     def email
     def email=(value)
+    # Use attr_reader for public read-only access
     def id
     def created_at
+    # Class variable (shared across all instances)
     @@user_count
+    # Public class method to get user count
     def self.count
+    # Constructor method
     def initialize(name, email)
+    # Public instance method
     def to_s
+    # Public instance method with validation
     def valid?
+    # Protected method (can be called by other instances of same class)
+    # Private methods (only callable from within the same instance)
 
+# Subclass demonstrating inheritance
 class AdminUser < User
     def permissions
     def initialize(name, email, permissions = ...)
+    # Override parent method
     def to_s
+    # Public method specific to AdminUser
     def has_permission?(permission)
 </file>

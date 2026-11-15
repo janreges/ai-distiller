@@ -1,10 +1,12 @@
 <file path="source.rb">
 
+# Complex DSL creation, method chaining, advanced metaprogramming
 module DSLBuilder
     def self.included(base)
         base.extend(ClassMethods)
 
     module ClassMethods
+        # Create a DSL method that accepts a block
         def dsl_method(name, &default_block)
             define_method(name) do |*args, &block|
               # Create a new DSL context
@@ -19,6 +21,7 @@ module DSLBuilder
               # Return self for chaining
               self
             end
+        # Create chainable setter methods
         def chainable_attr(*names*)
             names.each do |name|
               define_method(name) do |value = nil|
@@ -31,9 +34,11 @@ module DSLBuilder
               end
             end
 
+    # Internal DSL context class
     class DSLContext
         def initialize(target)
             @target = target
+        # Forward missing methods to target
         def method_missing(method_name, *args*, &block)
             if @target.respond_to?(method_name, true)
               @target.send(method_name, *args, &block)
@@ -43,11 +48,13 @@ module DSLBuilder
         def respond_to_missing?(method_name, include_private = ...)
             @target.respond_to?(method_name, include_private) || super
 
+# Module for creating fluent interfaces
 module FluentInterface
     def self.included(base)
         base.extend(ClassMethods)
 
     module ClassMethods
+        # Create a fluent builder pattern
         def fluent_builder(*method_names*)
             method_names.each do |method_name|
               define_method(method_name) do |value = nil, &block|
@@ -69,7 +76,9 @@ module FluentInterface
               end
             end
 
+# Advanced reflection and dynamic class creation
 module ReflectionUtils
+    # Dynamically create classes at runtime
     def self.create_class(class_name, parent_class = ..., &block)
         new_class = Class.new(parent_class) do
           define_method(:initialize) do |*args|
@@ -97,6 +106,7 @@ module ReflectionUtils
         # Set the class name in the constant table
         Object.const_set(class_name.to_sym, new_class) unless Object.const_defined?(class_name.to_sym)
         new_class
+    # Analyze class structure
     def self.analyze_class(klass)
         {
           name: klass.name,
@@ -108,12 +118,14 @@ module ReflectionUtils
           constants: klass.constants
         }
 
+# Complex DSL for building configurations
 class ConfigurationBuilder
     include DSLBuilder
     include FluentInterface
     def initialize
         @settings = {}
         @nested_configs = {}
+    # Method chaining for array operations
     def add_middleware(middleware_class, *options*)
         @middleware ||= []
         @middleware << { class: middleware_class, options: options }
@@ -130,6 +142,7 @@ class ConfigurationBuilder
         end
 
         self
+    # Dynamic method creation based on patterns
     def method_missing(method_name, *args*, &block)
         method_str = method_name.to_s
 
@@ -157,6 +170,7 @@ class ConfigurationBuilder
     def respond_to_missing?(method_name, include_private = ...)
         method_str = method_name.to_s
         method_str.match?(/^(with_|enable_|.+_callback$)/) || super
+    # Convert configuration to hash
     def to_hash
         result = {
           settings: @settings,
@@ -175,6 +189,7 @@ class ConfigurationBuilder
 
         result.compact
 
+# Plugin configuration DSL
 class PluginConfiguration
     def initialize
         @options = {}
@@ -196,6 +211,7 @@ class PluginConfiguration
     def to_hash
         @options
 
+# Factory for creating dynamic classes with DSL
 class DynamicClassFactory
     def self.create_model(name, &definition)
         model_class = ReflectionUtils.create_class(name) do
