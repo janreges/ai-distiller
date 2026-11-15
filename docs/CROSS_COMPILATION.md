@@ -104,9 +104,6 @@ Once all toolchains are installed:
 ```bash
 # Build releases for all platforms
 ./scripts/build-releases.sh
-
-# Or use make
-make cross-compile
 ```
 
 ## Troubleshooting

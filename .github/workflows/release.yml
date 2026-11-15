@@ -308,6 +308,8 @@ jobs:
           else
             echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           fi
+          tag="$(grep '^tag=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-)"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push Docker image
         if: env.DOCKER_USERNAME != ''
@@ -320,7 +322,7 @@ jobs:
             ${{ secrets.DOCKER_USERNAME }}/ai-distiller:${{ steps.docker_version.outputs.tag }}
             ${{ secrets.DOCKER_USERNAME }}/ai-distiller:latest
           build-args: |
-            VERSION=${{ steps.docker_version.outputs.tag }}
+            VERSION=${{ steps.docker_version.outputs.version }}
             COMMIT=${{ github.sha }}
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}

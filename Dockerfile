@@ -1,39 +1,32 @@
 # Multi-stage build for optimal image size
-FROM golang:1.21-alpine AS builder
+FROM golang:1.25-bookworm AS builder
 
 # Install build dependencies
-RUN apk add --no-cache git ca-certificates tzdata
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates tzdata build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /build
 
-# Copy go mod files
-COPY go.mod go.sum ./
-
-# Download dependencies
-RUN go mod download
-
-# Copy source code
+# Copy the whole tree: go.mod has local replace directives for the grammar
+# modules under internal/parser/grammars, so go.mod alone cannot resolve.
 COPY . .
 
 # Build arguments for version info
 ARG VERSION=dev
-ARG BUILD_TIME
-ARG COMMIT
+ARG COMMIT=unknown
 
-# Build the binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-    -ldflags="-s -w -X 'main.version=${VERSION}' -X 'main.buildTime=${BUILD_TIME}' -X 'main.commit=${COMMIT}'" \
+# Build the binary (cgo is mandatory: the tree-sitter parsers are C libraries)
+RUN CGO_ENABLED=1 CGO_CFLAGS=-w go build \
+    -ldflags="-s -w -X github.com/janreges/ai-distiller/internal/version.Version=${VERSION} -X github.com/janreges/ai-distiller/internal/version.Commit=${COMMIT}" \
     -o aid ./cmd/aid/
 
 # Production image
-FROM scratch
+FROM debian:bookworm-slim
 
-# Copy certificates for HTTPS support
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-
-# Copy timezone data
-COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+# CA certificates for HTTPS support
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary
 COPY --from=builder /build/aid /usr/local/bin/aid

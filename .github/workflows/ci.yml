@@ -62,3 +62,5 @@ jobs:
         run: sh scripts/version-drift.sh
       - name: Installer version resolution
         run: sh scripts/tests/install_sh_test.sh
+      - name: cgo stays enabled
+        run: sh scripts/check-cgo.sh

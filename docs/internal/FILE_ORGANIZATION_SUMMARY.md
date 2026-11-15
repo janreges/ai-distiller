@@ -50,7 +50,7 @@ Removed:
 - `tmp/` - Temporary directory with test files
 
 ### 7. Moved Scripts
-- `build.sh` → `scripts/build-variants.sh`
+- `build.sh` (since removed)
 
 ## Final Structure
 

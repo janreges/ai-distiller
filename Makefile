@@ -1,4 +1,4 @@
-.PHONY: all build test bench lint clean install cross-compile test-parser test-performance aid
+.PHONY: all build test bench lint clean install test-parser test-performance aid
 
 # Variables
 BINARY_NAME = aid
@@ -6,7 +6,10 @@ BUILD_DIR = build
 INSTALL_DIR = /usr/local/bin
 
 # Version comes from the latest git tag (single source of truth)
-VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo dev)
+VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
+ifeq ($(VERSION),)
+VERSION := dev
+endif
 # Get git metadata
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 BUILD_DATE := $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
@@ -26,9 +29,6 @@ GOMOD = $(GOCMD) mod
 GOFMT = gofmt
 GOLINT = golangci-lint
 
-# Platforms for cross-compilation
-PLATFORMS = linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
-
 all: build
 
 # Build for current platform (with CGO - full language support and embedded templates)
@@ -36,13 +36,6 @@ build: clean
 	@echo "==> Building $(BINARY_NAME) $(VERSION) with full language support and embedded templates"
 	@mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=1 CGO_CFLAGS="-w" $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/aid
-	@echo "✅ Successfully built $(BINARY_NAME) at: $(BUILD_DIR)/$(BINARY_NAME) ($$(du -h $(BUILD_DIR)/$(BINARY_NAME) | cut -f1))"
-
-# Build without CGO (embedded templates only, Go language support)
-build-no-cgo: clean
-	@echo "==> Building $(BINARY_NAME) $(VERSION) with embedded templates (CGO disabled)"
-	@mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=0 $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/aid
 	@echo "✅ Successfully built $(BINARY_NAME) at: $(BUILD_DIR)/$(BINARY_NAME) ($$(du -h $(BUILD_DIR)/$(BINARY_NAME) | cut -f1))"
 
 # Build with verbose output (shows all warnings)
@@ -162,32 +155,15 @@ test-basic:
 	@export CGO_CFLAGS="-w"; \
 	$(GOTEST) -v -race -coverprofile=coverage.txt -covermode=atomic $$(go list ./... | grep -v '/tools/' | grep -v '/test_project/')
 
-# Run only passing tests (exclude known failing packages)
-test-passing:
-	@echo "==> Running tests (only passing packages)"
-	@export PATH="$$PATH:$$(go env GOPATH)/bin"; \
-	export CGO_CFLAGS="-w"; \
-	if command -v gotestsum >/dev/null 2>&1; then \
-		gotestsum --format testname --junitfile test-results.xml -- -race -coverprofile=coverage.txt -covermode=atomic $$(go list ./... | grep -v '/tools/' | grep -v '/test_project/' | grep -v '/cli' | grep -v '/language/golang'); \
-	else \
-		echo "📝 For prettier test output, install gotestsum: go install gotest.tools/gotestsum@latest"; \
-		$(GOTEST) -v -race -coverprofile=coverage.txt -covermode=atomic $$(go list ./... | grep -v '/tools/' | grep -v '/test_project/' | grep -v '/cli' | grep -v '/language/golang'); \
-	fi
-
 # Run integration tests with new test runner
 test-integration:
 	@echo "==> Running integration tests"
-	$(GOTEST) -v ./internal/testrunner
+	$(GOTEST) -v -count=1 ./internal/testrunner
 
 # Update expected test files
 test-update:
 	@echo "==> Updating expected test files"
-	UPDATE_EXPECTED=true $(GOTEST) -v ./internal/testrunner
-
-# Regenerate all expected test files
-test-regenerate:
-	@echo "==> Regenerating all expected test files"
-	@./scripts/regenerate-expected.sh
+	UPDATE_EXPECTED=true $(GOTEST) -v -count=1 ./internal/testrunner
 
 # Generate expected test data for all languages (includes building aid)
 generate-expected-testdata: build
@@ -198,12 +174,12 @@ generate-expected-testdata: build
 # Audit test structure for consistency issues
 test-audit:
 	@echo "==> Auditing test structure"
-	@go run -ldflags "-X main.mode=audit" ./cmd/test-audit
+	@go run ./cmd/test-audit
 
 # Run benchmarks
 bench:
 	@echo "==> Running benchmarks"
-	$(GOTEST) -bench=. -benchmem ./...
+	$(GOTEST) -run '^$$' -bench=. -benchmem ./internal/...
 
 # Run linter
 lint:
@@ -213,7 +189,7 @@ lint:
 # Format code
 fmt:
 	@echo "==> Formatting code"
-	$(GOFMT) -s -w .
+	$(GOFMT) -s -w cmd internal
 
 # Install binary
 install: build
@@ -230,20 +206,6 @@ deps:
 	@echo "==> Downloading dependencies"
 	$(GOMOD) download
 	$(GOMOD) tidy
-
-# Cross-compile for all platforms (requires proper toolchains)
-cross-compile: $(PLATFORMS)
-
-$(PLATFORMS):
-	@echo "==> Building for $@"
-	@mkdir -p $(BUILD_DIR)
-	@CGO_ENABLED=1 GOOS=$(word 1,$(subst /, ,$@)) GOARCH=$(word 2,$(subst /, ,$@)) \
-		$(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-$(word 1,$(subst /, ,$@))-$(word 2,$(subst /, ,$@))$(if $(findstring windows,$(word 1,$(subst /, ,$@))),.exe) ./cmd/aid
-
-# Build WASM modules
-build-wasm:
-	@echo "==> Building WASM modules"
-	@./scripts/build-wasm.sh
 
 # Development setup
 setup:
@@ -321,75 +283,14 @@ perf-optimize:
 	@echo "==> Finding optimal performance configuration"
 	@go run ./cmd/performance-test -mode=config
 
-# NPM package version (read from npm/package.json)
-NPM_VERSION := $(shell node -p "require('./npm/package.json').version" 2>/dev/null || echo "0.0.0")
-
-# NPM release preparation
-npm-prepare:
-	@echo "==> Preparing NPM package (version $(NPM_VERSION))"
-	@mkdir -p npm
-	@cp LICENSE npm/ 2>/dev/null || echo "No LICENSE file found"
-	@echo "==> NPM package prepared in ./npm"
-
-# Build release binaries for NPM
-npm-build-binaries:
-	@echo "==> Building release binaries for all platforms"
-	@mkdir -p dist
-	# Linux AMD64
-	GOOS=linux GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o dist/aid-linux-amd64 ./cmd/aid
-	cd dist && tar -czf aid-linux-amd64.tar.gz aid-linux-amd64
-	# Linux ARM64
-	GOOS=linux GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o dist/aid-linux-arm64 ./cmd/aid
-	cd dist && tar -czf aid-linux-arm64.tar.gz aid-linux-arm64
-	# macOS AMD64
-	GOOS=darwin GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o dist/aid-darwin-amd64 ./cmd/aid
-	cd dist && tar -czf aid-darwin-amd64.tar.gz aid-darwin-amd64
-	# macOS ARM64 (M1/M2)
-	GOOS=darwin GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o dist/aid-darwin-arm64 ./cmd/aid
-	cd dist && tar -czf aid-darwin-arm64.tar.gz aid-darwin-arm64
-	# Windows AMD64
-	GOOS=windows GOARCH=amd64 $(GOBUILD) $(LDFLAGS) -o dist/aid-windows-amd64.exe ./cmd/aid
-	cd dist && tar -czf aid-windows-amd64.tar.gz aid-windows-amd64.exe
-	# Windows ARM64
-	GOOS=windows GOARCH=arm64 $(GOBUILD) $(LDFLAGS) -o dist/aid-windows-arm64.exe ./cmd/aid
-	cd dist && tar -czf aid-windows-arm64.tar.gz aid-windows-arm64.exe
-	@echo "==> Release binaries built in ./dist"
-
-# Test NPM package locally
-npm-test-local:
-	@echo "==> Testing NPM package locally"
-	cd npm && npm pack
-	@echo "==> Install the package locally with: npm install -g ./npm/*.tgz"
-
-# Publish to NPM (requires npm login)
-npm-publish:
-	@echo "==> Publishing to NPM"
-	@echo "==> Checking NPM login status..."
-	@npm whoami || (echo "Error: Not logged in to NPM. Run 'npm login' first." && exit 1)
-	cd npm && npm publish --access public
-	@echo "==> Published @janreges/ai-distiller-mcp@$(NPM_VERSION) to NPM"
-
-# Update NPM version
-npm-version:
-	@echo "==> Current NPM version: $(NPM_VERSION)"
-	@echo "==> To update version, run: cd npm && npm version <patch|minor|major>"
-
-# Complete NPM release process
-npm-release: npm-prepare npm-build-binaries
-	@echo "==> Creating GitHub release v$(NPM_VERSION)"
-	@echo "==> Upload binaries from ./dist to GitHub release"
-	@echo "==> Then run 'make npm-publish' to publish to NPM"
-
 # Show help
 help:
 	@echo "Available targets:"
 	@echo "  build           - Build the application (CGO enabled, full language support)"
-	@echo "  build-no-cgo   - Build with embedded templates only (CGO disabled)"
 	@echo "  build-verbose   - Build with verbose output (shows CGO warnings)"
 	@echo ""
 	@echo "✨ Test commands (with gotestsum - pretty output):"
 	@echo "  test            - Run tests with enhanced output (default)"
-	@echo "  test-passing    - Run only passing tests (exclude known failing packages)"
 	@echo "  test-pretty     - Run tests with pretty package output ✓✖"
 	@echo "  test-dots       - Run tests with dots progress indicator ···"
 	@echo "  test-short      - Run tests with short verbose output"
@@ -405,8 +306,6 @@ help:
 	@echo "  install         - Install binary to system"
 	@echo "  clean           - Remove build artifacts"
 	@echo "  deps            - Download dependencies"
-	@echo "  cross-compile   - Build for all platforms"
-	@echo "  build-wasm      - Build WASM modules"
 	@echo "  setup           - Set up development environment"
 	@echo "  dev-init        - Initialize dev environment with all dependencies"
 	@echo "  run ARGS=...    - Run the application with arguments"
@@ -417,35 +316,12 @@ help:
 	@echo "  generate-expected-testdata - Build aid and regenerate all expected test files"
 	@echo "  perf-compare    - Compare performance modes"
 	@echo "  perf-optimize   - Find optimal configuration"
-	@echo ""
-	@echo "NPM Distribution targets:"
-	@echo "  npm-prepare     - Prepare NPM package structure"
-	@echo "  npm-build-binaries - Build binaries for all platforms"
-	@echo "  npm-test-local  - Create local NPM package for testing"
-	@echo "  npm-publish     - Publish package to NPM registry"
-	@echo "  npm-version     - Show current NPM package version"
-	@echo "  npm-release     - Full release process (prepare + build)"
-	@echo ""
-	@echo "Version Management targets:"
-	@echo "  version         - Show current version"
-	@echo "  sync-versions   - Sync version across all files"
 
 # Version management
 version:
 	@echo "AI Distiller version: $(VERSION)"
 	@echo "Git commit: $(GIT_COMMIT)"
 	@echo "Build date: $(BUILD_DATE)"
-
-# Sync version across all files
-sync-versions:
-	@echo "Syncing version $(VERSION) across all files..."
-	@# Update MCP package.json
-	@cd mcp-npm && npm version --no-git-tag-version --allow-same-version $(VERSION) > /dev/null
-	@echo "✓ Updated mcp-npm/package.json"
-	@# Update MCP server version constant
-	@sed -i 's/serverVersion = "[^"]*"/serverVersion = "$(VERSION)"/' mcp-npm/cmd/aid-mcp/main.go
-	@echo "✓ Updated MCP server version"
-	@echo "Version sync complete!"
 
 # Default target
 .DEFAULT_GOAL := build
