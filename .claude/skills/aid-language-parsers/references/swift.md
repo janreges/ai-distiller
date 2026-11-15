@@ -64,7 +64,8 @@ Protocol requirements are `public`. Swift produces no `protected`.
 
 ## Unused files
 
-- `tree_sitter_processor.go`: its only caller in `processor.go` is commented
+- `tree_sitter_processor.go` (kept on purpose for the tree-sitter migration,
+  roadmap decision D3, and marked with a comment at the top): its only caller in `processor.go` is commented
   out. It is still compiled, and with it the vendored grammar in
   `internal/parser/grammars/tree-sitter-swift`, which nothing else imports.
 

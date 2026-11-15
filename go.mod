@@ -11,7 +11,6 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.9
 	github.com/stretchr/testify v1.11.1
-	github.com/tetratelabs/wazero v1.11.0
 	github.com/tree-sitter/tree-sitter-c-sharp v0.23.1
 	github.com/tree-sitter/tree-sitter-cpp v0.23.4
 	github.com/tree-sitter/tree-sitter-java v0.23.5
@@ -26,8 +25,6 @@ require (
 replace tree-sitter-swift => ./internal/parser/grammars/tree-sitter-swift
 
 replace tree-sitter-typescript => ./internal/parser/grammars/tree-sitter-typescript
-
-// replace tree-sitter-rust => ./internal/parser/grammars/tree-sitter-rust
 
 require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect

@@ -174,58 +174,6 @@ func (p *ASTParser) ProcessSource(ctx context.Context, source []byte, filename s
 	return distilledFile, nil
 }
 
-// getReceiverTypeName extracts the receiver type name from a method
-func (p *ASTParser) getReceiverTypeName(fn *ir.DistilledFunction) string {
-	// Check if function has AbstractMethod modifier (indicating it has a receiver)
-	hasReceiverModifier := false
-	for _, mod := range fn.Modifiers {
-		if mod == ir.ModifierAbstract {
-			hasReceiverModifier = true
-			break
-		}
-	}
-
-	if hasReceiverModifier && len(fn.Parameters) > 0 {
-		receiverType := fn.Parameters[0].Type.Name
-		// Strip pointer if present (*User -> User, *Cache[K,V] -> Cache[K,V])
-		if strings.HasPrefix(receiverType, "*") {
-			receiverType = receiverType[1:]
-		}
-
-		// Extract base type name for generic types (Cache[K,V] -> Cache)
-		if bracketIndex := strings.Index(receiverType, "["); bracketIndex != -1 {
-			return receiverType[:bracketIndex]
-		}
-
-		return receiverType
-	}
-	return ""
-}
-
-// cleanMethodParameters removes the receiver parameter from the parameter list
-func (p *ASTParser) cleanMethodParameters(fn *ir.DistilledFunction) {
-	// Remove the receiver parameter (first parameter for methods)
-	hasReceiverModifier := false
-	for _, mod := range fn.Modifiers {
-		if mod == ir.ModifierAbstract {
-			hasReceiverModifier = true
-			break
-		}
-	}
-
-	if hasReceiverModifier && len(fn.Parameters) > 0 {
-		fn.Parameters = fn.Parameters[1:]
-		// Also remove the Abstract modifier since it was just used to mark methods
-		newModifiers := []ir.Modifier{}
-		for _, mod := range fn.Modifiers {
-			if mod != ir.ModifierAbstract {
-				newModifiers = append(newModifiers, mod)
-			}
-		}
-		fn.Modifiers = newModifiers
-	}
-}
-
 // analyzeInterfaceSatisfaction determines which structs implement which interfaces
 func (p *ASTParser) analyzeInterfaceSatisfaction(typeMap map[string]ir.DistilledNode) {
 	// Collect all interfaces and their method sets
@@ -492,23 +440,6 @@ func (p *ASTParser) processImport(spec *ast.ImportSpec) *ir.DistilledImport {
 	}
 
 	return imp
-}
-
-// processDecl processes a declaration
-func (p *ASTParser) processDecl(decl ast.Decl) []ir.DistilledNode {
-	var nodes []ir.DistilledNode
-
-	switch d := decl.(type) {
-	case *ast.FuncDecl:
-		fn := p.processFunction(d)
-		if fn != nil {
-			nodes = append(nodes, fn)
-		}
-	case *ast.GenDecl:
-		nodes = append(nodes, p.processGenDecl(d)...)
-	}
-
-	return nodes
 }
 
 // processGenDecl processes a general declaration (type, const, var)

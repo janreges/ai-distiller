@@ -58,11 +58,8 @@
 
 ## Unused files
 
-None.
-
-Also off the live path: the fallback in `processor.go` that returns an empty
-file with the warning `Line-based parser not yet implemented for JavaScript`; it
-runs only when the tree-sitter parse returns an error (a cancelled context).
+None. When the tree-sitter parse fails, the processor returns the error; there
+is no fallback that returns an empty file.
 
 ## Known gaps
 

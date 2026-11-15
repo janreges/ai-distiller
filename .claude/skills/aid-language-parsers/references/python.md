@@ -64,16 +64,10 @@ Python produces no `protected` or `internal`, so `--protected=1` and
 
 ## Unused files
 
-- `ast_comparator.go`: nothing calls `NewASTComparator`.
-- `error_recovery.go`: used only by the line parser in `processor.go`
-  (`internal/language/python/processor.go#Processor.parseActualFile`). That
-  parser runs only when the tree-sitter parse returns an error, which happens
-  only when the context is cancelled.
-
-Also off the live path, inside `processor.go`: the WASM branch (it needs
-`InitializeWASM`, which only a test calls), `processMock`, `mockParsePython`,
-the `createMock*` helpers, and `Processor.ProcessFile` (the central processor
-calls `ProcessWithOptions`).
+None. When the tree-sitter parse fails, `Processor.ProcessFile` and
+`Processor.ProcessWithOptions` return the error; there is no line parser
+fallback. `Processor.ProcessFile` itself is off the live path (the central
+processor calls `ProcessWithOptions`).
 
 ## Known gaps
 

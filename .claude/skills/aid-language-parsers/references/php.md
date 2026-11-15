@@ -66,12 +66,10 @@
 
 ## Unused files
 
-None.
+None. When the tree-sitter parse fails, the processor returns the error; there
+is no fallback that returns an empty file.
 
-Also off the live path: `Processor.parseLineBasedPHP` in `processor.go`, a
-fallback that returns an empty file with the warning `PHP parser fallback:
-tree-sitter parser not available` and runs only when the tree-sitter parse
-returns an error; `Processor.ProcessFile` in `processor.go`; and
+Also off the live path: `Processor.ProcessFile` in `processor.go` and
 `TreeSitterProcessor.resolveTypeName` in `tree_sitter_processor.go`.
 
 ## Known gaps

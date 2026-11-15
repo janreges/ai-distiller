@@ -30,7 +30,7 @@ they read `testdata/`, the conformance fixtures or a built binary.
 | `internal/language/java` | `processor_comprehensive_test.go` | `TestJavaConstructs` does the same for `testdata/java/01_basic`; parser features; Javadoc and comment placement, `///` docs, initializers |
 | `internal/language/javascript` | `processor_test.go` | `_` and `#` members are private, generators, imports, arrow bodies, comments, JSDoc tags, file doc |
 | `internal/language/kotlin` | `processor_test.go` | basic, advanced and complex features; visibility; function bodies; comments around headers, in interfaces and objects, not taken from bodies |
-| `internal/language/php` | `processor_test.go`, `processor_comprehensive_test.go` | classes, PHP 8 features, namespaces and `use`, traits, interfaces, line-based fallback; five constructs from basic to attributes |
+| `internal/language/php` | `processor_test.go`, `processor_comprehensive_test.go` | classes, PHP 8 features, namespaces and `use`, traits, interfaces; five constructs from basic to attributes |
 | `internal/language/python` | `processor_test.go` | processing options, annotated class attributes, docstrings as doc comments and their placement, decorators, comments and docstrings leaving with removed members |
 | | `processor_fuzz_test.go` | `FuzzProcess`, seeded from `testdata/python/*/source.py`; without `-fuzz` it runs the seeds only |
 | | `processor_bench_test.go` | benchmarks; they run only with `-bench` |
@@ -45,7 +45,7 @@ they read `testdata/`, the conformance fixtures or a built binary.
 |---|---|---|
 | `internal/stripper` | `stripper_test.go` | removal by visibility and of bodies; `--expand` on functions, classes, structs and qualified names; `--public=0`; a doc comment leaves with the declaration it documents and other comments stay; no node field is lost |
 | `internal/formatter` | `<lang>_formatter_test.go` (all languages but Swift) | the text rendering of bodies, comments, shebangs, enums, namespaces and visibility markers |
-| | `body_test.go`, `comment_test.go`, `text_visibility_test.go` | shared body dedent and rendering, C-style comment writing, visibility prefixes |
+| | `body_test.go`, `comment_test.go`, `visibility_test.go` | shared body dedent and rendering, C-style comment writing, visibility prefixes |
 | | `markdown_test.go`, `jsonl_test.go`, `json_structured_test.go`, `xml_test.go`, `registry_test.go` | each non-text format on hand-built IR; the format registry |
 | `internal/cli` | `root_test.go` | output file names; flag parsing and its mapping to processing options (include and exclude lists, fields and methods, `--public=0`); the `-v` count |
 | | `flags_doc_test.go` | every flag appears in the extended help and in `docs/user/COMMAND-LINE-OPTIONS.md`; help texts name only real flags; the doc lists every AI action; `--include-only` recipes keep members; redirect examples carry `--stdout` |
@@ -58,7 +58,6 @@ they read `testdata/`, the conformance fixtures or a built binary.
 | `internal/ignore` | `ignore_test.go`, `bin_obj_test.go` | `.aidignore` pattern matching, nested ignore files, comments and blank lines, `bin`/`obj` patterns with and without a slash |
 | `internal/importfilter` | `filter_test.go`, `comprehensive_test.go` | the unused-import filter on Python, JavaScript and Go cases and on the samples in `test-data/import-filtering/`: a removed import no longer appears |
 | `internal/ir` | `types_test.go`, `visitor_test.go`, `comment_test.go` | node types and their JSON, visitors and walker; parsers use the comment-format constants (a scan of `internal/language`) |
-| `internal/parser` | `wasm_runtime_test.go`, `converter_test.go` | the WASM runtime and the tree converter's helpers |
 | `internal/project` | `root_test.go` | project root detection and the `.aid/` directory |
 | `internal/semantic` | `typescript_analyzer_test.go` | the TypeScript analyzer on inline source |
 | `internal/summary` | `*_formatter_test.go`, `printed_test.go` | the summary styles; printed output is not offered for loading |

@@ -62,10 +62,6 @@
 
 None.
 
-Also off the live path, inside `ast_parser.go`: `ASTParser.getReceiverTypeName`,
-`ASTParser.cleanMethodParameters` and `ASTParser.processDecl` (the walk in
-`ProcessSource` does not call them).
-
 ## Known gaps
 
 See keys starting with `go/` in `internal/conformance/known_gaps_test.go`.

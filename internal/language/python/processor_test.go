@@ -197,60 +197,6 @@ def public_function():
 	}
 }
 
-func TestCountLines(t *testing.T) {
-	tests := []struct {
-		source string
-		lines  int
-	}{
-		{"", 0},
-		{"single line", 1},
-		{"line1\nline2", 2},
-		{"line1\nline2\n", 3},
-		{"line1\nline2\nline3", 3},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.source, func(t *testing.T) {
-			result := countLines([]byte(tt.source))
-			assert.Equal(t, tt.lines, result)
-		})
-	}
-}
-
-func TestIsPrivate(t *testing.T) {
-	tests := []struct {
-		name     string
-		expected bool
-	}{
-		{"public_function", false},
-		{"_private_function", true},
-		{"__dunder_method__", false},
-		{"", false},
-		{"normal_name", false},
-		{"_", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := isPrivate(tt.name)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestInitializeWASM(t *testing.T) {
-	proc := NewProcessor()
-
-	ctx := context.Background()
-
-	// Test with empty WASM bytes (will fail but tests the flow)
-	err := proc.InitializeWASM(ctx, []byte{})
-	assert.Error(t, err) // Empty WASM should fail
-
-	// Test that runtime was created
-	assert.NotNil(t, proc.wasmRuntime)
-}
-
 func TestProcessorImplementsInterface(t *testing.T) {
 	proc := NewProcessor()
 

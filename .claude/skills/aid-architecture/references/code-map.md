@@ -65,29 +65,19 @@ Reached, but running only in a corner:
   types; imported only by `internal/processor/dependency.go`, so it matters
   only with `--dependency-aware`. Its queries are embedded from
   `internal/semantic/queries`.
-- `internal/parser`: a WASM runtime for tree-sitter (wazero) and an AST
-  converter, imported only by `internal/language/python/processor.go`, whose
-  WASM branch is off the live path (`aid-language-parsers`,
-  `references/python.md`). The directory `internal/parser/grammars` is not
-  this package: it holds the grammar modules `tree-sitter-typescript` (live)
-  and `tree-sitter-swift` (imported only by Swift's unused tree-sitter
-  processor), which `go.mod` replaces with these paths
-  (`aid-language-parsers`, `references/tree-sitter-cgo.md`).
+- `internal/parser/grammars`: not a package of this module but separate Go
+  modules: `tree-sitter-typescript` (live) and `tree-sitter-swift` (imported
+  only by Swift's unused tree-sitter processor), which `go.mod` replaces with
+  these paths (`aid-language-parsers`, `references/tree-sitter-cgo.md`).
 
 ## Not reached by `cmd/aid`
 
 | Package | What it is |
 |---|---|
-| `cmd/ai-distiller` | an older standalone CLI (`ai-distiller [files...]`) that calls the processor, stripper and formatter directly; it has no tests |
 | `cmd/ast-dump` | prints the tree-sitter tree a processor walks (`aid-language-parsers`, section 4) |
-| `cmd/parser-test` | runs six language processors over files in `test-data/functional-tests`, a directory the repository does not contain |
-| `cmd/performance-test` | benchmark driver for `internal/performance` |
-| `cmd/semantic-test` | runs `internal/semantic` on one Python file, by default under `test-data/functional-tests` |
-| `cmd/semantic-resolver-test` | runs the `internal/semantic` resolver on `test-data/semantic-test`, which the repository does not contain |
 | `cmd/test-audit` | audits the snapshot fixtures in `testdata/` through `internal/testrunner` (`aid-testing-debugging`) |
 | `internal/conformance` | test-only package: the conformance suite and the CLI contract tests (`internal/conformance/doc.go`) |
 | `internal/testrunner` | the snapshot suite, `BuildBinary` for tests, and the audit used by `cmd/test-audit` |
-| `internal/performance` | caching, streaming and concurrent processors with a benchmark suite; used only by `cmd/performance-test` |
 
 Every package in the table compiles with `go build`; only `cmd/aid` is built
 by the release workflow.
@@ -97,8 +87,6 @@ by the release workflow.
 - `internal/aiactions/templates`, `internal/semantic/queries`: files embedded
   with `//go:embed`.
 - `internal/parser/grammars`: separate Go modules (above).
-- `internal/parser/wasm`: a `tree-sitter-python.wasm` file that no Go code
-  reads.
 - `internal/conformance/testdata`: the conformance fixtures.
 - `test-data/` at the top level (outside `internal/`): import-filter samples
   and Go samples; the snapshot fixtures are in `testdata/`.

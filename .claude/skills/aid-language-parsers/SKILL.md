@@ -95,10 +95,10 @@ the grammars from `github.com/tree-sitter/...` are wrapped with
 `sitter.NewLanguage(...)`. The Go package is `internal/language/golang/`, and its
 processor registers as `go`.
 
-Some packages hold a second parser that is never called (a tree-sitter parser
-for Rust and Swift, an older TypeScript parser) or a fallback that runs only
-after a failed tree-sitter parse. Each reference lists them under
-`## Unused files`; fixing a bug there changes nothing.
+Rust and Swift hold a second parser that is never called (a tree-sitter parser,
+kept for the tree-sitter migration). A failed tree-sitter parse returns an
+error; no language falls back to another parser. Each reference lists the
+unused files under `## Unused files`; fixing a bug there changes nothing.
 
 ## 3. Which layer is wrong
 

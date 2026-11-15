@@ -64,7 +64,8 @@ Methods inside `impl Trait for Type` have no modifier in the source but are
 
 ## Unused files
 
-- `ast_parser.go`: a tree-sitter parser without a grammar. `NewProcessor`
+- `ast_parser.go` (kept on purpose for the tree-sitter migration, roadmap
+  decision D3, and marked with a comment at the top): a tree-sitter parser without a grammar. `NewProcessor`
   stores a `NewASTParser()` whose `parser` field is nil, and nothing calls its
   `ProcessSource`. The `deadcode` tool does not flag it, because its methods are
   exported.

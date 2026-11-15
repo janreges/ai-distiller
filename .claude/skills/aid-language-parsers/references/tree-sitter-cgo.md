@@ -20,7 +20,7 @@ cgo, not even `internal/language` on its own.
 | typescript, tsx | `tree-sitter-typescript` | a local wrapper module, see below |
 | swift | `tree-sitter-swift` | vendored in `internal/parser/grammars/tree-sitter-swift`; only the unused tree-sitter processor imports it (`references/swift.md`) |
 | go | none | standard library `go/parser` |
-| rust | none | line parser; `go.mod` has only a commented-out replace line for a Rust grammar |
+| rust | none | line parser; no Rust grammar is in `go.mod` |
 
 `cmd/ast-dump` imports the same grammars (`cmd/ast-dump/main.go#language`), so
 the tree it prints is the tree the processor walks.
@@ -65,10 +65,9 @@ github.com/smacker/go-tree-sitter/python: build constraints exclude all Go files
 ../go/pkg/mod/github.com/smacker/go-tree-sitter@.../iter.go:17:18: undefined: Node
 ```
 
-There is no CGO=0 binary that starts and then reports missing parsers: the
-`!cgo` files (`internal/language/registry_nocgo.go`,
-`internal/language/nocgo.go#RegisterTreeSitterProcessors`, the `_nocgo.go`
-grammar wrappers) are never part of a successful build.
+The module does not compile with `CGO_ENABLED=0`, and there is no `!cgo` stub
+registry that would start and report missing parsers: `internal/language/registry_cgo.go`
+is the only registry and carries `//go:build cgo`.
 `scripts/check-cgo.sh` fails when the `Makefile`, the `Dockerfile`, the scripts
 or the workflows set `CGO_ENABLED=0`.
 

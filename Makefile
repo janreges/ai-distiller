@@ -1,4 +1,4 @@
-.PHONY: all build test bench lint clean install test-parser test-performance aid
+.PHONY: all build test bench lint clean install aid
 
 # Variables
 BINARY_NAME = aid
@@ -247,36 +247,6 @@ aid:
 %:
 	@:
 
-# Test parser functionality
-test-parser:
-	@echo "==> Running parser functional tests"
-	@go run ./cmd/parser-test
-
-# Test performance optimizations
-test-performance:
-	@echo "==> Running performance tests"
-	@go run ./cmd/performance-test $(PERF_ARGS)
-
-# Test semantic analysis
-test-semantic:
-	@echo "==> Running semantic analysis tests"
-	@go run ./cmd/semantic-test
-
-# Test semantic resolver (Pass 2)
-test-resolver:
-	@echo "==> Running semantic resolver tests"
-	@go run ./cmd/semantic-resolver-test
-
-# Run performance comparison
-perf-compare:
-	@echo "==> Running performance mode comparison"
-	@go run ./cmd/performance-test -mode=comparison
-
-# Find optimal configuration
-perf-optimize:
-	@echo "==> Finding optimal performance configuration"
-	@go run ./cmd/performance-test -mode=config
-
 # Show help
 help:
 	@echo "Available targets:"
@@ -303,12 +273,6 @@ help:
 	@echo "  setup           - Set up development environment"
 	@echo "  dev-init        - Initialize dev environment with all dependencies"
 	@echo "  run ARGS=...    - Run the application with arguments"
-	@echo "  test-parser     - Run parser functional tests"
-	@echo "  test-performance- Run performance tests"
-	@echo "  test-semantic   - Run semantic analysis tests"
-	@echo "  test-resolver   - Run semantic resolver tests"
-	@echo "  perf-compare    - Compare performance modes"
-	@echo "  perf-optimize   - Find optimal configuration"
 
 # Version management
 version:

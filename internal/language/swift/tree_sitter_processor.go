@@ -1,3 +1,5 @@
+// Not on the live path: the line parser is used. Kept for the tree-sitter migration (see docs/superpowers/plans/2026-11-15-aid-hardening-00-roadmap.md).
+
 package swift
 
 import (

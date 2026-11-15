@@ -47,7 +47,6 @@ class User extends BaseModel
 }`
 
 	proc := NewProcessor()
-	proc.EnableTreeSitter()
 
 	ctx := context.Background()
 	file, err := proc.Process(ctx, strings.NewReader(source), "test.php")
@@ -99,7 +98,6 @@ class UserController
 }`
 
 	proc := NewProcessor()
-	proc.EnableTreeSitter()
 
 	ctx := context.Background()
 	file, err := proc.Process(ctx, strings.NewReader(source), "modern.php")
@@ -186,7 +184,6 @@ class UserService implements ServiceInterface
 }`
 
 	proc := NewProcessor()
-	proc.EnableTreeSitter()
 
 	ctx := context.Background()
 	file, err := proc.Process(ctx, strings.NewReader(source), "namespace.php")
@@ -243,7 +240,6 @@ class User
 }`
 
 	proc := NewProcessor()
-	proc.EnableTreeSitter()
 
 	ctx := context.Background()
 	file, err := proc.Process(ctx, strings.NewReader(source), "traits.php")
@@ -320,7 +316,6 @@ class Model implements Serializable
 }`
 
 	proc := NewProcessor()
-	proc.EnableTreeSitter()
 
 	ctx := context.Background()
 	file, err := proc.Process(ctx, strings.NewReader(source), "interfaces.php")
@@ -355,25 +350,4 @@ class Model implements Serializable
 
 	// Check that Serializable extends other interfaces
 	assert.Equal(t, 2, len(serializable.Extends), "Serializable should extend 2 interfaces")
-}
-
-func TestProcessorFallbackToLineBased(t *testing.T) {
-	// Test that we can fall back gracefully
-	proc := NewProcessor()
-	proc.useTreeSitter = false // Force line-based parser
-
-	source := `<?php
-class User {
-    public $name;
-}`
-
-	ctx := context.Background()
-	file, err := proc.Process(ctx, strings.NewReader(source), "fallback.php")
-
-	require.NoError(t, err)
-	require.NotNil(t, file)
-
-	// Should at least return a valid file structure
-	assert.Equal(t, "php", file.Language)
-	assert.Equal(t, "fallback.php", file.Path)
 }

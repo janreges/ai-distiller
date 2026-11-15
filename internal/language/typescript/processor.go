@@ -14,7 +14,6 @@ import (
 // Processor handles TypeScript source code processing
 type Processor struct {
 	processor.BaseProcessor
-	useTreeSitter bool
 }
 
 // NewProcessor creates a new TypeScript processor
@@ -25,7 +24,6 @@ func NewProcessor() *Processor {
 			"1.0.0",
 			[]string{".ts", ".tsx", ".d.ts"},
 		),
-		useTreeSitter: true, // Default to tree-sitter for TypeScript
 	}
 }
 
@@ -73,16 +71,6 @@ func (p *Processor) ProcessWithOptions(ctx context.Context, reader io.Reader, fi
 	}
 
 	return result, nil
-}
-
-// EnableTreeSitter enables tree-sitter parsing
-func (p *Processor) EnableTreeSitter() {
-	p.useTreeSitter = true
-}
-
-// DisableTreeSitter disables tree-sitter parsing
-func (p *Processor) DisableTreeSitter() {
-	p.useTreeSitter = false
 }
 
 // ProcessFile processes a file by path

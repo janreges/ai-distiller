@@ -75,10 +75,8 @@ one the prompt AI actions distil to:
 Stdin (`internal/cli/root.go#processStdinWithContext`) formats the same way,
 import filter included, but keeps empty blocks and prints no summary.
 
-`internal/formatter/text_formatter.go#TextFormatter` is not registered for any
-format; only `internal/formatter/text_visibility_test.go` builds it, so editing
-it changes no output. Its helper `internal/formatter/text_formatter.go#getVisibilityPrefix`
-is live: the Python formatter prints its `-` prefix with it.
+The helper `internal/formatter/visibility.go#getVisibilityPrefix` is live: the
+Python formatter prints its `-` prefix with it.
 
 ## 2. Formats
 

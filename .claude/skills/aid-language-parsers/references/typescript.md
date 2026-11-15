@@ -71,9 +71,7 @@
 
 ## Unused files
 
-- `enhanced_parser.go`: nothing calls `NewEnhancedParser`.
-
-Also off the live path: `ASTParser.analyzeInterfaceSatisfaction`,
+Off the live path: `ASTParser.analyzeInterfaceSatisfaction`,
 `ASTParser.classImplementsInterface` and `ASTParser.typesCompatible` in
 `ast_parser.go`, and `Processor.ProcessFile` in `processor.go`.
 

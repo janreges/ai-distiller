@@ -22,8 +22,8 @@ processor registers under and the IR's `Language`.
    `cmd/ast-dump/main.go#language` and the usage string in the same file, so
    the tree can be dumped.
 3. Registration: `internal/language/registry_cgo.go#RegisterAll`.
-   (`internal/language/nocgo.go#RegisterTreeSitterProcessors` is never built;
-   see `references/tree-sitter-cgo.md`.)
+   (There is no `!cgo` registry: the module does not compile with
+   `CGO_ENABLED=0`; see `references/tree-sitter-cgo.md`.)
 4. Aliases for `--lang`, if any: `internal/language/names.go#aliases`.
    `internal/language/names_test.go#TestCanonical_EveryAliasHasAProcessor`
    fails for an alias without a processor.
@@ -36,7 +36,7 @@ processor registers under and the IR's `Language`.
    Without one, files of the language go through the generic fallback.
    The language formatter prints the visibility keywords itself, for example
    through `internal/formatter/csharp_formatter.go#CSharpFormatter.getVisibilityKeyword`
-   (Python uses `internal/formatter/text_formatter.go#getVisibilityPrefix`).
+   (Python uses `internal/formatter/visibility.go#getVisibilityPrefix`).
    Nothing calls `BaseLanguageFormatter.GetVisibilityKeyword`, so changing it
    changes no output.
 7. Markdown code fences: `internal/formatter/markdown.go#MarkdownFormatter.getLanguageFromPath`
