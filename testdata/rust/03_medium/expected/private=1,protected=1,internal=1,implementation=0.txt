@@ -63,7 +63,7 @@ impl Debug for InMemorySource {
 }
 // Generic trait with lifetime bounds
 
-pub trait Processor<'a, T> {
+pub trait Processor<'a, T> where T: Clone + 'a {
     type Output: 'a;
 
     fn process(&self, input: &'a T) -> Self::Output;

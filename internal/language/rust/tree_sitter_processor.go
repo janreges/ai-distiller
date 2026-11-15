@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/janreges/ai-distiller/internal/ir"
@@ -92,6 +93,7 @@ const (
 	inImpl                       // the body of an inherent impl
 	inTraitImpl                  // the body of impl Trait for Type
 	inTrait                      // the body of a trait
+	inExtern                     // the body of an extern block
 )
 
 // walker builds the IR of one parsed file, or of one macro body parsed on its
@@ -139,10 +141,11 @@ func (w *walker) children(node *sitter.Node) []sitter.Node {
 // line where the previous sibling that is not a comment ends (an item, an
 // attribute, a brace): it remarks on that line and yields no IR. Outer
 // attributes are skipped and leave the docs above them to the item after
-// them. The doc comments right before a statement that yields no IR (a macro
-// call, macro_rules!, an extern block) are dropped, so they do not document
-// the next item (appendStatement). The items inside a macro call with braces
-// follow its place (expand).
+// them; a #[macro_export] among them makes the macro_rules! after them public.
+// The doc comments right before a statement that yields no IR (a macro call,
+// an inner attribute) are dropped, so they do not document the next item
+// (appendStatement). The items inside a macro call with braces follow its
+// place (expand).
 //
 // In a macro body, an ERROR node yields no IR; at the top level of the body,
 // it and an expression statement with an error stand for the {} blocks of the
@@ -186,6 +189,8 @@ func (w *walker) items(node *sitter.Node, parent *ir.DistilledClass, in containe
 			if body := w.braceBody(child); body != nil {
 				w.expand(body, parent, in, w.depth+1)
 			}
+		case child.Kind() == "macro_definition":
+			*list = appendStatement(*list, w.macroDefinition(child, w.macroExported(kids[:i])))
 		default:
 			*list = appendStatement(*list, w.item(child, in))
 		}
@@ -457,15 +462,16 @@ func appendStatement(list []ir.DistilledNode, node ir.DistilledNode) []ir.Distil
 }
 
 // item returns the IR of one item in a list of kind in, or nil for an item
-// that yields none in this list (a macro definition, a macro call statement
-// such as m!(...);, a union, an extern block or crate, an inner attribute, a
-// trait const).
+// that yields none in this list (a macro call statement such as m!(...);, an
+// inner attribute, a type with a default in a trait).
 func (w *walker) item(node *sitter.Node, in container) ir.DistilledNode {
 	switch node.Kind() {
 	case "function_item", "function_signature_item":
 		return w.function(node, in)
 	case "struct_item":
-		return w.structItem(node)
+		return w.structItem(node, ir.ModifierStruct)
+	case "union_item":
+		return w.structItem(node, ir.ModifierUnion)
 	case "enum_item":
 		return w.enumItem(node)
 	case "trait_item":
@@ -474,22 +480,23 @@ func (w *walker) item(node *sitter.Node, in container) ir.DistilledNode {
 		return w.implItem(node)
 	case "mod_item":
 		return w.modItem(node)
+	case "foreign_mod_item":
+		return w.externBlock(node)
 	case "use_declaration":
 		return w.useDeclaration(node)
+	case "extern_crate_declaration":
+		return w.externCrate(node)
 	case "const_item":
-		if in == inTrait {
-			return nil
-		}
-		return w.valueItem(node, ir.ModifierFinal)
+		return w.valueItem(node, ir.ModifierFinal, in)
 	case "static_item":
-		return w.valueItem(node, ir.ModifierStatic)
+		return w.valueItem(node, ir.ModifierStatic, in)
 	case "type_item":
 		if in == inTrait {
 			return nil
 		}
-		return w.typeItem(node)
+		return w.typeItem(node, in)
 	case "associated_type":
-		return w.associatedType(node)
+		return w.associatedType(node, in)
 	}
 	return nil
 }
@@ -504,14 +511,9 @@ func (w *walker) function(node *sitter.Node, in container) ir.DistilledNode {
 	fn := &ir.DistilledFunction{
 		BaseNode:   ir.BaseNode{Location: w.location(node)},
 		Name:       name,
-		Visibility: w.visibility(node),
+		Visibility: w.memberVisibility(node, in),
 		Modifiers:  w.functionModifiers(node),
 		Parameters: w.parameters(node.ChildByFieldName("parameters")),
-	}
-	if in == inTrait || in == inTraitImpl && w.visibilityModifier(node) == nil {
-		// Trait members and the members of a trait impl take no visibility
-		// keyword; they are as visible as the trait.
-		fn.Visibility = ir.VisibilityPublic
 	}
 
 	returns := ""
@@ -588,9 +590,11 @@ func (w *walker) parameters(node *sitter.Node) []ir.Parameter {
 	return params
 }
 
-// structItem returns a struct with its named fields. Tuple fields and the
-// comments of the body are not distilled.
-func (w *walker) structItem(node *sitter.Node) ir.DistilledNode {
+// structItem returns a struct (kind struct) or a union (kind union) with its
+// fields and the where clause of its header. The fields of a tuple struct are
+// named "0", "1", ... (tupleFields). The comments of the body are not
+// distilled.
+func (w *walker) structItem(node *sitter.Node, kind ir.Modifier) ir.DistilledNode {
 	name := w.nameWithGenerics(node)
 	if name == "" {
 		return nil
@@ -599,11 +603,19 @@ func (w *walker) structItem(node *sitter.Node) ir.DistilledNode {
 		BaseNode:   ir.BaseNode{Location: w.location(node)},
 		Name:       name,
 		Visibility: w.visibility(node),
-		Modifiers:  []ir.Modifier{ir.ModifierStruct},
+		Modifiers:  []ir.Modifier{kind},
 		Children:   []ir.DistilledNode{},
 	}
+	w.setWhere(class, node)
 	body := node.ChildByFieldName("body")
-	if body == nil || body.Kind() != "field_declaration_list" {
+	if body == nil {
+		return class
+	}
+	if body.Kind() == "ordered_field_declaration_list" {
+		w.tupleFields(class, body)
+		return class
+	}
+	if body.Kind() != "field_declaration_list" {
 		return class
 	}
 	for _, child := range w.children(body) {
@@ -627,6 +639,38 @@ func (w *walker) structItem(node *sitter.Node) ir.DistilledNode {
 	return class
 }
 
+// tupleFields adds the fields of a tuple struct's body (an
+// ordered_field_declaration_list) to class, named "0", "1", ... in order, and
+// records their number as its TupleArity. The body has no node per field: a
+// field is an optional attribute, an optional visibility and its type.
+func (w *walker) tupleFields(class *ir.DistilledClass, body *sitter.Node) {
+	types := body.ChildrenByFieldName("type", w.cursor)
+	var vis *sitter.Node
+	n := 0
+	for _, child := range w.children(body) {
+		switch {
+		case child.Kind() == "visibility_modifier":
+			vis = &child
+		case n < len(types) && child.Equals(types[n]):
+			field := &ir.DistilledField{
+				BaseNode:   ir.BaseNode{Location: w.location(&child)},
+				Name:       strconv.Itoa(n),
+				Visibility: ir.VisibilityPrivate,
+				Type:       &ir.TypeRef{Name: w.flat(&child)},
+			}
+			if vis != nil {
+				start := w.location(vis)
+				field.Location.StartLine, field.Location.StartColumn = start.StartLine, start.StartColumn
+				field.Visibility = w.visibilityOf(vis)
+			}
+			class.Children = append(class.Children, field)
+			vis = nil
+			n++
+		}
+	}
+	rustExtensions(class).TupleArity = n
+}
+
 // enumItem returns an enum whose variants are public fields: the payload as
 // written ("(T, U)" or "{ x: T }", runs of white space collapsed, comments
 // removed) is the type, and the discriminant is the default value.
@@ -642,6 +686,7 @@ func (w *walker) enumItem(node *sitter.Node) ir.DistilledNode {
 		Modifiers:  []ir.Modifier{ir.ModifierEnum},
 		Children:   []ir.DistilledNode{},
 	}
+	w.setWhere(class, node)
 	body := node.ChildByFieldName("body")
 	if body == nil {
 		return class
@@ -671,7 +716,9 @@ func (w *walker) enumItem(node *sitter.Node) ir.DistilledNode {
 }
 
 // traitItem returns a trait: an abstract class whose children are its
-// methods, associated types and comments.
+// methods, associated types, consts and comments. Each supertrait bound
+// (trait A: B + 'static) is one entry of Extends, and the where clause of the
+// header is kept.
 func (w *walker) traitItem(node *sitter.Node) ir.DistilledNode {
 	name := w.nameWithGenerics(node)
 	if name == "" {
@@ -684,6 +731,14 @@ func (w *walker) traitItem(node *sitter.Node) ir.DistilledNode {
 		Modifiers:  []ir.Modifier{ir.ModifierAbstract},
 		Children:   []ir.DistilledNode{},
 	}
+	if bounds := node.ChildByFieldName("bounds"); bounds != nil {
+		for _, bound := range w.children(bounds) {
+			if bound.IsNamed() && !isComment(&bound) {
+				class.Extends = append(class.Extends, ir.TypeRef{Name: w.flat(&bound)})
+			}
+		}
+	}
+	w.setWhere(class, node)
 	if body := node.ChildByFieldName("body"); body != nil {
 		w.items(body, class, inTrait)
 	}
@@ -692,7 +747,8 @@ func (w *walker) traitItem(node *sitter.Node) ir.DistilledNode {
 
 // implItem returns an impl block: a public class named after its header
 // ("impl<T> Trait for Type<T>", white space collapsed) whose children are the
-// items of the block.
+// items of the block. The where clause of the header is kept apart from the
+// name.
 func (w *walker) implItem(node *sitter.Node) ir.DistilledNode {
 	typ := node.ChildByFieldName("type")
 	if typ == nil {
@@ -720,6 +776,7 @@ func (w *walker) implItem(node *sitter.Node) ir.DistilledNode {
 		Modifiers:  []ir.Modifier{},
 		Children:   []ir.DistilledNode{},
 	}
+	w.setWhere(class, node)
 	if body := node.ChildByFieldName("body"); body != nil {
 		w.items(body, class, in)
 	}
@@ -746,8 +803,96 @@ func (w *walker) modItem(node *sitter.Node) ir.DistilledNode {
 	return class
 }
 
+// externBlock returns an extern block (extern "C" { ... }): a public class
+// with the modifier extern, named after its ABI (extern "C", or extern), whose
+// children are its foreign functions and statics, each with its own
+// visibility.
+func (w *walker) externBlock(node *sitter.Node) ir.DistilledNode {
+	class := &ir.DistilledClass{
+		BaseNode:   ir.BaseNode{Location: w.location(node)},
+		Name:       "extern",
+		Visibility: ir.VisibilityPublic,
+		Modifiers:  []ir.Modifier{ir.ModifierExtern},
+		Children:   []ir.DistilledNode{},
+	}
+	for _, child := range w.children(node) {
+		if child.Kind() == "extern_modifier" {
+			class.Name = collapse(w.code(&child))
+		}
+	}
+	if body := node.ChildByFieldName("body"); body != nil {
+		w.items(body, class, inExtern)
+	}
+	return class
+}
+
+// macroExported reports whether the attributes right before a macro_rules!
+// (the end of before, its preceding siblings) include #[macro_export].
+func (w *walker) macroExported(before []sitter.Node) bool {
+	for i := len(before) - 1; i >= 0; i-- {
+		node := &before[i]
+		switch {
+		case isComment(node):
+		case node.Kind() == "attribute_item":
+			for _, attr := range w.children(node) {
+				if attr.Kind() != "attribute" {
+					continue
+				}
+				if path := attr.NamedChild(0); path != nil && w.text(path) == "macro_export" {
+					return true
+				}
+			}
+		default:
+			return false
+		}
+	}
+	return false
+}
+
+// macroDefinition returns a macro_rules! definition as a function with the
+// modifier macro: public when it is exported (#[macro_export]), internal
+// otherwise. Each rule is a parameter named after its matcher, normalised
+// with its commas kept ("($x:expr, $(,)?)"); the implementation is the body
+// from its opening to its closing delimiter.
+func (w *walker) macroDefinition(node *sitter.Node, exported bool) ir.DistilledNode {
+	name := node.ChildByFieldName("name")
+	if name == nil {
+		return nil
+	}
+	macro := &ir.DistilledFunction{
+		BaseNode:   ir.BaseNode{Location: w.location(node)},
+		Name:       w.text(name),
+		Visibility: ir.VisibilityInternal,
+		Modifiers:  []ir.Modifier{ir.ModifierMacro},
+		Parameters: []ir.Parameter{},
+	}
+	if exported {
+		macro.Visibility = ir.VisibilityPublic
+	}
+	var open, end uint
+	for _, child := range w.children(node) {
+		switch child.Kind() {
+		case "macro_rule":
+			if left := child.ChildByFieldName("left"); left != nil {
+				macro.Parameters = append(macro.Parameters, ir.Parameter{Name: normalizeTokens(w.code(left))})
+			}
+		case "{", "(", "[":
+			if open == 0 {
+				open = child.StartByte() + 1
+			}
+		case "}", ")", "]":
+			end = child.EndByte()
+		}
+	}
+	if open > 0 && end >= open {
+		macro.Implementation = string(w.source[open-1 : end])
+	}
+	return macro
+}
+
 // useDeclaration returns a use declaration. "use a::{b, c as d}" gives the
 // module a with the symbols b and c (alias d); any other tree is the module.
+// The import type is "use", after the visibility of a re-export ("pub use").
 func (w *walker) useDeclaration(node *sitter.Node) ir.DistilledNode {
 	arg := node.ChildByFieldName("argument")
 	if arg == nil {
@@ -755,7 +900,7 @@ func (w *walker) useDeclaration(node *sitter.Node) ir.DistilledNode {
 	}
 	imp := &ir.DistilledImport{
 		BaseNode:   ir.BaseNode{Location: w.location(node)},
-		ImportType: "use",
+		ImportType: w.importType(node, "use"),
 	}
 	switch arg.Kind() {
 	case "scoped_use_list":
@@ -771,6 +916,34 @@ func (w *walker) useDeclaration(node *sitter.Node) ir.DistilledNode {
 		imp.Module = normalize(w.code(arg))
 	}
 	return imp
+}
+
+// externCrate returns extern crate as an import of the type "extern crate"
+// (after its visibility, if any) whose module is the crate, with its alias
+// ("foo as bar").
+func (w *walker) externCrate(node *sitter.Node) ir.DistilledNode {
+	name := node.ChildByFieldName("name")
+	if name == nil {
+		return nil
+	}
+	module := w.text(name)
+	if alias := node.ChildByFieldName("alias"); alias != nil {
+		module += " as " + w.text(alias)
+	}
+	return &ir.DistilledImport{
+		BaseNode:   ir.BaseNode{Location: w.location(node)},
+		ImportType: w.importType(node, "extern crate"),
+		Module:     module,
+	}
+}
+
+// importType returns keyword after the normalised visibility of node, if it
+// has one ("pub(crate) use").
+func (w *walker) importType(node *sitter.Node, keyword string) string {
+	if modifier := w.visibilityModifier(node); modifier != nil {
+		return normalize(w.code(modifier)) + " " + keyword
+	}
+	return keyword
 }
 
 // useSymbols returns the items of a use_list, each as written with its text
@@ -793,9 +966,10 @@ func (w *walker) useSymbols(list *sitter.Node) []ir.ImportedSymbol {
 	return symbols
 }
 
-// valueItem returns a const (modifier final) or static (modifier static) as
-// a field. Its value is kept when it fits on one line; a longer one is "...".
-func (w *walker) valueItem(node *sitter.Node, kind ir.Modifier) ir.DistilledNode {
+// valueItem returns a const (modifier final) or static (modifier static) in a
+// list of kind in as a field. Its value is kept when it fits on one line; a
+// longer one is "...".
+func (w *walker) valueItem(node *sitter.Node, kind ir.Modifier, in container) ir.DistilledNode {
 	name := node.ChildByFieldName("name")
 	if name == nil {
 		return nil
@@ -803,7 +977,7 @@ func (w *walker) valueItem(node *sitter.Node, kind ir.Modifier) ir.DistilledNode
 	field := &ir.DistilledField{
 		BaseNode:   ir.BaseNode{Location: w.location(node)},
 		Name:       w.text(name),
-		Visibility: w.visibility(node),
+		Visibility: w.memberVisibility(node, in),
 		Modifiers:  []ir.Modifier{kind},
 		Type:       &ir.TypeRef{},
 	}
@@ -820,9 +994,10 @@ func (w *walker) valueItem(node *sitter.Node, kind ir.Modifier) ir.DistilledNode
 	return field
 }
 
-// typeItem returns a type alias as a field with the modifier type_alias; its
-// generics stay in the name, and a where clause follows the type.
-func (w *walker) typeItem(node *sitter.Node) ir.DistilledNode {
+// typeItem returns a type alias in a list of kind in as a field with the
+// modifier type_alias; its generics stay in the name, and a where clause
+// follows the type.
+func (w *walker) typeItem(node *sitter.Node, in container) ir.DistilledNode {
 	name := w.nameWithGenerics(node)
 	if name == "" {
 		return nil
@@ -837,15 +1012,17 @@ func (w *walker) typeItem(node *sitter.Node) ir.DistilledNode {
 	return &ir.DistilledField{
 		BaseNode:   ir.BaseNode{Location: w.location(node)},
 		Name:       name,
-		Visibility: w.visibility(node),
+		Visibility: w.memberVisibility(node, in),
 		Modifiers:  []ir.Modifier{ir.ModifierTypeAlias},
 		Type:       &ir.TypeRef{Name: typ},
 	}
 }
 
 // associatedType returns an associated type of a trait (type Item: Bound
-// where ...;) as a public type_alias field whose type is its bounds.
-func (w *walker) associatedType(node *sitter.Node) ir.DistilledNode {
+// where ...;) as a type_alias field whose type is its bounds. It is public in
+// a trait; elsewhere (an extern type in an extern block) it has its own
+// visibility.
+func (w *walker) associatedType(node *sitter.Node, in container) ir.DistilledNode {
 	name := w.nameWithGenerics(node)
 	if name == "" {
 		return nil
@@ -853,7 +1030,7 @@ func (w *walker) associatedType(node *sitter.Node) ir.DistilledNode {
 	field := &ir.DistilledField{
 		BaseNode:   ir.BaseNode{Location: w.location(node)},
 		Name:       name,
-		Visibility: ir.VisibilityPublic,
+		Visibility: w.memberVisibility(node, in),
 		Modifiers:  []ir.Modifier{ir.ModifierTypeAlias},
 	}
 	if bounds := node.ChildByFieldName("bounds"); bounds != nil {
@@ -910,14 +1087,31 @@ func (w *walker) visibilityModifier(node *sitter.Node) *sitter.Node {
 	return nil
 }
 
-// visibility maps the visibility of node: none is private, pub(crate)
-// internal, pub(super) and pub(in path) protected, any other pub (also
-// pub(self)) public, and the 2015 crate private.
+// visibility maps the visibility of node: none is private, and a
+// visibility_modifier maps as visibilityOf says.
 func (w *walker) visibility(node *sitter.Node) ir.Visibility {
 	modifier := w.visibilityModifier(node)
 	if modifier == nil {
 		return ir.VisibilityPrivate
 	}
+	return w.visibilityOf(modifier)
+}
+
+// memberVisibility is the visibility of node, an item in a list of kind in.
+// Trait members, and the members of a trait impl that have no visibility of
+// their own, are public: they take no visibility keyword and are as visible
+// as the trait.
+func (w *walker) memberVisibility(node *sitter.Node, in container) ir.Visibility {
+	if in == inTrait || in == inTraitImpl && w.visibilityModifier(node) == nil {
+		return ir.VisibilityPublic
+	}
+	return w.visibility(node)
+}
+
+// visibilityOf maps a visibility_modifier: pub(crate) is internal, pub(super)
+// and pub(in path) protected, any other pub (also pub(self)) public, and the
+// 2015 crate private.
+func (w *walker) visibilityOf(modifier *sitter.Node) ir.Visibility {
 	vis := strings.Join(strings.Fields(w.code(modifier)), "")
 	switch {
 	case strings.HasPrefix(vis, "pub(crate)"):
@@ -965,6 +1159,27 @@ func (w *walker) whereClause(node *sitter.Node) string {
 		}
 	}
 	return ""
+}
+
+// setWhere records the where clause of node, the header of class, in its
+// Rust extensions, without a trailing comma: the header goes on with " {" or
+// ";".
+func (w *walker) setWhere(class *ir.DistilledClass, node *sitter.Node) {
+	if where := w.whereClause(node); where != "" {
+		rustExtensions(class).Where = strings.TrimSuffix(where, ",")
+	}
+}
+
+// rustExtensions returns the Rust extensions of class, created when it has
+// none.
+func rustExtensions(class *ir.DistilledClass) *ir.RustExtensions {
+	if class.Extensions == nil {
+		class.Extensions = &ir.NodeExtensions{}
+	}
+	if class.Extensions.Rust == nil {
+		class.Extensions.Rust = &ir.RustExtensions{}
+	}
+	return class.Extensions.Rust
 }
 
 // text returns the source text of node.
@@ -1078,6 +1293,18 @@ func collapse(s string) string {
 // space, no space after "(", "[" or "{" nor before ")", "]" or "}", and no
 // comma directly before a closing bracket.
 func normalize(s string) string {
+	return squeeze(s, true)
+}
+
+// normalizeTokens is normalize for the tokens a macro matches, whose commas
+// are tokens too: they all stay.
+func normalizeTokens(s string) string {
+	return squeeze(s, false)
+}
+
+// squeeze is normalize; dropCommas says whether a comma directly before a
+// closing bracket goes.
+func squeeze(s string, dropCommas bool) string {
 	s = collapse(s)
 	closes := func(i int) bool { return i < len(s) && strings.IndexByte(")]}", s[i]) >= 0 }
 	out := make([]byte, 0, len(s))
@@ -1086,7 +1313,7 @@ func normalize(s string) string {
 		switch {
 		case c == ' ' && (len(out) > 0 && strings.IndexByte("([{", out[len(out)-1]) >= 0 || closes(i+1)):
 			continue
-		case c == ',' && (closes(i+1) || i+1 < len(s) && s[i+1] == ' ' && closes(i+2)):
+		case dropCommas && c == ',' && (closes(i+1) || i+1 < len(s) && s[i+1] == ' ' && closes(i+2)):
 			continue
 		}
 		out = append(out, c)

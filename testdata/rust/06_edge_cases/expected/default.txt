@@ -1,10 +1,11 @@
 <file path="source.rs">
 // Crate-level inner doc comment.
 // Second inner doc line.
+extern crate alloc;
 use std::collections::HashMap;
 use std::io::{self, Read, Write as IoWrite};
 use std::fmt::Display as Disp;
-use crate::inner::Thing;
+pub use crate::inner::Thing;
 use std::sync::*;
 use std::{fs::File, path::{Path, PathBuf}};
 // Max retries for the client.
@@ -22,15 +23,15 @@ pub struct Point {
     pub x: f64,
 }
 
-pub struct Meters;
+pub struct Meters(pub f64);
 
-pub struct Pair;
+pub struct Pair(pub i32, _);
 
 pub struct Unit;
 
 pub struct Wrapper<'a, T: Display + 'a>;
 
-pub struct Bounded<T> {
+pub struct Bounded<T> where T: Clone {
     pub value: T,
 }
 // A shape.
@@ -42,8 +43,12 @@ pub enum Shape {
     Coded = 7,
 }
 
-pub trait Animal {
+pub trait Animal: Display + Clone {
     type Food;
+
+    const LEGS: u32;
+
+    const DEFAULT_NAME: &'static str = "animal";
 
     fn name(&self) -> String;
 
@@ -54,7 +59,7 @@ pub trait Animal {
     fn raw(&self) -> *const u8;
 }
 
-pub trait Container<T> {
+pub trait Container<T> where T: Clone {
 
     fn get(&self, i: usize) -> Option<&T>;
 }
@@ -70,12 +75,14 @@ impl<T: Clone> Container<T> for Vec<T> {
     fn get(&self, i: usize) -> Option<&T>
 }
 
-impl<T> Bounded<T> {
+impl<T> Bounded<T> where T: Clone + Default {
 
     pub fn reset(&mut self)
 }
 
 impl Iterator for Counter {
+
+    type Item = u32;
 
     fn next(&mut self) -> Option<Self::Item>
 }
@@ -97,8 +104,18 @@ pub fn longest<'a, T>(x: &'a str, y: &'a str, _t: T) -> &'a str where T: Display
 
 pub fn multi_line_params(first: u32, second: String) -> bool
 
-pub enum inline_mod {
+pub mod inline_mod {
+
+    pub fn inside() -> u8
+
+    pub struct Inner;
 }
+
+macro_rules! exported {
+    () => ...;
+}
+
+pub union IntOrFloat;
 
 pub fn self_vis()
 
@@ -106,7 +123,7 @@ pub struct Arr<const N: usize> {
     pub data: [u8; N],
 }
 
-pub trait Sized2 {
+pub trait Sized2: Sized {
 }
 
 impl<'a> Wrapper<'a> {
@@ -120,7 +137,7 @@ pub fn takes_closure<F: Fn(i32) -> i32>(f: F) -> i32
 
 pub fn tuple_param((a, b): (i32, i32)) -> i32
 
-pub struct Multi;
+pub struct Multi(pub u8, _);
 // Doc one.
 //
 // Doc two after a blank doc line.

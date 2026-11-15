@@ -400,10 +400,9 @@ func TestRust_TraitDefaultMethodKeepsLaterMembers(t *testing.T) {
 }
 
 func TestRust_BlockBracesInLiterals(t *testing.T) {
-	// A brace inside a string or char literal ends no block. The trait const
-	// is not distilled yet.
+	// A brace inside a string or char literal ends no block.
 	trait := "pub trait T {\n    const OPEN: &'static str = \"{\";\n    fn after(&self);\n}\n"
-	assert.Equal(t, []string{"after"}, childNames(findRustClass(t, parseRust(t, trait), "T")))
+	assert.Equal(t, []string{"OPEN", "after"}, childNames(findRustClass(t, parseRust(t, trait), "T")))
 
 	impl := "pub struct S;\n\nimpl S {\n" +
 		"    pub fn long(\n        &self,\n    ) -> &'static str {\n        \"}\"\n    }\n" +
@@ -748,8 +747,8 @@ func TestRust_CRLFAndUnicode(t *testing.T) {
 func TestRust_ItemsInsideBodiesAreNotDistilled(t *testing.T) {
 	file := parseRust(t, "fn main() { struct L; impl L {} }\nconst _: () = { struct H; };\nmacro_rules! m { () => { struct M; } }\n"+
 		"fn main2() { s! { struct N; } }\n")
-	assert.Equal(t, []string{"main", "_", "main2"}, declNames(file.Children))
-	assert.Len(t, file.Children, 3)
+	assert.Equal(t, []string{"main", "_", "m", "main2"}, declNames(file.Children))
+	assert.Len(t, file.Children, 4)
 	for _, name := range allNames(file) {
 		assert.NotContains(t, []string{"L", "H", "M", "N", "impl L"}, name)
 	}
@@ -1009,4 +1008,271 @@ func TestRust_TrailingCommentsYieldNoIR(t *testing.T) {
 	})
 	assert.Equal(t, []string{"own line"}, comments)
 	assert.Equal(t, []string{"A", "X", "S", "impl T for A", "g"}, declNames(file.Children))
+}
+
+// rustExt returns the Rust extensions of class, or an empty value when it has
+// none.
+func rustExt(class *ir.DistilledClass) ir.RustExtensions {
+	if class.Extensions == nil || class.Extensions.Rust == nil {
+		return ir.RustExtensions{}
+	}
+	return *class.Extensions.Rust
+}
+
+// fieldsOf returns the fields among class's members, in order.
+func fieldsOf(class *ir.DistilledClass) []*ir.DistilledField {
+	var fields []*ir.DistilledField
+	for _, child := range class.Children {
+		if field, ok := child.(*ir.DistilledField); ok {
+			fields = append(fields, field)
+		}
+	}
+	return fields
+}
+
+func TestRust_TupleStructFields(t *testing.T) {
+	src := "pub struct Pair(pub i32, String);\npub struct Meters(f64);\n" +
+		"pub struct Multi(\n    #[serde(skip)] pub(crate) u8, // c\n    (\n        u16,\n        u32,\n    ),\n);\npub struct Unit;\n"
+	file := parseRust(t, src)
+
+	pair := findRustClass(t, file, "Pair")
+	assert.Equal(t, []ir.Modifier{ir.ModifierStruct}, pair.Modifiers)
+	assert.Equal(t, 2, rustExt(pair).TupleArity)
+	fields := fieldsOf(pair)
+	require.Len(t, fields, 2)
+	assert.Equal(t, "0", fields[0].Name)
+	assert.Equal(t, ir.VisibilityPublic, fields[0].Visibility)
+	assert.Equal(t, "i32", fields[0].Type.Name)
+	assert.Equal(t, "1", fields[1].Name)
+	assert.Equal(t, ir.VisibilityPrivate, fields[1].Visibility)
+	assert.Equal(t, "String", fields[1].Type.Name)
+
+	meters := findRustClass(t, file, "Meters")
+	assert.Equal(t, 1, rustExt(meters).TupleArity)
+	assert.Equal(t, []string{"0"}, childNames(meters))
+
+	multi := findRustClass(t, file, "Multi")
+	assert.Equal(t, 2, rustExt(multi).TupleArity)
+	fields = fieldsOf(multi)
+	require.Len(t, fields, 2)
+	assert.Equal(t, ir.VisibilityInternal, fields[0].Visibility, "the attribute before the visibility is skipped")
+	assert.Equal(t, "u8", fields[0].Type.Name)
+	assert.Equal(t, 4, fields[0].Location.StartLine)
+	assert.Equal(t, 20, fields[0].Location.StartColumn, "a field starts at its visibility")
+	assert.Equal(t, "(u16, u32)", fields[1].Type.Name, "a type over several lines is normalised")
+
+	assert.Zero(t, rustExt(findRustClass(t, file, "Unit")).TupleArity)
+}
+
+func TestRust_InlineModKeepsNestedItems(t *testing.T) {
+	src := "pub mod inline_mod {\n    use super::*;\n    pub fn inside() -> u8 { 1 }\n    pub struct Inner;\n" +
+		"    mod deeper {}\n    pub type T = u8;\n    pub union U { a: u8 }\n    extern \"C\" { fn c(); }\n}\nmod external;\n"
+	file := parseRust(t, src)
+
+	mod := findRustClass(t, file, "inline_mod")
+	assert.Empty(t, mod.Modifiers, "a module has no kind modifier")
+	require.Len(t, mod.Children, 7)
+	_, isImport := mod.Children[0].(*ir.DistilledImport)
+	assert.True(t, isImport, "use inside a mod is a child of the mod")
+	assert.Equal(t, []string{"inside", "Inner", "deeper", "T", "U", `extern "C"`}, childNames(mod))
+
+	external := findRustClass(t, file, "external")
+	assert.Empty(t, external.Modifiers)
+	assert.Empty(t, external.Children)
+}
+
+func TestRust_Union(t *testing.T) {
+	src := "/// Doc.\npub union FFIData<T> where T: Copy {\n    i: u32,\n    pub f: f32,\n}\n"
+	file := parseRust(t, src)
+	require.Len(t, file.Children, 2, "the doc stays with the union")
+	union := findRustClass(t, file, "FFIData<T>")
+	assert.Equal(t, []ir.Modifier{ir.ModifierUnion}, union.Modifiers)
+	assert.Equal(t, ir.VisibilityPublic, union.Visibility)
+	fields := fieldsOf(union)
+	require.Len(t, fields, 2)
+	assert.Equal(t, "i", fields[0].Name)
+	assert.Equal(t, ir.VisibilityPrivate, fields[0].Visibility)
+	assert.Equal(t, "u32", fields[0].Type.Name)
+	assert.Equal(t, "f", fields[1].Name)
+	assert.Equal(t, ir.VisibilityPublic, fields[1].Visibility)
+	assert.Equal(t, "where T: Copy", rustExt(union).Where)
+}
+
+func TestRust_ExternBlock(t *testing.T) {
+	src := "/// FFI.\nextern \"C\" {\n    fn validate(x: i32) -> bool;\n    pub fn other();\n    pub static environ: *const u8;\n}\n" +
+		"extern {\n    fn bare();\n    type Opaque;\n}\n"
+	file := parseRust(t, src)
+	require.Len(t, file.Children, 3, "the doc stays with the block")
+
+	block := findRustClass(t, file, `extern "C"`)
+	assert.Equal(t, []ir.Modifier{ir.ModifierExtern}, block.Modifiers)
+	assert.Equal(t, ir.VisibilityPublic, block.Visibility)
+	require.Len(t, block.Children, 3)
+
+	validate, ok := block.Children[0].(*ir.DistilledFunction)
+	require.True(t, ok)
+	assert.Equal(t, "validate", validate.Name)
+	assert.Equal(t, ir.VisibilityPrivate, validate.Visibility)
+	assert.Equal(t, []ir.Modifier{ir.ModifierAbstract}, validate.Modifiers)
+	assert.Equal(t, "bool", validate.Returns.Name)
+
+	other, ok := block.Children[1].(*ir.DistilledFunction)
+	require.True(t, ok)
+	assert.Equal(t, ir.VisibilityPublic, other.Visibility)
+	assert.Contains(t, other.Modifiers, ir.ModifierAbstract)
+
+	environ, ok := block.Children[2].(*ir.DistilledField)
+	require.True(t, ok)
+	assert.Equal(t, "environ", environ.Name)
+	assert.Equal(t, ir.VisibilityPublic, environ.Visibility)
+	assert.Equal(t, []ir.Modifier{ir.ModifierStatic}, environ.Modifiers)
+	assert.Equal(t, "*const u8", environ.Type.Name)
+
+	bare := findRustClass(t, file, "extern")
+	assert.Equal(t, []ir.Modifier{ir.ModifierExtern}, bare.Modifiers)
+	assert.Equal(t, []string{"bare", "Opaque"}, childNames(bare))
+	assert.Equal(t, ir.VisibilityPrivate, fieldsOf(bare)[0].Visibility, "an extern type has its own visibility")
+}
+
+func TestRust_MacroRules(t *testing.T) {
+	src := "/// Squares.\nmacro_rules! square_it {\n    ($x:expr) => { $x * $x };\n    ( $a:expr,\n      $b:expr $(,)? ) => ( $a * $b );\n}\n\n" +
+		"#[macro_export]\n// note\nmacro_rules! exported {\n    () => {};\n}\n" +
+		"macro_rules! paren ( [] => {}; );\n"
+	file := parseRust(t, src)
+
+	square := findRustFn(t, file, "square_it")
+	assert.Equal(t, []ir.Modifier{ir.ModifierMacro}, square.Modifiers)
+	assert.Equal(t, ir.VisibilityInternal, square.Visibility)
+	assert.Equal(t, []ir.Parameter{{Name: "($x:expr)"}, {Name: "($a:expr, $b:expr $(,)?)"}}, square.Parameters,
+		"each rule's matcher, normalised; the commas the macro matches stay")
+	assert.Equal(t, "{\n    ($x:expr) => { $x * $x };\n    ( $a:expr,\n      $b:expr $(,)? ) => ( $a * $b );\n}", square.Implementation)
+	doc, ok := file.Children[0].(*ir.DistilledComment)
+	require.True(t, ok, "the doc of a macro stays with it")
+	assert.Equal(t, "Squares.", doc.Text)
+
+	exported := findRustFn(t, file, "exported")
+	assert.Equal(t, ir.VisibilityPublic, exported.Visibility, "#[macro_export] makes a macro public")
+	assert.Equal(t, []ir.Parameter{{Name: "()"}}, exported.Parameters)
+
+	paren := findRustFn(t, file, "paren")
+	assert.Equal(t, "( [] => {}; )", paren.Implementation, "the body ends at its closing delimiter")
+	assert.Equal(t, []ir.Parameter{{Name: "[]"}}, paren.Parameters)
+}
+
+func TestRust_ExternCrate(t *testing.T) {
+	file := parseRust(t, "extern crate alloc;\nextern crate foo as bar;\npub extern crate self as me;\n")
+	require.Len(t, file.Children, 3)
+	want := []ir.DistilledImport{
+		{ImportType: "extern crate", Module: "alloc"},
+		{ImportType: "extern crate", Module: "foo as bar"},
+		{ImportType: "pub extern crate", Module: "self as me"},
+	}
+	for i, w := range want {
+		imp, ok := file.Children[i].(*ir.DistilledImport)
+		require.True(t, ok)
+		assert.Equal(t, w.ImportType, imp.ImportType)
+		assert.Equal(t, w.Module, imp.Module)
+		assert.Empty(t, imp.Symbols)
+	}
+}
+
+func TestRust_PubUse(t *testing.T) {
+	file := parseRust(t, "pub use crate::inner::Thing;\npub(crate) use a::{b, c};\npub( in crate::x ) use y;\nuse z;\n")
+	require.Len(t, file.Children, 4)
+	var types []string
+	for _, child := range file.Children {
+		imp, ok := child.(*ir.DistilledImport)
+		require.True(t, ok)
+		types = append(types, imp.ImportType)
+	}
+	assert.Equal(t, []string{"pub use", "pub(crate) use", "pub(in crate::x) use", "use"}, types)
+	assert.Equal(t, "crate::inner::Thing", file.Children[0].(*ir.DistilledImport).Module)
+}
+
+func TestRust_UseInsideMod(t *testing.T) {
+	file := parseRust(t, "mod tests {\n    use super::*;\n    pub use crate::x::{A, B};\n    fn t() {}\n}\n")
+	mod := findRustClass(t, file, "tests")
+	require.Len(t, mod.Children, 3)
+	first, ok := mod.Children[0].(*ir.DistilledImport)
+	require.True(t, ok)
+	assert.Equal(t, "use", first.ImportType)
+	assert.Equal(t, "super::*", first.Module)
+	second, ok := mod.Children[1].(*ir.DistilledImport)
+	require.True(t, ok)
+	assert.Equal(t, "pub use", second.ImportType)
+	assert.Equal(t, "crate::x", second.Module)
+}
+
+func TestRust_TraitConsts(t *testing.T) {
+	src := "pub trait Animal {\n    type Food;\n    const LEGS: u32;\n    const NAME: &'static str = \"animal\";\n    fn name(&self) -> String;\n}\n"
+	trait := findRustClass(t, parseRust(t, src), "Animal")
+	assert.Equal(t, []string{"Food", "LEGS", "NAME", "name"}, childNames(trait))
+	fields := fieldsOf(trait)
+	require.Len(t, fields, 3)
+	legs, name := fields[1], fields[2]
+	assert.Equal(t, []ir.Modifier{ir.ModifierFinal}, legs.Modifiers)
+	assert.Equal(t, ir.VisibilityPublic, legs.Visibility)
+	assert.Equal(t, "u32", legs.Type.Name)
+	assert.Empty(t, legs.DefaultValue)
+	assert.Equal(t, []ir.Modifier{ir.ModifierFinal}, name.Modifiers)
+	assert.Equal(t, ir.VisibilityPublic, name.Visibility)
+	assert.Equal(t, "&'static str", name.Type.Name)
+	assert.Equal(t, `"animal"`, name.DefaultValue)
+}
+
+func TestRust_Supertraits(t *testing.T) {
+	src := "pub trait Animal: Display + Clone {}\n" +
+		"pub trait Wide<T>: ?Sized + for<'a> Fn(\n    &'a T,\n) + Iterator<Item = T>\n    + 'static {}\n" +
+		"pub trait Plain {}\n"
+	file := parseRust(t, src)
+	assert.Equal(t, []ir.TypeRef{{Name: "Display"}, {Name: "Clone"}}, findRustClass(t, file, "Animal").Extends)
+	assert.Equal(t, []ir.TypeRef{{Name: "?Sized"}, {Name: "for<'a> Fn(&'a T)"}, {Name: "Iterator<Item = T>"}, {Name: "'static"}},
+		findRustClass(t, file, "Wide<T>").Extends)
+	assert.Empty(t, findRustClass(t, file, "Plain").Extends)
+}
+
+func TestRust_WhereOnHeaders(t *testing.T) {
+	src := "pub struct Bounded<T>\nwhere\n    T: Clone,\n{\n    pub value: T,\n}\n" +
+		"pub struct W<T>(T) where T: Clone;\n" +
+		"pub enum E<T> where T: Copy { A(T) }\n" +
+		"pub union U<T> where T: Copy { a: T }\n" +
+		"pub trait Container<T>: Sized where T: Clone {}\n" +
+		"impl<T> Copy for Own<T> where T: ?Sized {}\n" +
+		"impl<T> Bounded<T>\nwhere\n    T: Clone\n        + Default,\n{\n    pub fn reset(&mut self) {}\n}\n" +
+		"pub struct Plain;\n"
+	file := parseRust(t, src)
+	// Normalised, and without the trailing comma of a clause over several
+	// lines: the header goes on with " {" or ";".
+	for name, where := range map[string]string{
+		"Bounded<T>":              "where T: Clone",
+		"W<T>":                    "where T: Clone",
+		"E<T>":                    "where T: Copy",
+		"U<T>":                    "where T: Copy",
+		"Container<T>":            "where T: Clone",
+		"impl<T> Copy for Own<T>": "where T: ?Sized",
+		"impl<T> Bounded<T>":      "where T: Clone + Default",
+		"Plain":                   "",
+	} {
+		assert.Equal(t, where, rustExt(findRustClass(t, file, name)).Where, name)
+	}
+	assert.Equal(t, []string{"value"}, childNames(findRustClass(t, file, "Bounded<T>")))
+	assert.Equal(t, []string{"reset"}, childNames(findRustClass(t, file, "impl<T> Bounded<T>")))
+}
+
+func TestRust_TraitImplAssociatedItemsArePublic(t *testing.T) {
+	src := "impl Iterator for Counter {\n    type Item = u32;\n    const X: u8 = 1;\n    fn next(&mut self) -> Option<u32> { None }\n}\n" +
+		"impl Counter {\n    const Y: u8 = 2;\n    type Z = u8;\n}\n"
+	file := parseRust(t, src)
+	traitImpl := findRustClass(t, file, "impl Iterator for Counter")
+	fields := fieldsOf(traitImpl)
+	require.Len(t, fields, 2)
+	assert.Equal(t, "Item", fields[0].Name)
+	assert.Equal(t, ir.VisibilityPublic, fields[0].Visibility)
+	assert.Equal(t, []ir.Modifier{ir.ModifierTypeAlias}, fields[0].Modifiers)
+	assert.Equal(t, "X", fields[1].Name)
+	assert.Equal(t, ir.VisibilityPublic, fields[1].Visibility)
+
+	for _, field := range fieldsOf(findRustClass(t, file, "impl Counter")) {
+		assert.Equal(t, ir.VisibilityPrivate, field.Visibility, "members of an inherent impl keep their own visibility: %s", field.Name)
+	}
 }

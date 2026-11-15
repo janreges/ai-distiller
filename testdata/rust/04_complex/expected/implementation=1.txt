@@ -64,11 +64,18 @@ pub trait AsyncProcessor {
 
 impl AsyncProcessor for AnalysisService {
 
+    type Item = String;
+
+    type Error = &'static str;
+
     async fn process_async(&self, item: Self::Item) -> Result<String, Self::Error> {
         self.validate_code(&item).await?;
         Ok(format!("Processed: {}", item))
     }
 }
+// Union type for advanced FFI
+
+pub union FFIData;
 
 impl FFIData {
     // Safe constructor

@@ -95,6 +95,8 @@ const (
 	ModifierClass       Modifier = "class"
 	ModifierExport      Modifier = "export"
 	ModifierAnnotation  Modifier = "annotation"
+	ModifierMacro       Modifier = "macro"
+	ModifierUnion       Modifier = "union"
 )
 
 // DistilledNode is the base interface for all IR nodes
@@ -192,6 +194,13 @@ type CSharpExtensions struct {
 type RustExtensions struct {
 	IsUnsafe bool   `json:"is_unsafe,omitempty"`
 	Lifetime string `json:"lifetime,omitempty"`
+	// TupleArity is the number of fields of a tuple struct; its fields are
+	// named "0" to "TupleArity-1", and the ones the stripper removed print as
+	// "_".
+	TupleArity int `json:"tuple_arity,omitempty"`
+	// Where is the where clause of a struct, enum, union, trait or impl
+	// header ("where T: Clone").
+	Where string `json:"where,omitempty"`
 }
 
 // PHPExtensions provides PHP-specific metadata

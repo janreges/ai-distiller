@@ -9,8 +9,8 @@
   Tree: `go run ./cmd/ast-dump --lang rust`.
 - Extensions: `.rs`.
 - Dispatch: `internal/language/rust/tree_sitter_processor.go#walker.items`
-  reads the items of the source file and of every inline `mod`, `impl` and
-  `trait` body, and hands each to
+  reads the items of the source file and of every inline `mod`, `impl`,
+  `trait` and `extern` block body, and hands each to
   `internal/language/rust/tree_sitter_processor.go#walker.item`. It never
   descends into function bodies (`block`), `macro_rules!` bodies or the values
   of `const` and `static` items: items written there are not distilled.
@@ -55,13 +55,14 @@
   the bodies around it stay alive (real crates nest 1 to 3 levels, and the
   budget bounds the tree of each body).
   Calls with `()` or `[]` and macro calls inside bodies are not read.
-- Statements that yield no IR: the macro call itself, `macro_rules!`, `union`,
-  `extern` blocks, `extern crate`, inner attributes (`#![...]`) and the `const`
-  items of a trait. The outer doc comments right before them are dropped, so
-  they do not document the next item; inner docs (`//!`) and plain comments
-  stay (`internal/language/rust/tree_sitter_processor.go#appendStatement`).
-  Outer attributes (`#[...]`) are skipped, and the docs above them stay with
-  the item after them.
+- Statements that yield no IR: the macro call itself, inner attributes
+  (`#![...]`) and a `type` with a default inside a trait. The outer doc
+  comments right before them are dropped, so they do not document the next
+  item; inner docs (`//!`) and plain comments stay
+  (`internal/language/rust/tree_sitter_processor.go#appendStatement`). Outer
+  attributes (`#[...]`) are skipped, and the docs above them stay with the
+  item after them; only `#[macro_export]` is read, by
+  `internal/language/rust/tree_sitter_processor.go#walker.macroExported`.
 - A syntax error becomes an `ERROR` node; one among items is read as items of
   the same list, so the items around a broken region still print. The parse
   fails only when its context is cancelled.
@@ -76,33 +77,57 @@ Decided by `internal/language/rust/tree_sitter_processor.go#walker.visibility`:
   `pub(super)`);
 - `pub`: `public`, and so is `pub(self)`, which Rust treats as private.
 
-Methods inside `impl Trait for Type` have no modifier in the source but are
-`public`. Methods and associated types declared in a trait body are `public`.
-Enum variants are `public`. Other members of a trait impl (`type`, `const`)
-follow the rules above, so they are `private`.
+The members of `impl Trait for Type` (methods, `type`, `const`) have no
+modifier in the source but are `public`, and so is every member declared in a
+trait body (`internal/language/rust/tree_sitter_processor.go#walker.memberVisibility`).
+Enum variants are `public`. An `extern` block is `public`; each of its foreign
+items has its own visibility. A `macro_rules!` is `public` with
+`#[macro_export]` and `internal` without it.
 
 ## Methods and types
 
 - An `impl` block is a `DistilledClass` named after its header with white space
   collapsed: `impl Type`, `impl<T: Clone> Trait for Type<T>`, `impl !Send for
   Type`. It is always `public`, and its children are the items of the block
-  (`internal/language/rust/tree_sitter_processor.go#walker.implItem`). The
-  header's `where` clause is not kept. Methods are not moved into the struct;
-  the struct and each of its `impl` blocks are separate nodes.
-- `struct` is a `DistilledClass` with the modifier `struct` and its named fields
-  as children; tuple-struct fields are not distilled. `enum` is a
-  `DistilledClass` with the modifier `enum` and its variants as public
-  `DistilledField`s: the payload as written (`(f64)`, `{ w: f64, h: f64 }`, white
-  space collapsed, comments removed) is the type, the discriminant the
-  `DefaultValue`. `trait` is a `DistilledClass` with the modifier `abstract`
-  whose children are its methods, associated types and comments.
-- A function without a body (a required trait method) carries `abstract`; the
-  formatter ends it with `;`.
+  (`internal/language/rust/tree_sitter_processor.go#walker.implItem`). Methods
+  are not moved into the struct; the struct and each of its `impl` blocks are
+  separate nodes.
+- `struct` is a `DistilledClass` with the modifier `struct`, `union` one with
+  the modifier `union`, and their fields are children. The fields of a tuple
+  struct are named `0`, `1`, ... with their own visibility, and
+  `Extensions.Rust.TupleArity` is their number
+  (`internal/language/rust/tree_sitter_processor.go#walker.tupleFields`): the
+  formatter prints a field the stripper removed as `_` (`pub struct Pair(pub
+  i32, _);`). `enum` is a `DistilledClass` with the modifier `enum` and its
+  variants as public `DistilledField`s: the payload as written (`(f64)`, `{ w:
+  f64, h: f64 }`, white space collapsed, comments removed) is the type, the
+  discriminant the `DefaultValue`. `trait` is a `DistilledClass` with the
+  modifier `abstract` whose children are its methods, associated types, consts
+  and comments; each supertrait bound is one entry of `Extends`.
+- The `where` clause of a struct, enum, union, trait or impl header is
+  `Extensions.Rust.Where`, normalised and without a trailing comma
+  (`internal/language/rust/tree_sitter_processor.go#walker.setWhere`).
+- A function without a body (a required trait method, a foreign function)
+  carries `abstract`; the formatter ends it with `;`.
 - `mod name { ... }` is a `DistilledClass` without modifiers whose children are
   all the items of the module
   (`internal/language/rust/tree_sitter_processor.go#walker.modItem`); `mod
-  name;` has none. The formatter prints only the fields and functions of a
-  module, with the comments among them.
+  name;` has none. The formatter prints every child of a module, and a class
+  without a `struct`, `union`, `enum`, `abstract` or `extern` modifier whose
+  name does not start with `impl` is a module
+  (`internal/formatter/rust_formatter.go#rustItemKind`).
+- `extern "C" { ... }` is a public `DistilledClass` with the modifier `extern`
+  named `extern "C"` (or `extern`), whose children are its foreign functions
+  and statics (`internal/language/rust/tree_sitter_processor.go#walker.externBlock`).
+  The formatter does not print a block whose members were all removed, nor
+  the docs right above it
+  (`internal/formatter/rust_formatter.go#RustFormatter.FormatNodes`).
+- `macro_rules! name { ... }` is a `DistilledFunction` with the modifier
+  `macro`: one parameter per rule, named after its matcher (normalised, its
+  commas kept), and the body from its opening to its closing delimiter as
+  `Implementation` (`internal/language/rust/tree_sitter_processor.go#walker.macroDefinition`).
+  The formatter prints `macro_rules! name {`, one `(matcher) => ...;` line per
+  rule and `}`, or the body when it is kept.
 - `const` is a `DistilledField` with the modifier `final`, `static` one with
   `static`; the value is `DefaultValue` when it fits on one source line and
   `...` when it spans lines. A type alias (`type X<T> = ...;`) and an associated
@@ -118,17 +143,21 @@ follow the rules above, so they are `private`.
 
 ## IR specifics
 
-- `use` is a `DistilledImport` with `ImportType` `use`
+- `use` is a `DistilledImport` with `ImportType` `use`, after the normalised
+  visibility of a re-export (`pub use`, `pub(crate) use`)
   (`internal/language/rust/tree_sitter_processor.go#walker.useDeclaration`).
   `use a::{b, c as d};` gives `Module` `a` and the symbols `b` and `c` (alias
   `d`), `self` included; `use {a::B, c::D};` gives an empty `Module` and the
   symbols; any other tree is the `Module` (`std::fmt::Display as Disp`,
-  `super::*`). `pub use` is not told apart from `use`.
+  `super::*`). An import follows `--imports` only, whatever its visibility.
+  `extern crate alloc;` is a `DistilledImport` with `ImportType` `extern crate`
+  and `Module` `alloc` (`foo as bar` with an alias)
+  (`internal/language/rust/tree_sitter_processor.go#walker.externCrate`).
 - No `DistilledPackage`: a module is a `DistilledClass` (see above).
 - `Implementation` is the source text of the body, from its `{` to its `}`.
 - Comments: one `DistilledComment` per comment node, in the file and in `mod`,
-  `impl` and `trait` bodies; comments inside struct and enum bodies are not
-  read (`internal/language/rust/tree_sitter_processor.go#walker.comment`). A
+  `impl`, `trait` and `extern` block bodies; comments inside struct, union and
+  enum bodies are not read (`internal/language/rust/tree_sitter_processor.go#walker.comment`). A
   comment that starts on the line where the previous item, attribute or brace
   ends (`pub const X: u8 = 1; // note`) yields none.
   `///` and `/** */` are `doc`; `//!` and `/*! */` are `doc` with `Inner` set
@@ -139,9 +168,9 @@ follow the rules above, so they are `private`.
   are normalised: runs of white space become one space, there is no space
   after `(`, `[` and `{` nor before `)`, `]` and `}`, and no comma before a
   closing bracket
-  (`internal/language/rust/tree_sitter_processor.go#normalize`); a `where`
-  clause keeps its trailing comma.
-- `Extensions` is not used.
+  (`internal/language/rust/tree_sitter_processor.go#normalize`); a function's
+  `where` clause keeps its trailing comma.
+- `Extensions.Rust` holds `TupleArity` and `Where` of a class (see above).
 
 ## Unused files
 

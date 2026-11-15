@@ -37,6 +37,8 @@ pub fn compare_sources<'a, 'b, S1, S2>(source1: &'a S1, source2: &'b S2) -> Resu
 
 impl DataSource for InMemorySource {
 
+    type Content = Vec<u8>;
+
     fn get_content(&self) -> Result<Self::Content, AnalysisError>
 }
 
@@ -46,7 +48,7 @@ impl Debug for InMemorySource {
 }
 // Generic trait with lifetime bounds
 
-pub trait Processor<'a, T> {
+pub trait Processor<'a, T> where T: Clone + 'a {
     type Output: 'a;
 
     fn process(&self, input: &'a T) -> Self::Output;
@@ -59,6 +61,8 @@ pub trait Processor<'a, T> {
 pub struct StringProcessor;
 
 impl<'a> Processor<'a, String> for StringProcessor {
+
+    type Output = &'a str;
 
     fn process(&self, input: &'a String) -> Self::Output
 }

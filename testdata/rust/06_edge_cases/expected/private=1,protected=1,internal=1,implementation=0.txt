@@ -1,10 +1,11 @@
 <file path="source.rs">
 // Crate-level inner doc comment.
 // Second inner doc line.
+extern crate alloc;
 use std::collections::HashMap;
 use std::io::{self, Read, Write as IoWrite};
 use std::fmt::Display as Disp;
-use crate::inner::Thing;
+pub use crate::inner::Thing;
 use std::sync::*;
 use std::{fs::File, path::{Path, PathBuf}};
 // Max retries for the client.
@@ -30,9 +31,9 @@ pub struct Point {
     z: f64,
 }
 
-pub struct Meters;
+pub struct Meters(pub f64);
 
-pub struct Pair;
+pub struct Pair(pub i32, String);
 
 pub struct Unit;
 
@@ -40,7 +41,7 @@ pub struct Wrapper<'a, T: Display + 'a> {
     inner: &'a T,
 }
 
-pub struct Bounded<T> {
+pub struct Bounded<T> where T: Clone {
     pub value: T,
     count: usize,
 }
@@ -58,8 +59,12 @@ pub(crate) enum Level {
     High,
 }
 
-pub trait Animal {
+pub trait Animal: Display + Clone {
     type Food;
+
+    const LEGS: u32;
+
+    const DEFAULT_NAME: &'static str = "animal";
 
     fn name(&self) -> String;
 
@@ -70,7 +75,7 @@ pub trait Animal {
     fn raw(&self) -> *const u8;
 }
 
-pub trait Container<T> {
+pub trait Container<T> where T: Clone {
 
     fn get(&self, i: usize) -> Option<&T>;
 }
@@ -94,7 +99,7 @@ impl<T: Clone> Container<T> for Vec<T> {
     fn get(&self, i: usize) -> Option<&T>
 }
 
-impl<T> Bounded<T> {
+impl<T> Bounded<T> where T: Clone + Default {
 
     pub fn reset(&mut self)
 }
@@ -125,12 +130,34 @@ pub fn multi_line_params(first: u32, second: String) -> bool
 
 fn private_fn()
 
-pub enum inline_mod {
+pub mod inline_mod {
+
+    pub fn inside() -> u8
+
+    pub struct Inner;
 }
 
 mod external_mod;
 
 pub(crate) mod crate_mod;
+
+macro_rules! square_it {
+    ($x:expr) => ...;
+}
+
+macro_rules! exported {
+    () => ...;
+}
+
+extern "C" {
+
+    fn abs(input: i32) -> i32;
+}
+
+pub union IntOrFloat {
+    i: u32,
+    f: f32,
+}
 
 pub fn self_vis()
 
@@ -140,7 +167,7 @@ pub struct Arr<const N: usize> {
     pub data: [u8; N],
 }
 
-pub trait Sized2 {
+pub trait Sized2: Sized {
 }
 
 impl<'a> Wrapper<'a> {
@@ -154,7 +181,7 @@ pub fn takes_closure<F: Fn(i32) -> i32>(f: F) -> i32
 
 pub fn tuple_param((a, b): (i32, i32)) -> i32
 
-pub struct Multi;
+pub struct Multi(pub u8, u16);
 // Doc one.
 //
 // Doc two after a blank doc line.
@@ -167,7 +194,10 @@ pub(crate) fn crate_fn() -> u8
 
 pub(super) fn super_fn()
 
-enum tests {
+mod tests {
+    use super::*;
+
+    fn it_works()
 }
 // A struct declared inside a macro call.
 

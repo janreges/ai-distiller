@@ -1,10 +1,13 @@
 package formatter
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/janreges/ai-distiller/internal/ir"
+	"github.com/janreges/ai-distiller/internal/language/rust"
+	"github.com/janreges/ai-distiller/internal/processor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -61,35 +64,37 @@ func TestRustFormatter_AbstractFunctionEndsWithSemicolon(t *testing.T) {
 	assert.Contains(t, lines, "    fn c(&self)")
 }
 
-func TestRustFormatter_ModWithOnlyNestedItemsIsNotAnEnum(t *testing.T) {
+func TestRustFormatter_InlineModPrintsEveryChild(t *testing.T) {
 	format := func(children ...ir.DistilledNode) string {
-		mod := &ir.DistilledClass{Name: "m", Visibility: ir.VisibilityPublic, Children: children}
-		var b strings.Builder
-		require.NoError(t, NewRustFormatter().FormatNode(&b, mod, 0))
-		return b.String()
+		return formatRust(t, &ir.DistilledClass{Name: "inline_mod", Visibility: ir.VisibilityPublic, Children: children}, 0)
 	}
-	doc := &ir.DistilledComment{Text: "Inner doc", Format: ir.CommentDoc}
+	pub := ir.VisibilityPublic
 
-	// A mod body prints its fields and functions, with the comments among
-	// them; nested items, imports and the docs of nested items alone do not
-	// open a body or turn the mod into an enum.
-	assert.Equal(t, "\npub mod m;\n", format(
-		&ir.DistilledImport{ImportType: "use", Module: "super::*"},
-		doc,
-		&ir.DistilledClass{Name: "Inner", Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{ir.ModifierStruct}},
+	// A class without a kind modifier is a module, also when it holds only
+	// functions (the old enum fallback) or only nested items and imports.
+	assert.Equal(t, "\npub mod inline_mod {\n\n    pub fn inside() -> u8\n}\n", format(
+		&ir.DistilledFunction{Name: "inside", Visibility: pub, Returns: &ir.TypeRef{Name: "u8"}},
 	))
-
-	withMembers := format(
-		&ir.DistilledField{Name: "N", Visibility: ir.VisibilityPublic, Type: &ir.TypeRef{Name: "u8"},
-			DefaultValue: "1", Modifiers: []ir.Modifier{ir.ModifierFinal}},
-		doc,
-		&ir.DistilledFunction{Name: "f", Visibility: ir.VisibilityPublic},
-		&ir.DistilledClass{Name: "Inner", Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{ir.ModifierStruct}},
-	)
-	assert.True(t, strings.HasPrefix(withMembers, "\npub mod m {\n"), withMembers)
-	assert.Contains(t, withMembers, "    // Inner doc\n")
-	assert.Contains(t, withMembers, "    pub fn f()\n")
-	assert.NotContains(t, withMembers, "Inner {")
+	assert.Equal(t, "\npub mod inline_mod {\n"+
+		"    use super::*;\n"+
+		"    // Inner doc\n"+
+		"\n    pub struct Inner;\n"+
+		"\n    pub fn inside() -> u8\n"+
+		"\n    pub type T = u8;\n"+
+		"\n    mod deeper {\n"+
+		"\n        pub const N: u8 = 1;\n"+
+		"    }\n"+
+		"}\n", format(
+		&ir.DistilledImport{ImportType: "use", Module: "super::*"},
+		&ir.DistilledComment{Text: "Inner doc", Format: ir.CommentDoc},
+		&ir.DistilledClass{Name: "Inner", Visibility: pub, Modifiers: []ir.Modifier{ir.ModifierStruct}},
+		&ir.DistilledFunction{Name: "inside", Visibility: pub, Returns: &ir.TypeRef{Name: "u8"}},
+		&ir.DistilledField{Name: "T", Visibility: pub, Modifiers: []ir.Modifier{ir.ModifierTypeAlias}, Type: &ir.TypeRef{Name: "u8"}},
+		&ir.DistilledClass{Name: "deeper", Visibility: ir.VisibilityPrivate, Children: []ir.DistilledNode{
+			&ir.DistilledField{Name: "N", Visibility: pub, Modifiers: []ir.Modifier{ir.ModifierFinal}, Type: &ir.TypeRef{Name: "u8"}, DefaultValue: "1"},
+		}},
+	))
+	assert.Equal(t, "\npub mod inline_mod;\n", format())
 }
 
 func TestRustFormatter_UseGroups(t *testing.T) {
@@ -116,4 +121,179 @@ func TestRustFormatter_EnumVariantPayloadAndDiscriminant(t *testing.T) {
 	var b strings.Builder
 	require.NoError(t, NewRustFormatter().FormatNode(&b, enum, 0))
 	assert.Equal(t, "\npub enum E {\n    A = 1 << 2,\n    B(Vec<(i32, i32)>),\n    C { x: i32 },\n    D,\n}\n", b.String())
+}
+
+// formatRust formats node with the Rust formatter at indent.
+func formatRust(t *testing.T, node ir.DistilledNode, indent int) string {
+	t.Helper()
+	var b strings.Builder
+	require.NoError(t, NewRustFormatter().FormatNode(&b, node, indent))
+	return b.String()
+}
+
+// distillRust runs the real Rust processor, with the stripper for opts, and
+// the text formatter on src, and returns the lines between the <file> tags.
+func distillRust(t *testing.T, src string, opts processor.ProcessOptions) []string {
+	t.Helper()
+	file, err := rust.NewProcessor().ProcessWithOptions(context.Background(), strings.NewReader(src), "x.rs", opts)
+	require.NoError(t, err)
+	var b strings.Builder
+	require.NoError(t, NewLanguageAwareTextFormatter(Options{}).Format(&b, file))
+	lines := strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n")
+	require.GreaterOrEqual(t, len(lines), 2)
+	return lines[1 : len(lines)-1]
+}
+
+// rustDefault are the default flags: public items with their docs, no
+// bodies, no other comments.
+var rustDefault = processor.ProcessOptions{
+	IncludeImports: true, IncludeDocstrings: true, IncludeAnnotations: true, IncludeFields: true, IncludeMethods: true,
+}
+
+// rustAll keeps every item, without bodies.
+var rustAll = processor.ProcessOptions{
+	IncludeImports: true, IncludeDocstrings: true, IncludeAnnotations: true, IncludeFields: true, IncludeMethods: true,
+	IncludePrivate: true,
+}
+
+func withRustExtensions(ext ir.RustExtensions) ir.BaseNode {
+	return ir.BaseNode{Extensions: &ir.NodeExtensions{Rust: &ext}}
+}
+
+func TestRustFormatter_TupleStruct(t *testing.T) {
+	pair := &ir.DistilledClass{BaseNode: withRustExtensions(ir.RustExtensions{TupleArity: 2}), Name: "Pair",
+		Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{ir.ModifierStruct}, Children: []ir.DistilledNode{
+			&ir.DistilledField{Name: "0", Visibility: ir.VisibilityPublic, Type: &ir.TypeRef{Name: "i32"}},
+			&ir.DistilledField{Name: "1", Visibility: ir.VisibilityPrivate, Type: &ir.TypeRef{Name: "String"}},
+		}}
+	assert.Equal(t, "\npub struct Pair(pub i32, String);\n", formatRust(t, pair, 0))
+
+	// A field the stripper removed prints as _, as in rustdoc.
+	src := "pub struct Pair(pub i32, String);\npub struct Meters(f64);\n"
+	assert.Equal(t, []string{"", "pub struct Pair(pub i32, _);", "", "pub struct Meters(_);"}, distillRust(t, src, rustDefault))
+	assert.Equal(t, []string{"", "pub struct Pair(pub i32, String);", "", "pub struct Meters(f64);"}, distillRust(t, src, rustAll))
+}
+
+func TestRustFormatter_Union(t *testing.T) {
+	union := &ir.DistilledClass{Name: "FFIData", Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{ir.ModifierUnion},
+		Children: []ir.DistilledNode{
+			&ir.DistilledField{Name: "i", Visibility: ir.VisibilityPrivate, Type: &ir.TypeRef{Name: "u32"}},
+			&ir.DistilledField{Name: "f", Visibility: ir.VisibilityPublic, Type: &ir.TypeRef{Name: "f32"}},
+		}}
+	assert.Equal(t, "\npub union FFIData {\n    i: u32,\n    pub f: f32,\n}\n", formatRust(t, union, 0))
+}
+
+func TestRustFormatter_ExternBlock(t *testing.T) {
+	abstract := []ir.Modifier{ir.ModifierAbstract}
+	block := &ir.DistilledClass{Name: `extern "C"`, Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{ir.ModifierExtern},
+		Children: []ir.DistilledNode{
+			&ir.DistilledFunction{Name: "validate", Visibility: ir.VisibilityPrivate, Modifiers: abstract,
+				Parameters: []ir.Parameter{{Name: "x", Type: ir.TypeRef{Name: "i32"}}}, Returns: &ir.TypeRef{Name: "bool"}},
+			&ir.DistilledFunction{Name: "other", Visibility: ir.VisibilityPublic, Modifiers: abstract},
+			&ir.DistilledField{Name: "environ", Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{ir.ModifierStatic},
+				Type: &ir.TypeRef{Name: "*const u8"}},
+		}}
+	assert.Equal(t, "\nextern \"C\" {\n\n    fn validate(x: i32) -> bool;\n\n    pub fn other();\n\n    pub static environ: *const u8;\n}\n",
+		formatRust(t, block, 0))
+
+	// A block whose members were all removed is not printed, nor are the
+	// docs above it, at the top level and in a module; a plain comment stays.
+	src := "/// FFI doc.\nextern \"C\" {\n    fn abs(input: i32) -> i32;\n}\npub fn after() {}\n"
+	assert.Equal(t, []string{"", "pub fn after()"}, distillRust(t, src, rustDefault))
+	inMod := "pub mod m {\n    // note\n    /// FFI doc.\n    extern \"C\" {\n        fn abs();\n    }\n    pub fn after() {}\n}\n"
+	withComments := rustDefault
+	withComments.IncludeComments = true
+	assert.Equal(t, []string{"", "pub mod m {", "    // note", "", "    pub fn after()", "}"}, distillRust(t, inMod, withComments))
+	assert.Equal(t, []string{"// FFI doc.", "", "extern \"C\" {", "", "    fn abs(input: i32) -> i32;", "}", "", "pub fn after()"},
+		distillRust(t, src, rustAll))
+}
+
+func TestRustFormatter_MacroRules(t *testing.T) {
+	macro := &ir.DistilledFunction{Name: "square_it", Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{ir.ModifierMacro},
+		Parameters: []ir.Parameter{{Name: "($x:expr)"}, {Name: "($a:expr, $b:expr)"}}}
+	assert.Equal(t, "\nmacro_rules! square_it {\n    ($x:expr) => ...;\n    ($a:expr, $b:expr) => ...;\n}\n", formatRust(t, macro, 0))
+
+	macro.Implementation = "{\n    ($x:expr) => { $x * $x };\n}"
+	assert.Equal(t, "\nmacro_rules! square_it {\n    ($x:expr) => { $x * $x };\n}\n", formatRust(t, macro, 0))
+
+	inMod := &ir.DistilledClass{Name: "m", Visibility: ir.VisibilityPublic, Children: []ir.DistilledNode{
+		&ir.DistilledFunction{Name: "e", Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{ir.ModifierMacro},
+			Parameters: []ir.Parameter{{Name: "()"}}},
+	}}
+	assert.Equal(t, "\npub mod m {\n\n    macro_rules! e {\n        () => ...;\n    }\n}\n", formatRust(t, inMod, 0))
+}
+
+func TestRustFormatter_ExternCrateAndPubUse(t *testing.T) {
+	format := func(imp *ir.DistilledImport) string { return formatRust(t, imp, 0) }
+	assert.Equal(t, "extern crate alloc;\n", format(&ir.DistilledImport{ImportType: "extern crate", Module: "alloc"}))
+	assert.Equal(t, "extern crate foo as bar;\n", format(&ir.DistilledImport{ImportType: "extern crate", Module: "foo as bar"}))
+	assert.Equal(t, "pub extern crate self as me;\n", format(&ir.DistilledImport{ImportType: "pub extern crate", Module: "self as me"}))
+	assert.Equal(t, "pub use crate::inner::Thing;\n", format(&ir.DistilledImport{ImportType: "pub use", Module: "crate::inner::Thing"}))
+	assert.Equal(t, "pub(crate) use a::{b, c};\n", format(&ir.DistilledImport{ImportType: "pub(crate) use", Module: "a",
+		Symbols: []ir.ImportedSymbol{{Name: "b"}, {Name: "c"}}}))
+
+	// pub use is an import: --imports decides, not visibility.
+	src := "pub use crate::inner::Thing;\nextern crate alloc;\n"
+	assert.Equal(t, []string{"pub use crate::inner::Thing;", "extern crate alloc;"}, distillRust(t, src, rustDefault))
+	noImports := rustAll
+	noImports.IncludeImports = false
+	assert.Empty(t, distillRust(t, src, noImports))
+}
+
+func TestRustFormatter_TraitConstsAndSupertraits(t *testing.T) {
+	pub := ir.VisibilityPublic
+	trait := &ir.DistilledClass{Name: "Animal", Visibility: pub, Modifiers: []ir.Modifier{ir.ModifierAbstract},
+		Extends: []ir.TypeRef{{Name: "Display"}, {Name: "Clone"}},
+		Children: []ir.DistilledNode{
+			&ir.DistilledField{Name: "Food", Visibility: pub, Modifiers: []ir.Modifier{ir.ModifierTypeAlias}},
+			&ir.DistilledField{Name: "LEGS", Visibility: pub, Modifiers: []ir.Modifier{ir.ModifierFinal}, Type: &ir.TypeRef{Name: "u32"}},
+			&ir.DistilledField{Name: "NAME", Visibility: pub, Modifiers: []ir.Modifier{ir.ModifierFinal},
+				Type: &ir.TypeRef{Name: "&'static str"}, DefaultValue: `"animal"`},
+		}}
+	assert.Equal(t, "\npub trait Animal: Display + Clone {\n    type Food;\n\n    const LEGS: u32;\n\n    const NAME: &'static str = \"animal\";\n}\n",
+		formatRust(t, trait, 0))
+}
+
+func TestRustFormatter_WhereOnHeaders(t *testing.T) {
+	where := func(clause string) ir.BaseNode { return withRustExtensions(ir.RustExtensions{Where: clause}) }
+	pub := ir.VisibilityPublic
+	value := &ir.DistilledField{Name: "value", Visibility: pub, Type: &ir.TypeRef{Name: "T"}}
+
+	assert.Equal(t, "\npub struct Bounded<T> where T: Clone {\n    pub value: T,\n}\n", formatRust(t, &ir.DistilledClass{
+		BaseNode: where("where T: Clone"), Name: "Bounded<T>", Visibility: pub, Modifiers: []ir.Modifier{ir.ModifierStruct},
+		Children: []ir.DistilledNode{value}}, 0))
+	assert.Equal(t, "\npub struct S<T> where T: Clone;\n", formatRust(t, &ir.DistilledClass{
+		BaseNode: where("where T: Clone"), Name: "S<T>", Visibility: pub, Modifiers: []ir.Modifier{ir.ModifierStruct}}, 0))
+	assert.Equal(t, "\npub struct W<T>(T) where T: Clone;\n", formatRust(t, &ir.DistilledClass{
+		BaseNode: withRustExtensions(ir.RustExtensions{TupleArity: 1, Where: "where T: Clone"}), Name: "W<T>", Visibility: pub,
+		Modifiers: []ir.Modifier{ir.ModifierStruct},
+		Children:  []ir.DistilledNode{&ir.DistilledField{Name: "0", Visibility: ir.VisibilityPrivate, Type: &ir.TypeRef{Name: "T"}}}}, 0))
+	assert.Equal(t, "\npub enum E<T> where T: Copy {\n    A(T),\n}\n", formatRust(t, &ir.DistilledClass{
+		BaseNode: where("where T: Copy"), Name: "E<T>", Visibility: pub, Modifiers: []ir.Modifier{ir.ModifierEnum},
+		Children: []ir.DistilledNode{&ir.DistilledField{Name: "A", Visibility: pub, Type: &ir.TypeRef{Name: "(T)"}}}}, 0))
+	assert.Equal(t, "\npub union U<T> where T: Copy {\n    pub value: T,\n}\n", formatRust(t, &ir.DistilledClass{
+		BaseNode: where("where T: Copy"), Name: "U<T>", Visibility: pub, Modifiers: []ir.Modifier{ir.ModifierUnion},
+		Children: []ir.DistilledNode{value}}, 0))
+	assert.Equal(t, "\npub trait Container<T>: Sized where T: Clone {\n}\n", formatRust(t, &ir.DistilledClass{
+		BaseNode: where("where T: Clone"), Name: "Container<T>", Visibility: pub, Modifiers: []ir.Modifier{ir.ModifierAbstract},
+		Extends: []ir.TypeRef{{Name: "Sized"}}}, 0))
+	assert.Equal(t, "\nimpl<T> Copy for Own<T> where T: ?Sized {\n}\n", formatRust(t, &ir.DistilledClass{
+		BaseNode: where("where T: ?Sized"), Name: "impl<T> Copy for Own<T>", Visibility: pub}, 0))
+}
+
+func TestRustFormatter_TraitImplAssociatedItems(t *testing.T) {
+	pub := ir.VisibilityPublic
+	members := []ir.DistilledNode{
+		&ir.DistilledField{Name: "Item", Visibility: pub, Modifiers: []ir.Modifier{ir.ModifierTypeAlias}, Type: &ir.TypeRef{Name: "u32"}},
+		&ir.DistilledField{Name: "X", Visibility: pub, Modifiers: []ir.Modifier{ir.ModifierFinal}, Type: &ir.TypeRef{Name: "u8"}, DefaultValue: "1"},
+	}
+	assert.Equal(t, "\nimpl Iterator for Counter {\n\n    type Item = u32;\n\n    const X: u8 = 1;\n}\n",
+		formatRust(t, &ir.DistilledClass{Name: "impl Iterator for Counter", Visibility: pub, Children: members}, 0))
+	assert.Equal(t, "\nimpl Counter {\n\n    pub type Item = u32;\n\n    pub const X: u8 = 1;\n}\n",
+		formatRust(t, &ir.DistilledClass{Name: "impl Counter", Visibility: pub, Children: members}, 0))
+
+	// In the default output, through the real processor and stripper.
+	src := "impl Iterator for Counter {\n    type Item = u32;\n    fn next(&mut self) -> Option<u32> { None }\n}\n"
+	assert.Equal(t, []string{"", "impl Iterator for Counter {", "", "    type Item = u32;", "",
+		"    fn next(&mut self) -> Option<u32>", "}"}, distillRust(t, src, rustDefault))
 }

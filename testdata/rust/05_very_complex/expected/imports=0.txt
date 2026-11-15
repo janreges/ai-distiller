@@ -56,6 +56,10 @@ impl<T: Clone, const N: usize> FixedArray<T, N> {
 
 impl<T: Clone, const N: usize> AdvancedContainer<N> for FixedArray<T, N> {
 
+    type Item<'a> = &'a T where T: 'a;
+
+    type Iterator<'a> = std::iter::FilterMap< std::slice::Iter<'a, Option<T>>, fn(&'a Option<T>) -> Option<&'a T> > where T: 'a;
+
     fn get_items<'a>(&'a self) -> Self::Iterator<'a>
 
     fn process_batch<'a, F>(&'a self, f: F) -> [Option<Self::Item<'a>>; N] where F: Fn(usize) -> Option<Self::Item<'a>>

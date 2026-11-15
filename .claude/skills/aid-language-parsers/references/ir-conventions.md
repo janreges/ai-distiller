@@ -62,8 +62,9 @@ public type whose members are all removed goes too
 `embedded`, `struct`, `enum`, `type_alias`, `export`, ...). Some processors
 reuse a word with their own meaning: Go marks methods with `abstract`, Swift
 marks actors with `async`, Kotlin objects and Ruby singleton methods are
-`static`, Rust marks `struct`, `enum` and `type_alias`. Read the language's
-reference before relying on a modifier.
+`static`, Rust marks `struct`, `union`, `enum`, `extern` (an extern block),
+`macro` (a `macro_rules!`) and `type_alias`. Read the language's reference
+before relying on a modifier.
 
 ## Comments
 
@@ -115,8 +116,9 @@ flags it stays: a C# namespace holding only an internal class prints
 `namespace N;`.
 
 `Extensions` carries language-specific data (`internal/ir/types.go#NodeExtensions`).
-On the live path only Java (`Extensions.Java`) and PHP (`Extensions.PHP`) set
-it.
+On the live path only Java (`Extensions.Java`), PHP (`Extensions.PHP`) and
+Rust (`Extensions.Rust`: a tuple struct's arity and a header's `where` clause)
+set it.
 
 ## Encoded differently per language
 

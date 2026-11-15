@@ -68,6 +68,8 @@ pub enum FileError {
 
 impl FileOperations for SourceFile {
 
+    type Error = FileError;
+
     fn read_content(&self) -> Result<&str, Self::Error> {
         if self.is_valid() {
             Ok(&self.content)
