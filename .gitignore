@@ -16,6 +16,8 @@ aid.*.txt
 # Binary files
 aid
 aid-*
+# ...but not the skill directories, which are named aid-<topic>
+!.claude/skills/*/
 
 # Build directories
 build/
