@@ -60,8 +60,12 @@
   comments right before them are dropped, so they do not document the next
   item; inner docs (`//!`) and plain comments stay
   (`internal/language/rust/tree_sitter_processor.go#appendStatement`). Outer
-  attributes (`#[...]`) are skipped, and the docs above them stay with the
-  item after them; only `#[macro_export]` is read, by
+  attributes (`#[...]`) are the `Decorators` of the item, field or variant
+  after them (normalised text, `#[...]` included;
+  `internal/language/rust/tree_sitter_processor.go#decorated`), and the docs
+  above them stay with that item; the attributes of a tuple-struct field,
+  parameter, statement or `use` are not distilled, and `#[macro_export]` is
+  also read by
   `internal/language/rust/tree_sitter_processor.go#walker.macroExported`.
 - A syntax error becomes an `ERROR` node; one among items is read as items of
   the same list, so the items around a broken region still print. The parse
@@ -162,14 +166,17 @@ items has its own visibility. A `macro_rules!` is `public` with
 - No `DistilledPackage`: a module is a `DistilledClass` (see above).
 - `Implementation` is the source text of the body, from its `{` to its `}`.
 - Comments: one `DistilledComment` per comment node, in the file and in `mod`,
-  `impl`, `trait` and `extern` block bodies; comments inside struct, union and
-  enum bodies are not read (`internal/language/rust/tree_sitter_processor.go#walker.comment`). A
+  `impl`, `trait` and `extern` block bodies and in braced struct, union and
+  enum bodies (`internal/language/rust/tree_sitter_processor.go#walker.bodyMembers`;
+  not inside a tuple struct's parentheses)
+  (`internal/language/rust/tree_sitter_processor.go#walker.comment`). A
   comment that starts on the line where the previous item, attribute or brace
   ends (`pub const X: u8 = 1; // note`) yields none.
   `///` and `/** */` are `doc`; `//!` and `/*! */` are `doc` with `Inner` set
   (they document the enclosing item); other `//` comments (also `////`) are
   `line`, other `/* */` comments `block`. The text loses its delimiters and the
-  doc marker; a block comment keeps its ` * ` gutters.
+  doc marker; a doc block also loses its ` * ` gutters (`stripGutters`), a plain
+  block comment keeps them.
 - Multi-line types, parameters, return types, `where` clauses and `use` trees
   are normalised: runs of white space become one space, there is no space
   after `(`, `[` and `{` nor before `)`, `]` and `}`, and no comma before a

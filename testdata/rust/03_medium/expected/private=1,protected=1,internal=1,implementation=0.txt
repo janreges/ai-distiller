@@ -1,25 +1,26 @@
 <file path="source.rs">
 use std::fmt::{Debug, Display};
-// A custom error type for our parsing operations.
+/// A custom error type for our parsing operations.
 
+#[derive(Debug)]
 pub enum AnalysisError {
     IoError(std::io::Error),
     EmptyContent,
     InvalidFormat(String),
 }
-// A trait for a data source that can be analyzed.
-// This uses an associated type, a more advanced trait feature.
+/// A trait for a data source that can be analyzed.
+/// This uses an associated type, a more advanced trait feature.
 
 pub trait DataSource {
     type Content: AsRef<[u8]>;
 
     fn get_content(&self) -> Result<Self::Content, AnalysisError>;
-    // Default method with lifetime parameters
+    /// Default method with lifetime parameters
 
     fn content_slice<'a>(&'a self) -> Option<&'a [u8]> where Self::Content: 'a
 }
-// A generic container for an analysis result.
-// It's generic over the type `T` which must implement `Display`.
+/// A generic container for an analysis result.
+/// It's generic over the type `T` which must implement `Display`.
 
 pub struct AnalysisResult<T: Display> {
     source_id: String,
@@ -28,21 +29,21 @@ pub struct AnalysisResult<T: Display> {
 }
 
 impl<T: Display> AnalysisResult<T> {
-    // Create new analysis result
+    /// Create new analysis result
 
     pub fn new(source_id: String, result: T) -> Self
-    // Private validation method
+    /// Private validation method
 
     fn is_valid(&self) -> bool
-    // Internal metadata setter
+    /// Internal metadata setter
 
     pub(crate) fn set_metadata(&mut self, metadata: String)
 }
-// A generic function with a lifetime `'a` and trait bounds.
-// It analyzes a data source and returns a result.
+/// A generic function with a lifetime `'a` and trait bounds.
+/// It analyzes a data source and returns a result.
 
 pub fn analyze<'a, S>(source: &'a S) -> Result<AnalysisResult<String>, AnalysisError> where S: DataSource + ?Sized
-// Advanced generic function with multiple lifetime parameters
+/// Advanced generic function with multiple lifetime parameters
 
 pub fn compare_sources<'a, 'b, S1, S2>(source1: &'a S1, source2: &'b S2) -> Result<bool, AnalysisError> where S1: DataSource + Debug, S2: DataSource + Debug
 
@@ -61,17 +62,17 @@ impl Debug for InMemorySource {
 
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
 }
-// Generic trait with lifetime bounds
+/// Generic trait with lifetime bounds
 
 pub trait Processor<'a, T> where T: Clone + 'a {
     type Output: 'a;
 
     fn process(&self, input: &'a T) -> Self::Output;
-    // Private helper method
+    /// Private helper method
 
     fn validate_input(&self, _input: &T) -> bool
 }
-// Implementation for string processing
+/// Implementation for string processing
 
 pub struct StringProcessor;
 

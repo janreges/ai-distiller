@@ -6,6 +6,8 @@ AI Distiller parses Rust with tree-sitter (the `tree-sitter-rust` grammar v0.24.
 
 Rust support in AI Distiller captures the essential structure of Rust code including ownership annotations, lifetime parameters, trait bounds, and async functions. A declaration written across several lines (a parameter list, a `where` clause, a `use` group) is printed on one line. Items inside function bodies are not distilled; the items inside an item-level macro call with braces (`cfg_if! { ... }`, `lazy_static! { ... }`) are. The limitations are listed below.
 
+Doc comments print in their own style (`///` and `/** */` as `///`, `//!` and `/*! */` as `//!`, with the ` * ` gutters of a block removed), also inside struct, enum and union bodies above their fields and variants; other comments print as `//` with `--comments=1`. The outer attributes of an item, a named field and an enum variant (`#[derive(Debug)]`, `#[repr(C)]`, `#[serde(rename = "x")]`, `#[default]`) print one per line above it, after its docs, unless `--annotations=0` is given.
+
 ## Supported Rust Constructs
 
 ### Core Language Features
@@ -39,31 +41,13 @@ Rust support in AI Distiller captures the essential structure of Rust code inclu
 | **Return types** | ✅ Full | Including `impl Trait`, `-> Result<T, E>` |
 | **Self types** | ✅ Full | `self`, `&self`, `&mut self`, `&'a self` |
 
-## Recent Fixes (2025-06-15)
+## Recent Fixes
 
-1. **&self parameters missing** (✅ Fixed)
-   - **Issue**: Methods with lifetime-annotated self like `&'a self` were missing parameters
-   - **Fix**: Enhanced `isSelfParameter()` to handle complex self patterns
-   - **Impact**: All self parameter variations now correctly displayed
-
-2. **Complex return types cut off** (✅ Fixed)
-   - **Issue**: Return types like `-> Option<HashMap<String, Vec<T>>>` were truncated
-   - **Fix**: Changed regex from non-greedy to greedy matching
-   - **Impact**: Full return type signatures preserved
-
-3. **Generic return types** (✅ Fixed)
-   - **Issue**: Generic parameters in return types were not captured
-   - **Fix**: Improved return type extraction in line parser
-   - **Impact**: Complete generic type information shown
-
-4. **Trait methods showing `pub`** (✅ Fixed)
-   - **Issue**: Methods in trait definitions incorrectly showed `pub` keyword
-   - **Fix**: Added context detection to suppress visibility in traits
-   - **Impact**: Idiomatic Rust trait syntax
+Earlier fixes (2025): `&'a self` and other self parameters print; complex and generic return types are kept whole; the members of a trait print without `pub`.
 
 Later fixes: methods of `impl Trait for Type` are public (as visible as the trait) and print in the default output; one-line structs and enums get their fields and variants; a trait's members after a default method are no longer lost; printed bodies (`--implementation=1`) no longer repeat the signature; constant names print as written.
 
-November 2026: the line parser was replaced by a tree-sitter parser. Multi-line signatures, `where` clauses and `use` groups, impl generics, trait `async fn` members, and the generics of type aliases and associated types now print; trailing comments are no longer glued into types; the items inside item-level macro calls with braces print; a comment at the end of a code line no longer prints as a comment line of its own. Then inline modules with all their items, tuple-struct fields, unions, `extern` blocks, `macro_rules!` definitions, `extern crate`, `pub use`, trait consts, supertraits, `where` clauses on item headers and the associated types of trait impls started to print, each with the docs above it.
+November 2026: the line parser was replaced by a tree-sitter parser. Multi-line signatures, `where` clauses and `use` groups, impl generics, trait `async fn` members, and the generics of type aliases and associated types now print; trailing comments are no longer glued into types; the items inside item-level macro calls with braces print; a comment at the end of a code line no longer prints as a comment line of its own. Then inline modules with all their items, tuple-struct fields, unions, `extern` blocks, `macro_rules!` definitions, `extern crate`, `pub use`, trait consts, supertraits, `where` clauses on item headers and the associated types of trait impls started to print, each with the docs above it. Finally doc comments print as `///` and `//!` instead of `//`, struct, enum and union bodies print the docs above their fields and variants, and outer attributes print.
 
 ## Key Features
 
@@ -165,8 +149,11 @@ pub async fn fetch_user(id: u64) -> Result<User, ApiError> {
 ```
 <file path="api.rs">
 
+#[derive(Debug, thiserror::Error)]
 pub enum ApiError {
+    #[error("Network error: {0}")]
     Network(#[from] reqwest::Error),
+    #[error("Parse error: {0}")]
     Parse(#[from] serde_json::Error),
 }
 
@@ -187,10 +174,9 @@ The members of `impl Trait for Type` (methods, associated types and consts) and 
 
 ## Known Limitations
 
-1. **Macros**: a `macro_rules!` prints its rules' matchers, not what they expand to, and macros are not expanded; the items inside a macro call are distilled only for an item-level call with braces, only the items the parser can read (or those in the `{}` blocks of a statement it cannot read, as in `cfg_if!`), and never inside `()` or `[]` calls or function bodies
-2. **Attributes**: `#[derive(...)]` and other attributes on items, fields and tuple-struct fields are dropped
-3. **Doc comments**: `///` docs are printed with `//`
-4. **Empty bodies**: a struct or union whose fields are all hidden prints as `pub struct X;`, and so does `struct X();`; a module whose items are all hidden prints as `pub mod x;`
+1. **Macros**: a `macro_rules!` prints its rules' matchers, not what they expand to, and macros are not expanded; the items inside a macro call are distilled only for an item-level call with braces whose body starts like items (an item keyword, an attribute, the `if` of `cfg_if!` or a macro call; not the arms of `select!` or a table), only when the body parses within a budget (the parser's work on about 75 KiB of the densest code or 300 KiB of typical code; a body over it prints nothing), only the items the parser can read (or those in the `{}` blocks of a statement it cannot read, as in `cfg_if!`), and never inside `()` or `[]` calls or function bodies
+2. **Attributes**: inner attributes (`#![allow(dead_code)]`) are not printed, nor are the attributes of parameters, statements, expressions, `use` declarations and the fields of a tuple struct (`struct S(#[serde(skip)] u8);` prints `struct S(u8);`)
+3. **Empty bodies**: a struct or union whose fields are all hidden prints as `pub struct X;`, and so does `struct X();`; a module whose items are all hidden prints as `pub mod x;`
 
 ## Best Practices
 

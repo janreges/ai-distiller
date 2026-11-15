@@ -7,30 +7,31 @@ use std::pin::Pin;
 extern "C" {
 
     fn validate_syntax_natively(input: *const c_char) -> i32;
-    // Additional FFI function for complex validation
+    /// Additional FFI function for complex validation
 
     fn complex_validation(input: *const c_char, length: usize, callback: extern "C" fn(i32)) -> i32;
 }
-// A simple declarative macro for creating a new, validated config.
-// The parser must handle the unique syntax of `macro_rules!`.
+/// A simple declarative macro for creating a new, validated config.
+/// The parser must handle the unique syntax of `macro_rules!`.
 
 macro_rules! new_config {
     ($name:expr, $version:expr) => ...;
     ($name:expr) => ...;
 }
-// Macro for generating validation functions
+/// Macro for generating validation functions
 
 macro_rules! generate_validator {
     ($fn_name:ident, $error_msg:expr) => ...;
 }
 
+#[derive(Clone)]
 pub struct Config {
     name: String,
     version: u32,
     is_validated: bool,
 }
-// A service that uses a shared, mutable cache.
-// This tests `Arc<Mutex<T>>`, a very common concurrent pattern.
+/// A service that uses a shared, mutable cache.
+/// This tests `Arc<Mutex<T>>`, a very common concurrent pattern.
 
 pub struct AnalysisService {
     cache: Arc<Mutex<Vec<String>>>,
@@ -38,34 +39,34 @@ pub struct AnalysisService {
 }
 
 impl AnalysisService {
-    // Create new analysis service
+    /// Create new analysis service
 
     pub fn new() -> Self
-    // Asynchronously validates a piece of code using the native FFI function.
-    // This tests `async fn` syntax and `unsafe` blocks.
+    /// Asynchronously validates a piece of code using the native FFI function.
+    /// This tests `async fn` syntax and `unsafe` blocks.
 
     pub async fn validate_code(&self, code: &str) -> Result<bool, &'static str>
 
     fn name_from_code(&self, code: &str) -> String
-    // Internal unsafe method for advanced operations
+    /// Internal unsafe method for advanced operations
 
     pub(crate) unsafe fn direct_memory_access(&self, ptr: *mut u8, len: usize) -> Option<String>
-    // Private async method
+    /// Private async method
 
     async fn process_cache(&self) -> usize
 }
-// Advanced trait with async methods
+/// Advanced trait with async methods
 
 pub trait AsyncProcessor {
     type Item;
     type Error;
 
     async fn process_async(&self, item: Self::Item) -> Result<String, Self::Error>;
-    // Default async implementation
+    /// Default async implementation
 
     async fn batch_process(&self, items: Vec<Self::Item>) -> Vec<Result<String, Self::Error>>
 }
-// Implementation for the analysis service
+/// Implementation for the analysis service
 
 impl AsyncProcessor for AnalysisService {
 
@@ -75,8 +76,9 @@ impl AsyncProcessor for AnalysisService {
 
     async fn process_async(&self, item: Self::Item) -> Result<String, Self::Error>
 }
-// Union type for advanced FFI
+/// Union type for advanced FFI
 
+#[repr(C)]
 pub union FFIData {
     integer: i64,
     floating: f64,
@@ -84,13 +86,13 @@ pub union FFIData {
 }
 
 impl FFIData {
-    // Safe constructor
+    /// Safe constructor
 
     pub fn new_integer(value: i64) -> Self
-    // Unsafe getter
+    /// Unsafe getter
 
     pub unsafe fn get_integer(&self) -> i64
-    // Private unsafe method
+    /// Private unsafe method
 
     unsafe fn get_bytes(&self) -> &[u8; 8]
 }

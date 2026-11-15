@@ -1,13 +1,13 @@
 <file path="source.rs">
-// A module to handle application settings.
-// This tests the parser's ability to handle inline module definitions.
+/// A module to handle application settings.
+/// This tests the parser's ability to handle inline module definitions.
 
 pub mod settings {
-    // The public name of the application.
+    /// The public name of the application.
 
     pub const APP_NAME: &str = "AI Distiller";
-    // Returns the full version string.
-    // This function is public and can be called from outside `settings`.
+    /// Returns the full version string.
+    /// This function is public and can be called from outside `settings`.
 
     pub fn get_version() -> String {
         // This function demonstrates internal logic and calls a private function.

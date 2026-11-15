@@ -140,8 +140,9 @@ func (w *walker) children(node *sitter.Node) []sitter.Node {
 // Comments are added where they are, except a comment that starts on the
 // line where the previous sibling that is not a comment ends (an item, an
 // attribute, a brace): it remarks on that line and yields no IR. Outer
-// attributes are skipped and leave the docs above them to the item after
-// them; a #[macro_export] among them makes the macro_rules! after them public.
+// attributes are the Decorators of the item after them and leave the docs
+// above them to that item; a #[macro_export] among them makes the
+// macro_rules! after them public. Inner attributes (#![...]) yield no IR.
 // The doc comments right before a statement that yields no IR (a macro call,
 // an inner attribute) are dropped, so they do not document the next item
 // (appendStatement). The items inside a macro call with braces follow its
@@ -163,6 +164,8 @@ func (w *walker) items(node *sitter.Node, parent *ir.DistilledClass, in containe
 	if top {
 		prev = 0
 	}
+	// attrs are the outer attributes waiting for their item.
+	var attrs attributes
 	kids := w.children(node)
 	for i := range kids {
 		child := &kids[i]
@@ -173,8 +176,14 @@ func (w *walker) items(node *sitter.Node, parent *ir.DistilledClass, in containe
 			continue
 		}
 		prev = lastRow(child)
+		var decorators attributes
+		if child.IsNamed() && child.Kind() != "attribute_item" {
+			decorators, attrs = attrs, attributes{}
+		}
 		switch {
-		case !child.IsNamed() || child.Kind() == "attribute_item":
+		case child.Kind() == "attribute_item":
+			attrs.add(w, child)
+		case !child.IsNamed():
 		case top && (child.Kind() == "ERROR" || child.Kind() == "expression_statement" && child.HasError()):
 			*list = appendStatement(*list, nil)
 			w.expandBlocksIn(child, parent, in)
@@ -190,9 +199,65 @@ func (w *walker) items(node *sitter.Node, parent *ir.DistilledClass, in containe
 				w.expand(body, parent, in, w.depth+1)
 			}
 		case child.Kind() == "macro_definition":
-			*list = appendStatement(*list, w.macroDefinition(child, w.macroExported(kids[:i])))
+			*list = appendStatement(*list, decorated(w.macroDefinition(child, w.macroExported(kids[:i])), decorators))
 		default:
-			*list = appendStatement(*list, w.item(child, in))
+			*list = appendStatement(*list, decorated(w.item(child, in), decorators))
+		}
+	}
+}
+
+// attributes are the outer attributes before an item, field or variant.
+type attributes struct {
+	// texts are the attributes in source order, each one on a line.
+	texts []string
+}
+
+// add appends the attribute_item node.
+func (a *attributes) add(w *walker, node *sitter.Node) {
+	a.texts = append(a.texts, w.flat(node))
+}
+
+// decorated sets the Decorators of node, the IR of an item, to the attributes
+// and returns node. A use declaration takes none: its attributes are not
+// printed. The item keeps its own location, which starts after its attributes.
+func decorated(node ir.DistilledNode, attrs attributes) ir.DistilledNode {
+	if len(attrs.texts) == 0 {
+		return node
+	}
+	switch n := node.(type) {
+	case *ir.DistilledFunction:
+		n.Decorators = attrs.texts
+	case *ir.DistilledClass:
+		n.Decorators = attrs.texts
+	case *ir.DistilledField:
+		n.Decorators = attrs.texts
+	}
+	return node
+}
+
+// bodyMembers adds the members of a field_declaration_list or an
+// enum_variant_list to class: the comments of the body, placed as items()
+// places them, and, for each child of kind member, the node that add returns
+// (nil for none) with the outer attributes before it as Decorators.
+func (w *walker) bodyMembers(body *sitter.Node, class *ir.DistilledClass, member string, add func(*sitter.Node) ir.DistilledNode) {
+	prev := -1
+	var attrs attributes
+	for _, child := range w.children(body) {
+		if isComment(&child) {
+			if int(child.StartPosition().Row) != prev {
+				class.Children = append(class.Children, w.comment(&child))
+			}
+			continue
+		}
+		prev = lastRow(&child)
+		switch child.Kind() {
+		case "attribute_item":
+			attrs.add(w, &child)
+		case member:
+			if node := add(&child); node != nil {
+				class.Children = append(class.Children, decorated(node, attrs))
+			}
+			attrs = attributes{}
 		}
 	}
 }
@@ -658,8 +723,9 @@ func (w *walker) parameters(node *sitter.Node) []ir.Parameter {
 
 // structItem returns a struct (kind struct) or a union (kind union) with its
 // fields and the where clause of its header. The fields of a tuple struct are
-// named "0", "1", ... (tupleFields). The comments of the body are not
-// distilled.
+// named "0", "1", ... (tupleFields). The comments and the outer attributes of
+// a braced body are distilled; those inside a tuple struct's parentheses are
+// not, as they print inline.
 func (w *walker) structItem(node *sitter.Node, kind ir.Modifier) ir.DistilledNode {
 	name := w.nameWithGenerics(node)
 	if name == "" {
@@ -684,27 +750,24 @@ func (w *walker) structItem(node *sitter.Node, kind ir.Modifier) ir.DistilledNod
 	if body.Kind() != "field_declaration_list" {
 		return class
 	}
-	for _, child := range w.children(body) {
-		if child.Kind() != "field_declaration" {
-			continue
-		}
+	w.bodyMembers(body, class, "field_declaration", func(child *sitter.Node) ir.DistilledNode {
 		fieldName := child.ChildByFieldName("name")
 		if fieldName == nil {
-			continue
+			return nil
 		}
 		field := &ir.DistilledField{
-			BaseNode:   ir.BaseNode{Location: w.location(&child)},
+			BaseNode:   ir.BaseNode{Location: w.location(child)},
 			Name:       w.text(fieldName),
-			Visibility: w.visibility(&child),
+			Visibility: w.visibility(child),
 		}
-		if modifier := w.visibilityModifier(&child); modifier != nil {
+		if modifier := w.visibilityModifier(child); modifier != nil {
 			w.recordVisibilityPath(&field.BaseNode, modifier)
 		}
 		if typ := child.ChildByFieldName("type"); typ != nil {
 			field.Type = &ir.TypeRef{Name: w.flat(typ)}
 		}
-		class.Children = append(class.Children, field)
-	}
+		return field
+	})
 	return class
 }
 
@@ -761,16 +824,13 @@ func (w *walker) enumItem(node *sitter.Node) ir.DistilledNode {
 	if body == nil {
 		return class
 	}
-	for _, child := range w.children(body) {
-		if child.Kind() != "enum_variant" {
-			continue
-		}
+	w.bodyMembers(body, class, "enum_variant", func(child *sitter.Node) ir.DistilledNode {
 		variantName := child.ChildByFieldName("name")
 		if variantName == nil {
-			continue
+			return nil
 		}
 		variant := &ir.DistilledField{
-			BaseNode:   ir.BaseNode{Location: w.location(&child)},
+			BaseNode:   ir.BaseNode{Location: w.location(child)},
 			Name:       w.text(variantName),
 			Visibility: ir.VisibilityPublic,
 		}
@@ -780,8 +840,8 @@ func (w *walker) enumItem(node *sitter.Node) ir.DistilledNode {
 		if value := child.ChildByFieldName("value"); value != nil {
 			variant.DefaultValue = collapse(w.code(value))
 		}
-		class.Children = append(class.Children, variant)
-	}
+		return variant
+	})
 	return class
 }
 
@@ -1155,12 +1215,38 @@ func (w *walker) comment(node *sitter.Node) *ir.DistilledComment {
 		loc.EndLine = int(end.Row + w.rowOffset)
 		loc.EndColumn = loc.StartColumn + len(strings.TrimRight(raw, "\r\n"))
 	}
+	if node.Kind() == "block_comment" && format == ir.CommentDoc {
+		text = stripGutters(text)
+	}
 	return &ir.DistilledComment{
 		BaseNode: ir.BaseNode{Location: loc},
 		Text:     strings.TrimSpace(text),
 		Format:   format,
 		Inner:    inner,
 	}
+}
+
+// stripGutters removes the " * " that starts each line of a block doc comment
+// after the first, when every such line has one or is blank, as rustdoc does.
+// Text that is indented more than the gutter keeps its relative indent.
+func stripGutters(text string) string {
+	lines := strings.Split(text, "\n")
+	if len(lines) < 2 {
+		return text
+	}
+	for _, line := range lines[1:] {
+		if t := strings.TrimSpace(line); t != "" && t[0] != '*' {
+			return text
+		}
+	}
+	for i := 1; i < len(lines); i++ {
+		line := strings.TrimLeft(lines[i], " \t")
+		if strings.HasPrefix(line, "*") {
+			line = strings.TrimPrefix(strings.TrimPrefix(line, "*"), " ")
+		}
+		lines[i] = strings.TrimRight(line, " \t")
+	}
+	return strings.Join(lines, "\n")
 }
 
 // visibilityModifier returns the visibility_modifier child of node, or nil.

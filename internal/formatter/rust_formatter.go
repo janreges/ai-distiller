@@ -120,19 +120,32 @@ func (f *RustFormatter) formatImport(w io.Writer, imp *ir.DistilledImport, inden
 	return nil
 }
 
+// formatComment writes a comment in its own style, one line per text line: an
+// outer doc as "/// text", an inner doc as "//! text" and any other comment
+// as "// text". An empty line has no trailing space.
 func (f *RustFormatter) formatComment(w io.Writer, comment *ir.DistilledComment, indent string) error {
-	lines := strings.Split(comment.Text, "\n")
-	for _, line := range lines {
-		if strings.HasPrefix(line, "///") || strings.HasPrefix(line, "//!") {
-			// Doc comments
-			fmt.Fprintf(w, "%s%s\n", indent, line)
-		} else if line != "" {
-			fmt.Fprintf(w, "%s// %s\n", indent, line)
-		} else {
-			fmt.Fprintf(w, "%s//\n", indent)
+	marker := "//"
+	if comment.IsDoc() {
+		marker = "///"
+		if comment.Inner {
+			marker = "//!"
 		}
 	}
+	for _, line := range strings.Split(comment.Text, "\n") {
+		if line = strings.TrimRight(line, " \t\r"); line != "" {
+			line = " " + line
+		}
+		fmt.Fprintf(w, "%s%s%s\n", indent, marker, line)
+	}
 	return nil
+}
+
+// formatDecorators writes the outer attributes of an item, field or variant,
+// one per line.
+func formatDecorators(w io.Writer, decorators []string, indent string) {
+	for _, decorator := range decorators {
+		fmt.Fprintf(w, "%s%s\n", indent, decorator)
+	}
 }
 
 // rustItemKind returns the Rust item a DistilledClass stands for: "impl"
@@ -183,6 +196,7 @@ func (f *RustFormatter) formatStruct(w io.Writer, class *ir.DistilledClass, inde
 	ext := rustExtensions(&class.BaseNode)
 
 	fmt.Fprintln(w)
+	formatDecorators(w, class.Decorators, indentStr)
 	fmt.Fprint(w, indentStr)
 	switch kind {
 	case "impl", "extern":
@@ -296,6 +310,7 @@ func (f *RustFormatter) formatMembers(w io.Writer, class *ir.DistilledClass, kin
 		switch n := child.(type) {
 		case *ir.DistilledField:
 			if kind == "trait" && !hasModifier(n.Modifiers, ir.ModifierFinal) {
+				formatDecorators(w, n.Decorators, memberIndent)
 				fmt.Fprintf(w, "%stype %s", memberIndent, n.Name)
 				if n.Type != nil && n.Type.Name != "" && n.Type.Name != "type" {
 					fmt.Fprintf(w, ": %s", n.Type.Name)
@@ -317,7 +332,13 @@ func (f *RustFormatter) formatMembers(w io.Writer, class *ir.DistilledClass, kin
 // formatEnumBody writes the variants of an enum, one per line, or ";" for an
 // enum without any.
 func (f *RustFormatter) formatEnumBody(w io.Writer, class *ir.DistilledClass, indentStr string) {
-	if len(class.Children) == 0 {
+	variants := 0
+	for _, child := range class.Children {
+		if _, ok := child.(*ir.DistilledField); ok {
+			variants++
+		}
+	}
+	if variants == 0 {
 		fmt.Fprintln(w, ";")
 		return
 	}
@@ -325,8 +346,12 @@ func (f *RustFormatter) formatEnumBody(w io.Writer, class *ir.DistilledClass, in
 	for _, child := range class.Children {
 		field, ok := child.(*ir.DistilledField)
 		if !ok {
+			if comment, ok := child.(*ir.DistilledComment); ok {
+				f.formatComment(w, comment, indentStr+"    ")
+			}
 			continue
 		}
+		formatDecorators(w, field.Decorators, indentStr+"    ")
 		fmt.Fprintf(w, "%s    %s", indentStr, field.Name)
 		if field.Type != nil && field.Type.Name != "" {
 			if strings.HasPrefix(field.Type.Name, "(") {
@@ -363,8 +388,11 @@ func (f *RustFormatter) formatStructBody(w io.Writer, class *ir.DistilledClass, 
 	if hasFields {
 		fmt.Fprintln(w, " {")
 		for _, child := range class.Children {
-			if field, ok := child.(*ir.DistilledField); ok {
-				f.formatStructField(w, field, indent+1)
+			switch n := child.(type) {
+			case *ir.DistilledField:
+				f.formatStructField(w, n, indent+1)
+			case *ir.DistilledComment:
+				f.formatComment(w, n, indentStr+"    ")
 			}
 		}
 		fmt.Fprintf(w, "%s}\n", indentStr)
@@ -412,6 +440,7 @@ func (f *RustFormatter) formatStructField(w io.Writer, field *ir.DistilledField,
 	if field.Type != nil {
 		typeName = field.Type.Name
 	}
+	formatDecorators(w, field.Decorators, indentStr)
 	if visKeyword != "" {
 		fmt.Fprintf(w, "%s%s %s: %s,\n", indentStr, visKeyword, field.Name, typeName)
 	} else {
@@ -508,7 +537,9 @@ func (f *RustFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, in
 		}
 	}
 	head = append(head, "fn")
-	fmt.Fprintf(w, "\n%s%s %s", indent, strings.Join(head, " "), fn.Name)
+	fmt.Fprintln(w)
+	formatDecorators(w, fn.Decorators, indent)
+	fmt.Fprintf(w, "%s%s %s", indent, strings.Join(head, " "), fn.Name)
 
 	// Add generic type parameters
 	if len(fn.TypeParams) > 0 {
@@ -554,7 +585,9 @@ func (f *RustFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, in
 // by "=> ...;". A macro takes no visibility keyword (#[macro_export] makes it
 // public).
 func (f *RustFormatter) formatMacro(w io.Writer, macro *ir.DistilledFunction, indent string) error {
-	fmt.Fprintf(w, "\n%smacro_rules! %s", indent, macro.Name)
+	fmt.Fprintln(w)
+	formatDecorators(w, macro.Decorators, indent)
+	fmt.Fprintf(w, "%smacro_rules! %s", indent, macro.Name)
 	if macro.Implementation != "" {
 		fmt.Fprint(w, renderBody(macro.Implementation, indent))
 		return nil
@@ -583,6 +616,7 @@ func (f *RustFormatter) formatImplMethod(w io.Writer, fn *ir.DistilledFunction, 
 	}
 
 	// Format method signature
+	formatDecorators(w, fn.Decorators, indentStr)
 	if visKeyword != "" {
 		if isAsync {
 			fmt.Fprintf(w, "%s%s async fn %s", indentStr, visKeyword, fn.Name)
@@ -724,20 +758,24 @@ func (f *RustFormatter) formatFieldWithVisibility(w io.Writer, field *ir.Distill
 	if field.Type != nil {
 		typeName = field.Type.Name
 	}
+	if isTypeAlias || isConst || isStatic {
+		fmt.Fprintln(w)
+	}
+	formatDecorators(w, field.Decorators, indent)
 	if isTypeAlias {
 		if visKeyword != "" {
-			fmt.Fprintf(w, "\n%s%s type %s", indent, visKeyword, field.Name)
+			fmt.Fprintf(w, "%s%s type %s", indent, visKeyword, field.Name)
 		} else {
-			fmt.Fprintf(w, "\n%stype %s", indent, field.Name)
+			fmt.Fprintf(w, "%stype %s", indent, field.Name)
 		}
 		if field.Type != nil && field.Type.Name != "" {
 			fmt.Fprintf(w, " = %s", field.Type.Name)
 		}
 	} else if isConst {
 		if visKeyword != "" {
-			fmt.Fprintf(w, "\n%s%s const %s: %s", indent, visKeyword, field.Name, typeName)
+			fmt.Fprintf(w, "%s%s const %s: %s", indent, visKeyword, field.Name, typeName)
 		} else {
-			fmt.Fprintf(w, "\n%sconst %s: %s", indent, field.Name, typeName)
+			fmt.Fprintf(w, "%sconst %s: %s", indent, field.Name, typeName)
 		}
 	} else if isStatic {
 		static := "static"
@@ -745,9 +783,9 @@ func (f *RustFormatter) formatFieldWithVisibility(w io.Writer, field *ir.Distill
 			static = "static mut"
 		}
 		if visKeyword != "" {
-			fmt.Fprintf(w, "\n%s%s %s %s: %s", indent, visKeyword, static, field.Name, typeName)
+			fmt.Fprintf(w, "%s%s %s %s: %s", indent, visKeyword, static, field.Name, typeName)
 		} else {
-			fmt.Fprintf(w, "\n%s%s %s: %s", indent, static, field.Name, typeName)
+			fmt.Fprintf(w, "%s%s %s: %s", indent, static, field.Name, typeName)
 		}
 	} else {
 		// Regular field (shouldn't appear at top level in Rust)

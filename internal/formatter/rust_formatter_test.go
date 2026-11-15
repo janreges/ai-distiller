@@ -77,7 +77,7 @@ func TestRustFormatter_InlineModPrintsEveryChild(t *testing.T) {
 	))
 	assert.Equal(t, "\npub mod inline_mod {\n"+
 		"    use super::*;\n"+
-		"    // Inner doc\n"+
+		"    /// Inner doc\n"+
 		"\n    pub struct Inner;\n"+
 		"\n    pub fn inside() -> u8\n"+
 		"\n    pub type T = u8;\n"+
@@ -204,7 +204,7 @@ func TestRustFormatter_ExternBlock(t *testing.T) {
 	withComments := rustDefault
 	withComments.IncludeComments = true
 	assert.Equal(t, []string{"", "pub mod m {", "    // note", "", "    pub fn after()", "}"}, distillRust(t, inMod, withComments))
-	assert.Equal(t, []string{"// FFI doc.", "", "extern \"C\" {", "", "    fn abs(input: i32) -> i32;", "}", "", "pub fn after()"},
+	assert.Equal(t, []string{"/// FFI doc.", "", "extern \"C\" {", "", "    fn abs(input: i32) -> i32;", "}", "", "pub fn after()"},
 		distillRust(t, src, rustAll))
 }
 
@@ -345,4 +345,93 @@ func TestRustFormatter_RestrictedVisibility(t *testing.T) {
 
 	// pub(self) is private: hidden by default.
 	assert.Equal(t, []string{"", "pub struct T(_);"}, distillRust(t, src, rustDefault))
+}
+
+func TestRustFormatter_DocCommentStyles(t *testing.T) {
+	src := "/// outer line\n" +
+		"///\n" +
+		"/// after an empty doc line\n" +
+		"fn a() {}\n" +
+		"/** outer block\n * second line\n *\n *   indented\n */\n" +
+		"fn b() {}\n" +
+		"//! inner line\n" +
+		"/*! inner block\n * more\n */\n" +
+		"// plain line\n" +
+		"/* plain block */\n" +
+		"fn c() {}\n"
+	opts := rustAll
+	opts.IncludeComments = true
+	assert.Equal(t, []string{
+		"/// outer line",
+		"///",
+		"/// after an empty doc line",
+		"",
+		"fn a()",
+		"/// outer block",
+		"/// second line",
+		"///",
+		"///   indented",
+		"",
+		"fn b()",
+		"//! inner line",
+		"//! inner block",
+		"//! more",
+		"// plain line",
+		"// plain block",
+		"",
+		"fn c()",
+	}, distillRust(t, src, opts))
+
+	// An empty comment prints its marker alone, at the indent.
+	assert.Equal(t, "    ///\n    /// x\n", formatRust(t, &ir.DistilledComment{Text: "\nx", Format: ir.CommentDoc}, 1))
+	assert.Equal(t, "//!\n", formatRust(t, &ir.DistilledComment{Text: "", Format: ir.CommentDoc, Inner: true}, 0))
+	assert.Equal(t, "//\n", formatRust(t, &ir.DistilledComment{Text: "", Format: ir.CommentLine}, 0))
+}
+
+func TestRustFormatter_AttributesAndBodyDocs(t *testing.T) {
+	src := "/// pub doc\n#[derive(Debug)]\npub struct A;\n/// priv doc\n#[derive(Debug)]\nstruct B;\n"
+	assert.Equal(t, []string{"/// pub doc", "", "#[derive(Debug)]", "pub struct A;"}, distillRust(t, src, rustDefault))
+
+	src = "/// S doc\n#[derive(Debug, Clone)]\n#[repr(C)]\npub struct S {\n" +
+		"    /// x doc\n    #[serde(rename = \"x\")]\n    pub x: u8,\n" +
+		"    /// hidden doc\n    #[serde(skip)]\n    y: u8,\n" +
+		"    /// z doc\n    pub z: u8,\n}\n" +
+		"pub enum E {\n    /// a doc\n    #[default]\n    A,\n    /// b doc\n    B(u8),\n}\n" +
+		"pub union U {\n    /// f doc\n    #[allow(dead_code)]\n    pub f: u32,\n}\n" +
+		"pub struct T(#[serde(skip)] pub u8);\n"
+	assert.Equal(t, []string{
+		"/// S doc", "", "#[derive(Debug, Clone)]", "#[repr(C)]", "pub struct S {",
+		"    /// x doc", "    #[serde(rename = \"x\")]", "    pub x: u8,",
+		"    /// z doc", "    pub z: u8,", "}",
+		"", "pub enum E {",
+		"    /// a doc", "    #[default]", "    A,", "    /// b doc", "    B(u8),", "}",
+		"", "pub union U {", "    /// f doc", "    #[allow(dead_code)]", "    pub f: u32,", "}",
+		"", "pub struct T(pub u8);",
+	}, distillRust(t, src, rustDefault))
+
+	// Plain comments in a body print only with comments on, above the
+	// field they precede; the hidden field takes its doc and attribute along.
+	body := "pub struct S {\n    // note\n    pub a: u8,\n    /// hidden\n    // also hidden\n    b: u8,\n    /// hidden too\n    #[x]\n    c: u8,\n    d: u8, // trailing\n}\n"
+	assert.Equal(t, []string{"", "pub struct S {", "    pub a: u8,", "}"}, distillRust(t, body, rustDefault))
+	withComments := rustDefault
+	withComments.IncludeComments = true
+	assert.Equal(t, []string{"", "pub struct S {", "    // note", "    pub a: u8,", "}"},
+		distillRust(t, body, withComments))
+
+	// Members, functions, consts and macros carry their attributes too.
+	members := "pub trait T {\n    #[must_use]\n    fn f(&self) -> u8;\n    #[deprecated]\n    type X;\n}\n" +
+		"impl S {\n    #[inline]\n    pub fn g() {}\n    #[allow(x)]\n    pub const C: u8 = 1;\n}\n" +
+		"#[macro_export]\nmacro_rules! m { () => {}; }\n" +
+		"#[cfg(test)]\nuse std::fmt;\n#![allow(dead_code)]\n"
+	assert.Equal(t, []string{
+		"", "pub trait T {", "", "    #[must_use]", "    fn f(&self) -> u8;", "    #[deprecated]", "    type X;", "}",
+		"", "impl S {", "", "    #[inline]", "    pub fn g()", "", "    #[allow(x)]", "    pub const C: u8 = 1;", "}",
+		"", "#[macro_export]", "macro_rules! m {", "    () => ...;", "}",
+		"use std::fmt;",
+	}, distillRust(t, members, rustAll))
+
+	// Annotations off removes them.
+	noAttrs := rustDefault
+	noAttrs.IncludeAnnotations = false
+	assert.Equal(t, []string{"/// pub doc", "", "pub struct A;"}, distillRust(t, "/// pub doc\n#[derive(Debug)]\npub struct A;\n", noAttrs))
 }

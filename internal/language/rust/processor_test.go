@@ -1370,3 +1370,57 @@ func TestRust_RestrictedVisibility(t *testing.T) {
 	require.NotNil(t, x.Extensions)
 	assert.Equal(t, "crate::m", x.Extensions.Rust.VisibilityPath)
 }
+
+func TestRust_FieldAndVariantDocs(t *testing.T) {
+	file := parseRust(t, "pub struct S {\n    /// x doc\n    pub x: u8,\n    // plain\n    y: u8, // trailing\n}\n"+
+		"pub enum E {\n    /// a doc\n    A,\n    /// b doc\n    B(u8), // trailing\n}\n")
+	describe := func(class *ir.DistilledClass) []string {
+		var out []string
+		for _, child := range class.Children {
+			switch n := child.(type) {
+			case *ir.DistilledComment:
+				out = append(out, "comment:"+n.Text+":"+n.Format)
+			case *ir.DistilledField:
+				out = append(out, "field:"+n.Name)
+			}
+		}
+		return out
+	}
+	assert.Equal(t, []string{"comment:x doc:doc", "field:x", "comment:plain:line", "field:y"}, describe(findRustClass(t, file, "S")))
+	assert.Equal(t, []string{"comment:a doc:doc", "field:A", "comment:b doc:doc", "field:B"}, describe(findRustClass(t, file, "E")))
+
+	// A tuple struct prints its fields inline: no comment or attribute of its
+	// parentheses is distilled.
+	tuple := findRustClass(t, parseRust(t, "pub struct T(\n    /// doc\n    #[serde(skip)]\n    pub u8,\n);\n"), "T")
+	require.Len(t, tuple.Children, 1)
+	assert.Empty(t, tuple.Children[0].(*ir.DistilledField).Decorators)
+}
+
+func TestRust_AttributesAreDecorators(t *testing.T) {
+	file := parseRust(t, "#![allow(dead_code)]\n"+
+		"#[derive(Debug, Clone)]\n"+
+		"// between\n"+
+		"#[repr(C)]\n"+
+		"pub struct S {\n    #[serde(rename = \"x\")]\n    pub x: u8,\n    y: u8,\n}\n"+
+		"pub enum E {\n    #[default]\n    A,\n    B,\n}\n"+
+		"#[cfg(\n    test\n)]\n#[inline] pub fn f() {}\n"+
+		"#[cfg(test)]\nuse std::fmt;\n"+
+		"#[derive(Debug)]\nm!();\npub fn g() {}\n")
+	s := findRustClass(t, file, "S")
+	assert.Equal(t, []string{"#[derive(Debug, Clone)]", "#[repr(C)]"}, s.Decorators)
+	assert.Equal(t, []string{`#[serde(rename = "x"]`[:0] + `#[serde(rename = "x")]`}, fieldsOf(s)[0].Decorators)
+	assert.Empty(t, fieldsOf(s)[1].Decorators)
+	assert.Equal(t, []string{"#[default]"}, variant(t, findRustClass(t, file, "E"), "A").Decorators)
+	assert.Empty(t, variant(t, findRustClass(t, file, "E"), "B").Decorators)
+	assert.Equal(t, []string{"#[cfg(test)]", "#[inline]"}, findRustFn(t, file, "f").Decorators)
+	assert.Empty(t, findRustFn(t, file, "g").Decorators, "an attribute of a statement that yields no IR is dropped")
+}
+
+func TestRust_DocAboveAttributeFollowsItemAndDecorators(t *testing.T) {
+	src := "/// pub doc\n#[derive(Debug)]\npub struct A;\n/// priv doc\n#[derive(Debug)]\nstruct B;\n"
+	file, err := NewProcessor().ProcessWithOptions(context.Background(), strings.NewReader(src), "test.rs", rustPublicOnly)
+	require.NoError(t, err)
+	require.Len(t, file.Children, 2)
+	assert.Equal(t, "pub doc", file.Children[0].(*ir.DistilledComment).Text)
+	assert.Equal(t, []string{"#[derive(Debug)]"}, file.Children[1].(*ir.DistilledClass).Decorators)
+}

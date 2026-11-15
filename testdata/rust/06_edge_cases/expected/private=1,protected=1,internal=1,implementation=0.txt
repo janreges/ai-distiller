@@ -1,6 +1,6 @@
 <file path="source.rs">
-// Crate-level inner doc comment.
-// Second inner doc line.
+//! Crate-level inner doc comment.
+//! Second inner doc line.
 extern crate alloc;
 use std::collections::HashMap;
 use std::io::{self, Read, Write as IoWrite};
@@ -8,7 +8,7 @@ use std::fmt::Display as Disp;
 pub use crate::inner::Thing;
 use std::sync::*;
 use std::{fs::File, path::{Path, PathBuf}};
-// Max retries for the client.
+/// Max retries for the client.
 
 pub const MAX_RETRIES: u32 = 3;
 
@@ -17,15 +17,17 @@ const SECRET: &str = "s3cr3t";
 pub static GREETING: &str = "hello";
 
 static mut COUNTER: u64 = 0;
-// Result alias.
+/// Result alias.
 
 pub type Res<T> = Result<T, io::Error>;
 
 type Map = HashMap<String, u32>;
-// Block doc comment
-//  * on a struct.
+/// Block doc comment
+/// on a struct.
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Point {
+    /// The x coordinate.
     pub x: f64,
     pub(crate) y: f64,
     z: f64,
@@ -45,9 +47,11 @@ pub struct Bounded<T> where T: Clone {
     pub value: T,
     count: usize,
 }
-// A shape.
+/// A shape.
 
+#[derive(Debug)]
 pub enum Shape {
+    /// A circle.
     Circle(f64),
     Rect { w: f64, h: f64 },
     Empty,
@@ -81,7 +85,7 @@ pub trait Container<T> where T: Clone {
 }
 
 impl Point {
-    // Creates a point.
+    /// Creates a point.
 
     pub fn new(x: f64, y: f64) -> Self
 
@@ -145,6 +149,7 @@ macro_rules! square_it {
     ($x:expr) => ...;
 }
 
+#[macro_export]
 macro_rules! exported {
     () => ...;
 }
@@ -182,9 +187,9 @@ pub fn takes_closure<F: Fn(i32) -> i32>(f: F) -> i32
 pub fn tuple_param((a, b): (i32, i32)) -> i32
 
 pub struct Multi(pub u8, u16);
-// Doc one.
-//
-// Doc two after a blank doc line.
+/// Doc one.
+///
+/// Doc two after a blank doc line.
 
 pub fn documented()
 
@@ -194,12 +199,14 @@ pub(crate) fn crate_fn() -> u8
 
 pub(super) fn super_fn()
 
+#[cfg(test)]
 mod tests {
     use super::*;
 
+    #[test]
     fn it_works()
 }
-// A struct declared inside a macro call.
+/// A struct declared inside a macro call.
 
 pub struct InMacro {
     pub field: u8,
