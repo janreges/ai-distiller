@@ -23,6 +23,7 @@ import (
 	tree_sitter_php "github.com/tree-sitter/tree-sitter-php/bindings/go"
 	tree_sitter_python "github.com/tree-sitter/tree-sitter-python/bindings/go"
 	tree_sitter_ruby "github.com/tree-sitter/tree-sitter-ruby/bindings/go"
+	tree_sitter_rust "github.com/tree-sitter/tree-sitter-rust/bindings/go"
 	typescript "tree-sitter-typescript"
 )
 
@@ -50,10 +51,12 @@ func language(lang string) (*sitter.Language, error) {
 		return sitter.NewLanguage(tree_sitter_cpp.Language()), nil
 	case "php":
 		return sitter.NewLanguage(tree_sitter_php.LanguagePHP()), nil
-	case "go", "rust", "swift":
-		return nil, fmt.Errorf("%s is not parsed with tree-sitter in aid (go uses go/parser; rust and swift use line parsers)", lang)
+	case "rust":
+		return sitter.NewLanguage(tree_sitter_rust.Language()), nil
+	case "go", "swift":
+		return nil, fmt.Errorf("%s is not parsed with tree-sitter in aid (go uses go/parser; swift uses a line parser)", lang)
 	}
-	return nil, fmt.Errorf("unsupported language %q (supported: python, typescript, tsx, javascript, ruby, java, csharp, kotlin, cpp, php)", lang)
+	return nil, fmt.Errorf("unsupported language %q (supported: python, typescript, tsx, javascript, ruby, java, csharp, kotlin, cpp, php, rust)", lang)
 }
 
 // dump parses src and renders its AST, one node per line. Anonymous nodes are
@@ -113,7 +116,7 @@ func nodeText(n *sitter.Node, src []byte) string {
 }
 
 func main() {
-	lang := flag.String("lang", "", "language to parse (python, typescript, tsx, javascript, ruby, java, csharp, kotlin, cpp, php)")
+	lang := flag.String("lang", "", "language to parse (python, typescript, tsx, javascript, ruby, java, csharp, kotlin, cpp, php, rust)")
 	all := flag.Bool("all", false, "also print anonymous nodes")
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage: ast-dump --lang <lang> [--all] [file]  (reads stdin when file is missing or -)")

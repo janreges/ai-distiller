@@ -43,6 +43,68 @@ func TestRustFormatter_TraitMembersHaveNoVisibility(t *testing.T) {
 	assert.Contains(t, format(inherent), "    pub fn area(&self) -> i32\n")
 }
 
+func TestRustFormatter_AbstractFunctionEndsWithSemicolon(t *testing.T) {
+	self := []ir.Parameter{{Name: "&self"}}
+	abstract := []ir.Modifier{ir.ModifierAbstract}
+	trait := &ir.DistilledClass{Name: "T", Visibility: ir.VisibilityPublic, Modifiers: abstract,
+		Children: []ir.DistilledNode{
+			&ir.DistilledFunction{Name: "a", Visibility: ir.VisibilityPublic, Modifiers: abstract, Parameters: self},
+			&ir.DistilledFunction{Name: "b", Visibility: ir.VisibilityPublic, Modifiers: abstract, Parameters: self,
+				Returns: &ir.TypeRef{Name: "u8"}},
+			&ir.DistilledFunction{Name: "c", Visibility: ir.VisibilityPublic, Parameters: self},
+		}}
+	var b strings.Builder
+	require.NoError(t, NewRustFormatter().FormatNode(&b, trait, 0))
+	lines := strings.Split(b.String(), "\n")
+	assert.Contains(t, lines, "    fn a(&self);")
+	assert.Contains(t, lines, "    fn b(&self) -> u8;")
+	assert.Contains(t, lines, "    fn c(&self)")
+}
+
+func TestRustFormatter_ModWithOnlyNestedItemsIsNotAnEnum(t *testing.T) {
+	format := func(children ...ir.DistilledNode) string {
+		mod := &ir.DistilledClass{Name: "m", Visibility: ir.VisibilityPublic, Children: children}
+		var b strings.Builder
+		require.NoError(t, NewRustFormatter().FormatNode(&b, mod, 0))
+		return b.String()
+	}
+	doc := &ir.DistilledComment{Text: "Inner doc", Format: ir.CommentDoc}
+
+	// A mod body prints its fields and functions, with the comments among
+	// them; nested items, imports and the docs of nested items alone do not
+	// open a body or turn the mod into an enum.
+	assert.Equal(t, "\npub mod m;\n", format(
+		&ir.DistilledImport{ImportType: "use", Module: "super::*"},
+		doc,
+		&ir.DistilledClass{Name: "Inner", Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{ir.ModifierStruct}},
+	))
+
+	withMembers := format(
+		&ir.DistilledField{Name: "N", Visibility: ir.VisibilityPublic, Type: &ir.TypeRef{Name: "u8"},
+			DefaultValue: "1", Modifiers: []ir.Modifier{ir.ModifierFinal}},
+		doc,
+		&ir.DistilledFunction{Name: "f", Visibility: ir.VisibilityPublic},
+		&ir.DistilledClass{Name: "Inner", Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{ir.ModifierStruct}},
+	)
+	assert.True(t, strings.HasPrefix(withMembers, "\npub mod m {\n"), withMembers)
+	assert.Contains(t, withMembers, "    // Inner doc\n")
+	assert.Contains(t, withMembers, "    pub fn f()\n")
+	assert.NotContains(t, withMembers, "Inner {")
+}
+
+func TestRustFormatter_UseGroups(t *testing.T) {
+	format := func(imp *ir.DistilledImport) string {
+		var b strings.Builder
+		require.NoError(t, NewRustFormatter().FormatNode(&b, imp, 0))
+		return b.String()
+	}
+	assert.Equal(t, "use std::io::{self, Write as W};\n", format(&ir.DistilledImport{ImportType: "use", Module: "std::io",
+		Symbols: []ir.ImportedSymbol{{Name: "self"}, {Name: "Write", Alias: "W"}}}))
+	assert.Equal(t, "use {a::B, c::D};\n", format(&ir.DistilledImport{ImportType: "use",
+		Symbols: []ir.ImportedSymbol{{Name: "a::B"}, {Name: "c::D"}}}))
+	assert.Equal(t, "use super::*;\n", format(&ir.DistilledImport{ImportType: "use", Module: "super::*"}))
+}
+
 func TestRustFormatter_EnumVariantPayloadAndDiscriminant(t *testing.T) {
 	enum := &ir.DistilledClass{Name: "E", Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{ir.ModifierEnum},
 		Children: []ir.DistilledNode{

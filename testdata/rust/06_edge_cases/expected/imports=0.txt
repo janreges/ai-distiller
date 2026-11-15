@@ -1,0 +1,136 @@
+<file path="source.rs">
+// Crate-level inner doc comment.
+// Second inner doc line.
+// Max retries for the client.
+
+pub const MAX_RETRIES: u32 = 3;
+
+pub static GREETING: &str = "hello";
+// Result alias.
+
+pub type Res<T> = Result<T, io::Error>;
+// Block doc comment
+//  * on a struct.
+
+pub struct Point {
+    pub x: f64,
+}
+
+pub struct Meters;
+
+pub struct Pair;
+
+pub struct Unit;
+
+pub struct Wrapper<'a, T: Display + 'a>;
+
+pub struct Bounded<T> {
+    pub value: T,
+}
+// A shape.
+
+pub enum Shape {
+    Circle(f64),
+    Rect { w: f64, h: f64 },
+    Empty,
+    Coded = 7,
+}
+
+pub trait Animal {
+    type Food;
+
+    fn name(&self) -> String;
+
+    fn speak(&self) -> String
+
+    async fn fetch(&self) -> u32;
+
+    fn raw(&self) -> *const u8;
+}
+
+pub trait Container<T> {
+
+    fn get(&self, i: usize) -> Option<&T>;
+}
+
+impl Point {
+    // Creates a point.
+
+    pub fn new(x: f64, y: f64) -> Self
+}
+
+impl<T: Clone> Container<T> for Vec<T> {
+
+    fn get(&self, i: usize) -> Option<&T>
+}
+
+impl<T> Bounded<T> {
+
+    pub fn reset(&mut self)
+}
+
+impl Iterator for Counter {
+
+    fn next(&mut self) -> Option<Self::Item>
+}
+
+impl std::fmt::Display for Point {
+
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+}
+
+pub async fn fetch_data(url: &str) -> Result<String, io::Error>
+
+pub fn dangerous(ptr: *mut u8)
+
+pub fn square(x: u32) -> u32
+
+pub fn callback(code: i32) -> i32
+
+pub fn longest<'a, T>(x: &'a str, y: &'a str, _t: T) -> &'a str where T: Display,
+
+pub fn multi_line_params(first: u32, second: String) -> bool
+
+pub enum inline_mod {
+}
+
+pub fn self_vis()
+
+pub struct Arr<const N: usize> {
+    pub data: [u8; N],
+}
+
+pub trait Sized2 {
+}
+
+impl<'a> Wrapper<'a> {
+
+    pub fn get(&self) -> &'a str
+}
+
+pub fn returns_impl() -> impl Iterator<Item = u32>
+
+pub fn takes_closure<F: Fn(i32) -> i32>(f: F) -> i32
+
+pub fn tuple_param((a, b): (i32, i32)) -> i32
+
+pub struct Multi;
+// Doc one.
+//
+// Doc two after a blank doc line.
+
+pub fn documented()
+
+pub fn brace_on_next_line()
+// A struct declared inside a macro call.
+
+pub struct InMacro {
+    pub field: u8,
+}
+
+pub fn only_on_unix() -> bool
+
+pub fn not_on_unix() -> bool
+
+pub static COUNTER: std::cell::Cell<u32> = std::cell::Cell::new(0);
+</file>

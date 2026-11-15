@@ -1,0 +1,250 @@
+//! Crate-level inner doc comment.
+//! Second inner doc line.
+
+#![allow(dead_code)]
+extern crate alloc;
+
+use std::collections::HashMap;
+use std::io::{self, Read, Write as IoWrite};
+use std::fmt::Display as Disp;
+pub use crate::inner::Thing;
+use std::sync::*;
+use std::{
+    fs::File,
+    path::{Path, PathBuf},
+};
+
+/// Max retries for the client.
+pub const MAX_RETRIES: u32 = 3;
+const SECRET: &str = "s3cr3t";
+pub static GREETING: &str = "hello";
+static mut COUNTER: u64 = 0;
+
+/// Result alias.
+pub type Res<T> = Result<T, io::Error>;
+type Map = HashMap<String, u32>;
+
+/** Block doc comment
+ * on a struct. */
+#[derive(Debug, Clone, PartialEq)]
+pub struct Point {
+    /// The x coordinate.
+    pub x: f64,
+    pub(crate) y: f64,
+    z: f64,
+}
+
+pub struct Meters(pub f64);
+pub struct Pair(pub i32, String);
+pub struct Unit;
+pub struct Wrapper<'a, T: Display + 'a> {
+    inner: &'a T,
+}
+
+pub struct Bounded<T>
+where
+    T: Clone,
+{
+    pub value: T,
+    count: usize,
+}
+
+/// A shape.
+#[derive(Debug)]
+pub enum Shape {
+    /// A circle.
+    Circle(f64),
+    Rect { w: f64, h: f64 },
+    Empty,
+    Coded = 7,
+}
+
+pub(crate) enum Level { Low, High }
+
+pub trait Animal: Display + Clone {
+    type Food;
+    const LEGS: u32;
+    const DEFAULT_NAME: &'static str = "animal";
+    fn name(&self) -> String;
+    fn speak(&self) -> String {
+        format!("{} speaks", self.name())
+    }
+    async fn fetch(&self) -> u32;
+    unsafe fn raw(&self) -> *const u8;
+}
+
+pub trait Container<T>
+where
+    T: Clone,
+{
+    fn get(&self, i: usize) -> Option<&T>;
+}
+
+impl Point {
+    /// Creates a point.
+    pub fn new(x: f64, y: f64) -> Self {
+        Point { x, y, z: 0.0 }
+    }
+
+    pub(crate) fn crate_only(&self) -> f64 { self.x }
+    pub(super) fn parent_only(&self) {}
+    pub(in crate::outer) fn path_only(&self) {}
+    fn private_helper(&mut self) {
+        self.z += 1.0;
+    }
+}
+
+impl<T: Clone> Container<T> for Vec<T> {
+    fn get(&self, i: usize) -> Option<&T> {
+        self.as_slice().get(i)
+    }
+}
+
+impl<T> Bounded<T>
+where
+    T: Clone + Default,
+{
+    pub fn reset(&mut self) {
+        self.value = T::default();
+    }
+}
+
+impl Iterator for Counter {
+    type Item = u32;
+    fn next(&mut self) -> Option<Self::Item> {
+        None
+    }
+}
+
+impl std::fmt::Display for Point {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
+    }
+}
+
+pub async fn fetch_data(url: &str) -> Result<String, io::Error> {
+    Ok(url.to_string())
+}
+
+pub unsafe fn dangerous(ptr: *mut u8) {
+    *ptr = 0;
+}
+
+pub const fn square(x: u32) -> u32 { x * x }
+
+pub extern "C" fn callback(code: i32) -> i32 {
+    code
+}
+
+pub fn longest<'a, T>(x: &'a str, y: &'a str, _t: T) -> &'a str
+where
+    T: Display,
+{
+    if x.len() > y.len() { x } else { y }
+}
+
+pub fn multi_line_params(
+    first: u32,
+    second: String,
+) -> bool {
+    first > 0 && !second.is_empty()
+}
+
+fn private_fn() {}
+
+pub mod inline_mod {
+    pub fn inside() -> u8 { 1 }
+    pub struct Inner;
+}
+
+mod external_mod;
+pub(crate) mod crate_mod;
+
+macro_rules! square_it {
+    ($x:expr) => { $x * $x };
+}
+
+#[macro_export]
+macro_rules! exported {
+    () => {};
+}
+
+extern "C" {
+    fn abs(input: i32) -> i32;
+}
+
+pub union IntOrFloat {
+    i: u32,
+    f: f32,
+}
+
+/* plain block comment */
+// plain line comment
+
+pub(self) fn self_vis() {}
+pub(in crate::a) fn in_path() {}
+
+pub struct Arr<const N: usize> {
+    pub data: [u8; N],
+}
+
+pub trait Sized2: Sized {}
+
+impl<'a> Wrapper<'a> {
+    pub fn get(&self) -> &'a str { "" }
+}
+
+pub fn returns_impl() -> impl Iterator<Item = u32> {
+    0..3
+}
+
+pub fn takes_closure<F: Fn(i32) -> i32>(f: F) -> i32 { f(1) }
+
+pub fn tuple_param((a, b): (i32, i32)) -> i32 { a + b }
+
+pub struct Multi(
+    pub u8,
+    u16,
+);
+
+/// Doc one.
+///
+/// Doc two after a blank doc line.
+pub fn documented() {}
+
+pub fn brace_on_next_line()
+{
+}
+
+pub(crate) fn crate_fn() -> u8 { 0 }
+pub(super) fn super_fn() {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_works() {
+        assert_eq!(2 + 2, 4);
+    }
+}
+
+// Items inside an item-level macro call with braces are distilled.
+s! {
+    /// A struct declared inside a macro call.
+    pub struct InMacro {
+        pub field: u8,
+    }
+}
+
+cfg_if::cfg_if! {
+    if #[cfg(unix)] {
+        pub fn only_on_unix() -> bool { true }
+    } else {
+        pub fn not_on_unix() -> bool { false }
+    }
+}
+
+thread_local! {
+    pub static COUNTER: std::cell::Cell<u32> = std::cell::Cell::new(0);
+}

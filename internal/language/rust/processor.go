@@ -34,9 +34,8 @@ func (p *Processor) Process(ctx context.Context, reader io.Reader, filename stri
 		return nil, fmt.Errorf("failed to read source: %w", err)
 	}
 
-	// Always use line parser (Rust has no tree-sitter parser)
-	parser := NewLineParser(source, filename)
-	return parser.Parse(), nil
+	// A new tree-sitter processor per call keeps calls independent
+	return NewTreeSitterProcessor().ProcessSource(ctx, source, filename)
 }
 
 // ProcessWithOptions implements processor.LanguageProcessor
@@ -47,9 +46,10 @@ func (p *Processor) ProcessWithOptions(ctx context.Context, reader io.Reader, fi
 		return nil, fmt.Errorf("failed to read source: %w", err)
 	}
 
-	// Always use line parser (Rust has no tree-sitter parser)
-	parser := NewLineParser(source, filename)
-	file := parser.Parse()
+	file, err := NewTreeSitterProcessor().ProcessSource(ctx, source, filename)
+	if err != nil {
+		return nil, err
+	}
 
 	// Apply stripper options
 	stripperOpts := opts.ToStripperOptions()

@@ -17,6 +17,10 @@ import (
 // was not cancelled.
 var ErrNoTree = errors.New("tree-sitter returned no tree")
 
+// ErrBudget is returned by ParseBudget when the parse needs more work than
+// its budget.
+var ErrBudget = errors.New("tree-sitter parse exceeded its budget")
+
 // NewParser returns a parser for lang. The caller closes it.
 //
 // It fails when the grammar's ABI version is outside the range the runtime
@@ -73,6 +77,64 @@ func Parse(ctx context.Context, parser *sitter.Parser, src []byte) (*sitter.Tree
 		parser.Reset()
 		if err := ctx.Err(); err != nil {
 			return nil, err
+		}
+		return nil, ErrNoTree
+	}
+	return tree, nil
+}
+
+// ParseBudget parses src with parser like Parse, but stops the parse once
+// tree-sitter has checked its progress more than budget times, and returns
+// ErrBudget; the parser is then reset, so it can parse another text. The C
+// runtime checks progress once every 100 parser operations or so (fewer
+// than 100 operations make no check), so the budget bounds the operations of
+// a parse, and with them the length of text it reads: the same text gets the
+// same result on any machine, which a timeout would not give. Error recovery
+// does work that counts as no operation (recovery over a long run of text the
+// grammar cannot read can take time quadratic in its length, at the usual
+// rate of checks per byte), so a budget meant to bound time needs a cap that
+// does not grow with the text. A context that is done stops the parse with
+// its error.
+//
+// It always calls ParseWithOptions, whose options go-pointer keeps for the
+// life of the process (see Parse): each call leaves a one-byte C allocation,
+// a global map entry, the options and their closure, which holds a counter
+// and the context's Done channel. Use it for a parse that can run away, not
+// for every parse.
+func ParseBudget(ctx context.Context, parser *sitter.Parser, src []byte, budget int) (*sitter.Tree, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	read := func(offset int, _ sitter.Point) []byte {
+		if offset < len(src) {
+			return src[offset:]
+		}
+		return []byte{}
+	}
+	checks, done := 0, ctx.Done()
+	tree := parser.ParseWithOptions(read, nil, &sitter.ParseOptions{
+		ProgressCallback: func(sitter.ParseState) bool {
+			checks++
+			if checks > budget {
+				return true
+			}
+			select {
+			case <-done:
+				return true
+			default:
+				return false
+			}
+		},
+	})
+
+	if tree == nil {
+		parser.Reset()
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if checks > budget {
+			return nil, ErrBudget
 		}
 		return nil, ErrNoTree
 	}

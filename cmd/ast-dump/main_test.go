@@ -25,7 +25,7 @@ func TestDump_AllIncludesAnonymousNodes(t *testing.T) {
 }
 
 func TestDump_EveryTreeSitterLanguageParses(t *testing.T) {
-	for _, lang := range []string{"python", "typescript", "tsx", "javascript", "ruby", "java", "csharp", "kotlin", "cpp", "php"} {
+	for _, lang := range []string{"python", "typescript", "tsx", "javascript", "ruby", "java", "csharp", "kotlin", "cpp", "php", "rust"} {
 		out, err := dump(lang, []byte("x"), false)
 		require.NoError(t, err, lang)
 		assert.NotEmpty(t, out, lang)
@@ -33,7 +33,7 @@ func TestDump_EveryTreeSitterLanguageParses(t *testing.T) {
 }
 
 func TestDump_UnsupportedLanguage(t *testing.T) {
-	for _, lang := range []string{"go", "rust", "swift"} {
+	for _, lang := range []string{"go", "swift"} {
 		_, err := dump(lang, []byte("x"), false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not parsed with tree-sitter")

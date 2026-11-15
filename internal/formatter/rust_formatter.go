@@ -63,7 +63,12 @@ func (f *RustFormatter) formatImport(w io.Writer, imp *ir.DistilledImport, inden
 				symbols[i] = sym.Name
 			}
 		}
-		fmt.Fprintf(w, "%suse %s::{%s};\n", indent, imp.Module, strings.Join(symbols, ", "))
+		// A group without a path ("use {a::B, c::D};") has an empty Module
+		prefix := ""
+		if imp.Module != "" {
+			prefix = imp.Module + "::"
+		}
+		fmt.Fprintf(w, "%suse %s{%s};\n", indent, prefix, strings.Join(symbols, ", "))
 	} else {
 		fmt.Fprintf(w, "%suse %s;\n", indent, imp.Module)
 	}
@@ -118,9 +123,20 @@ func (f *RustFormatter) formatStruct(w io.Writer, class *ir.DistilledClass, inde
 		}
 	}
 
+	// A mod body prints its fields and functions, with the comments among
+	// them. Nested items and imports of a module are not printed, so they,
+	// and comments alone, do not open a body.
+	modMembers := 0
+	for _, child := range class.Children {
+		switch child.(type) {
+		case *ir.DistilledField, *ir.DistilledFunction:
+			modMembers++
+		}
+	}
+
 	// Check if it's an enum based on children (all fields without types)
 	// This is a fallback for when ModifierEnum is not set
-	if !isStruct && !isTrait && !isEnum && len(class.Children) > 0 {
+	if !isStruct && !isTrait && !isEnum && modMembers > 0 {
 		allFieldsNoType := true
 		for _, child := range class.Children {
 			if field, ok := child.(*ir.DistilledField); ok {
@@ -141,8 +157,8 @@ func (f *RustFormatter) formatStruct(w io.Writer, class *ir.DistilledClass, inde
 		}
 	}
 
-	// Check if it's an impl block
-	if strings.HasPrefix(class.Name, "impl ") {
+	// Check if it's an impl block ("impl Type", "impl<T> Trait for Type<T>")
+	if strings.HasPrefix(class.Name, "impl ") || strings.HasPrefix(class.Name, "impl<") {
 		declarationType = ""
 		isImpl = true
 	}
@@ -229,7 +245,7 @@ func (f *RustFormatter) formatStruct(w io.Writer, class *ir.DistilledClass, inde
 		}
 	} else if declarationType == "mod" {
 		// Modules have a body with various items
-		if len(class.Children) > 0 {
+		if modMembers > 0 {
 			fmt.Fprintln(w, " {")
 			// Format all children in the module
 			for _, child := range class.Children {
@@ -373,22 +389,24 @@ func (f *RustFormatter) formatTrait(w io.Writer, trait *ir.DistilledInterface, i
 }
 
 // formatFunction writes fn. withVisibility false leaves out the visibility
-// keyword, as for the members of a trait or a trait impl.
+// keyword, as for the members of a trait or a trait impl. An abstract
+// function (declared without a body, like a required trait method) ends with
+// ";".
 func (f *RustFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, indent string, withVisibility bool) error {
 	// Check for async
 	isAsync := false
-	isTrait := false
+	isAbstract := false
 	for _, mod := range fn.Modifiers {
 		if mod == ir.ModifierAsync {
 			isAsync = true
 		} else if mod == ir.ModifierAbstract {
-			isTrait = true
+			isAbstract = true
 		}
 	}
 
 	// Get visibility keyword - trait methods don't use pub
 	visKeyword := ""
-	if withVisibility && !isTrait {
+	if withVisibility && !isAbstract {
 		visKeyword = f.getRustVisibilityKeyword(fn.Visibility)
 	}
 
@@ -437,6 +455,8 @@ func (f *RustFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, in
 	// Implementation
 	if fn.Implementation != "" {
 		fmt.Fprint(w, renderBody(fn.Implementation, indent))
+	} else if isAbstract {
+		fmt.Fprintln(w, ";")
 	} else {
 		fmt.Fprintln(w)
 	}

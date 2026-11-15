@@ -9,6 +9,7 @@ pub struct SourceFile {
 pub trait Summarizable {
 
     fn summary(&self) -> String;
+    // Default implementation for short summary
 
     fn short_summary(&self) -> String {
         let full = self.summary();

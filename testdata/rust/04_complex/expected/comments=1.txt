@@ -7,12 +7,6 @@ use std::future::Future;
 use std::pin::Pin;
 // FFI: Declaring an external function from a C library.
 // The parser must handle `extern "C"` blocks.
-// Additional FFI function for complex validation
-// A simple declarative macro for creating a new, validated config.
-// The parser must handle the unique syntax of `macro_rules!`.
-// In a real scenario, more complex logic would be here.
-// Multiple macro patterns
-// Macro for generating validation functions
 // Using the macro to generate functions
 
 pub struct Config;
@@ -35,6 +29,11 @@ impl AnalysisService {
 pub trait AsyncProcessor {
     type Item;
     type Error;
+
+    async fn process_async(&self, item: Self::Item) -> Result<String, Self::Error>;
+    // Default async implementation
+
+    async fn batch_process(&self, items: Vec<Self::Item>) -> Vec<Result<String, Self::Error>>
 }
 // Implementation for the analysis service
 
@@ -42,7 +41,6 @@ impl AsyncProcessor for AnalysisService {
 
     async fn process_async(&self, item: Self::Item) -> Result<String, Self::Error>
 }
-// Union type for advanced FFI
 
 impl FFIData {
     // Safe constructor

@@ -1,10 +1,10 @@
 # Rust Language Support
 
-AI Distiller supports Rust codebases with a line-based parser (regular expressions, no tree-sitter). It covers the common item declarations: structs, enums, traits, impl blocks, functions, constants and use statements.
+AI Distiller parses Rust with tree-sitter (the `tree-sitter-rust` grammar v0.24.2, compiled into the binary). It covers the common item declarations: structs, enums, traits, impl blocks, functions, constants, type aliases and use statements.
 
 ## Overview
 
-Rust support in AI Distiller captures the essential structure of Rust code including ownership annotations, lifetime parameters, trait bounds, and async functions. Because the parser reads one line at a time, a declaration written across several lines (a parameter list or a `where` clause) can be lost; the limitations are listed below.
+Rust support in AI Distiller captures the essential structure of Rust code including ownership annotations, lifetime parameters, trait bounds, and async functions. A declaration written across several lines (a parameter list, a `where` clause, a `use` group) is printed on one line. Items inside function bodies are not distilled; the items inside an item-level macro call with braces (`cfg_if! { ... }`, `lazy_static! { ... }`) are. The limitations are listed below.
 
 ## Supported Rust Constructs
 
@@ -14,14 +14,14 @@ Rust support in AI Distiller captures the essential structure of Rust code inclu
 |-----------|--------------|-------|
 | **Structs** | ⚠️ Partial | Named-field structs with generics; a tuple struct prints without its fields (`pub struct Meters;`) |
 | **Enums** | ✅ Full | Variants with tuple or struct payloads and discriminants (`Ok = 0`), also on one line |
-| **Traits** | ⚠️ Partial | Methods (default methods with their bodies under `--implementation=1`) and associated types; supertraits (`: Sized`) are dropped |
-| **Implementations** | ⚠️ Partial | Inherent and trait impls with their methods; the impl's own generics (`impl<T: Display>`) and associated types are dropped |
-| **Functions** | ⚠️ Partial | Free functions and methods; a function whose parameter list spans several lines is dropped |
-| **Type Aliases** | ⚠️ Partial | Printed with their value; the alias's type parameters are dropped (`type Map<K>` prints as `type Map`) |
-| **Constants** | ✅ Full | `const` and `static`, names as written |
-| **Modules** | ❌ Broken | An inline `mod name { ... }` prints as an empty `enum name {}` |
-| **Use statements** | ⚠️ Partial | Paths, groups and globs; an `as` rename prints garbled |
-| **Macros** | ❌ Not extracted | `macro_rules!` definitions are skipped |
+| **Traits** | ⚠️ Partial | Methods, including `async fn` and `unsafe fn` members (default methods with their bodies under `--implementation=1`; a required method ends with `;`), associated types with their generics, and the comments of the trait body; supertraits (`: Sized`) and trait `const` items are dropped |
+| **Implementations** | ⚠️ Partial | Inherent and trait impls with their generics (`impl<T: Display> Trait for Type<T>`) and their methods; the associated types of a trait impl print only with `--private=1`, and a `where` clause on the impl header is dropped |
+| **Functions** | ⚠️ Partial | Free functions and methods, also with a parameter list or `where` clause over several lines, tuple-pattern parameters and `extern "C" fn`; the `unsafe`, `const` and `extern` qualifiers are dropped |
+| **Type Aliases** | ✅ Full | Printed with their generics and value (`pub type Map<K> = HashMap<K, u32>;`) |
+| **Constants** | ✅ Full | `const` and `static`, names as written; a value over several lines prints as `...` |
+| **Modules** | ❌ Broken | An inline `mod name { ... }` prints only its `const`, `static`, `type` and `fn` items, and only when it holds one of the first three; with functions alone it prints as an empty `enum name {}`, otherwise as `mod name;` |
+| **Use statements** | ✅ Full | Paths, nested and multi-line groups, `self`, globs and `as` renames, as written; `pub use` prints as `use` |
+| **Macros** | ⚠️ Partial | `macro_rules!` definitions are skipped and macros are not expanded; the items written inside an item-level macro call with braces (`s! { ... }`, `cfg_if! { if #[cfg(unix)] { ... } else { ... } }`) print where the call stands, also when one item uses syntax of the macro's own (`pub {const} fn`, `pub struct X #full { ... }`); an item the parser cannot read at all (`fn f() -> T { ... } ?= default`) is skipped |
 | **Async/Await** | ✅ Full | `async fn` keeps `async` |
 | **Unsafe** | ⚠️ Partial | The `unsafe` keyword is dropped |
 
@@ -29,10 +29,10 @@ Rust support in AI Distiller captures the essential structure of Rust code inclu
 
 | Feature | Support Level | Notes |
 |---------|--------------|-------|
-| **Lifetimes** | ✅ Full | In function signatures, including `'static`; an impl block's own lifetime parameter (`impl<'a>`) is dropped |
+| **Lifetimes** | ✅ Full | In function signatures, including `'static`, and on impl blocks (`impl<'a>`) |
 | **References** | ✅ Full | `&T`, `&mut T`, `&'a T` |
 | **Generic parameters** | ✅ Full | Type, lifetime and const generics on functions and structs |
-| **Trait bounds** | ⚠️ Partial | Inline bounds, and a function's `where` clause (printed on the signature line); a multi-line `where` clause on a struct or impl block loses its fields or methods (see Known Limitations) |
+| **Trait bounds** | ⚠️ Partial | Inline bounds, and a function's `where` clause (printed on the signature line, also when it spans several lines); a `where` clause on a struct, trait or impl header is dropped, while the item keeps its fields or methods |
 | **Associated types** | ⚠️ Partial | In traits; not in implementations |
 | **Return types** | ✅ Full | Including `impl Trait`, `-> Result<T, E>` |
 | **Self types** | ✅ Full | `self`, `&self`, `&mut self`, `&'a self` |
@@ -61,6 +61,8 @@ Rust support in AI Distiller captures the essential structure of Rust code inclu
 
 Later fixes: methods of `impl Trait for Type` are public (as visible as the trait) and print in the default output; one-line structs and enums get their fields and variants; a trait's members after a default method are no longer lost; printed bodies (`--implementation=1`) no longer repeat the signature; constant names print as written.
 
+November 2026: the line parser was replaced by a tree-sitter parser. Multi-line signatures, `where` clauses and `use` groups, impl generics, trait `async fn` members, and the generics of type aliases and associated types now print; trailing comments are no longer glued into types; the docs of macros, `extern` blocks and unions no longer attach to the next item; the items inside item-level macro calls with braces print; a comment at the end of a code line no longer prints as a comment line of its own.
+
 ## Key Features
 
 ### 1. **Ownership and Borrowing Representation**
@@ -85,7 +87,7 @@ impl<'a> Parser<'a> {
 ```
 <file path="parser.rs">
 
-impl Parser<'a> {
+impl<'a> Parser<'a> {
 
     pub fn new(input: &'a str) -> Self
 
@@ -130,7 +132,7 @@ pub trait Serialize {
     fn to_bytes(&self) -> Result<Vec<u8>, Self::Error>
 }
 
-impl Serialize for T {
+impl<T: Display> Serialize for T {
 
     fn serialize<W: Write>(&self, writer: &mut W) -> Result<(), Self::Error>
 }
@@ -181,14 +183,13 @@ Methods of `impl Trait for Type` and the methods declared in a trait are public.
 
 ## Known Limitations
 
-1. **Multi-line declarations**: a function whose parameter list spans several lines is dropped, and an item with a multi-line `where` clause loses its body: a struct prints without fields, an impl block without methods (see the example below)
-2. **Modules**: an inline `mod name { ... }` prints as an empty `enum name {}`
-3. **Macro definitions**: `macro_rules!` definitions are not extracted, and macros are not expanded
-4. **Attributes**: `#[derive(...)]` and other attributes on items are dropped
-5. **Tuple structs**: printed without their fields
-6. **`use ... as ...` renames**: printed garbled (`use a::b::C as D;` prints as `use a::b::C::{a::b::C as D};`)
-7. **Impl and trait headers**: the impl's generics, its associated types and a trait's supertraits are dropped
-8. **Doc comments**: `///` docs are printed with `//`
+1. **Modules**: an inline `mod name { ... }` prints only its `const`, `static`, `type` and `fn` items, and only when it holds one of the first three; with functions alone it prints as an empty `enum name {}`, otherwise as `mod name;`
+2. **Macros**: `macro_rules!` definitions are not extracted and macros are not expanded; the items inside a macro call are distilled only for an item-level call with braces, only the items the parser can read (or those in the `{}` blocks of a statement it cannot read, as in `cfg_if!`), and never inside `()` or `[]` calls or function bodies
+3. **Attributes**: `#[derive(...)]` and other attributes on items are dropped
+4. **Tuple structs**: printed without their fields
+5. **Impl and trait headers**: the associated types of a trait impl print only with `--private=1`; a trait's supertraits and `const` items and the `where` clause of a struct, trait or impl header are dropped
+6. **Doc comments**: `///` docs are printed with `//`
+7. **Unions, `extern` blocks and `extern crate`**: not printed
 
 ## Best Practices
 
@@ -206,7 +207,7 @@ pub fn parse(input: &str) -> Result<Token, Error>
 
 ### 2. **Clear Trait Bounds**
 
-Use descriptive trait bounds. A function's `where` clause is printed on its signature line; on a struct or impl block, prefer inline bounds, because a multi-line `where` clause there loses the fields or methods (Known Limitations, item 1):
+Use descriptive trait bounds. A function's `where` clause is printed on its signature line; on a struct or impl block, prefer inline bounds, because a `where` clause on its header is not printed (Known Limitations, item 5):
 
 ```rust
 // Good
@@ -287,12 +288,18 @@ Output (default):
 
 pub struct Cache<K, V, S = RandomState>;
 
-impl Cache<K, V, S> {
+impl<K, V, S> Cache<K, V, S> {
+
+    pub fn with_hasher(capacity: usize, hasher: S) -> Self
+
+    pub fn get(&self, key: &K) -> Option<&V>
+
+    pub fn insert(&mut self, key: K, value: V) -> Option<V>
 }
 </file>
 ```
 
-The multi-line `where` clauses make the parser lose the struct's fields and the impl's methods (Known Limitations, item 1). Written with inline bounds (`impl<K: Hash + Eq, V: Clone, S: BuildHasher> Cache<K, V, S> {`), the methods are kept.
+The struct's fields are private, so it prints with `;`. The `where` clauses of the struct and impl headers are not printed (Known Limitations, item 5); written with inline bounds (`impl<K: Hash + Eq, V: Clone, S: BuildHasher> Cache<K, V, S> {`), the bounds print.
 
 </details>
 
@@ -315,7 +322,7 @@ aid src/ --comments=1
 
 ## Future Improvements
 
-- Multi-line signatures and `where` clauses
+- `where` clauses on struct, trait and impl headers
 - Inline modules, tuple structs and macro definitions
 - Full macro expansion support
 - Better const generic handling

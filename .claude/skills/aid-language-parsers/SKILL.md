@@ -3,7 +3,7 @@ name: aid-language-parsers
 description: >-
   How AI Distiller's 12 language processors in internal/language/ turn source
   code into IR: which parser each language really uses (tree-sitter via cgo,
-  go/parser for Go, regex line parsers for Rust and Swift), visibility rules,
+  go/parser for Go, a regex line parser for Swift), visibility rules,
   how methods attach to types, and where each language's known gaps are
   recorded. Use whenever output for a specific language is missing or wrong (a
   construct disappears, wrong visibility, missing body, wrong signature), when
@@ -71,8 +71,8 @@ in a directory run aid prints `Warning: failed to process ...` and goes on.
 
 ## 2. Parser per language
 
-Three kinds: tree-sitter through cgo (nine languages), the standard library's
-`go/parser` (Go), and regex line parsers (Rust, Swift). The entry point is the
+Three kinds: tree-sitter through cgo (ten languages), the standard library's
+`go/parser` (Go), and a regex line parser (Swift). The entry point is the
 function the package's `ProcessWithOptions` calls.
 
 | Language | Parser actually wired | Grammar import | Reference |
@@ -81,7 +81,7 @@ function the package's `ProcessWithOptions` calls.
 | typescript | `internal/language/typescript/ast_parser.go#ASTParser.ProcessSource` | `tree-sitter-typescript` (replaced by `internal/parser/grammars/tree-sitter-typescript`) | `references/typescript.md` |
 | javascript | `internal/language/javascript/tree_sitter_processor.go#TreeSitterProcessor.ProcessSource` | `github.com/tree-sitter/tree-sitter-javascript/bindings/go` | `references/javascript.md` |
 | go | `internal/language/golang/ast_parser.go#ASTParser.ProcessSource` | `go/parser`, `go/ast` (standard library) | `references/go.md` |
-| rust | `internal/language/rust/line_parser.go#LineParser.Parse` (regex) | none | `references/rust.md` |
+| rust | `internal/language/rust/tree_sitter_processor.go#TreeSitterProcessor.ProcessSource` | `github.com/tree-sitter/tree-sitter-rust/bindings/go` | `references/rust.md` |
 | swift | `internal/language/swift/line_parser.go#LineParser.Parse` (regex) | none | `references/swift.md` |
 | ruby | `internal/language/ruby/tree_sitter_processor.go#TreeSitterProcessor.ProcessSource` | `github.com/tree-sitter/tree-sitter-ruby/bindings/go` | `references/ruby.md` |
 | java | `internal/language/java/tree_sitter_processor.go#TreeSitterProcessor.ProcessSource` | `github.com/tree-sitter/tree-sitter-java/bindings/go` | `references/java.md` |
@@ -98,9 +98,9 @@ closing parsers and trees and for using nodes are in
 `references/tree-sitter-cgo.md`. The Go package is `internal/language/golang/`,
 and its processor registers as `go`.
 
-Rust and Swift are distilled by their line parsers only; they have no
-tree-sitter parser. A failed tree-sitter parse returns an
-error; no language falls back to another parser. A reference may list unused
+Swift is distilled by its line parser only; it has no tree-sitter parser. A
+failed tree-sitter parse returns an error; no language falls back to another
+parser. A reference may list unused
 code under `## Unused files`; fixing a bug there changes nothing.
 
 ## 3. Which layer is wrong
@@ -121,7 +121,7 @@ wrong `visibility` is the parser's visibility rule (the language's reference,
 
 ## 4. Reading the tree
 
-For the nine tree-sitter languages, `cmd/ast-dump` prints the tree that the
+For the ten tree-sitter languages, `cmd/ast-dump` prints the tree that the
 processor walks, built with the same grammar:
 
 ```bash
@@ -130,7 +130,7 @@ go run ./cmd/ast-dump --lang python --all testdata/python/01_basic/source.py | h
 ```
 
 `--lang` takes `python`, `typescript`, `tsx`, `javascript`, `ruby`, `java`,
-`csharp`, `kotlin`, `cpp` or `php`. It refuses `go`, `rust` and `swift` (exit
+`csharp`, `kotlin`, `cpp`, `php` or `rust`. It refuses `go` and `swift` (exit
 status 2, which `go run` reports as `exit status 2`), because aid does not parse
 them with tree-sitter; read their parser instead. A file argument or stdin (no
 argument, or `-`) is the input.

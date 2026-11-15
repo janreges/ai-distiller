@@ -35,7 +35,7 @@ they read `testdata/`, the conformance fixtures or a built binary.
 | | `processor_fuzz_test.go` | `FuzzProcess`, seeded from `testdata/python/*/source.py`; without `-fuzz` it runs the seeds only |
 | | `processor_bench_test.go` | benchmarks; they run only with `-bench` |
 | `internal/language/ruby` | `processor_test.go` | `require`, `attr_*`, `include`, keyword calls, visibility sections, singleton methods, comment and doc-comment rules, shebang |
-| `internal/language/rust` | `processor_test.go` | items and visibility; body boundaries (braces on their own line, in literals, one-line bodies); trait impl methods are public; enums with discriminants and payloads; inner docs; docs of hidden items |
+| `internal/language/rust` | `processor_test.go` | items and visibility; body boundaries (braces on their own line, in literals, one-line bodies); trait impl methods are public; enums with discriminants and payloads; inner docs; docs of hidden items; multi-line signatures and `where` clauses, impl generics, trait `async`/`unsafe` members, `use` trees, comment lines, docs of skipped statements and above attributes, error recovery, 200 nested modules, CRLF and Unicode, items inside bodies, items inside macro calls (offsets, `cfg_if!` blocks, errors inside items, bodies that do not parse, no function body at item level, depth limit), trailing comments |
 | `internal/language/swift` | `line_parser_test.go` | the line parser: body extraction (multi-line and one-line bodies, braces inside string literals), property defaults without the `=`, the `struct` modifier, code after a block comment on the same line; through the processor and the text formatter: ordinary comments print only with `--comments` and doc comments by default, an empty block comment prints nothing, an extension header names its conformance once |
 | `internal/language/typescript` | `ast_parser_test.go` | namespaces, ambient modules, return types and type guards, const types, `#private` fields and methods, arrow bodies, enum initialisers, comment and doc placement |
 
@@ -62,7 +62,7 @@ they read `testdata/`, the conformance fixtures or a built binary.
 | `internal/semantic` | `typescript_analyzer_test.go` | the TypeScript analyzer on inline source |
 | `internal/summary` | `*_formatter_test.go`, `printed_test.go` | the summary styles; printed output is not offered for loading |
 | `internal/aiactions` | `source_files_test.go` | which source files an AI action collects |
-| `cmd/ast-dump` | `main_test.go` | the tree-sitter dump of each tree-sitter language; Go, Rust and Swift are refused (build tag `cgo`) |
+| `cmd/ast-dump` | `main_test.go` | the tree-sitter dump of each tree-sitter language; Go and Swift are refused (build tag `cgo`) |
 
 `docs/internal/proof-of-concepts/` holds two more test files, but each sits in its
 own Go module, so `go list ./...` and the full suite do not include them.

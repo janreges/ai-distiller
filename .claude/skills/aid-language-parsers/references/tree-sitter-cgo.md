@@ -6,7 +6,7 @@ Tree-sitter grammars are generated C parsers. Go reaches them through the
 official binding `github.com/tree-sitter/go-tree-sitter` (version in `go.mod`),
 which is itself cgo code: without cgo its package has no `Node`, `Parser` or
 `Language` type, and every grammar package is excluded by its build
-constraints. Nine processors use it (all but Go, Rust and Swift), and so do
+constraints. Ten processors use it (all but Go and Swift), and so do
 `internal/semantic` (Python and TypeScript grammars), which
 `internal/processor/dependency.go` imports, and `cmd/ast-dump`. So nothing in
 aid compiles without cgo, not even `internal/language` on its own.
@@ -31,7 +31,13 @@ of ABI 13 to 15. Code that uses it imports it as
   incompatible grammar, and `internal/language/tsparse/tsparse.go#Parse`
   honours the context. Do not call `Parser.ParseCtx`: in v0.25.0 a context
   cancelled during the parse makes it dereference a nil cancellation flag and
-  crash the process.
+  crash the process. `internal/language/tsparse/tsparse.go#ParseBudget` also
+  stops a parse after a number of progress checks (one per about 100 parser
+  operations) and returns `ErrBudget`, so the same text gives the same result
+  on any machine; the check rate is about the same per byte in clean code and
+  in error recovery, so a budget bounds time only through its cap on the
+  length parsed. Each call leaves about a hundred bytes that go-pointer never
+  frees, so use it only for a parse that can run away (the Rust macro bodies).
 - Every `Child`, `Parent` or sibling call returns a new `*sitter.Node`, so `==`
   between two nodes is false even for the same node; compare with
   `a.Equals(*b)`. `Kind()` is the node type, `StartPosition()` and
@@ -49,10 +55,10 @@ re-read the binding's `allocator.go` and every place it frees memory.
 |---|---|---|
 | python, javascript, java, csharp, cpp, ruby, php | `github.com/tree-sitter/tree-sitter-<name>/bindings/go` | the grammar's own Go module (version in `go.mod`); the processor wraps its pointer with `sitter.NewLanguage(...)`, PHP with `LanguagePHP()` |
 | kotlin | `github.com/fwcd/tree-sitter-kotlin/bindings/go` | the grammar's own Go module (fwcd, pinned to commit `d6af96d2` in `go.mod`, ABI 14); its `parser.c` is about 35 MB; measured once when it replaced the copy bundled with the previous Go binding, a cold `go build -a` went from 27.3 s to 31.3 s and the binary grew by 2.0 MB; wrapped with `sitter.NewLanguage(...)` |
+| rust | `github.com/tree-sitter/tree-sitter-rust/bindings/go` | the grammar's own Go module (v0.24.2 in `go.mod`, ABI 15); its `parser.c` is about 6.5 MB; wrapped with `sitter.NewLanguage(...)` |
 | typescript, tsx | `tree-sitter-typescript` | a local wrapper module, see below |
 | swift | none | line parser (`references/swift.md`) |
 | go | none | standard library `go/parser` |
-| rust | none | line parser; no Rust grammar is in `go.mod` |
 
 `cmd/ast-dump` imports the same grammars (`cmd/ast-dump/main.go#language`), so
 the tree it prints is the tree the processor walks.

@@ -39,7 +39,8 @@ Pipeline:
   processors.
 - `internal/language/tsparse`: creates tree-sitter parsers and runs a parse
   that honours the context, for the processors, `internal/semantic` and
-  `cmd/ast-dump`.
+  `cmd/ast-dump`, or one that also stops at a budget of parser work (the Rust
+  macro bodies).
 - `internal/ir`: the IR node types and the visitor.
 - `internal/stripper`: removes what the flags exclude
   (`ir-and-stripper.md`).

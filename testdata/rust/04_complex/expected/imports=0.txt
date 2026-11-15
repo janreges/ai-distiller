@@ -1,8 +1,4 @@
 <file path="source.rs">
-// Additional FFI function for complex validation
-// A simple declarative macro for creating a new, validated config.
-// The parser must handle the unique syntax of `macro_rules!`.
-// Macro for generating validation functions
 
 pub struct Config;
 // A service that uses a shared, mutable cache.
@@ -24,6 +20,11 @@ impl AnalysisService {
 pub trait AsyncProcessor {
     type Item;
     type Error;
+
+    async fn process_async(&self, item: Self::Item) -> Result<String, Self::Error>;
+    // Default async implementation
+
+    async fn batch_process(&self, items: Vec<Self::Item>) -> Vec<Result<String, Self::Error>>
 }
 // Implementation for the analysis service
 
@@ -31,7 +32,6 @@ impl AsyncProcessor for AnalysisService {
 
     async fn process_async(&self, item: Self::Item) -> Result<String, Self::Error>
 }
-// Union type for advanced FFI
 
 impl FFIData {
     // Safe constructor

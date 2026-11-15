@@ -82,3 +82,48 @@ func TestParse_CancellableContextNotCancelled(t *testing.T) {
 	require.Equal(t, plain.RootNode().ToSexp(), tree.RootNode().ToSexp())
 	require.Equal(t, uint(len(src)), tree.RootNode().EndByte())
 }
+
+// A parse that needs more progress checks than its budget stops with
+// ErrBudget, and the parser parses the next text afresh.
+func TestParseBudget_StopsAndLeavesTheParserReusable(t *testing.T) {
+	parser := newPythonParser(t)
+	big := []byte(strings.Repeat("def f(x):\n    return [y for y in range(x) if y]\n", 2000))
+
+	tree, err := ParseBudget(context.Background(), parser, big, 10)
+	if tree != nil {
+		tree.Close()
+		t.Fatal("the parse finished within 10 progress checks; enlarge the input")
+	}
+	require.ErrorIs(t, err, ErrBudget)
+
+	tree, err = ParseBudget(context.Background(), parser, []byte("class A:\n    pass\n"), 10)
+	require.NoError(t, err)
+	defer tree.Close()
+	require.Equal(t, "(module (class_definition name: (identifier) body: (block (pass_statement))))", tree.RootNode().ToSexp())
+}
+
+// A parse within its budget gives the tree Parse gives.
+func TestParseBudget_WithinBudget(t *testing.T) {
+	parser := newPythonParser(t)
+	src := []byte(strings.Repeat("def f(x):\n    return [y for y in range(x) if y]\n", 200))
+
+	tree, err := ParseBudget(context.Background(), parser, src, 1_000_000)
+	require.NoError(t, err)
+	defer tree.Close()
+
+	plain, err := Parse(context.Background(), parser, src)
+	require.NoError(t, err)
+	defer plain.Close()
+	require.Equal(t, plain.RootNode().ToSexp(), tree.RootNode().ToSexp())
+}
+
+// A context that is done stops a budgeted parse with its error, not ErrBudget.
+func TestParseBudget_ContextDone(t *testing.T) {
+	parser := newPythonParser(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	tree, err := ParseBudget(ctx, parser, []byte("x = 1\n"), 1_000_000)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Nil(t, tree)
+}

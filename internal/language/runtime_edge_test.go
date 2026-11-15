@@ -58,6 +58,10 @@ var edgeLanguages = []edgeLanguage{
 		func(i int) string {
 			return fmt.Sprintf("/// Doc %d.\nclass C%d {\npublic:\n    int m(int y) { return x + y; }\nprivate:\n    int x = %d;\n};\n", i, i, i)
 		}},
+	{"rust", "edge.rs", "const S: &str = \"a\xff\xfe\xc3(b\";\n",
+		func(i int) string {
+			return fmt.Sprintf("/// Doc %d.\npub struct C%d {\n    x: i32,\n}\n\nimpl C%d {\n    pub fn m(&self, y: i32) -> i32 { self.x + y + %d }\n}\n", i, i, i, i)
+		}},
 	// Sixteen classes per namespace block, docs in the class bodies: the PHP
 	// processor searches all siblings of a /** comment and of a class, which
 	// takes minutes for thousands of top-level classes.

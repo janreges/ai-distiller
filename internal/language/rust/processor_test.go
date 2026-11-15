@@ -2,8 +2,10 @@ package rust
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/janreges/ai-distiller/internal/ir"
 	"github.com/janreges/ai-distiller/internal/processor"
@@ -84,9 +86,7 @@ use std::io::{self, Read, Write};`,
 				require.True(t, ok, "Expected second to be import")
 				assert.Equal(t, "use", imp2.ImportType)
 				assert.Equal(t, "std::io", imp2.Module)
-				assert.Len(t, imp2.Symbols, 2, "Expected two imported symbols")
-				assert.Equal(t, "Read", imp2.Symbols[0].Name)
-				assert.Equal(t, "Write", imp2.Symbols[1].Name)
+				assert.Equal(t, []ir.ImportedSymbol{{Name: "self"}, {Name: "Read"}, {Name: "Write"}}, imp2.Symbols)
 			},
 		},
 		{
@@ -331,19 +331,6 @@ func TestRust_BraceInsideStringLiteral(t *testing.T) {
 	assert.NotNil(t, findRustFn(t, file, "b"))
 }
 
-func TestRust_BraceDelta(t *testing.T) {
-	assert.Equal(t, 1, braceDelta("pub fn a() {"))
-	assert.Equal(t, -1, braceDelta("}"))
-	assert.Equal(t, 0, braceDelta(`println!("}"); // }`))
-	assert.Equal(t, 0, braceDelta(`let s = "\"{";`))
-	// Char literals hold braces and quotes; lifetimes are not char literals.
-	assert.Equal(t, 0, braceDelta(`'{' => depth += 1,`))
-	assert.Equal(t, 1, braceDelta(`'}' => {`))
-	assert.Equal(t, 1, braceDelta(`if c == '"' {`))
-	assert.Equal(t, 1, braceDelta(`if c == '\'' {`))
-	assert.Equal(t, 1, braceDelta(`fn f<'a>(x: &'a str) -> &'a str {`))
-}
-
 func TestRust_OneLineBody(t *testing.T) {
 	src := "pub struct S {\n    items: Vec<i32>,\n}\n\nimpl S {\n" +
 		"    pub fn quick(&self) -> usize { self.items.len() }\n" +
@@ -358,14 +345,6 @@ func TestRust_OneLineBody(t *testing.T) {
 	assert.Equal(t, "{ if self.items.is_empty() { '}' } else { '{' } }", findRustFn(t, file, "brace").Implementation)
 	assert.Equal(t, "{\n        1\n    }", findRustFn(t, file, "after").Implementation)
 	assert.Equal(t, "{ 42 }", findRustFn(t, file, "top").Implementation)
-}
-
-func TestRust_OneLineBodyOpenOnly(t *testing.T) {
-	// A body that opens on the signature line but closes later is not a
-	// one-line body.
-	assert.Equal(t, "", oneLineBody("pub fn f() { let x = 1;"))
-	assert.Equal(t, "", oneLineBody("pub fn f() -> i32;"))
-	assert.Equal(t, "{ x }", oneLineBody("pub fn f(x: i32) -> i32 { x } // trailing"))
 }
 
 func TestRust_TraitImplMethodsArePublic(t *testing.T) {
@@ -386,12 +365,6 @@ func TestRust_OneLineEnumAndStruct(t *testing.T) {
 func TestRust_OneLineStructWithGenerics(t *testing.T) {
 	p := findRustClass(t, parseRust(t, "pub struct P<T> { pub x: HashMap<String, Vec<T>>, pub y: (i32, i32) }\n"), "P<T>")
 	assert.Equal(t, []string{"x", "y"}, childNames(p))
-}
-
-func TestSplitTopLevel(t *testing.T) {
-	assert.Equal(t, []string{"a: Map<K, V>", " b: (i32, i32)", " c: [u8; 2]"}, splitTopLevel("a: Map<K, V>, b: (i32, i32), c: [u8; 2]", ','))
-	// The '>' of a fn-type arrow closes no bracket.
-	assert.Equal(t, []string{"f: Box<dyn Fn(i32) -> i32>", " g: u8"}, splitTopLevel("f: Box<dyn Fn(i32) -> i32>, g: u8", ','))
 }
 
 func TestRust_TraitDefaultMethodKeepsLaterMembers(t *testing.T) {
@@ -427,15 +400,15 @@ func TestRust_TraitDefaultMethodKeepsLaterMembers(t *testing.T) {
 }
 
 func TestRust_BlockBracesInLiterals(t *testing.T) {
-	// Lines the block parsers do not recognise as members are brace-counted;
-	// a brace inside a string or char literal there must not end the block.
+	// A brace inside a string or char literal ends no block. The trait const
+	// is not distilled yet.
 	trait := "pub trait T {\n    const OPEN: &'static str = \"{\";\n    fn after(&self);\n}\n"
 	assert.Equal(t, []string{"after"}, childNames(findRustClass(t, parseRust(t, trait), "T")))
 
 	impl := "pub struct S;\n\nimpl S {\n" +
 		"    pub fn long(\n        &self,\n    ) -> &'static str {\n        \"}\"\n    }\n" +
 		"    pub fn after(&self) {}\n}\n"
-	assert.Equal(t, []string{"after"}, childNames(findRustClass(t, parseRust(t, impl), "impl S")))
+	assert.Equal(t, []string{"long", "after"}, childNames(findRustClass(t, parseRust(t, impl), "impl S")))
 }
 
 // variant returns the enum variant called name among class's fields. The test
@@ -543,4 +516,497 @@ func TestRust_PublicOffDropsTheDocOfPublicFunction(t *testing.T) {
 	opts.RemovePublic, opts.IncludePrivate = true, true
 	src := "/// Public api.\npub fn api() {}\n\n/// helper doc.\nfn helper() {}\n"
 	assert.Equal(t, []string{"doc:helper doc.", "fn:helper"}, distillRustTop(t, src, opts))
+}
+
+// walkRust calls visit for every node of the IR below file, depth first.
+func walkRust(file *ir.DistilledFile, visit func(ir.DistilledNode)) {
+	var walk func(nodes []ir.DistilledNode)
+	walk = func(nodes []ir.DistilledNode) {
+		for _, node := range nodes {
+			visit(node)
+			if class, ok := node.(*ir.DistilledClass); ok {
+				walk(class.Children)
+			}
+		}
+	}
+	walk(file.Children)
+}
+
+// declNames returns the names of the classes, functions and fields among
+// nodes, in order; comments and imports are skipped.
+func declNames(nodes []ir.DistilledNode) []string {
+	names := []string{}
+	for _, node := range nodes {
+		switch n := node.(type) {
+		case *ir.DistilledClass:
+			names = append(names, n.Name)
+		case *ir.DistilledFunction:
+			names = append(names, n.Name)
+		case *ir.DistilledField:
+			names = append(names, n.Name)
+		}
+	}
+	return names
+}
+
+// allNames returns the names of the classes, functions and fields anywhere in
+// file's IR.
+func allNames(file *ir.DistilledFile) []string {
+	var names []string
+	walkRust(file, func(node ir.DistilledNode) {
+		names = append(names, declNames([]ir.DistilledNode{node})...)
+	})
+	return names
+}
+
+const multiLineSignature = "pub fn f(\n    a: u32,\n    b: u32,\n) -> bool\nwhere\n    u32: Copy,\n{ true }"
+
+func TestRust_MultiLineSignature(t *testing.T) {
+	file := parseRust(t, multiLineSignature)
+	require.Equal(t, []string{"f"}, declNames(file.Children))
+	f := findRustFn(t, file, "f")
+	assert.Equal(t, []ir.Parameter{{Name: "a", Type: ir.TypeRef{Name: "u32"}}, {Name: "b", Type: ir.TypeRef{Name: "u32"}}}, f.Parameters)
+	require.NotNil(t, f.Returns)
+	assert.Equal(t, "bool where u32: Copy,", f.Returns.Name)
+}
+
+func TestRust_ImplGenericsInName(t *testing.T) {
+	file := parseRust(t, "impl<T: Clone> Container<T> for Vec<T> {}\n")
+	findRustClass(t, file, "impl<T: Clone> Container<T> for Vec<T>")
+}
+
+func TestRust_WhereBeforeBraceKeepsMembers(t *testing.T) {
+	src := "pub struct Bounded<T>\nwhere\n    T: Clone,\n{\n    pub value: T,\n    count: usize,\n}\n\n" +
+		"impl<T> Bounded<T>\nwhere\n    T: Clone + Default,\n{\n    pub fn reset(&mut self) {}\n}\n\n" +
+		"pub trait Container<T>\nwhere\n    T: Clone,\n{\n    fn get(&self, i: usize) -> Option<&T>;\n}\n"
+	file := parseRust(t, src)
+	assert.Equal(t, []string{"Bounded<T>", "impl<T> Bounded<T>", "Container<T>"}, declNames(file.Children))
+	assert.Len(t, file.Children, 3)
+	assert.Equal(t, []string{"value", "count"}, childNames(findRustClass(t, file, "Bounded<T>")))
+	assert.Equal(t, []string{"reset"}, childNames(findRustClass(t, file, "impl<T> Bounded<T>")))
+	assert.Equal(t, []string{"get"}, childNames(findRustClass(t, file, "Container<T>")))
+}
+
+func TestRust_TraitAsyncUnsafeMembers(t *testing.T) {
+	file := parseRust(t, "trait T { async fn a(&self); unsafe fn b(&self); fn c(&self) {} }\n")
+	assert.Equal(t, []string{"a", "b", "c"}, childNames(findRustClass(t, file, "T")))
+	assert.Contains(t, findRustFnIn(t, file, "T", "a").Modifiers, ir.ModifierAbstract)
+	assert.Contains(t, findRustFnIn(t, file, "T", "b").Modifiers, ir.ModifierAbstract)
+	assert.NotContains(t, findRustFnIn(t, file, "T", "c").Modifiers, ir.ModifierAbstract)
+}
+
+func TestRust_TrailingCommentNotInType(t *testing.T) {
+	s := findRustClass(t, parseRust(t, "pub struct S {\n    content: String, // note\n}\n"), "S")
+	require.Len(t, s.Children, 1)
+	field, ok := s.Children[0].(*ir.DistilledField)
+	require.True(t, ok)
+	assert.Equal(t, "content", field.Name)
+	assert.Equal(t, "String", field.Type.Name)
+}
+
+func TestRust_DocsOfSkippedStatementsAreDropped(t *testing.T) {
+	file := parseRust(t, "/// d\nthread_local! { static X: u8 = 0; }\npub struct S;\n")
+	walkRust(file, func(node ir.DistilledNode) {
+		if c, ok := node.(*ir.DistilledComment); ok {
+			assert.NotEqual(t, "d", c.Text)
+		}
+	})
+	findRustClass(t, file, "S")
+}
+
+func TestRust_UseTrees(t *testing.T) {
+	tests := []struct {
+		src     string
+		module  string
+		symbols []ir.ImportedSymbol
+	}{
+		{"use std::io::{self, Read, Write as W};", "std::io", []ir.ImportedSymbol{{Name: "self"}, {Name: "Read"}, {Name: "Write", Alias: "W"}}},
+		{"use std::fmt::Display as Disp;", "std::fmt::Display as Disp", nil},
+		{"use std::{\n    fs::File,\n    path::{Path, PathBuf},\n};", "std", []ir.ImportedSymbol{{Name: "fs::File"}, {Name: "path::{Path, PathBuf}"}}},
+		{"use super::*;", "super::*", nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.src, func(t *testing.T) {
+			file := parseRust(t, tt.src)
+			require.Len(t, file.Children, 1)
+			imp, ok := file.Children[0].(*ir.DistilledImport)
+			require.True(t, ok)
+			assert.Equal(t, "use", imp.ImportType)
+			assert.Equal(t, tt.module, imp.Module)
+			if tt.symbols == nil {
+				assert.Empty(t, imp.Symbols)
+			} else {
+				assert.Equal(t, tt.symbols, imp.Symbols)
+			}
+		})
+	}
+}
+
+func TestRust_CommentLines(t *testing.T) {
+	file := parseRust(t, "/// a\n/// b\nfn f() {}\n")
+	require.Len(t, file.Children, 3)
+	for i, want := range []string{"a", "b"} {
+		c, ok := file.Children[i].(*ir.DistilledComment)
+		require.True(t, ok)
+		assert.Equal(t, want, c.Text)
+		assert.Equal(t, ir.CommentDoc, c.Format)
+		assert.Equal(t, i+1, c.Location.StartLine, want)
+		assert.Equal(t, i+1, c.Location.EndLine, want)
+	}
+}
+
+func TestRust_ErrorRecovery(t *testing.T) {
+	file, err := NewProcessor().Process(context.Background(), strings.NewReader("pub fn a() {}\nfn b( {\npub fn c() {}\n"), "test.rs")
+	require.NoError(t, err)
+	assert.Empty(t, file.Errors)
+	names := allNames(file)
+	assert.Contains(t, names, "c")
+	seen := map[string]bool{}
+	for _, name := range names {
+		assert.False(t, seen[name], "%q is present twice", name)
+		seen[name] = true
+	}
+}
+
+func TestRust_DeepNesting(t *testing.T) {
+	const depth = 200
+	var sb strings.Builder
+	for i := 0; i < depth; i++ {
+		fmt.Fprintf(&sb, "mod m%d { ", i)
+	}
+	sb.WriteString("pub fn leaf() {}")
+	sb.WriteString(strings.Repeat(" }", depth))
+
+	file, err := NewProcessor().Process(context.Background(), strings.NewReader(sb.String()), "test.rs")
+	require.NoError(t, err)
+	nodes := file.Children
+	for i := 0; i < depth; i++ {
+		require.Len(t, nodes, 1, "level %d", i)
+		mod, ok := nodes[0].(*ir.DistilledClass)
+		require.True(t, ok, "level %d", i)
+		require.Equal(t, fmt.Sprintf("m%d", i), mod.Name)
+		nodes = mod.Children
+	}
+	assert.Equal(t, []string{"leaf"}, declNames(nodes))
+}
+
+func TestRust_DocAboveAttributeFollowsItem(t *testing.T) {
+	src := "/// pub doc\n#[derive(Debug)]\npub struct A;\n/// priv doc\n#[derive(Debug)]\nstruct B;\n"
+	file, err := NewProcessor().ProcessWithOptions(context.Background(), strings.NewReader(src), "test.rs", rustPublicOnly)
+	require.NoError(t, err)
+	var out []string
+	walkRust(file, func(node ir.DistilledNode) {
+		if c, ok := node.(*ir.DistilledComment); ok {
+			out = append(out, "doc:"+c.Text)
+		}
+		out = append(out, declNames([]ir.DistilledNode{node})...)
+	})
+	assert.Equal(t, []string{"doc:pub doc", "A"}, out)
+}
+
+func TestRust_CRLFAndUnicode(t *testing.T) {
+	src := strings.ReplaceAll(multiLineSignature+"\n/// příliš\npub struct Žluť { pub ü: u8 }\n", "\n", "\r\n")
+	file := parseRust(t, src)
+	walkRust(file, func(node ir.DistilledNode) {
+		var texts []string
+		switch n := node.(type) {
+		case *ir.DistilledFunction:
+			texts = append(texts, n.Name)
+			if n.Returns != nil {
+				texts = append(texts, n.Returns.Name)
+			}
+			for _, p := range n.Parameters {
+				texts = append(texts, p.Name, p.Type.Name)
+			}
+		case *ir.DistilledClass:
+			texts = append(texts, n.Name)
+		case *ir.DistilledField:
+			texts = append(texts, n.Name)
+			if n.Type != nil {
+				texts = append(texts, n.Type.Name)
+			}
+		case *ir.DistilledComment:
+			texts = append(texts, n.Text)
+		}
+		for _, text := range texts {
+			assert.NotContains(t, text, "\r")
+		}
+	})
+
+	assert.Equal(t, "bool where u32: Copy,", findRustFn(t, file, "f").Returns.Name)
+	s := findRustClass(t, file, "Žluť")
+	assert.Equal(t, []string{"ü"}, childNames(s))
+	var comments []string
+	walkRust(file, func(node ir.DistilledNode) {
+		if c, ok := node.(*ir.DistilledComment); ok {
+			comments = append(comments, c.Text)
+		}
+	})
+	assert.Equal(t, []string{"příliš"}, comments)
+}
+
+func TestRust_ItemsInsideBodiesAreNotDistilled(t *testing.T) {
+	file := parseRust(t, "fn main() { struct L; impl L {} }\nconst _: () = { struct H; };\nmacro_rules! m { () => { struct M; } }\n"+
+		"fn main2() { s! { struct N; } }\n")
+	assert.Equal(t, []string{"main", "_", "main2"}, declNames(file.Children))
+	assert.Len(t, file.Children, 3)
+	for _, name := range allNames(file) {
+		assert.NotContains(t, []string{"L", "H", "M", "N", "impl L"}, name)
+	}
+}
+
+func TestRust_ItemsInMacroCalls(t *testing.T) {
+	src := "s! {\n    /// d\n    pub struct A { pub x: u8 }\n}\n" + // lines 1-4
+		"cfg_if::cfg_if! {\n" + // line 5
+		"    if #[cfg(unix)] {\n        pub fn on_unix() {}\n" + // lines 6-7
+		"    } else {\n        pub fn elsewhere() {}\n    }\n}\n" + // lines 8-11
+		"lazy_static! { static ref X: u8 = 0; }\n" // line 12
+	file := parseRust(t, src)
+
+	require.GreaterOrEqual(t, len(file.Children), 2)
+	doc, ok := file.Children[0].(*ir.DistilledComment)
+	require.True(t, ok, "the doc inside the macro body comes first")
+	assert.Equal(t, "d", doc.Text)
+	assert.Equal(t, 2, doc.Location.StartLine)
+	assert.Equal(t, 2, doc.Location.EndLine)
+	assert.Equal(t, 5, doc.Location.StartColumn)
+
+	a := findRustClass(t, file, "A")
+	assert.Same(t, a, file.Children[1], "the doc stands right before A")
+	assert.Equal(t, 3, a.Location.StartLine)
+	assert.Equal(t, 5, a.Location.StartColumn)
+	assert.Equal(t, []string{"x"}, childNames(a))
+
+	assert.Equal(t, 7, findRustFn(t, file, "on_unix").Location.StartLine)
+	assert.Equal(t, 9, findRustFn(t, file, "elsewhere").Location.StartLine)
+	assert.NotContains(t, allNames(file), "ref")
+
+	var x *ir.DistilledField
+	walkRust(file, func(node ir.DistilledNode) {
+		if f, ok := node.(*ir.DistilledField); ok && f.Name == "X" {
+			x = f
+		}
+	})
+	require.NotNil(t, x, "the static inside lazy_static! is distilled")
+	assert.Equal(t, 12, x.Location.StartLine)
+	assert.Equal(t, 16, x.Location.StartColumn, "a body that starts on the line of its brace keeps the column")
+}
+
+// A macro body with an error keeps the items the parser recognised around
+// it; the doc before the ERROR node is dropped.
+func TestRust_MacroBodyWithErrors(t *testing.T) {
+	file := parseRust(t, "m! {\n    pub fn kept(x: u8) -> u8;\n    /// gone\n    $x:ident => 1;\n    pub type T = u8;\n}\n")
+	assert.Equal(t, []string{"kept", "T"}, declNames(file.Children))
+	assert.Equal(t, 2, findRustFn(t, file, "kept").Location.StartLine)
+	walkRust(file, func(node ir.DistilledNode) {
+		if c, ok := node.(*ir.DistilledComment); ok {
+			assert.NotEqual(t, "gone", c.Text)
+		}
+	})
+}
+
+// An error inside one item of a macro body (Rust 2024 safe fn, libc's
+// {const} fn) keeps the items the parser recognised, and a function body is
+// never read as items.
+func TestRust_MacroBodyWithAnErrorInsideAnItem(t *testing.T) {
+	src := "f! {\n    pub safe fn a() -> bool {\n        // inside\n        true\n    }\n    pub fn b() {}\n" + // lines 1-6
+		"    pub {const} fn c(len: usize) -> usize {\n        // also inside\n        struct Local;\n        len\n    }\n}\n" // lines 7-12
+	file := parseRust(t, src)
+	assert.Equal(t, []string{"a", "b", "c"}, declNames(file.Children))
+	assert.Len(t, file.Children, 3, "nothing else reaches item level")
+	assert.Equal(t, 2, findRustFn(t, file, "a").Location.StartLine)
+	assert.Equal(t, 6, findRustFn(t, file, "b").Location.StartLine)
+	assert.Equal(t, 7, findRustFn(t, file, "c").Location.StartLine)
+	for _, name := range allNames(file) {
+		assert.NotEqual(t, "Local", name)
+	}
+	walkRust(file, func(node ir.DistilledNode) {
+		if c, ok := node.(*ir.DistilledComment); ok {
+			assert.Fail(t, "a comment of a function body reached item level", c.Text)
+		}
+	})
+}
+
+// The {} blocks inside a statement the parser could not read
+// (if #[cfg(..)] { .. }) are expanded in place, between the items around it;
+// the blocks of recognised items are not.
+func TestRust_MacroBodyMixesItemsAndCfgBlocks(t *testing.T) {
+	src := "m! {\n    pub fn first() {}\n    if #[cfg(unix)] {\n        pub fn branch() {}\n    }\n" + // lines 1-5
+		"    impl S {\n        pub fn inner() {}\n    }\n    pub fn last() {}\n}\n" // lines 6-10
+	file := parseRust(t, src)
+	assert.Equal(t, []string{"first", "branch", "impl S", "last"}, declNames(file.Children))
+	assert.Equal(t, 4, findRustFn(t, file, "branch").Location.StartLine)
+	assert.Equal(t, 7, findRustFnIn(t, file, "impl S", "inner").Location.StartLine)
+}
+
+// A function the parser cannot read, whose header and body lie in one ERROR
+// node (hyper's ffi_fn! { fn f() -> T { .. } ?= default }), does not let its
+// body reach item level.
+func TestRust_MacroBodyNeverReadsAFunctionBody(t *testing.T) {
+	src := "ffi_fn! {\n    /// h docs\n    fn h() -> u8 {\n        // body note\n        struct Local;\n        0\n    } ?= 0\n}\n"
+	file := parseRust(t, src)
+	for _, name := range allNames(file) {
+		assert.NotEqual(t, "Local", name)
+	}
+	walkRust(file, func(node ir.DistilledNode) {
+		if c, ok := node.(*ir.DistilledComment); ok {
+			assert.NotEqual(t, "body note", c.Text)
+		}
+	})
+	assert.Empty(t, file.Children, "the doc before the unreadable function is dropped too")
+}
+
+// A body that does not parse at all (its root is an ERROR node, as for an
+// attribute before tokio's cfg_metrics_variant! arms stable: { .. },
+// unstable: { .. }) yields only the items of its {} blocks.
+func TestRust_MacroBodyThatDoesNotParse(t *testing.T) {
+	src := "impl M {\n    cfg_metrics_variant! {\n        #[cfg(x)] stable: {\n            fn s(m: &W, now: Option<I>) -> B {\n                B { a: 0 }\n            }\n        },\n" + // lines 1-7
+		"        unstable: {\n            fn u(m: &W, now: Option<I>) -> B {\n                let t = now.map(|n| P { s: n });\n                // in u\n                B { a: 0, t }\n            }\n        }\n    }\n}\n" // lines 8-16
+	file := parseRust(t, src)
+	assert.Equal(t, 4, findRustFnIn(t, file, "impl M", "s").Location.StartLine)
+	assert.Equal(t, 9, findRustFnIn(t, file, "impl M", "u").Location.StartLine)
+	walkRust(file, func(node ir.DistilledNode) {
+		if c, ok := node.(*ir.DistilledComment); ok {
+			assert.Fail(t, "a comment of a function body reached item level", c.Text)
+		}
+	})
+}
+
+// Macro bodies nested deeper than maxMacroDepth are not distilled.
+func TestRust_MacroBodyDepthLimit(t *testing.T) {
+	src := ""
+	for level := 1; level <= maxMacroDepth+1; level++ {
+		src += fmt.Sprintf("m! { pub struct L%d; ", level)
+	}
+	src += strings.Repeat("}", maxMacroDepth+1) + "\n"
+	names := declNames(parseRust(t, src).Children)
+	assert.Len(t, names, maxMacroDepth)
+	assert.Contains(t, names, fmt.Sprintf("L%d", maxMacroDepth))
+	assert.NotContains(t, names, fmt.Sprintf("L%d", maxMacroDepth+1))
+}
+
+// An item of a macro body whose name the parser reads across an error
+// (bitflags!, paste!) yields no IR, with its docs, and nothing from inside it
+// reaches the enclosing list; an error after the name keeps the item.
+func TestRust_MacroBodyItemNamedAcrossAnError(t *testing.T) {
+	tests := []struct {
+		name, src string
+		want      []string
+	}{
+		{"bitflags with a path type", "bitflags::bitflags! {\n    /// Mode doc.\n    #[repr(transparent)]\n    pub struct Mode: libc::mode_t {\n        const S_IRWXU = libc::S_IRWXU;\n        const X = Self::S_IRWXU.bits() | Self::S_IRUSR.bits();\n    }\n}\n", nil},
+		{"bitflags with a primitive type", "bitflags! {\n    pub struct Flags: u32 {\n        const A = 0b0001;\n        const AB = Self::A.bits() | Self::B.bits();\n    }\n}\n", []string{"Flags"}},
+		{"paste function", "paste! {\n    /// Getter doc.\n    pub fn [<get_ $name>](&self) -> u8 { struct InBody; 1 }\n}\n", nil},
+		{"paste struct and impl", "paste! {\n    pub struct [<Foo Bar>] { pub a: u8 }\n    impl [<Foo Bar>] { pub fn new() -> Self { todo!() } }\n}\n", nil},
+		{"syntax of the macro after the name", "ast_struct! {\n    pub struct ExprArray #full {\n        pub elems: u8,\n    }\n}\n", []string{"ExprArray", "elems"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			file := parseRust(t, tt.src)
+			if tt.want == nil {
+				assert.Empty(t, allNames(file), "an item named across an error yields nothing, its members included")
+				assert.Empty(t, file.Children, "its docs go too")
+				return
+			}
+			assert.Equal(t, tt.want[:1], declNames(file.Children))
+			assert.Equal(t, tt.want, allNames(file))
+		})
+	}
+}
+
+// A macro body is parsed as items only when its first token, after comments,
+// starts an item: an item keyword, an attribute, the if of cfg_if! or a macro
+// call. Any other body yields no IR.
+func TestRust_MacroBodyMustStartLikeItems(t *testing.T) {
+	read := map[string]string{
+		"doc then pub":       "/// d\n    pub fn a() {}",
+		"attribute":          "#[cfg(unix)] fn a() {}",
+		"inner attribute":    "#![cfg(unix)] fn a() {}",
+		"cfg_if":             "if #[cfg(unix)] { fn a() {} }",
+		"macro call":         "inner! { fn a() {} }",
+		"macro call by path": "cfg_if::cfg_if! { if #[cfg(unix)] { fn a() {} } }",
+		"extern":             "extern \"C\" { fn x(); } fn a() {}",
+		"macro_rules":        "macro_rules! m { () => {} } fn a() {}",
+		"union":              "union U { x: u8 } fn a() {}",
+		"unsafe":             "unsafe impl Send for X {} fn a() {}",
+		"default":            "default fn a() {}",
+		"async":              "async fn a() {}",
+	}
+	for name, body := range read {
+		t.Run(name, func(t *testing.T) {
+			assert.Contains(t, allNames(parseRust(t, "m! {\n    "+body+"\n}\n")), "a")
+		})
+	}
+	skipped := map[string]string{
+		"tokio arms":   "stable: {\n        fn s(m: &W) -> B {\n            B { a: 0 }\n        }\n    },\n    unstable: {\n        fn u(m: &W) -> B {\n            B { a: 0 }\n        }\n    }",
+		"select arms":  "v = rx.recv() => { fn s() {} }",
+		"table":        "users (id) { id -> Integer, }",
+		"block":        "{ fn a() {} }",
+		"metavariable": "$vis struct S;",
+	}
+	for name, body := range skipped {
+		t.Run(name, func(t *testing.T) {
+			file := parseRust(t, "m! {\n    "+body+"\n}\n")
+			assert.Empty(t, allNames(file))
+			assert.Empty(t, file.Children, "no comment either")
+		})
+	}
+
+	// A body of comments only (an empty cfg_if! branch) keeps them.
+	file := parseRust(t, "m! {\n    // Unknown target_arch\n}\n")
+	require.Len(t, file.Children, 1)
+	assert.Equal(t, "Unknown target_arch", file.Children[0].(*ir.DistilledComment).Text)
+}
+
+// tableMacro returns a macro call whose body holds lead and then n table
+// entries x0 => { pub fn f0() {} }, ... on lines of their own.
+func tableMacro(lead string, n int) string {
+	var b strings.Builder
+	b.WriteString("m! {\n" + lead)
+	for i := 0; i < n; i++ {
+		fmt.Fprintf(&b, "    x%d => { pub fn f%d() {} },\n", i, i)
+	}
+	b.WriteString("}\npub fn after() {}\n")
+	return b.String()
+}
+
+// A long table in a macro body is not parsed as items: tree-sitter's error
+// recovery is quadratic on text that is not items (20,000 entries took 15 s).
+func TestRust_MacroBodyTableIsNotParsed(t *testing.T) {
+	src := tableMacro("", 20000)
+	start := time.Now()
+	file := parseRust(t, src)
+	assert.Less(t, time.Since(start), 2*time.Second)
+	assert.Equal(t, []string{"after"}, allNames(file))
+}
+
+// A body that starts like items and goes on as a long table stops at the
+// parse budget instead of running for seconds; it yields at most its leading
+// items.
+func TestRust_MacroBodyParseHasABudget(t *testing.T) {
+	src := tableMacro("    pub fn lead() {}\n", 20000)
+	start := time.Now()
+	file := parseRust(t, src)
+	assert.Less(t, time.Since(start), 5*time.Second)
+	names := allNames(file)
+	assert.Contains(t, names, "after")
+	assert.Subset(t, []string{"lead", "after"}, names)
+}
+
+func TestRust_TrailingCommentsYieldNoIR(t *testing.T) {
+	src := "#[derive(Debug)] // attr note\n" +
+		"pub struct A;\n" +
+		"pub const X: u8 = 1; // const note\n" +
+		"pub struct S {\n    pub x: u8, // field note\n}\n" +
+		"impl T for A {\n    type C = u8; // assoc note\n    fn f(&self) {} // fn note\n}\n" +
+		"// own line\n" +
+		"pub fn g() {}\n"
+	file := parseRust(t, src)
+	var comments []string
+	walkRust(file, func(node ir.DistilledNode) {
+		if c, ok := node.(*ir.DistilledComment); ok {
+			comments = append(comments, c.Text)
+		}
+	})
+	assert.Equal(t, []string{"own line"}, comments)
+	assert.Equal(t, []string{"A", "X", "S", "impl T for A", "g"}, declNames(file.Children))
 }

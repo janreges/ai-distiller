@@ -19,6 +19,7 @@ require (
 	github.com/tree-sitter/tree-sitter-php v0.23.12
 	github.com/tree-sitter/tree-sitter-python v0.25.0
 	github.com/tree-sitter/tree-sitter-ruby v0.23.1
+	github.com/tree-sitter/tree-sitter-rust v0.24.2
 	golang.org/x/term v0.45.0
 	tree-sitter-typescript v0.0.0
 )

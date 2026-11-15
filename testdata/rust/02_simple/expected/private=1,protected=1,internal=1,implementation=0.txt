@@ -3,7 +3,7 @@
 
 pub struct SourceFile {
     pub path: String,
-    content: String, // This field is private.,
+    content: String,
     lines_of_code: u32,
 }
 // A trait for items that can be summarized.
@@ -11,6 +11,7 @@ pub struct SourceFile {
 pub trait Summarizable {
 
     fn summary(&self) -> String;
+    // Default implementation for short summary
 
     fn short_summary(&self) -> String
 }

@@ -14,6 +14,7 @@ pub trait DataSource {
     type Content: AsRef<[u8]>;
 
     fn get_content(&self) -> Result<Self::Content, AnalysisError>;
+    // Default method with lifetime parameters
 
     fn content_slice<'a>(&'a self) -> Option<&'a [u8]> where Self::Content: 'a {
         None // Default implementation
@@ -24,7 +25,7 @@ pub trait DataSource {
 
 pub struct AnalysisResult<T: Display>;
 
-impl AnalysisResult<T> {
+impl<T: Display> AnalysisResult<T> {
     // Create new analysis result
 
     pub fn new(source_id: String, result: T) -> Self {
@@ -38,7 +39,7 @@ impl AnalysisResult<T> {
 // A generic function with a lifetime `'a` and trait bounds.
 // It analyzes a data source and returns a result.
 
-pub fn analyze<'a, S>(source: &'a S) -> Result<AnalysisResult<String>, AnalysisError> where S: DataSource + ?Sized, // `?Sized` is an interesting bound to parse. {
+pub fn analyze<'a, S>(source: &'a S) -> Result<AnalysisResult<String>, AnalysisError> where S: DataSource + ?Sized, {
     let content = source.get_content()?.as_ref().to_vec();
 
     if content.is_empty() {
@@ -49,6 +50,14 @@ pub fn analyze<'a, S>(source: &'a S) -> Result<AnalysisResult<String>, AnalysisE
     let analysis_summary = format!("Analyzed {} bytes", content.len());
 
     Ok(AnalysisResult::new("mock_id".to_string(), analysis_summary))
+}
+// Advanced generic function with multiple lifetime parameters
+
+pub fn compare_sources<'a, 'b, S1, S2>(source1: &'a S1, source2: &'b S2) -> Result<bool, AnalysisError> where S1: DataSource + Debug, S2: DataSource + Debug, {
+    let content1 = source1.get_content()?;
+    let content2 = source2.get_content()?;
+
+    Ok(content1.as_ref() == content2.as_ref())
 }
 
 impl DataSource for InMemorySource {
@@ -67,13 +76,20 @@ impl Debug for InMemorySource {
 // Generic trait with lifetime bounds
 
 pub trait Processor<'a, T> {
+    type Output: 'a;
+
+    fn process(&self, input: &'a T) -> Self::Output;
+    // Private helper method
+
+    fn validate_input(&self, _input: &T) -> bool {
+        true
+    }
 }
-// Private helper method
 // Implementation for string processing
 
 pub struct StringProcessor;
 
-impl Processor<'a, String> for StringProcessor {
+impl<'a> Processor<'a, String> for StringProcessor {
 
     fn process(&self, input: &'a String) -> Self::Output {
         if self.validate_input(input) {

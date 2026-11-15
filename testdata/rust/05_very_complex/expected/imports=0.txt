@@ -14,8 +14,9 @@ pub trait DataSource {
     fn get_reader<'a>(&'a self) -> Self::Reader<'a>;
 
     fn get_config<T: Clone>(&self) -> Self::Config<T>;
+    // Method with complex generic bounds
 
-    fn process_with_bounds<'a, T, U>(&'a self, input: T) -> U
+    fn process_with_bounds<'a, T, U>(&'a self, input: T) -> U where T: AsRef<str> + 'a, U: From<&'a str> + Default, Self::Reader<'a>: std::io::BufRead;
 }
 // A struct that would use a procedural derive macro in a real project.
 // The parser must handle attributes on the struct and its fields.
@@ -41,19 +42,19 @@ pub trait AdvancedContainer<const N: usize> {
 
     fn get_items<'a>(&'a self) -> Self::Iterator<'a>;
 
-    fn process_batch<'a, F>(&'a self, f: F) -> [Option<Self::Item<'a>>; N]
+    fn process_batch<'a, F>(&'a self, f: F) -> [Option<Self::Item<'a>>; N] where F: Fn(usize) -> Option<Self::Item<'a>>;
 }
 // Implementation with const generics
 
 pub struct FixedArray<T: Clone, const N: usize>;
 
-impl FixedArray<T, N> {
+impl<T: Clone, const N: usize> FixedArray<T, N> {
     // Create new fixed array
 
     pub fn new() -> Self
 }
 
-impl AdvancedContainer<N> for FixedArray<T, N> {
+impl<T: Clone, const N: usize> AdvancedContainer<N> for FixedArray<T, N> {
 
     fn get_items<'a>(&'a self) -> Self::Iterator<'a>
 
@@ -64,5 +65,10 @@ impl AdvancedContainer<N> for FixedArray<T, N> {
 pub trait AsyncDataProcessor {
     type Output<'a>: Send where Self: 'a;
     type Error: std::error::Error + Send + Sync;
+
+    async fn process_async<'a>(&'a self, data: &'a [u8]) -> Result<Self::Output<'a>, Self::Error>;
+    // Default implementation with complex bounds
+
+    async fn batch_process<'a, I>(&'a self, inputs: I) -> Vec<Result<Self::Output<'a>, Self::Error>> where I: IntoIterator<Item = &'a [u8]> + Send, I::IntoIter: Send,
 }
 </file>

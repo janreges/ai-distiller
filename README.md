@@ -193,7 +193,7 @@ Currently supports 12 languages:
 ## 🎯 How It Works
 
 1. **Scans** your codebase recursively for supported file types (12 languages)
-2. **Parses** each file with a language-specific parser, all bundled in the binary with no external dependencies: nine languages (Python, JavaScript, TypeScript, PHP, Ruby, Java, C#, Kotlin, C++) use tree-sitter, Go uses the Go standard library parser, and Rust and Swift use line-based parsers
+2. **Parses** each file with a language-specific parser, all bundled in the binary with no external dependencies: ten languages (Python, JavaScript, TypeScript, PHP, Ruby, Java, C#, Kotlin, C++, Rust) use tree-sitter, Go uses the Go standard library parser, and Swift uses a line-based parser
 3. **Extracts** only what you need: public APIs, type signatures, class hierarchies
 4. **Outputs** in your preferred format: compact text, markdown, or structured JSON
 
