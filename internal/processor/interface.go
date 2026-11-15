@@ -135,8 +135,8 @@ func DefaultProcessOptions() ProcessOptions {
 		IncludeAnnotations:    true,
 		IncludeFields:         true,
 		IncludeMethods:        true,
-		MaxDepth:              100,
-		SymbolResolution:      true,
+		MaxDepth:              2,
+		SymbolResolution:      false,
 		IncludeLineNumbers:    true,
 		Workers:               0, // 0 = auto (80% of CPU cores)
 		Recursive:             true,

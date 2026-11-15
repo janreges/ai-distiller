@@ -174,8 +174,8 @@ These flags may change without notice.
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--dependency-aware` | `false` | Cross-file dependency analysis and call graph traversal |
-| `--max-depth NUM` | `2` | Maximum depth for dependency traversal |
+| `--dependency-aware` | `false` | EXPERIMENTAL: follow calls across files and keep only what the entry file uses (regex-based) |
+| `--max-depth NUM` | `2` | EXPERIMENTAL: call depth for `--dependency-aware` |
 
 ## Output File Naming & Management
 

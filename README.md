@@ -31,7 +31,7 @@ Very simply, it can be said that `aid`, within the distillation process, will le
 - [🤔 Why AI Distiller?](#-why-ai-distiller)
 - [✨ Key Features](#-key-features)
 - [🎯 How It Works](#-how-it-works)
-- [🔗 Dependency-Aware Distillation](#-dependency-aware-distillation)
+- [🔗 Dependency-Aware Distillation (experimental)](#-dependency-aware-distillation-experimental)
 - [🚀 Quick Start](#-quick-start)
   - [One-Line Installation](#one-line-installation)
   - [Basic Usage](#basic-usage)
@@ -199,7 +199,9 @@ Currently supports 12 languages via tree-sitter:
 
 All tree-sitter grammars are compiled into the `aid` binary - zero external dependencies!
 
-## 🔗 Dependency-Aware Distillation
+## 🔗 Dependency-Aware Distillation (experimental)
+
+The analysis is heuristic and regex-based, and results vary by language.
 
 **Advanced Feature**: AI Distiller includes dependency-aware distillation that analyzes call graphs across files and includes only the code that is actually used from your codebase. This creates focused distillations for deep code analysis by following function/method calls across multiple files.
 

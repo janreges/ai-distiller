@@ -239,8 +239,8 @@ func initFlags() {
 	rootCmd.Flags().BoolVar(filterImports, "filter-imports", true, "Filter unused imports in text output")
 	
 	// Dependency-aware distillation flags
-	rootCmd.Flags().BoolVar(&dependencyAware, "dependency-aware", false, "Enable cross-file dependency analysis and call graph traversal")
-	rootCmd.Flags().IntVar(&maxDepth, "max-depth", 2, "Maximum depth for dependency traversal (default: 2)")
+	rootCmd.Flags().BoolVar(&dependencyAware, "dependency-aware", false, "EXPERIMENTAL: follow calls across files and keep only what the entry file uses (regex-based)")
+	rootCmd.Flags().IntVar(&maxDepth, "max-depth", 2, "EXPERIMENTAL: call depth for --dependency-aware (default: 2)")
 
 	// Handle version flag specially
 	rootCmd.PreRun = func(cmd *cobra.Command, args []string) {

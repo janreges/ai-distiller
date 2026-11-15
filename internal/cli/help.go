@@ -310,9 +310,10 @@ Diagnostics and Help:
     --cheat                    Show the quick reference card
 
 EXPERIMENTAL
-    --dependency-aware         Cross-file dependency analysis and call graph traversal
+    --dependency-aware         EXPERIMENTAL: follow calls across files and keep only what the entry file uses
+                               (regex-based)
                                (default: off; behaviour may change)
-    --max-depth N              Maximum depth for dependency traversal (default: 2)
+    --max-depth N              EXPERIMENTAL: call depth for --dependency-aware (default: 2)
 
 SUPPORTED LANGUAGES
 

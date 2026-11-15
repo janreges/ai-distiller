@@ -18,9 +18,13 @@ func TestDefaultProcessOptions(t *testing.T) {
 	assert.True(t, opts.IncludeComments)
 	assert.True(t, opts.IncludeImports)
 	assert.True(t, opts.IncludePrivate)
-	assert.Equal(t, 100, opts.MaxDepth)
-	assert.True(t, opts.SymbolResolution)
 	assert.True(t, opts.IncludeLineNumbers)
+}
+
+func TestDefaultProcessOptionsDoesNotEnableDependencyAnalysis(t *testing.T) {
+	opts := DefaultProcessOptions()
+	assert.False(t, opts.SymbolResolution)
+	assert.Equal(t, 2, opts.MaxDepth)
 }
 
 func TestProcessorError(t *testing.T) {
