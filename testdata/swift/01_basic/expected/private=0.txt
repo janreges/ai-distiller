@@ -1,3 +1,0 @@
-<file path="source.swift">
-import Foundation
-</file>

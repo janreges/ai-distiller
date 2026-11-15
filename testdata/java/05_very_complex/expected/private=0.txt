@@ -1,7 +1,0 @@
-<file path="source.java">
-package com.aidi.test.modern
-
-public class ModernJava {
-    public static void main(String[] args);
-}
-</file>

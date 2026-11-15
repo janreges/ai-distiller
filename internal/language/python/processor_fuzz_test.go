@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/janreges/ai-distiller/internal/ir"
@@ -15,20 +16,23 @@ import (
 // FuzzProcess tests the parser with random inputs to ensure it never panics
 func FuzzProcess(f *testing.F) {
 	// Add seed corpus from our test files
-	testFiles := []string{
-		"../../../testdata/input/basic_class.py",
-		"../../../testdata/input/complex_imports.py",
-		"../../../testdata/input/decorators_and_metadata.py",
-		"../../../testdata/input/edge_cases.py",
-		"../../../testdata/input/multiline_definitions.py",
-		"../../../testdata/input/error_recovery.py",
+	testFiles, err := filepath.Glob("../../../testdata/python/*/source.py")
+	if err != nil {
+		f.Fatal(err)
 	}
 
 	// Add contents of test files as corpus
+	seeds := 0
 	for _, file := range testFiles {
-		if content, err := os.ReadFile(file); err == nil {
-			f.Add(content)
+		content, err := os.ReadFile(file)
+		if err != nil {
+			f.Fatalf("reading seed %s: %v", file, err)
 		}
+		f.Add(content)
+		seeds++
+	}
+	if seeds < 5 {
+		f.Fatalf("expected at least 5 python seed files, found %d", seeds)
 	}
 
 	// Add some specific edge cases as corpus

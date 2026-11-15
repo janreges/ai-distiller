@@ -38,34 +38,12 @@ func New(testDataDir, aidBinary string) *Runner {
 	}
 }
 
-// parseFlags extracts flags from expected filename based on parameter encoding
-// e.g., "Test5-Complex.implementation=0.comments=0.public=1.expected" -> ["--implementation=0", "--comments=0", "--public=1"]
-// Also supports simple aliases: "public.expected" -> ["--private=0"], "no_impl.expected" -> ["--implementation=0"]
+// parseParametersFromFilename extracts flags from an expected-file name,
+// e.g. "implementation=0,comments=0,public=1.txt" -> ["--comments=0", "--implementation=0", "--public=1"]
+// "default.txt" means no flags; there are no other aliases.
 func parseParametersFromFilename(filename string) []string {
 	// Remove the .txt extension
 	name := strings.TrimSuffix(filename, ".txt")
-	
-	// Handle simple aliases first (legacy naming support)
-	simpleAliases := map[string][]string{
-		"default":        {},
-		"public":         {"--private=0"},
-		"no_private":     {"--private=0"},
-		"no_impl":        {"--implementation=0"},
-		"public.no_impl": {"--private=0", "--implementation=0"},
-		"no_private.no_impl": {"--private=0", "--implementation=0"},
-		// Rust special cases
-		"fixed_full":      {"--private=1", "--protected=1", "--internal=1", "--implementation=1"},
-		"fixed_no_impl":   {"--private=1", "--protected=1", "--internal=1", "--implementation=0"},
-		"fixed_no_private": {"--private=0", "--protected=0", "--internal=0", "--implementation=1"},
-		// PHP special case
-		"ideal_psr19_output": {"--private=0", "--protected=0", "--internal=0", "--implementation=0"},
-	}
-	
-	if flags, exists := simpleAliases[name]; exists {
-		// Sort flags for consistency
-		sort.Strings(flags)
-		return flags
-	}
 	
 	// Parse parameters from filename
 	// The filename can be in formats like:
@@ -97,6 +75,22 @@ func parseParametersFromFilename(filename string) []string {
 	return flags
 }
 
+
+// validateExpectedName accepts "default.txt" or a comma-separated list of
+// key=value tokens; anything else would silently run with fewer flags.
+func validateExpectedName(filename string) error {
+	name := strings.TrimSuffix(filename, ".txt")
+	if name == "default" {
+		return nil
+	}
+	for _, tok := range strings.Split(name, ",") {
+		k, v, ok := strings.Cut(strings.TrimSpace(tok), "=")
+		if !ok || k == "" || v == "" {
+			return fmt.Errorf("expected file %q: name must be default.txt or comma-separated key=value tokens", filename)
+		}
+	}
+	return nil
+}
 
 // DiscoverTests walks the testdata directory and finds all test cases
 func (r *Runner) DiscoverTests() ([]TestCase, error) {
@@ -133,7 +127,7 @@ func (r *Runner) DiscoverTests() ([]TestCase, error) {
 			// Find source file
 			sourceFile, err := findSourceFile(scenarioDir, language)
 			if err != nil {
-				continue // Skip scenarios without source files
+				return nil, fmt.Errorf("scenario %s/%s: %w", language, scenarioName, err)
 			}
 			
 			// Find expected files - require expected/ directory
@@ -153,7 +147,10 @@ func (r *Runner) DiscoverTests() ([]TestCase, error) {
 						Flags:        []string{},
 					})
 				}
-				continue // Skip scenarios without expected directory unless in update mode
+				if !r.updateMode {
+					return nil, fmt.Errorf("scenario %s/%s: missing expected/ directory", language, scenarioName)
+				}
+				continue
 			}
 			
 			// Read all expected files
@@ -162,9 +159,14 @@ func (r *Runner) DiscoverTests() ([]TestCase, error) {
 				return nil, fmt.Errorf("reading expected dir for %s/%s: %w", language, scenarioName, err)
 			}
 			
+			found := 0
 			for _, expFile := range expectedFiles {
 				if !strings.HasSuffix(expFile.Name(), ".txt") {
 					continue
+				}
+				found++
+				if err := validateExpectedName(expFile.Name()); err != nil {
+					return nil, fmt.Errorf("scenario %s/%s: %w", language, scenarioName, err)
 				}
 				
 				// Use new parameter-based parsing
@@ -176,6 +178,9 @@ func (r *Runner) DiscoverTests() ([]TestCase, error) {
 					ExpectedFile: filepath.Join(expectedDir, expFile.Name()),
 					Flags:        flags,
 				})
+			}
+			if found == 0 {
+				return nil, fmt.Errorf("scenario %s/%s: expected/ contains no .txt files", language, scenarioName)
 			}
 		}
 	}

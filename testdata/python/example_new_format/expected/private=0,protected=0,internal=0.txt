@@ -1,8 +1,0 @@
-<file path="source.py">
-
-class Calculator:
-    __init__(self)
-    add(self, a: float, b: float) -> float
-    @property
-    history(self) -> list
-</file>

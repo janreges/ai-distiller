@@ -1,5 +1,0 @@
-<file path="source.py">
-PUBLIC_MIN_PASSWORD_LENGTH = 8
-is_valid_email(email: str) -> bool
-is_strong_password(password: str, min_length: int = PUBLIC_MIN_PASSWORD_LENGTH) -> bool
-</file>

@@ -165,12 +165,6 @@ test-update:
 	@echo "==> Updating expected test files"
 	UPDATE_EXPECTED=true $(GOTEST) -v -count=1 ./internal/testrunner
 
-# Generate expected test data for all languages (includes building aid)
-generate-expected-testdata: build
-	@echo "==> Building aid and regenerating all expected test files"
-	@chmod +x scripts/regenerate-expected.sh
-	@./scripts/regenerate-expected.sh really-all
-
 # Audit test structure for consistency issues
 test-audit:
 	@echo "==> Auditing test structure"
@@ -313,7 +307,6 @@ help:
 	@echo "  test-performance- Run performance tests"
 	@echo "  test-semantic   - Run semantic analysis tests"
 	@echo "  test-resolver   - Run semantic resolver tests"
-	@echo "  generate-expected-testdata - Build aid and regenerate all expected test files"
 	@echo "  perf-compare    - Compare performance modes"
 	@echo "  perf-optimize   - Find optimal configuration"
 

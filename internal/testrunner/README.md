@@ -1,173 +1,68 @@
-# AI Distiller Unified Test System
+# Snapshot test suite
 
-## Overview
+`TestIntegration` runs the real `aid` binary on every fixture under `testdata/`
+and compares its stdout byte for byte with a stored snapshot. The suite builds
+its own binary (`testrunner.BuildBinary`), so nothing has to be built first.
 
-This directory contains the unified test runner for AI Distiller that automatically discovers and executes integration tests across all supported programming languages.
-
-## Test Structure
-
-All integration tests follow this structure:
+## Layout
 
 ```
-testdata/
-├── <language>/
-│   ├── <NN_scenario_name>/
-│   │   ├── source.<ext>           # Main source file to test
-│   │   ├── helper.<ext>           # Optional additional files
-│   │   └── expected/
-│   │       ├── default.expected   # Expected output with default flags
-│   │       ├── public.expected    # Expected output with --public=1 only
-│   │       └── public.no_impl.expected  # Multiple flags
-│   └── ...more scenarios
-└── ...more languages
+testdata/<lang>/<NN_name>/source.<ext>
+testdata/<lang>/<NN_name>/expected/<flags>.txt
 ```
 
-## Naming Conventions
+Discovery is strict: a scenario directory without a source file, without an
+`expected/` directory, or with no `expected/*.txt` makes the suite fail.
 
-### Scenario Directories
-- Format: `NN_descriptive_name` (e.g., `01_simple_function`, `02_class_inheritance`)
-- Numbers provide ordering but are not required
-- Use descriptive names that explain what's being tested
+## File name to flags
 
-### Source Files
-- Primary source file should be named `source.<ext>` (e.g., `source.go`, `source.py`)
-- Additional helper files can have any name
+The file name (without `.txt`) is a comma-separated list of `key=value` pairs.
+Each pair becomes `--key=value`. `default.txt` means no flags. There are no
+other aliases. A value that contains a comma cannot be encoded.
 
-### Expected Files
-- Located in `expected/` subdirectory
-- Two naming formats supported:
+Examples: `implementation=1.txt` runs `--implementation=1`;
+`private=1,protected=1,internal=1,implementation=0.txt` runs those four flags.
 
-#### 1. Parameter-based format (RECOMMENDED)
-- Format: `test.<param1=value>.<param2=value>.expected`
-- Parameters are extracted and converted to CLI flags
-- Examples:
-  - `test.implementation=0.expected` → `--implementation=0`
-  - `test.public=1.private=0.expected` → `--public=1 --private=0`
-  - `test.implementation=0.comments=0.public=1.expected` → Multiple flags
+## The five standard variants
 
-#### 2. Simple format
-- `default.expected` - No flags, default behavior
+Every scenario carries these snapshots:
 
-### Parameter Examples
+- `default.txt`
+- `implementation=1.txt`
+- `private=1,protected=1,internal=1,implementation=0.txt`
+- `comments=1.txt`
+- `imports=0.txt`
 
-| Filename | CLI Flags Generated |
-|----------|-------------------|
-| `default.expected` | (none) |
-| `test.implementation=0.expected` | `--implementation=0` |
-| `test.public=1.protected=0.internal=0.private=0.expected` | `--public=1 --protected=0 --internal=0 --private=0` |
-| `test.comments=0.docstrings=0.expected` | `--comments=0 --docstrings=0` |
-| `test.implementation=0.public=1.expected` | `--implementation=0 --public=1` |
+(`private=0`, `protected=0` and `private=0,protected=0,internal=0` are not
+kept: they are identical to the default.)
 
-## Running Tests
+## Running
 
-### Run All Tests
-```bash
-go test ./internal/testrunner
-```
-
-### Run Specific Language Tests
-```bash
-go test ./internal/testrunner -run "TestIntegration/python"
-```
-
-### Update Expected Files
-```bash
-UPDATE_EXPECTED=true go test ./internal/testrunner
-```
-
-This will regenerate all `.expected` files based on current aid output.
-
-## Adding New Tests
-
-### 1. Create Test Structure
-```bash
-mkdir -p testdata/python/10_new_feature/expected
-```
-
-### 2. Add Source File
-Create `testdata/python/10_new_feature/source.py`:
-```python
-class Example:
-    def public_method(self):
-        return "public"
-    
-    def _private_method(self):
-        return "private"
-```
-
-### 3. Generate Expected Files
-
-Option A: Run with UPDATE_EXPECTED=true (RECOMMENDED)
-```bash
-UPDATE_EXPECTED=true go test ./internal/testrunner -run "TestIntegration/python/10_new_feature"
-```
-
-Option B: Manually run aid and save output
-```bash
-# Default behavior
-aid testdata/python/10_new_feature/source.py --format text > testdata/python/10_new_feature/expected/default.expected
-
-# With specific parameters
-aid testdata/python/10_new_feature/source.py --format text --implementation=0 > testdata/python/10_new_feature/expected/test.implementation=0.expected
-
-# Multiple parameters (sorted alphabetically in filename)
-aid testdata/python/10_new_feature/source.py --format text --public=1 --protected=0 --internal=0 --private=0 --implementation=0 > testdata/python/10_new_feature/expected/test.implementation=0.internal=0.private=0.protected=0.public=1.expected
-```
-
-## Migration from Old Tests
-
-Use the migration helper to convert existing tests:
+Run commands from the repository root with cgo enabled:
 
 ```bash
-go run internal/testrunner/migrate.go
+export CGO_ENABLED=1 CGO_CFLAGS=-w
+go test -count=1 ./internal/testrunner                                   # everything
+go test -count=1 -run 'TestIntegration/python/' ./internal/testrunner    # one language
+go test -count=1 -run 'TestIntegration/python/01_basic/' ./internal/testrunner  # one scenario
+go test -count=1 -run 'TestIntegration/python/01_basic/default.txt' ./internal/testrunner  # one file
 ```
 
-This will:
-1. Find all existing test files matching known patterns
-2. Create the new directory structure under `testdata/`
-3. Copy and rename files according to new conventions
-4. Transform expected filenames to the new tag-based system
+A failure prints the snapshot path, the command to reproduce it and a diff.
 
-## Best Practices
+## Updating snapshots
 
-1. **Test Real-World Patterns**: Each test should represent code patterns developers actually write
-2. **Progressive Complexity**: Number tests from simple (01) to complex (10+)
-3. **Document Edge Cases**: Add comments in source files explaining what edge case is being tested
-4. **Language-Specific Features**: Don't force all languages to have identical tests - test what's idiomatic
-5. **Minimal Expected Variants**: Only create expected files for meaningful flag combinations
-
-## Common Flag Combinations
-
-These are the most useful combinations to test:
-
-1. `default.expected` - Baseline behavior
-2. `public.expected` - API documentation use case
-3. `no_impl.expected` - Header/interface generation
-4. `public.no_impl.expected` - Clean API reference
-5. `all.expected` - Complete code analysis
-
-## Debugging Failed Tests
-
-When a test fails, the error message will show:
-- The exact aid command that was run
-- The expected output
-- The actual output
-- A diff between them
-
-To debug:
-1. Run the aid command manually to see full output
-2. Check if the source file has syntax errors
-3. Verify the expected file matches your intentions
-4. Use UPDATE_EXPECTED=true to see what aid currently produces
-
-## CI Integration
-
-Add to your CI workflow:
-
-```yaml
-- name: Run Integration Tests
-  run: go test ./internal/testrunner -v
-
-- name: Check Test Coverage
-  run: go test ./internal/testrunner -run "TestIntegration" -count=1
+```bash
+UPDATE_EXPECTED=true go test -count=1 -run 'TestIntegration/python/' ./internal/testrunner
 ```
+
+Regenerate one language at a time, then read `git diff testdata/<lang>` and
+confirm every changed line is intended.
+
+## Adding a scenario
+
+1. Create `testdata/<lang>/<NN_name>/source.<ext>`.
+2. Create empty files in `expected/` for the five standard variants.
+3. Run the update command for that scenario, e.g.
+   `UPDATE_EXPECTED=true go test -count=1 -run 'TestIntegration/<lang>/<NN_name>/' ./internal/testrunner`.
+4. Review the generated snapshots by hand before committing.
