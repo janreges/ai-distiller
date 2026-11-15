@@ -3,10 +3,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { spawn } from "child_process";
 import * as path from "path";
 import * as os from "os";
 import * as fs from "fs";
+import { runAid, limitsFromEnv, AidRunError, SerialQueue } from "./run-aid.js";
 
 // Debug logging control
 const isDebug = process.env.DEBUG === 'true' || process.env.DEBUG === '1' || process.env.AID_MCP_DEBUG === 'true';
@@ -44,23 +44,13 @@ if (!fs.existsSync(binaryPath)) {
   process.exit(1);
 }
 
-// Types
-interface QueuedRequest {
-  args: string[];
-  resolve: (value: string) => void;
-  reject: (error: Error) => void;
-}
-
-// Removed unused interface
-
 /**
  * AI Distiller MCP Server
  * Executes aid commands with queuing to handle concurrency
  */
 class AidDistillerServer {
   private server: McpServer;
-  private requestQueue: QueuedRequest[] = [];
-  private isProcessing = false;
+  private queue = new SerialQueue();
 
   constructor() {
     this.server = new McpServer({
@@ -79,106 +69,39 @@ class AidDistillerServer {
   /**
    * Executes aid command with queuing to handle concurrency
    */
-  private async executeAidCommand(args: string[]): Promise<string> {
+  private executeAidCommand(args: string[]): Promise<string> {
     if (isDebug) console.error(`[AID MCP] executeAidCommand called with args: ${JSON.stringify(args)}`);
-    return new Promise((resolve, reject) => {
-      this.requestQueue.push({ args, resolve, reject });
-      this.processQueue();
-    });
-  }
-
-  /**
-   * Processes the request queue serially
-   */
-  private async processQueue(): Promise<void> {
-    if (this.isProcessing || this.requestQueue.length === 0) {
-      return;
-    }
-
-    this.isProcessing = true;
-    const request = this.requestQueue.shift()!;
-    if (isDebug) console.error(`[AID MCP] processQueue: Processing request with args: ${JSON.stringify(request.args)}`);
-
-    try {
-      const result = await this.runAidCommand(request.args);
-      request.resolve(result);
-    } catch (error) {
-      if (isDebug) console.error(`[AID MCP] processQueue: Error processing request: ${error}`);
-      request.reject(error as Error);
-    } finally {
-      this.isProcessing = false;
-      // Process next in queue
-      this.processQueue();
-    }
+    return this.queue.run(() => this.runAidCommand(args));
   }
 
   /**
    * Runs aid command and returns output
    */
-  private runAidCommand(args: string[]): Promise<string> {
-    return new Promise((resolve, reject) => {
-      // Don't add --summary-type=off anymore - we want to capture stderr
-      const fullCommand = `${binaryPath} ${args.map(arg => `"${arg}"`).join(' ')}`;
-      if (isDebug) {
-        console.error(`[AID MCP] Running command: ${fullCommand}`);
-        console.error(`[AID MCP] Binary path: ${binaryPath}`);
-        console.error(`[AID MCP] Arguments: ${JSON.stringify(args)}`);
-        console.error(`[AID MCP] Working directory: ${process.env.AID_ROOT || process.cwd()}`);
+  private async runAidCommand(args: string[]): Promise<string> {
+    const cwd = process.env.AID_ROOT || process.cwd();
+    const limits = limitsFromEnv(process.env);
+    if (isDebug) {
+      console.error(`[AID MCP] Running command: ${binaryPath} ${JSON.stringify(args)}`);
+      console.error(`[AID MCP] Working directory: ${cwd}`);
+      console.error(`[AID MCP] Limits: ${JSON.stringify(limits)}`);
+    }
+
+    try {
+      const { stdout, stderr, truncated } = await runAid(binaryPath, args, { cwd, ...limits });
+      // Put stderr (progress/info) first, then the actual content
+      let result = stderr.trim() ? stderr + '\n\n' : '';
+      result += stdout;
+      if (truncated) {
+        result += `\n\n[Output incomplete: stopped at ${limits.maxOutputBytes} bytes. This is not the whole result. Narrow the request: pass a subdirectory or a single file, use include_patterns, or turn off include_implementation. The limit is set by AID_MCP_MAX_OUTPUT_BYTES.]`;
       }
-      
-      const child = spawn(binaryPath, args, {
-        cwd: process.env.AID_ROOT || process.cwd(),
-        env: process.env,
-        stdio: ['ignore', 'pipe', 'pipe'] // Explicitly set stdio: ignore stdin, pipe stdout/stderr
-      });
-      
-      let stdout = '';
-      let stderr = '';
-      
-      child.stdout.on('data', (data) => {
-        const chunk = data.toString();
-        stdout += chunk;
-        if (isDebug) console.error(`[AID MCP] Stdout chunk (${chunk.length} bytes): ${chunk.substring(0, 100)}...`);
-      });
-      
-      child.stderr.on('data', (data) => {
-        const chunk = data.toString();
-        stderr += chunk;
-        if (isDebug) console.error(`[AID MCP] Stderr chunk: ${chunk}`);
-      });
-      
-      child.on('close', (code) => {
-        if (isDebug) {
-          console.error(`[AID MCP] Command exited with code: ${code}`);
-          console.error(`[AID MCP] Total stdout length: ${stdout.length} bytes`);
-          console.error(`[AID MCP] Total stderr length: ${stderr.length} bytes`);
-        }
-        
-        if (code !== 0) {
-          // If command failed, include stderr in error message
-          reject(new Error(stderr || `Aid exited with code ${code}`));
-        } else {
-          // Command succeeded - combine stderr and stdout
-          let result = '';
-          
-          // Put stderr (progress/info) first
-          if (stderr && stderr.trim()) {
-            result = stderr + '\n\n';
-          }
-          
-          // Then append stdout (actual content)
-          result += stdout;
-          
-          resolve(result);
-        }
-      });
-      
-      child.on('error', (err) => {
-        console.error(`[AID MCP] Process spawn error: ${err.message}`);
-        if (isDebug) console.error(`[AID MCP] Error stack: ${err.stack}`);
-        reject(err);
-      });
-    });
+      return result;
+    } catch (error) {
+      if (error instanceof AidRunError) {
+        console.error(`[AID MCP] aid run failed (${error.kind}): ${error.message}`);
+        if (error.kind === 'exit') throw new Error(error.stderr || error.message);
+      }
+      throw error;
+    }
   }
 
   /**

@@ -29,7 +29,8 @@
     "noUnusedParameters": true
   },
   "include": [
-    "mcp-server-sdk.ts"
+    "mcp-server-sdk.ts",
+    "run-aid.ts"
   ],
   "exclude": [
     "node_modules",

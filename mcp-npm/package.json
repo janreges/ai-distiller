@@ -32,7 +32,7 @@
     "watch": "tsc --watch",
     "postinstall": "node scripts/postinstall.js",
     "prepublishOnly": "npm run build",
-    "test": "echo \"No tests yet\""
+    "test": "npm run build && node --test"
   },
   "files": [
     "dist/",

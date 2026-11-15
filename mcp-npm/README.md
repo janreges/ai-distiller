@@ -122,6 +122,10 @@ AI Distiller (aid) **DOES NOT perform analysis** - it generates prompts with dis
 ### Environment Variables
 
 - `AID_ROOT` - **REQUIRED for user-scoped installation**: Root directory for analysis. Without this, the tool cannot determine which project to analyze.
+- `AID_MCP_TIMEOUT_MS` - Time limit for one `aid` run, in milliseconds (default: `120000`). When it is hit, `aid` is stopped and the tool returns an error saying the run did not finish; narrow the request or raise the limit.
+- `AID_MCP_MAX_OUTPUT_BYTES` - Cap on the stdout of one `aid` run, in bytes (default: `1000000`). When it is hit, `aid` is stopped and the result is returned marked incomplete, with the notice first and last.
+
+A value that is not a positive integer falls back to the default.
 
 ### Working Directory Behavior
 
