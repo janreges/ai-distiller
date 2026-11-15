@@ -17,6 +17,12 @@ module UserUtils
         "This is a private module method"
 
 class User
+    def name
+    def name=(value)
+    def email
+    def email=(value)
+    def id
+    def created_at
     @@user_count
     def self.count
         @@user_count
@@ -36,6 +42,7 @@ class User
         "user_#{Time.now.to_i}_#{rand(1000)}"
 
 class AdminUser < User
+    def permissions
     def initialize(name, email, permissions = ...)
         super(name, email)
         @permissions = permissions || []

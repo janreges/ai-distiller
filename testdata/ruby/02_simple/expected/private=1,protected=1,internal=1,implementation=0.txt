@@ -20,6 +20,16 @@ module RoleManager
     def self.role_stats
 
 class Document
+    include Loggable
+    include Serializable
+    def title
+    @title
+    def content
+    @content
+    def author
+    @author
+    def created_at
+    @created_at
     def initialize(title, content, author)
     def process_content
     def find_sections(pattern = ...)

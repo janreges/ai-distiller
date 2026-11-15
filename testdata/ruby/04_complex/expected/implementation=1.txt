@@ -109,6 +109,8 @@ module ReflectionUtils
         }
 
 class ConfigurationBuilder
+    include DSLBuilder
+    include FluentInterface
     def initialize
         @settings = {}
         @nested_configs = {}

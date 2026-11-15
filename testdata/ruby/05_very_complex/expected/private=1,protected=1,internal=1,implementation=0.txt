@@ -18,6 +18,7 @@ module CodeGenerator
     def self.build_validation_code(field, rules)
 
 class RuntimeCodeModifier
+    include AdvancedMetaprogramming
     def initialize
     def modify_method(target, method_name, &new_implementation)
     def restore_method(target, method_name)

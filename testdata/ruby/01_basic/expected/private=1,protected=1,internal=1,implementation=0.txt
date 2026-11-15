@@ -8,6 +8,16 @@ module UserUtils
     def self.internal_helper
 
 class User
+    def name
+    def name=(value)
+    @name
+    def email
+    def email=(value)
+    @email
+    def id
+    @id
+    def created_at
+    @created_at
     @@user_count
     def self.count
     def initialize(name, email)
@@ -17,6 +27,8 @@ class User
     def generate_id
 
 class AdminUser < User
+    def permissions
+    @permissions
     def initialize(name, email, permissions = ...)
     def to_s
     def has_permission?(permission)

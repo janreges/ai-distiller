@@ -148,6 +148,7 @@ module CodeGenerator
         RUBY
 
 class RuntimeCodeModifier
+    include AdvancedMetaprogramming
     def initialize
         @original_methods = {}
         @modified_methods = {}

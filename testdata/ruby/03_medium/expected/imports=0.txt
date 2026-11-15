@@ -22,6 +22,8 @@ module Trackable
     def method_call_history
 
 class ConfigurableModel
+    include MetaProgrammingUtils
+    include Trackable
     def initialize(initial_config = ...)
     def self.add_validation(field, &validation_block)
     def evaluate_expression(expression, context = ...)

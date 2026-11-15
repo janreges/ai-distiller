@@ -23,6 +23,8 @@ module ReflectionUtils
     def self.analyze_class(klass)
 
 class ConfigurationBuilder
+    include DSLBuilder
+    include FluentInterface
     def initialize
     def add_middleware(middleware_class, *options*)
     def add_plugin(plugin_name, &configuration_block)

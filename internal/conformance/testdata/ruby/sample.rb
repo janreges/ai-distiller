@@ -4,6 +4,9 @@ require "json"
 
 # CONF_DOC_COMMENT
 class ConfWidget
+  include Comparable
+  attr_reader :conf_name
+
   def conf_public
     a = "CONF_BODY_A"
     a

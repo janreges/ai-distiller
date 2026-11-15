@@ -74,8 +74,6 @@ func (p *TreeSitterProcessor) processNode(node *sitter.Node, source []byte, file
 		p.processCall(node, source, file, parent)
 	case "alias":
 		p.processAlias(node, source, file, parent)
-	case "require", "require_relative", "load":
-		p.processRequire(node, source, file)
 	default:
 		// Recursively process children
 		for i := 0; i < int(node.ChildCount()); i++ {
@@ -268,18 +266,30 @@ func (p *TreeSitterProcessor) processCall(node *sitter.Node, source []byte, file
 			// Extract arguments
 			for j := 0; j < int(child.ChildCount()); j++ {
 				arg := child.Child(j)
-				if arg.Type() == "symbol" || arg.Type() == "string" {
+				switch arg.Type() {
+				case "symbol", "simple_symbol", "string", "constant", "scope_resolution":
 					arguments = append(arguments, string(source[arg.StartByte():arg.EndByte()]))
 				}
 			}
 		}
 	}
 
+	// Keyword calls have no receiver: `YAML.load(x)` and `Foo.include Bar`
+	// are ordinary method calls, not declarations. `self.include X` and
+	// `self.attr_reader :x` in a class body are the keyword calls written out.
+	if receiver := node.ChildByFieldName("receiver"); receiver != nil && receiver.Type() != "self" {
+		return
+	}
+
 	// Handle common metaprogramming methods
 	switch methodName {
+	case "require", "require_relative", "load":
+		p.processRequire(methodName, node, source, file)
 	case "attr_reader", "attr_writer", "attr_accessor":
 		p.processAttrMethods(methodName, arguments, node, file, parent)
-	case "include", "prepend", "extend":
+	case "include":
+		// extend/prepend are skipped on purpose: Implements cannot carry the
+		// keyword, and printing them as `include` would change the meaning.
 		p.processModuleInclusion(methodName, arguments, node, file, parent)
 	case "private", "protected", "public":
 		// These affect visibility of subsequent methods
@@ -338,11 +348,10 @@ func (p *TreeSitterProcessor) processAttrMethods(methodName string, arguments []
 	}
 }
 
-// processModuleInclusion handles include, prepend, extend
+// processModuleInclusion records the modules of an `include` call as the
+// Implements of the enclosing class. `extend` and `prepend` are not routed
+// here: Implements cannot carry the keyword.
 func (p *TreeSitterProcessor) processModuleInclusion(methodName string, arguments []string, node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) {
-	// In Ruby, include/prepend add module methods as instance methods
-	// extend adds module methods as class methods
-	// For simplicity, we'll add them to implements
 	if class, ok := parent.(*ir.DistilledClass); ok {
 		for _, arg := range arguments {
 			moduleName := strings.Trim(arg, "\"' ")
@@ -386,38 +395,46 @@ func (p *TreeSitterProcessor) processAliasMethod(newName, oldName string, node *
 	p.addToParent(file, parent, fn)
 }
 
-// processRequire handles require/require_relative/load statements
-func (p *TreeSitterProcessor) processRequire(node *sitter.Node, source []byte, file *ir.DistilledFile) {
-	imp := &ir.DistilledImport{
+// processRequire records a require/require_relative/load call whose argument
+// is a plain string literal ('json', "lib/x", %q(x)) as an import of that
+// path. A call with any other argument (`File.expand_path(...)`, an
+// interpolated string, a variable) is skipped: the path is only known at run
+// time, and an import's Module is a path that formatters print quoted, so
+// carrying the expression would present it as a path.
+func (p *TreeSitterProcessor) processRequire(methodName string, node *sitter.Node, source []byte, file *ir.DistilledFile) {
+	args := node.ChildByFieldName("arguments")
+	if args == nil || args.NamedChildCount() == 0 {
+		return
+	}
+	path, ok := plainStringLiteral(args.NamedChild(0), source)
+	if !ok {
+		return
+	}
+	file.Children = append(file.Children, &ir.DistilledImport{
 		BaseNode: ir.BaseNode{
 			Location: p.nodeLocation(node),
 		},
-		ImportType: node.Type(),
-		Symbols:    []ir.ImportedSymbol{},
-	}
+		ImportType: methodName,
+		Module:     path,
+		Symbols:    []ir.ImportedSymbol{{Name: path}},
+	})
+}
 
-	// Find the required file
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "argument_list" {
-			for j := 0; j < int(child.ChildCount()); j++ {
-				arg := child.Child(j)
-				if arg.Type() == "string" {
-					// Extract the string content
-					content := string(source[arg.StartByte():arg.EndByte()])
-					// Remove quotes
-					content = strings.Trim(content, "\"'")
-					imp.Module = content
-					imp.Symbols = append(imp.Symbols, ir.ImportedSymbol{
-						Name: content,
-					})
-					break
-				}
-			}
+// plainStringLiteral returns the content of node when it is a string literal
+// without interpolation or escape sequences, and false otherwise.
+func plainStringLiteral(node *sitter.Node, source []byte) (string, bool) {
+	if node.Type() != "string" {
+		return "", false
+	}
+	content := ""
+	for i := 0; i < int(node.NamedChildCount()); i++ {
+		part := node.NamedChild(i)
+		if part.Type() != "string_content" {
+			return "", false
 		}
+		content += string(source[part.StartByte():part.EndByte()])
 	}
-
-	file.Children = append(file.Children, imp)
+	return content, content != ""
 }
 
 // processClassBody processes the body of a class

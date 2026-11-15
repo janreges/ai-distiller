@@ -106,7 +106,10 @@ var fixtures = []fixture{
 		Private:   []string{"conf_private"},
 		ExpandSym: "conf_public",
 	}), check{Cap: "body-indent", Flags: []string{"--implementation=1"},
-		Contains: []string{"        a = \"CONF_BODY_A\"\n        a\n"}})},
+		Contains: []string{"        a = \"CONF_BODY_A\"\n        a\n"}},
+		check{Cap: "require-kept", Flags: []string{"--filter-imports=false"}, Contains: []string{"json"}},
+		check{Cap: "attr-reader", Contains: []string{"conf_name"}},
+		check{Cap: "include-kept", Contains: []string{"Comparable"}})},
 	{Lang: "java", File: "java/ConfWidget.java", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
 		Private:   []string{"confPrivate"},

@@ -1,4 +1,5 @@
 <file path="source.rb">
+require 'time'
 
 module Loggable
     def log(message, level:)
@@ -40,6 +41,12 @@ module RoleManager
         roles_with_lengths.select { |_, length| length > 4 }
 
 class Document
+    include Loggable
+    include Serializable
+    def title
+    def content
+    def author
+    def created_at
     def initialize(title, content, author)
         @title = title
         @content = content

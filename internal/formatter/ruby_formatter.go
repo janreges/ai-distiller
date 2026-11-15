@@ -45,8 +45,12 @@ func (f *RubyFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent in
 }
 
 func (f *RubyFormatter) formatImport(w io.Writer, imp *ir.DistilledImport, indent string) error {
-	// Ruby uses require or require_relative
-	fmt.Fprintf(w, "%srequire '%s'\n", indent, imp.Module)
+	// Ruby uses require, require_relative or load
+	keyword := imp.ImportType
+	if keyword != "require_relative" && keyword != "load" {
+		keyword = "require"
+	}
+	fmt.Fprintf(w, "%s%s '%s'\n", indent, keyword, imp.Module)
 	return nil
 }
 
@@ -77,6 +81,12 @@ func (f *RubyFormatter) formatClass(w io.Writer, class *ir.DistilledClass, inden
 	}
 
 	fmt.Fprintln(w)
+
+	// Included modules (the parser records `include X` as Implements)
+	memberIndent := strings.Repeat("    ", indent+1)
+	for _, mixin := range class.Implements {
+		fmt.Fprintf(w, "%sinclude %s\n", memberIndent, mixin.Name)
+	}
 
 	// Format class members
 	for _, child := range class.Children {

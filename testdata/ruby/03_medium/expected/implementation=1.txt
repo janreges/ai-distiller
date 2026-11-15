@@ -88,6 +88,8 @@ module Trackable
         @method_calls || []
 
 class ConfigurableModel
+    include MetaProgrammingUtils
+    include Trackable
     def initialize(initial_config = ...)
         @config = initial_config
         @metadata = {}
