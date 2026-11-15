@@ -309,11 +309,64 @@ fun main() = runBlocking {
     }.collect { product ->
         println("Found: ${product.name} - $${product.price}")
     }
-var notificationService
-var serviceJob
-var subscription
-var config
-var connection
-var orchestrator
-var processingJob
+    
+    // Notification service example
+    println("\n=== Notification Service Example ===")
+    val notificationService = ProductNotificationService(repository)
+    val serviceJob = notificationService.start()
+    
+    val subscription = notificationService.subscribe("user1")
+    
+    // Listen to notifications in background
+    launch {
+        for (notification in subscription) {
+            when (notification) {
+                is Notification.ProductAdded -> println("🆕 New product: ${notification.productName}")
+                is Notification.ProductUpdated -> println("📝 Price changed for ${notification.productName}: $${notification.oldPrice} → $${notification.newPrice}")
+                is Notification.ProductRemoved -> println("🗑️ Removed: ${notification.productName}")
+                is Notification.CustomMessage -> println("📢 ${notification.message}")
+            }
+        }
+    }
+    
+    // Add a new product to trigger notification
+    delay(1000)
+    repository.addProduct(Product("6", "Tablet", 399.99, "Electronics", true, 4.1))
+    
+    // Update a product to trigger notification
+    delay(1000)
+    repository.updateProduct("1") { it.copy(price = 899.99) }
+    
+    delay(2000)
+    notificationService.unsubscribe("user1")
+    
+    // Configuration with advanced delegation
+    println("\n=== Advanced Property Delegation ===")
+    val config = ServiceConfiguration()
+    println("Max requests: ${config.maxConcurrentRequests}")
+    
+    config.maxConcurrentRequests = 200
+    println("Updated max requests: ${config.maxConcurrentRequests}")
+    
+    // Access async property
+    val connection = config.databaseConnection.await()
+    println("Database: $connection")
+    
+    // Data processing orchestrator
+    println("\n=== Data Processing Orchestrator ===")
+    val orchestrator = DataProcessingOrchestrator()
+    val processingJob = orchestrator.startProcessing(2)
+    
+    // Add some items for processing
+    repeat(20) { i ->
+        orchestrator.addItem(DataProcessingOrchestrator.DataItem("item_$i", "data_$i"))
+        delay(50)
+    }
+    
+    delay(3000)
+    
+    // Cleanup
+    serviceJob.cancelAndJoin()
+    processingJob.cancelAndJoin()
+}
 </file>

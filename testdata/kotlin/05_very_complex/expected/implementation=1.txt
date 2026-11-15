@@ -34,10 +34,12 @@ annotation class ConfigurationDsl {
 }
 /** Context receiver simulation for scoped functions */
 interface DatabaseContext {
+    var connectionPool: ConnectionPool
     suspend fun <T> withTransaction(block: TransactionScope.() -> T): T
 }
 /** Transaction scope with advanced resource management */
 interface TransactionScope {
+    var transactionId: String
     suspend fun <T> execute(query: String, params: Any): T
     suspend fun rollback()
     suspend fun commit()
@@ -61,9 +63,13 @@ abstract class AdvancedGenericRepository {
 }
 /** Advanced entity interface with complex inheritance */
 interface Entity {
+    var id: ID
+    var version: Long
+    var metadata: EntityMetadata
 }
 /** Auditable interface with temporal aspects */
 interface Auditable {
+    var auditInfo: AuditInfo
     fun updateAuditInfo(actor: String, action: String)
 }
 /** Validatable interface with context-aware validation */
@@ -106,6 +112,9 @@ class PlatformSpecificRepository {
 }
 /** Platform capabilities interface */
 interface PlatformCapabilities {
+    var supportsAdvancedFeatures: Boolean
+    var nativeLibraryVersion: String
+    var platformIdentifier: String
 }
 /** Complex sealed class hierarchy with nested types */
 sealed class ProcessingState {

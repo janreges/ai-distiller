@@ -14,8 +14,8 @@ cgo, not even `internal/language` on its own.
 
 | Language | Go import | Where the C code comes from |
 |---|---|---|
-| kotlin | `github.com/smacker/go-tree-sitter/kotlin` | bundled in the binding module |
 | python, javascript, java, csharp, cpp, ruby, php | `github.com/tree-sitter/tree-sitter-<name>/bindings/go` | the grammar's own Go module (version in `go.mod`); the processor wraps its pointer with `sitter.NewLanguage(...)`, PHP with `LanguagePHP()` |
+| kotlin | `github.com/fwcd/tree-sitter-kotlin/bindings/go` | the grammar's own Go module (fwcd, pinned to commit `d6af96d2` in `go.mod`, ABI 14); its `parser.c` is about 35 MB, so a cold `go build -a` takes about 4 s longer; wrapped with `sitter.NewLanguage(...)` |
 | typescript, tsx | `tree-sitter-typescript` | a local wrapper module, see below |
 | swift | `tree-sitter-swift` | vendored in `internal/parser/grammars/tree-sitter-swift`; only the unused tree-sitter processor imports it (`references/swift.md`) |
 | go | none | standard library `go/parser` |
@@ -60,7 +60,7 @@ CGO_ENABLED=0 go build ./cmd/aid
 fails at compile time, with errors such as:
 
 ```text
-github.com/smacker/go-tree-sitter/kotlin: build constraints exclude all Go files in ...
+github.com/tree-sitter/tree-sitter-python/bindings/go: build constraints exclude all Go files in ...
 ../go/pkg/mod/github.com/smacker/go-tree-sitter@.../iter.go:17:18: undefined: Node
 ```
 

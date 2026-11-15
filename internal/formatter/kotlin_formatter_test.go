@@ -34,8 +34,15 @@ func TestKotlinFormatter_Comments(t *testing.T) {
 		&ir.DistilledComment{Text: "line", Format: ir.CommentLine},
 		doc("g doc"),
 		&ir.DistilledFunction{Name: "g", Visibility: ir.VisibilityPublic, Returns: intT},
-		doc("Doc of a nested interface the class body does not print."),
-		&ir.DistilledInterface{Name: "Nested"},
+		doc("Nested interface doc."),
+		&ir.DistilledInterface{Name: "Nested", Visibility: ir.VisibilityPublic, Children: []ir.DistilledNode{
+			&ir.DistilledFunction{Name: "n", Visibility: ir.VisibilityPublic},
+		}},
+		doc("Nested enum doc."),
+		&ir.DistilledEnum{Name: "E", Visibility: ir.VisibilityPublic, Children: []ir.DistilledNode{
+			&ir.DistilledField{Name: "A", Visibility: ir.VisibilityPublic},
+			&ir.DistilledClass{Name: "Companion", Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{ir.ModifierStatic}},
+		}},
 		doc("Object doc."),
 		&ir.DistilledClass{Name: "O", Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{ir.ModifierStatic}, Children: []ir.DistilledNode{
 			doc("x doc"),
@@ -43,10 +50,12 @@ func TestKotlinFormatter_Comments(t *testing.T) {
 		}},
 	}}
 	iface := &ir.DistilledInterface{Name: "I", Visibility: ir.VisibilityPublic, Children: []ir.DistilledNode{
-		doc("p doc: interface properties are not printed"),
+		doc("p doc"),
 		&ir.DistilledField{Name: "p", Visibility: ir.VisibilityPublic, Type: intT},
 		doc("h doc"),
 		&ir.DistilledFunction{Name: "h", Visibility: ir.VisibilityPublic},
+		doc("Nested class doc."),
+		&ir.DistilledClass{Name: "Impl", Visibility: ir.VisibilityPublic},
 	}}
 	got := formatFileAs(t, "kotlin",
 		doc("Package doc: the package line is not printed, so neither is its doc."),
@@ -69,6 +78,16 @@ class K {
     // line
     /** g doc */
     fun g(): Int
+    /** Nested interface doc. */
+    interface Nested {
+        fun n()
+    }
+    /** Nested enum doc. */
+    enum class E {
+        A
+        object Companion {
+        }
+    }
     /** Object doc. */
     object O {
         /** x doc */
@@ -76,8 +95,13 @@ class K {
     }
 }
 interface I {
+    /** p doc */
+    var p: Int
     /** h doc */
     fun h()
+    /** Nested class doc. */
+    class Impl {
+    }
 }
 `, got)
 }

@@ -13,8 +13,8 @@ import (
 	"os"
 	"strings"
 
+	tree_sitter_kotlin "github.com/fwcd/tree-sitter-kotlin/bindings/go"
 	sitter "github.com/smacker/go-tree-sitter"
-	"github.com/smacker/go-tree-sitter/kotlin"
 	tree_sitter_c_sharp "github.com/tree-sitter/tree-sitter-c-sharp/bindings/go"
 	tree_sitter_cpp "github.com/tree-sitter/tree-sitter-cpp/bindings/go"
 	tree_sitter_java "github.com/tree-sitter/tree-sitter-java/bindings/go"
@@ -32,7 +32,7 @@ func language(lang string) (*sitter.Language, error) {
 	case "python":
 		return sitter.NewLanguage(tree_sitter_python.Language()), nil
 	case "kotlin":
-		return kotlin.GetLanguage(), nil
+		return sitter.NewLanguage(tree_sitter_kotlin.Language()), nil
 	case "typescript":
 		return sitter.NewLanguage(typescript.Language()), nil
 	case "tsx":

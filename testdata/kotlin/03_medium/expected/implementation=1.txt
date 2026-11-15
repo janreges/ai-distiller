@@ -48,6 +48,8 @@ abstract class BaseService {
 }
 /** Entity interface with comparable constraint */
 interface Entity {
+    var id: String
+    var version: Long
     override fun compareTo(other: Entity): Int = id.compareTo(other.id)
 }
 /** Concrete entity implementation */
@@ -235,6 +237,7 @@ class Cache {
         }
     }
 }
+/** Inline function with contract */
 inline fun <T> T?.requireNotNull(message: () -> String): T {
     contract {
         returns() implies (this@requireNotNull != null)

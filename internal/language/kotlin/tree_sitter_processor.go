@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	tree_sitter_kotlin "github.com/fwcd/tree-sitter-kotlin/bindings/go"
 	"github.com/janreges/ai-distiller/internal/ir"
 	"github.com/janreges/ai-distiller/internal/language/commentutil"
 	sitter "github.com/smacker/go-tree-sitter"
-	"github.com/smacker/go-tree-sitter/kotlin"
 )
 
 // TreeSitterProcessor uses tree-sitter for Kotlin parsing
@@ -19,7 +19,7 @@ type TreeSitterProcessor struct {
 // NewTreeSitterProcessor creates a new tree-sitter based processor
 func NewTreeSitterProcessor() *TreeSitterProcessor {
 	parser := sitter.NewParser()
-	parser.SetLanguage(kotlin.GetLanguage())
+	parser.SetLanguage(sitter.NewLanguage(tree_sitter_kotlin.Language()))
 
 	return &TreeSitterProcessor{
 		parser: parser,
@@ -247,6 +247,9 @@ func (p *TreeSitterProcessor) processClassDeclaration(node *sitter.Node, source 
 			p.extractDelegationSpecifier(child, source, class)
 		case "class_body":
 			p.processClassBody(child, source, file, class)
+		case "line_comment", "multiline_comment":
+			// A comment inside the header (before the constructor or the supertypes)
+			p.processComment(child, source, file, class)
 		}
 	}
 
@@ -281,6 +284,9 @@ func (p *TreeSitterProcessor) processInterfaceDeclaration(node *sitter.Node, sou
 			p.extractInterfaceDelegationSpecifier(child, source, iface)
 		case "class_body":
 			p.processInterfaceBody(child, source, file, iface)
+		case "line_comment", "multiline_comment":
+			// A comment inside the header (before the supertypes)
+			p.processComment(child, source, file, iface)
 		}
 	}
 
@@ -348,6 +354,9 @@ func (p *TreeSitterProcessor) processObjectDeclaration(node *sitter.Node, source
 			p.extractDelegationSpecifier(child, source, obj)
 		case "class_body":
 			p.processClassBody(child, source, file, obj)
+		case "line_comment", "multiline_comment":
+			// A comment inside the header (before the supertypes)
+			p.processComment(child, source, file, obj)
 		}
 	}
 
@@ -413,15 +422,13 @@ func (p *TreeSitterProcessor) processFunctionDeclaration(node *sitter.Node, sour
 			if function.Name == "" {
 				function.Name = string(source[child.StartByte():child.EndByte()])
 			}
+		case "receiver_type":
+			// The extension receiver (`fun String.foo()`): the grammar wraps it in its own node.
+			receiverType = string(source[child.StartByte():child.EndByte()])
 		case "user_type", "nullable_type":
-			// This could be receiver type for extension functions or return type
-			typeStr := string(source[child.StartByte():child.EndByte()])
-			if function.Name == "" {
-				// This is a receiver type (extension function)
-				receiverType = typeStr
-			} else if function.Returns == nil {
-				// This is the return type
-				function.Returns = &ir.TypeRef{Name: typeStr}
+			// The return type (the receiver has its own receiver_type node)
+			if function.Returns == nil {
+				function.Returns = &ir.TypeRef{Name: string(source[child.StartByte():child.EndByte()])}
 			}
 		case "function_body":
 			p.extractFunctionBody(child, source, function)
@@ -1201,8 +1208,9 @@ func (p *TreeSitterProcessor) processEnumBody(node *sitter.Node, source []byte, 
 		switch nodeType {
 		case "enum_entry":
 			p.processEnumEntry(child, source, file, parent)
-		case "function_declaration", "property_declaration":
-			// Enums can have methods and properties
+		case "function_declaration", "property_declaration",
+			"companion_object", "class_declaration", "object_declaration":
+			// Enums can have methods, properties, a companion object and nested types
 			p.processNode(child, source, file, parent)
 		}
 	}

@@ -72,6 +72,12 @@ enum class UserRole {
     MODERATOR("Moderator", setOf("read", "write", "moderate"))
     USER("User", setOf("read", "write_own"))
     fun hasPermission(permission: String): Boolean = permission in permissions
+    object Companion {
+        /** Get role by display name */
+        fun fromDisplayName(displayName: String): UserRole? {
+            return values().find { it.displayName == displayName }
+        }
+    }
 }
 /** Object declaration for constants and utilities */
 object UserConstants {

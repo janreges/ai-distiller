@@ -1,0 +1,64 @@
+<file path="source.kt">
+/**
+ * Declarations nested in a class, an object, an interface and an enum:
+ * functional interfaces, enums, sealed interfaces, interface properties
+ * and companion objects.
+ */
+/** Callbacks a caller registers. */
+object Callbacks {
+    fun register(done: Done)
+    /** Called when the work is done. */
+    interface Done {
+        fun onDone(ok: Boolean)
+    }
+}
+class Screen {
+    /** Maps one value to another. */
+    interface Mapper {
+        fun map(x: Int): Int
+    }
+    /** The colour scheme. */
+    enum class Mode {
+        LIGHT
+        DARK
+        fun next(): Mode
+    }
+    /** What the screen shows. */
+    interface State {
+        /** A label for the state. */
+        var label: String
+        /** Nothing to show yet. */
+        data object Idle {
+        }
+        /** Work in progress. */
+        data class Busy(val label: String, val progress: Int) {
+        }
+    }
+    fun render(mode: Mode, state: State, mapper: Mapper)
+    private interface Renderer {
+        fun draw(state: State)
+    }
+}
+/** A store of strings. */
+interface Repository {
+    /** The number of entries. */
+    var size: Int
+    var name: String
+    fun get(id: Int): String
+    /** Keeps the entries in memory. */
+    class InMemory {
+        val size: Int
+        var name: String
+        fun constructor(size: Int, name: String)
+        override fun get(id: Int): String
+    }
+}
+enum class Level {
+    LOW(1)
+    HIGH(2)
+    fun heavier(): Boolean
+    object Companion {
+        fun parse(s: String): Level
+    }
+}
+</file>

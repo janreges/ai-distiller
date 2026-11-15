@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/dustin/go-humanize v1.1.0
+	github.com/fwcd/tree-sitter-kotlin v0.0.0-20261031170920-d6af96d2e23e
 	github.com/mattn/go-isatty v0.0.24
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82

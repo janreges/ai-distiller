@@ -160,20 +160,4 @@ class DataProcessingOrchestrator {
 }
 /** Main function demonstrating complex features */
 fun main()
-// Notification service example
-var notificationService
-var serviceJob
-var subscription
-// Listen to notifications in background
-// Add a new product to trigger notification
-// Update a product to trigger notification
-// Configuration with advanced delegation
-var config
-// Access async property
-var connection
-// Data processing orchestrator
-var orchestrator
-var processingJob
-// Add some items for processing
-// Cleanup
 </file>

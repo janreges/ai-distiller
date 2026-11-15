@@ -7,6 +7,8 @@ import kotlin.random.Random
  */
 /** Base interface for all entities */
 interface Entity {
+    var id: String
+    var createdAt: Long
     /** Default implementation of a method */
     fun getAge(): Long = System.currentTimeMillis() - createdAt
     /** Abstract method to be implemented */
@@ -14,6 +16,8 @@ interface Entity {
 }
 /** Auditable interface for tracking changes */
 interface Auditable {
+    var lastModified: Long
+    var modifiedBy: String?
     /** Method to mark entity as modified */
     fun markModified(by: String) {
         lastModified = System.currentTimeMillis()
@@ -83,6 +87,37 @@ class Product {
 class Category {
     val name: String
     fun constructor(id: String, name: String, auditDelegate: Auditable)
+    /** Read-only property exposing products */
+    var products: List
+    /** Property with custom getter */
+    var productCount: Int
+    override fun getEntityType(): String = "Category"
+    override fun validate(): Boolean {
+        return name.isNotBlank() && name.length <= 50
+    }
+    /** Add product to category */
+    fun addProduct(product: Product): Boolean {
+        return if (product.category == name && product !in _products) {
+            _products.add(product)
+            markModified("system")
+            true
+        } else {
+            false
+        }
+    }
+    /** Remove product from category */
+    fun removeProduct(product: Product): Boolean {
+        return if (_products.remove(product)) {
+            markModified("system")
+            true
+        } else {
+            false
+        }
+    }
+    /** Get products by price range */
+    fun getProductsByPriceRange(min: Double, max: Double): List<Product> {
+        return _products.filter { it.price in min..max }
+    }
 }
 /** Audit implementation for delegation */
 class AuditImpl {

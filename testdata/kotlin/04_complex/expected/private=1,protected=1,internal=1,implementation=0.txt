@@ -198,11 +198,4 @@ class DataProcessingOrchestrator {
 }
 /** Main function demonstrating complex features */
 fun main()
-var notificationService
-var serviceJob
-var subscription
-var config
-var connection
-var orchestrator
-var processingJob
 </file>

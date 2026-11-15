@@ -642,3 +642,13 @@ func TestKotlin_CommentsInsideBodiesStayOut(t *testing.T) {
 	file := parseKotlin(t, "class K {\n    /** init doc */\n    init {\n        // inside init\n        val local = 1\n    }\n    fun f() {\n        // inside body\n    }\n}\n")
 	assert.Equal(t, []string{"f"}, labels(file.Children[0].(*ir.DistilledClass).Children))
 }
+
+// A comment between the class name and the primary constructor (or the
+// supertypes) is a child of the declaration node itself; it stays with the
+// class, before the members.
+func TestKotlin_CommentInDeclarationHeader(t *testing.T) {
+	file := parseKotlin(t, "internal class D\n// pools comment\nprivate constructor() : Base {\n    fun f() {}\n}\nobject O // object comment\n    : Base {\n    fun g() {}\n}\ninterface I // interface comment\n    : J {\n    fun h()\n}\n")
+	assert.Equal(t, []string{"line:pools comment", "constructor", "f"}, labels(file.Children[0].(*ir.DistilledClass).Children))
+	assert.Equal(t, []string{"line:object comment", "g"}, labels(file.Children[1].(*ir.DistilledClass).Children))
+	assert.Equal(t, []string{"line:interface comment", "h"}, labels(file.Children[2].(*ir.DistilledInterface).Children))
+}

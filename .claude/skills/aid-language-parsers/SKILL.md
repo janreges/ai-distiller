@@ -86,12 +86,12 @@ function the package's `ProcessWithOptions` calls.
 | ruby | `internal/language/ruby/tree_sitter_processor.go#TreeSitterProcessor.ProcessSource` | `github.com/tree-sitter/tree-sitter-ruby/bindings/go` | `references/ruby.md` |
 | java | `internal/language/java/tree_sitter_processor.go#TreeSitterProcessor.ProcessSource` | `github.com/tree-sitter/tree-sitter-java/bindings/go` | `references/java.md` |
 | csharp | `internal/language/csharp/tree_sitter_processor.go#TreeSitterProcessor.ProcessSource` | `github.com/tree-sitter/tree-sitter-c-sharp/bindings/go` | `references/csharp.md` |
-| kotlin | `internal/language/kotlin/tree_sitter_processor.go#TreeSitterProcessor.ProcessSource` | `github.com/smacker/go-tree-sitter/kotlin` | `references/kotlin.md` |
+| kotlin | `internal/language/kotlin/tree_sitter_processor.go#TreeSitterProcessor.ProcessSource` | `github.com/fwcd/tree-sitter-kotlin/bindings/go` | `references/kotlin.md` |
 | cpp | `internal/language/cpp/tree_sitter_processor.go#TreeSitterProcessor.ProcessSource` | `github.com/tree-sitter/tree-sitter-cpp/bindings/go` | `references/cpp.md` |
 | php | `internal/language/php/tree_sitter_processor.go#TreeSitterProcessor.ProcessSource` | `github.com/tree-sitter/tree-sitter-php/bindings/go` | `references/php.md` |
 
 All tree-sitter languages run on the binding `github.com/smacker/go-tree-sitter`;
-the grammars from `github.com/tree-sitter/...` are wrapped with
+the grammars from `github.com/tree-sitter/...` and `github.com/fwcd/...` are wrapped with
 `sitter.NewLanguage(...)`. The Go package is `internal/language/golang/`, and its
 processor registers as `go`.
 

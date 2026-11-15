@@ -38,6 +38,8 @@ abstract class BaseService {
 }
 /** Entity interface with comparable constraint */
 interface Entity {
+    var id: String
+    var version: Long
     override fun compareTo(other: Entity): Int
 }
 /** Concrete entity implementation */
@@ -107,6 +109,7 @@ class Cache {
     /** Clear expired entries */
     fun clearExpired()
 }
+/** Inline function with contract */
 inline fun <T> T?.requireNotNull(message: () -> String): T
 /** Higher-order function with multiple generic parameters */
 inline fun <T, R, S> combineAndTransform(first: T, second: R, transformer: (T, R) -> S): S

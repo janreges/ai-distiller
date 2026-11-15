@@ -5,7 +5,7 @@
 - Wired: `internal/language/kotlin/processor.go#Processor.ProcessWithOptions`
   creates `NewTreeSitterProcessor()` per call and runs
   `internal/language/kotlin/tree_sitter_processor.go#TreeSitterProcessor.ProcessSource`.
-- Grammar: `github.com/smacker/go-tree-sitter/kotlin`. Tree:
+- Grammar: `github.com/fwcd/tree-sitter-kotlin/bindings/go` (commit `d6af96d2`). Tree:
   `go run ./cmd/ast-dump --lang kotlin`.
 - Extensions: `.kt`, `.kts`.
 - Dispatch: `internal/language/kotlin/tree_sitter_processor.go#TreeSitterProcessor.processNode`
@@ -18,6 +18,13 @@
   `internal/language/kotlin/tree_sitter_processor.go#TreeSitterProcessor.processStatement`,
   which places comments and drops the doc comments of a statement that yields
   no declaration (`internal/language/commentutil/commentutil.go#AppendStatement`).
+  An enum body goes through
+  `internal/language/kotlin/tree_sitter_processor.go#TreeSitterProcessor.processEnumBody`
+  instead: entries, functions, properties, a companion object and nested
+  classes, objects, interfaces and enums; its comments are not read.
+- A comment inside a class, object or interface header (between the name and
+  the constructor, the supertypes or the body) is a child of the declaration
+  node; it becomes the declaration's first child, before its members.
 
 ## Visibility
 

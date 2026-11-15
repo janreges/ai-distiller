@@ -227,17 +227,30 @@ func (f *KotlinFormatter) formatClass(class *ir.DistilledClass, indent int) stri
 				return "", false
 			}
 			return f.formatField(n, indent+1), true
-		case *ir.DistilledClass:
-			// Handle nested classes (e.g., sealed class variants, companion objects)
-			return f.formatClass(n, indent+1), true
 		}
-		return "", false
+		// Nested classes, objects, interfaces and enums (sealed variants,
+		// companion objects, listener interfaces)
+		return f.formatNestedType(child, indent+1)
 	})...)
 
 	// Add closing brace
 	parts = append(parts, indentStr+"}")
 
 	return strings.Join(parts, "\n")
+}
+
+// formatNestedType formats a class, object, interface or enum declared inside
+// another declaration; printed is false for any other node.
+func (f *KotlinFormatter) formatNestedType(node ir.DistilledNode, indent int) (text string, printed bool) {
+	switch n := node.(type) {
+	case *ir.DistilledClass:
+		return f.formatClass(n, indent), true
+	case *ir.DistilledInterface:
+		return f.formatInterface(n, indent), true
+	case *ir.DistilledEnum:
+		return f.formatEnum(n, indent), true
+	}
+	return "", false
 }
 
 func (f *KotlinFormatter) formatInterface(intf *ir.DistilledInterface, indent int) string {
@@ -284,12 +297,15 @@ func (f *KotlinFormatter) formatInterface(intf *ir.DistilledInterface, indent in
 	var parts []string
 	parts = append(parts, indentStr+intfDecl+" {")
 
-	// Format children (methods and comments)
+	// Format children (methods, properties, nested types and comments)
 	parts = append(parts, formatCStyleNodes(intf.Children, indentStr+"    ", func(child ir.DistilledNode) (string, bool) {
-		if fn, ok := child.(*ir.DistilledFunction); ok {
-			return f.formatFunction(fn, indent+1), true
+		switch n := child.(type) {
+		case *ir.DistilledFunction:
+			return f.formatFunction(n, indent+1), true
+		case *ir.DistilledField:
+			return f.formatField(n, indent+1), true
 		}
-		return "", false
+		return f.formatNestedType(child, indent+1)
 	})...)
 
 	// Add closing brace
@@ -319,7 +335,7 @@ func (f *KotlinFormatter) formatEnum(enum *ir.DistilledEnum, indent int) string 
 	var parts []string
 	parts = append(parts, indentStr+enumDecl+" {")
 
-	// Format enum values and methods
+	// Format enum values, methods and nested types (a companion object)
 	for _, child := range enum.Children {
 		switch n := child.(type) {
 		case *ir.DistilledFunction:
@@ -331,6 +347,10 @@ func (f *KotlinFormatter) formatEnum(enum *ir.DistilledEnum, indent int) string 
 				valueStr += n.DefaultValue
 			}
 			parts = append(parts, valueStr)
+		default:
+			if text, ok := f.formatNestedType(n, indent+1); ok {
+				parts = append(parts, text)
+			}
 		}
 	}
 
