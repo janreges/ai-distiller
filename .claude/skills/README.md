@@ -6,7 +6,7 @@ and states only what is true at the commit where it is written.
 Skills (a line is replaced when its skill lands):
 
 - aid-testing-debugging: running and updating tests, known gaps, finding a bug's layer, debug output
-- aid-language-parsers: not yet written
+- aid-language-parsers: the 12 language processors, the parser each really uses, visibility, method attachment, IR conventions, adding a language
 - aid-architecture: not yet written
 - aid-output-formatting: not yet written
 - aid-release-mcp: not yet written

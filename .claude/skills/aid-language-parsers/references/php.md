@@ -1,0 +1,79 @@
+# PHP
+
+## Parser
+
+- Wired: `internal/language/php/processor.go#Processor.ProcessWithOptions`
+  creates `NewTreeSitterProcessor()` per call and runs
+  `internal/language/php/tree_sitter_processor.go#TreeSitterProcessor.ProcessSource`.
+- Grammar: `github.com/tree-sitter/tree-sitter-php/bindings/go`, the `php`
+  grammar (`LanguagePHP()`, which includes the HTML text around `<?php`),
+  wrapped with `sitter.NewLanguage`. Tree: `go run ./cmd/ast-dump --lang php`.
+- Extensions: `.php`, `.phtml`, `.php3`, `.php4`, `.php5`, `.php7`, `.phps`,
+  `.inc`.
+- Before the walk,
+  `internal/language/php/tree_sitter_processor.go#TreeSitterProcessor.collectPHPDocComments`
+  reads every `/** */` docblock and keys it by the next code line; declarations
+  take `@param`, `@return` and `@var` types from it.
+- Dispatch: `internal/language/php/tree_sitter_processor.go#TreeSitterProcessor.processNode`
+  handles the declaration node types and recurses into any other type. An
+  `attribute_list` (`#[...]`) is held and attached to the next declaration as
+  `Decorators`.
+
+## Visibility
+
+- Members without a modifier are `public`; `public`, `protected` and `private`
+  map to themselves. Top-level functions, classes, interfaces, traits and enums
+  are `public`.
+- A class docblock can change the class's visibility
+  (`internal/language/php/tree_sitter_processor.go#TreeSitterProcessor.parseDocblockTag`):
+  `@internal` makes it `internal`, `@api` makes it `public`.
+- Constructor property promotion (`__construct(private int $age)`) adds a field
+  with the parameter's visibility
+  (`internal/language/php/tree_sitter_processor.go#TreeSitterProcessor.processPromotedProperties`).
+
+## Methods and types
+
+- Members are nested in their `DistilledClass` or `DistilledInterface`.
+  `extends` goes to `Extends`, `implements` to `Implements`, `use Trait;`
+  inside a class to `Mixins`.
+- A trait is a `DistilledClass` with `Extensions.PHP.IsTrait`.
+- An enum is a `DistilledClass` with the modifier `final` and
+  `Extensions.PHP.IsEnum` (backing type in `EnumBackingType`); each `case` is a
+  `static` `final` field with `Extensions.PHP.IsEnumCase` and the value as
+  `DefaultValue`.
+- Class constants are `static` `final` fields.
+- The class docblock is not a comment node. It is parsed into the class
+  (`internal/language/php/tree_sitter_processor.go#TreeSitterProcessor.parseClassDocblock`):
+  its text becomes `Description`; `@property`, `@property-read` and
+  `@property-write` create virtual `public` fields with `Extensions.PHP`
+  `Origin` `docblock`, `AccessMode` and `SourceAnnotation`; `@method` creates a
+  virtual method (`static` when the tag says so); `@deprecated` fills
+  `Deprecated`. When it holds such API tags, the whole docblock is also kept in
+  `APIDocblock`, which the formatters print above the class.
+
+## IR specifics
+
+- A namespace is not a `DistilledPackage`: `namespace X;` (or `namespace X {
+  }`) is a `DistilledImport` with `ImportType` `namespace`, and the
+  declarations of its body are its siblings. `--imports=0` removes it.
+- `use A\B;` (also `use function`, `use const`) is a `DistilledImport` with
+  `ImportType` `use`.
+- `Implementation` is the function body with its braces (`{ return; }`).
+- Comments: `/** */` has the legacy format `docblock`, which counts as doc
+  (`internal/ir/comment.go#DistilledComment.IsDoc`); `/* */` is `block`, `//`
+  and `#` are `line`.
+- `Extensions.PHP` is used (traits, enums, docblock members).
+
+## Unused files
+
+None.
+
+Also off the live path: `Processor.parseLineBasedPHP` in `processor.go`, a
+fallback that returns an empty file with the warning `PHP parser fallback:
+tree-sitter parser not available` and runs only when the tree-sitter parse
+returns an error; `Processor.ProcessFile` in `processor.go`; and
+`TreeSitterProcessor.resolveTypeName` in `tree_sitter_processor.go`.
+
+## Known gaps
+
+See keys starting with `php/` in `internal/conformance/known_gaps_test.go`.
