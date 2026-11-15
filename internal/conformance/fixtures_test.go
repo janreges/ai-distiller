@@ -87,7 +87,14 @@ var fixtures = []fixture{
 	}), check{Cap: "body-signature-once", Flags: []string{"--implementation=1"}, Once: []string{"fn conf_public"}},
 		check{Cap: "body-indent", Flags: []string{"--implementation=1"},
 			Contains: []string{"        let a = \"CONF_BODY_A\";\n        a\n    }\n"}},
-		check{Cap: "one-line-body", Flags: []string{"--implementation=1"}, Contains: []string{"conf_quick(&self) -> i32 { 1 }"}})},
+		check{Cap: "one-line-body", Flags: []string{"--implementation=1"}, Contains: []string{"conf_quick(&self) -> i32 { 1 }"}},
+		check{Cap: "const-case", Contains: []string{"conf_max"}, NotContains: []string{"CONF_MAX"}},
+		check{Cap: "trait-impl-body", Flags: []string{"--expand=conf_area"}, Contains: []string{"CONF_BODY_C"}})},
+	// An enum has its own file: the stdin detector reads "enum Name" as
+	// TypeScript, so in sample.rs it would break rust/stdin-detect.
+	{Lang: "rust", File: "rust/one_line_enum.rs", Checks: []check{
+		{Cap: "one-line-enum", Contains: []string{"ConfRed", "ConfGreen"}},
+	}},
 	{Lang: "swift", File: "swift/sample.swift", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
 		Private:   []string{"confPrivate"},

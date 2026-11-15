@@ -1,3 +1,5 @@
+#![allow(non_upper_case_globals)]
+
 use std::path::MAIN_SEPARATOR;
 
 // CONF_LINE_COMMENT
@@ -24,4 +26,17 @@ impl ConfWidget {
     }
 
     pub fn conf_quick(&self) -> i32 { 1 }
+}
+
+pub const conf_max: u32 = 5;
+
+pub trait ConfShape {
+    fn conf_area(&self) -> i32;
+}
+
+impl ConfShape for ConfWidget {
+    fn conf_area(&self) -> i32 {
+        let c = "CONF_BODY_C";
+        1
+    }
 }

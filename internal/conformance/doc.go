@@ -4,7 +4,8 @@
 // body, and stdin language detection.
 //
 // The package has no production code. Its tests run the real aid binary
-// against one small fixture per language in testdata/ and compare the output
+// against one small fixture per language in testdata/ (plus a separate file
+// for a construct that would break a standard check) and compare the output
 // with a list of capability checks. Checks that fail today are listed with a
 // reason in knownGaps; a fix must delete its entry, because a listed check that
 // starts passing fails the suite.

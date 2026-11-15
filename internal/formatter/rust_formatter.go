@@ -38,7 +38,7 @@ func (f *RustFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent in
 	case *ir.DistilledInterface:
 		return f.formatTrait(w, n, indent)
 	case *ir.DistilledFunction:
-		return f.formatFunction(w, n, indentStr)
+		return f.formatFunction(w, n, indentStr, true)
 	case *ir.DistilledField:
 		return f.formatField(w, n, indentStr)
 	case *ir.DistilledTypeAlias:
@@ -124,9 +124,11 @@ func (f *RustFormatter) formatStruct(w io.Writer, class *ir.DistilledClass, inde
 		allFieldsNoType := true
 		for _, child := range class.Children {
 			if field, ok := child.(*ir.DistilledField); ok {
-				// Enum variants might have tuple types like "(String)"
+				// Enum variants might have tuple types like "(String)" or
+				// struct fields like "{ x: i32 }"
 				if field.Type != nil && field.Type.Name != "" &&
 					!strings.HasPrefix(field.Type.Name, "(") &&
+					!strings.HasPrefix(field.Type.Name, "{") &&
 					field.Type.Name != "struct" {
 					allFieldsNoType = false
 					break
@@ -170,6 +172,10 @@ func (f *RustFormatter) formatStruct(w io.Writer, class *ir.DistilledClass, inde
 
 	// Handle different declaration types
 	if isImpl || isTrait {
+		// Members of a trait or of "impl Trait for Type" take no visibility
+		// keyword; they are as visible as the trait.
+		traitMembers := isTrait || strings.Contains(class.Name, " for ")
+
 		// Impl blocks and traits always have a body
 		fmt.Fprintln(w, " {")
 		for _, child := range class.Children {
@@ -186,7 +192,7 @@ func (f *RustFormatter) formatStruct(w io.Writer, class *ir.DistilledClass, inde
 					f.formatField(w, n, indentStr+"    ")
 				}
 			case *ir.DistilledFunction:
-				f.formatFunction(w, n, indentStr+"    ")
+				f.formatFunction(w, n, indentStr+"    ", !traitMembers)
 			case *ir.DistilledComment:
 				f.formatComment(w, n, indentStr+"    ")
 			}
@@ -203,10 +209,16 @@ func (f *RustFormatter) formatStruct(w io.Writer, class *ir.DistilledClass, inde
 						if strings.HasPrefix(field.Type.Name, "(") {
 							// Tuple variant
 							fmt.Fprint(w, field.Type.Name)
+						} else if strings.HasPrefix(field.Type.Name, "{") {
+							// Struct variant: the parser keeps its fields as written
+							fmt.Fprintf(w, " %s", field.Type.Name)
 						} else if field.Type.Name == "struct" {
 							// Struct variant
 							fmt.Fprintf(w, " { /* fields */ }")
 						}
+					}
+					if field.DefaultValue != "" {
+						fmt.Fprintf(w, " = %s", field.DefaultValue)
 					}
 					fmt.Fprintln(w, ",")
 				}
@@ -225,7 +237,7 @@ func (f *RustFormatter) formatStruct(w io.Writer, class *ir.DistilledClass, inde
 				case *ir.DistilledField:
 					f.formatField(w, n, indentStr+"    ")
 				case *ir.DistilledFunction:
-					f.formatFunction(w, n, indentStr+"    ")
+					f.formatFunction(w, n, indentStr+"    ", true)
 				case *ir.DistilledComment:
 					f.formatComment(w, n, indentStr+"    ")
 				}
@@ -360,7 +372,9 @@ func (f *RustFormatter) formatTrait(w io.Writer, trait *ir.DistilledInterface, i
 	return nil
 }
 
-func (f *RustFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, indent string) error {
+// formatFunction writes fn. withVisibility false leaves out the visibility
+// keyword, as for the members of a trait or a trait impl.
+func (f *RustFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, indent string, withVisibility bool) error {
 	// Check for async
 	isAsync := false
 	isTrait := false
@@ -374,7 +388,7 @@ func (f *RustFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, in
 
 	// Get visibility keyword - trait methods don't use pub
 	visKeyword := ""
-	if !isTrait {
+	if withVisibility && !isTrait {
 		visKeyword = f.getRustVisibilityKeyword(fn.Visibility)
 	}
 
@@ -589,9 +603,9 @@ func (f *RustFormatter) formatField(w io.Writer, field *ir.DistilledField, inden
 		}
 	} else if isConst {
 		if visKeyword != "" {
-			fmt.Fprintf(w, "\n%s%s const %s: %s", indent, visKeyword, strings.ToUpper(field.Name), typeName)
+			fmt.Fprintf(w, "\n%s%s const %s: %s", indent, visKeyword, field.Name, typeName)
 		} else {
-			fmt.Fprintf(w, "\n%sconst %s: %s", indent, strings.ToUpper(field.Name), typeName)
+			fmt.Fprintf(w, "\n%sconst %s: %s", indent, field.Name, typeName)
 		}
 	} else if isStatic {
 		if visKeyword != "" {

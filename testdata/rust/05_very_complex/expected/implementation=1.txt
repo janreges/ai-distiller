@@ -26,6 +26,16 @@ pub struct ServerConfig {
 }
 
 impl Configurable for ServerConfig {
+
+    fn from_source<S: DataSource>(source: &S) -> Self {
+        // In a real macro, this would read from the source and parse.
+        let _reader = source.get_reader();
+        ServerConfig {
+            host: "localhost".to_string(),
+            port: 8080,
+            internal_key: None,
+        }
+    }
 }
 // A function with a Higher-Rank Trait Bound (HRTB).
 // The `F` closure must work for *any* lifetime `'a`.
@@ -63,6 +73,18 @@ impl FixedArray<T, N> {
 }
 
 impl AdvancedContainer<N> for FixedArray<T, N> {
+
+    fn get_items<'a>(&'a self) -> Self::Iterator<'a> {
+        self.data.iter().filter_map(|x| x.as_ref())
+    }
+
+    fn process_batch<'a, F>(&'a self, f: F) -> [Option<Self::Item<'a>>; N] where F: Fn(usize) -> Option<Self::Item<'a>> {
+        let mut result: [Option<Self::Item<'a>>; N] = [None; N];
+        for i in 0..N {
+            result[i] = f(i);
+        }
+        result
+    }
 }
 // Advanced async trait with GATs
 

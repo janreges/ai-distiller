@@ -56,6 +56,11 @@ pub trait AsyncProcessor {
 // Implementation for the analysis service
 
 impl AsyncProcessor for AnalysisService {
+
+    async fn process_async(&self, item: Self::Item) -> Result<String, Self::Error> {
+        self.validate_code(&item).await?;
+        Ok(format!("Processed: {}", item))
+    }
 }
 // Union type for advanced FFI
 

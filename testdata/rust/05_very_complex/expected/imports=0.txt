@@ -26,6 +26,8 @@ pub struct ServerConfig {
 }
 
 impl Configurable for ServerConfig {
+
+    fn from_source<S: DataSource>(source: &S) -> Self
 }
 // A function with a Higher-Rank Trait Bound (HRTB).
 // The `F` closure must work for *any* lifetime `'a`.
@@ -52,6 +54,10 @@ impl FixedArray<T, N> {
 }
 
 impl AdvancedContainer<N> for FixedArray<T, N> {
+
+    fn get_items<'a>(&'a self) -> Self::Iterator<'a>
+
+    fn process_batch<'a, F>(&'a self, f: F) -> [Option<Self::Item<'a>>; N] where F: Fn(usize) -> Option<Self::Item<'a>>
 }
 // Advanced async trait with GATs
 

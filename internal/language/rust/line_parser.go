@@ -15,11 +15,12 @@ type LineParser struct {
 	lines    []string
 
 	// Parser state
-	currentLine   int
-	insideComment bool
-	insideImpl    bool
-	currentClass  *ir.DistilledClass
-	currentIndent int
+	currentLine     int
+	insideComment   bool
+	insideImpl      bool
+	insideTraitImpl bool // the impl block being parsed is "impl Trait for Type"
+	currentClass    *ir.DistilledClass
+	currentIndent   int
 }
 
 var (
@@ -38,7 +39,7 @@ var (
 	staticRe      = regexp.MustCompile(`^\s*((?:pub(?:\([^)]+\))?\s+)?)static\s+(?:(mut)\s+)?(\w+):\s*([^=]+)(?:\s*=\s*(.+))?;`)
 	typeRe        = regexp.MustCompile(`^\s*((?:pub(?:\([^)]+\))?\s+)?)type\s+(\w+)(?:<[^>]+>)?\s*=\s*(.+);`)
 	fieldRe       = regexp.MustCompile(`^\s*((?:pub(?:\([^)]+\))?\s+)?)(\w+):\s*(.+),?$`)
-	enumVariantRe = regexp.MustCompile(`^\s*(\w+)(?:\(([^)]+)\)|\{[^}]+\})?,?$`)
+	variantNameRe = regexp.MustCompile(`^[A-Za-z_]\w*`)
 )
 
 // NewLineParser creates a new line-based parser
@@ -232,6 +233,14 @@ func (p *LineParser) parseStruct(file *ir.DistilledFile, matches []string) {
 	p.currentLine++
 
 	// Check for struct body
+	if members, ok := oneLineMembers(p.lines[p.currentLine-1]); ok {
+		for _, member := range members {
+			p.addStructField(strct, member, strct.Location.StartLine)
+		}
+		strct.Location.EndLine = strct.Location.StartLine
+		file.Children = append(file.Children, strct)
+		return
+	}
 	if p.currentLine < len(p.lines) {
 		line := strings.TrimSpace(p.lines[p.currentLine])
 		if line == "{" || strings.HasSuffix(strings.TrimSpace(p.lines[p.currentLine-1]), "{") {
@@ -270,6 +279,14 @@ func (p *LineParser) parseEnum(file *ir.DistilledFile, matches []string) {
 	p.currentLine++
 
 	// Parse enum variants
+	if body := oneLineBody(p.lines[p.currentLine-1]); body != "" {
+		for _, member := range splitVariants(body[1 : len(body)-1]) {
+			p.addEnumVariant(enum, member, enum.Location.StartLine)
+		}
+		enum.Location.EndLine = enum.Location.StartLine
+		file.Children = append(file.Children, enum)
+		return
+	}
 	if p.currentLine < len(p.lines) {
 		line := strings.TrimSpace(p.lines[p.currentLine])
 		if line == "{" || strings.HasSuffix(strings.TrimSpace(p.lines[p.currentLine-1]), "{") {
@@ -360,6 +377,7 @@ func (p *LineParser) parseImpl(file *ir.DistilledFile, matches []string) {
 
 	p.currentLine++
 	p.insideImpl = true
+	p.insideTraitImpl = trait != ""
 	p.currentClass = impl
 
 	// Parse impl body
@@ -375,6 +393,7 @@ func (p *LineParser) parseImpl(file *ir.DistilledFile, matches []string) {
 	}
 
 	p.insideImpl = false
+	p.insideTraitImpl = false
 	p.currentClass = nil
 	file.Children = append(file.Children, impl)
 }
@@ -382,6 +401,11 @@ func (p *LineParser) parseImpl(file *ir.DistilledFile, matches []string) {
 // parseFunction parses function declarations
 func (p *LineParser) parseFunction(file *ir.DistilledFile, parent ir.DistilledNode, matches []string) {
 	visibility := p.parseVisibility(matches[1])
+	if strings.TrimSpace(matches[1]) == "" && p.insideTraitImpl && parent == p.currentClass {
+		// A method of "impl Trait for Type" takes no visibility keyword; it
+		// is as visible as the trait it implements.
+		visibility = ir.VisibilityPublic
+	}
 	modifiers := p.parseFunctionModifiers(matches[2])
 	name := matches[3]
 	params := matches[4]
@@ -458,39 +482,7 @@ func (p *LineParser) parseFunction(file *ir.DistilledFile, parent ir.DistilledNo
 	}
 
 	p.currentLine++
-
-	// Parse function body. It opens and closes on the line before
-	// p.currentLine (the signature or the last where-clause line), opens at
-	// the end of that line, or opens on a line of its own.
-	if body := oneLineBody(p.lines[p.currentLine-1]); body != "" {
-		fn.Implementation = body
-		fn.Location.EndLine = p.currentLine
-	} else if p.currentLine < len(p.lines) {
-		open := -1
-		if strings.HasSuffix(strings.TrimSpace(p.lines[p.currentLine-1]), "{") {
-			open = p.currentLine - 1
-		} else if strings.TrimSpace(p.lines[p.currentLine]) == "{" {
-			open = p.currentLine
-		}
-
-		if open >= 0 {
-			p.currentLine = open
-			p.skipBlock() // stops on the line holding the closing brace
-			closing := min(p.currentLine, len(p.lines)-1)
-			p.currentLine++ // Move past the closing brace
-			fn.Location.EndLine = p.currentLine
-
-			// The body starts at the opening brace, so the signature is not
-			// repeated; the lines after it are kept verbatim.
-			first := p.lines[open]
-			implLines := []string{first[strings.LastIndex(first, "{"):]}
-			implLines = append(implLines, p.lines[open+1:closing+1]...)
-			fn.Implementation = strings.Join(implLines, "\n")
-		} else {
-			// No body (e.g., trait method declaration)
-			fn.Location.EndLine = p.currentLine
-		}
-	}
+	p.parseFunctionBody(fn)
 
 	if parent != nil {
 		if class, ok := parent.(*ir.DistilledClass); ok {
@@ -499,6 +491,46 @@ func (p *LineParser) parseFunction(file *ir.DistilledFile, parent ir.DistilledNo
 	} else {
 		file.Children = append(file.Children, fn)
 	}
+}
+
+// parseFunctionBody stores the body of fn, whose signature (with any where
+// clause) ends on the line before p.currentLine, and moves p.currentLine past
+// it. The body opens and closes on that last signature line, opens at the end
+// of it, or opens on a line of its own; with none of these fn has no body (a
+// trait method declaration).
+func (p *LineParser) parseFunctionBody(fn *ir.DistilledFunction) {
+	if body := oneLineBody(p.lines[p.currentLine-1]); body != "" {
+		fn.Implementation = body
+		fn.Location.EndLine = p.currentLine
+		return
+	}
+	if p.currentLine >= len(p.lines) {
+		return
+	}
+
+	open := -1
+	if strings.HasSuffix(strings.TrimSpace(p.lines[p.currentLine-1]), "{") {
+		open = p.currentLine - 1
+	} else if strings.TrimSpace(p.lines[p.currentLine]) == "{" {
+		open = p.currentLine
+	}
+	if open < 0 {
+		fn.Location.EndLine = p.currentLine
+		return
+	}
+
+	p.currentLine = open
+	p.skipBlock() // stops on the line holding the closing brace
+	closing := min(p.currentLine, len(p.lines)-1)
+	p.currentLine++ // Move past the closing brace
+	fn.Location.EndLine = p.currentLine
+
+	// The body starts at the opening brace, so the signature is not
+	// repeated; the lines after it are kept verbatim.
+	first := p.lines[open]
+	implLines := []string{first[strings.LastIndex(first, "{"):]}
+	implLines = append(implLines, p.lines[open+1:closing+1]...)
+	fn.Implementation = strings.Join(implLines, "\n")
 }
 
 // parseConst parses const declarations
@@ -596,8 +628,9 @@ func (p *LineParser) parseType(file *ir.DistilledFile, parent ir.DistilledNode, 
 	p.currentLine++
 }
 
-// parseBlock parses a block and returns the end line
-// TODO: This uses simple brace counting which can be fooled by braces in strings/comments
+// parseBlock parses a block and returns the end line. Braces are counted with
+// braceDelta; block comments and string literals that span lines can still
+// fool it.
 func (p *LineParser) parseBlock(file *ir.DistilledFile, parent ir.DistilledNode) int {
 	braceCount := 1
 
@@ -636,7 +669,7 @@ func (p *LineParser) parseBlock(file *ir.DistilledFile, parent ir.DistilledNode)
 		}
 
 		// Count braces AFTER trying to parse constructs
-		braceCount += strings.Count(line, "{") - strings.Count(line, "}")
+		braceCount += braceDelta(line)
 
 		if braceCount == 0 {
 			break
@@ -663,28 +696,78 @@ func (p *LineParser) parseStructFields(parent *ir.DistilledClass) {
 			break
 		}
 
-		if matches := fieldRe.FindStringSubmatch(line); matches != nil {
-			visibility := p.parseVisibility(matches[1])
-			name := matches[2]
-			typeStr := strings.TrimSpace(strings.TrimSuffix(matches[3], ","))
-
-			field := &ir.DistilledField{
-				BaseNode: ir.BaseNode{
-					Location: ir.Location{
-						StartLine: p.currentLine + 1,
-						EndLine:   p.currentLine + 1,
-					},
-				},
-				Name:       name,
-				Visibility: visibility,
-				Type:       &ir.TypeRef{Name: typeStr},
-			}
-
-			parent.Children = append(parent.Children, field)
-		}
-
+		p.addStructField(parent, line, p.currentLine+1)
 		p.currentLine++
 	}
+}
+
+// addStructField adds the field declared by text ("pub name: Type,") on
+// source line lineNo to parent; text that declares no field is ignored.
+func (p *LineParser) addStructField(parent *ir.DistilledClass, text string, lineNo int) {
+	matches := fieldRe.FindStringSubmatch(text)
+	if matches == nil {
+		return
+	}
+	parent.Children = append(parent.Children, &ir.DistilledField{
+		BaseNode: ir.BaseNode{
+			Location: ir.Location{StartLine: lineNo, EndLine: lineNo},
+		},
+		Name:       matches[2],
+		Visibility: p.parseVisibility(matches[1]),
+		Type:       &ir.TypeRef{Name: strings.TrimSpace(strings.TrimSuffix(matches[3], ","))},
+	})
+}
+
+// oneLineMembers returns the trimmed, comma-separated members between the
+// braces of a declaration that opens and closes on line, such as
+// "pub struct P { pub x: i32, y: u8 }", and whether line holds such a brace
+// pair.
+func oneLineMembers(line string) ([]string, bool) {
+	body := oneLineBody(line)
+	if body == "" {
+		return nil, false
+	}
+	var members []string
+	for _, member := range splitTopLevel(body[1:len(body)-1], ',') {
+		if member = strings.TrimSpace(member); member != "" {
+			members = append(members, member)
+		}
+	}
+	return members, true
+}
+
+// splitTopLevel splits s on sep where sep is outside <>, (), [] and {}. The
+// '>' of an arrow ("->" in a fn type) closes nothing.
+func splitTopLevel(s string, sep byte) []string {
+	return splitOutside(s, sep, true)
+}
+
+// splitVariants splits an enum body on the commas outside (), [] and {}.
+// Unlike splitTopLevel it ignores '<' and '>': a variant has no generics
+// outside its payload, while a discriminant may hold a shift ("1 << 3").
+func splitVariants(s string) []string {
+	return splitOutside(s, ',', false)
+}
+
+// splitOutside splits s on sep where sep is outside (), [] and {}, and also
+// outside <> when angles is set.
+func splitOutside(s string, sep byte, angles bool) []string {
+	var parts []string
+	depth, start := 0, 0
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; {
+		case c == '(' || c == '[' || c == '{' || angles && c == '<':
+			depth++
+		case angles && c == '>' && i > 0 && s[i-1] == '-':
+			// the arrow of a fn type
+		case c == ')' || c == ']' || c == '}' || angles && c == '>':
+			depth--
+		case c == sep && depth == 0:
+			parts = append(parts, s[start:i])
+			start = i + 1
+		}
+	}
+	return append(parts, s[start:])
 }
 
 // parseTupleFields parses tuple struct fields
@@ -717,40 +800,141 @@ func (p *LineParser) parseTupleFields(parent *ir.DistilledClass, line string) {
 	p.currentLine++
 }
 
-// parseEnumVariants parses enum variants
+// parseEnumVariants parses the variants of a multi-line enum body, from the
+// line after the opening brace through the line holding the closing brace.
+// The body is split on top-level commas, so a variant may span lines (a
+// struct variant, a long payload or discriminant).
 func (p *LineParser) parseEnumVariants(parent *ir.DistilledClass) {
-	for p.currentLine < len(p.lines) {
-		line := p.lines[p.currentLine]
-		trimmed := strings.TrimSpace(line)
-
-		if trimmed == "}" {
-			p.currentLine++
-			break
-		}
-
-		if matches := enumVariantRe.FindStringSubmatch(line); matches != nil {
-			name := matches[1]
-			variant := &ir.DistilledField{
-				BaseNode: ir.BaseNode{
-					Location: ir.Location{
-						StartLine: p.currentLine + 1,
-						EndLine:   p.currentLine + 1,
-					},
-				},
-				Name:       name,
-				Visibility: ir.VisibilityPublic,
+	var body strings.Builder
+	var lineStarts []int // offset in body of each source line, from firstLine
+	firstLine := p.currentLine
+	depth := 1
+	for p.currentLine < len(p.lines) && depth > 0 {
+		code := lineCode(p.lines[p.currentLine])
+		end := len(code)
+		codeBraces(code, func(i int, open bool) bool {
+			if open {
+				depth++
+			} else if depth--; depth == 0 {
+				end = i
+				return false
 			}
-
-			// Handle tuple or struct variants
-			if matches[2] != "" {
-				variant.Type = &ir.TypeRef{Name: fmt.Sprintf("(%s)", matches[2])}
-			}
-
-			parent.Children = append(parent.Children, variant)
-		}
-
+			return true
+		})
+		lineStarts = append(lineStarts, body.Len())
+		body.WriteString(code[:end])
+		body.WriteByte('\n')
 		p.currentLine++
 	}
+
+	offset := 0
+	for _, member := range splitVariants(body.String()) {
+		start := offset + skipVariantPrefix(member)
+		line := firstLine
+		for i, lineStart := range lineStarts {
+			if lineStart <= start {
+				line = firstLine + i
+			}
+		}
+		p.addEnumVariant(parent, member, line+1)
+		offset += len(member) + 1
+	}
+}
+
+// addEnumVariant adds the variant declared by text on source line lineNo to
+// parent: its name, its payload as written ("(T, U)" or "{ x: T }", with runs
+// of white space collapsed) as the type, and its discriminant ("= 1") as the
+// default value. Leading attributes and comments are skipped; text that
+// declares no variant is ignored.
+func (p *LineParser) addEnumVariant(parent *ir.DistilledClass, text string, lineNo int) {
+	text = strings.TrimSpace(text[skipVariantPrefix(text):])
+	name := variantNameRe.FindString(text)
+	if name == "" {
+		return
+	}
+	variant := &ir.DistilledField{
+		BaseNode: ir.BaseNode{
+			Location: ir.Location{StartLine: lineNo, EndLine: lineNo},
+		},
+		Name:       name,
+		Visibility: ir.VisibilityPublic,
+	}
+
+	rest := strings.TrimSpace(text[len(name):])
+	if strings.HasPrefix(rest, "(") || strings.HasPrefix(rest, "{") {
+		end := groupEnd(rest)
+		variant.Type = &ir.TypeRef{Name: strings.Join(strings.Fields(rest[:end]), " ")}
+		rest = strings.TrimSpace(rest[end:])
+	}
+	if value, ok := strings.CutPrefix(rest, "="); ok {
+		variant.DefaultValue = strings.Join(strings.Fields(value), " ")
+	}
+
+	parent.Children = append(parent.Children, variant)
+}
+
+// skipVariantPrefix returns the offset in s of the first character after the
+// white space, #[...] attributes and /* */ comments that precede a variant.
+func skipVariantPrefix(s string) int {
+	i := 0
+	for {
+		for i < len(s) && strings.IndexByte(" \t\r\n", s[i]) >= 0 {
+			i++
+		}
+		switch {
+		case strings.HasPrefix(s[i:], "#["):
+			i += groupEnd(s[i+1:]) + 1
+		case strings.HasPrefix(s[i:], "/*"):
+			if end := strings.Index(s[i+2:], "*/"); end >= 0 {
+				i += 2 + end + 2
+			} else {
+				return len(s)
+			}
+		default:
+			return i
+		}
+	}
+}
+
+// groupEnd returns the offset just past the bracket that closes the (), []
+// or {} group opening s, or len(s) when the group does not close.
+func groupEnd(s string) int {
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '(', '[', '{':
+			depth++
+		case ')', ']', '}':
+			if depth--; depth == 0 {
+				return i + 1
+			}
+		}
+	}
+	return len(s)
+}
+
+// lineCode returns line without its trailing // comment. A "//" inside a
+// string or char literal starts no comment.
+func lineCode(line string) string {
+	inString := false
+	for i := 0; i < len(line); i++ {
+		c := line[i]
+		switch {
+		case inString:
+			if c == '\\' {
+				i++ // skip the escaped character
+			} else if c == '"' {
+				inString = false
+			}
+		case c == '"':
+			inString = true
+		case c == '\'':
+			i += charLiteralLen(line[i:]) - 1
+		case c == '/' && i+1 < len(line) && line[i+1] == '/':
+			return line[:i]
+		}
+	}
+	return line
 }
 
 // parseLineComment parses line comments
@@ -1022,9 +1206,10 @@ func braceDelta(line string) int {
 	return delta
 }
 
-// oneLineBody returns the function body that opens and closes on line, from
-// its first code '{' to the matching '}', or "" when line holds no complete
-// body. Text after the closing brace (a comment) is not part of the body.
+// oneLineBody returns the function body (or struct/enum member list) that
+// opens and closes on line, from its first code '{' to the matching '}', or ""
+// when line holds no complete body. Text after the closing brace (a comment)
+// is not part of the body.
 func oneLineBody(line string) string {
 	start, depth, body := -1, 0, ""
 	codeBraces(line, func(i int, open bool) bool {
@@ -1201,22 +1386,12 @@ func (p *LineParser) parseTraitBlock(file *ir.DistilledFile, parent ir.Distilled
 					fn.Returns = &ir.TypeRef{Name: returnType}
 				}
 
-				// Check if method has default implementation
+				// A default method keeps its body and is not abstract
 				p.currentLine++
-				if p.currentLine < len(p.lines) {
-					nextLine := strings.TrimSpace(p.lines[p.currentLine])
-					if nextLine == "{" || strings.HasSuffix(trimmed, "{") {
-						// Has implementation, remove abstract modifier
-						fn.Modifiers = []ir.Modifier{}
-						// Skip the implementation block
-						if nextLine == "{" {
-							p.currentLine++
-						}
-						p.skipBlock()
-					}
+				p.parseFunctionBody(fn)
+				if fn.Implementation != "" {
+					fn.Modifiers = []ir.Modifier{}
 				}
-
-				fn.Location.EndLine = p.currentLine + 1
 
 				if class, ok := parent.(*ir.DistilledClass); ok {
 					class.Children = append(class.Children, fn)
@@ -1226,7 +1401,7 @@ func (p *LineParser) parseTraitBlock(file *ir.DistilledFile, parent ir.Distilled
 		}
 
 		// Count braces AFTER trying to parse constructs
-		braceCount += strings.Count(line, "{") - strings.Count(line, "}")
+		braceCount += braceDelta(line)
 
 		if braceCount == 0 {
 			break

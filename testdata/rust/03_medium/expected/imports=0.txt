@@ -14,7 +14,7 @@ pub trait DataSource {
 
     fn get_content(&self) -> Result<Self::Content, AnalysisError>;
 
-    pub fn content_slice<'a>(&'a self) -> Option<&'a [u8]> where Self::Content: 'a
+    fn content_slice<'a>(&'a self) -> Option<&'a [u8]> where Self::Content: 'a
 }
 // A generic container for an analysis result.
 // It's generic over the type `T` which must implement `Display`.
@@ -33,9 +33,13 @@ pub fn analyze<'a, S>(source: &'a S) -> Result<AnalysisResult<String>, AnalysisE
 // Advanced generic function with multiple lifetime parameters
 
 impl DataSource for InMemorySource {
+
+    fn get_content(&self) -> Result<Self::Content, AnalysisError>
 }
 
 impl Debug for InMemorySource {
+
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
 }
 // Generic trait with lifetime bounds
 
@@ -47,5 +51,7 @@ pub trait Processor<'a, T> {
 pub struct StringProcessor;
 
 impl Processor<'a, String> for StringProcessor {
+
+    fn process(&self, input: &'a String) -> Self::Output
 }
 </file>

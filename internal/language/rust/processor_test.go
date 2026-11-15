@@ -270,6 +270,49 @@ func findRustFn(t *testing.T, file *ir.DistilledFile, name string) *ir.Distilled
 	return nil
 }
 
+// findRustClass returns the top-level class (struct, enum, trait, impl or
+// module) called name. The test fails when there is none.
+func findRustClass(t *testing.T, file *ir.DistilledFile, name string) *ir.DistilledClass {
+	t.Helper()
+	for _, node := range file.Children {
+		if class, ok := node.(*ir.DistilledClass); ok && class.Name == name {
+			return class
+		}
+	}
+	require.Failf(t, "class not found", "no class %q in the parsed file", name)
+	return nil
+}
+
+// findRustFnIn returns the function called name among the members of the
+// top-level class called container. The test fails when there is none.
+func findRustFnIn(t *testing.T, file *ir.DistilledFile, container, name string) *ir.DistilledFunction {
+	t.Helper()
+	for _, child := range findRustClass(t, file, container).Children {
+		if fn, ok := child.(*ir.DistilledFunction); ok && fn.Name == name {
+			return fn
+		}
+	}
+	require.Failf(t, "function not found", "no function %q in %q", name, container)
+	return nil
+}
+
+// childNames returns the names of the fields, functions and classes among
+// class's members, in order; comments are skipped.
+func childNames(class *ir.DistilledClass) []string {
+	names := []string{}
+	for _, child := range class.Children {
+		switch n := child.(type) {
+		case *ir.DistilledField:
+			names = append(names, n.Name)
+		case *ir.DistilledFunction:
+			names = append(names, n.Name)
+		case *ir.DistilledClass:
+			names = append(names, n.Name)
+		}
+	}
+	return names
+}
+
 func TestRust_ImplementationStartsAtBrace(t *testing.T) {
 	file := parseRust(t, "pub struct P {\n    pub x: i32,\n}\n\nimpl P {\n    pub fn get(&self) -> i32 {\n        self.x\n    }\n}\n")
 	get := findRustFn(t, file, "get")
@@ -322,4 +365,128 @@ func TestRust_OneLineBodyOpenOnly(t *testing.T) {
 	assert.Equal(t, "", oneLineBody("pub fn f() { let x = 1;"))
 	assert.Equal(t, "", oneLineBody("pub fn f() -> i32;"))
 	assert.Equal(t, "{ x }", oneLineBody("pub fn f(x: i32) -> i32 { x } // trailing"))
+}
+
+func TestRust_TraitImplMethodsArePublic(t *testing.T) {
+	file := parseRust(t, "pub struct P;\n\npub trait Shape {\n    fn area(&self) -> i32;\n}\n\nimpl Shape for P {\n    fn area(&self) -> i32 {\n        1\n    }\n}\n\nimpl P {\n    fn helper(&self) {}\n}\n")
+	assert.Equal(t, ir.VisibilityPublic, findRustFnIn(t, file, "impl Shape for P", "area").Visibility)
+	assert.Equal(t, ir.VisibilityPrivate, findRustFnIn(t, file, "impl P", "helper").Visibility)
+}
+
+func TestRust_OneLineEnumAndStruct(t *testing.T) {
+	file := parseRust(t, "pub enum E { A, B(i32), C { x: i32 } }\npub struct P { pub x: i32, y: u8 }\n")
+	assert.Equal(t, []string{"A", "B", "C"}, childNames(findRustClass(t, file, "E")))
+	p := findRustClass(t, file, "P")
+	require.Equal(t, []string{"x", "y"}, childNames(p))
+	assert.Equal(t, ir.VisibilityPublic, p.Children[0].(*ir.DistilledField).Visibility)
+	assert.Equal(t, ir.VisibilityPrivate, p.Children[1].(*ir.DistilledField).Visibility)
+}
+
+func TestRust_OneLineStructWithGenerics(t *testing.T) {
+	p := findRustClass(t, parseRust(t, "pub struct P<T> { pub x: HashMap<String, Vec<T>>, pub y: (i32, i32) }\n"), "P<T>")
+	assert.Equal(t, []string{"x", "y"}, childNames(p))
+}
+
+func TestSplitTopLevel(t *testing.T) {
+	assert.Equal(t, []string{"a: Map<K, V>", " b: (i32, i32)", " c: [u8; 2]"}, splitTopLevel("a: Map<K, V>, b: (i32, i32), c: [u8; 2]", ','))
+	// The '>' of a fn-type arrow closes no bracket.
+	assert.Equal(t, []string{"f: Box<dyn Fn(i32) -> i32>", " g: u8"}, splitTopLevel("f: Box<dyn Fn(i32) -> i32>, g: u8", ','))
+}
+
+func TestRust_TraitDefaultMethodKeepsLaterMembers(t *testing.T) {
+	src := "pub trait T {\n" +
+		"    fn required(&self) -> i32;\n" +
+		"    fn provided(&self) -> i32 {\n" +
+		"        if self.required() > 0 {\n" +
+		"            let open = '{';\n" +
+		"            let close = \"}\";\n" +
+		"        }\n" +
+		"        1\n" +
+		"    }\n" +
+		"    fn quick(&self) -> i32 { 2 }\n" +
+		"    type Item;\n" +
+		"    fn after(&self);\n" +
+		"}\n\n" +
+		"pub fn tail() {}\n"
+	file := parseRust(t, src)
+	assert.Equal(t, []string{"required", "provided", "quick", "Item", "after"}, childNames(findRustClass(t, file, "T")))
+
+	provided := findRustFnIn(t, file, "T", "provided")
+	assert.Equal(t, "{\n        if self.required() > 0 {\n            let open = '{';\n            let close = \"}\";\n        }\n        1\n    }", provided.Implementation)
+	assert.NotContains(t, provided.Modifiers, ir.ModifierAbstract)
+	assert.Equal(t, "{ 2 }", findRustFnIn(t, file, "T", "quick").Implementation)
+	assert.NotContains(t, findRustFnIn(t, file, "T", "quick").Modifiers, ir.ModifierAbstract)
+
+	required := findRustFnIn(t, file, "T", "required")
+	assert.Empty(t, required.Implementation)
+	assert.Contains(t, required.Modifiers, ir.ModifierAbstract)
+	assert.Contains(t, findRustFnIn(t, file, "T", "after").Modifiers, ir.ModifierAbstract)
+
+	assert.Equal(t, "{}", findRustFn(t, file, "tail").Implementation)
+}
+
+func TestRust_BlockBracesInLiterals(t *testing.T) {
+	// Lines the block parsers do not recognise as members are brace-counted;
+	// a brace inside a string or char literal there must not end the block.
+	trait := "pub trait T {\n    const OPEN: &'static str = \"{\";\n    fn after(&self);\n}\n"
+	assert.Equal(t, []string{"after"}, childNames(findRustClass(t, parseRust(t, trait), "T")))
+
+	impl := "pub struct S;\n\nimpl S {\n" +
+		"    pub fn long(\n        &self,\n    ) -> &'static str {\n        \"}\"\n    }\n" +
+		"    pub fn after(&self) {}\n}\n"
+	assert.Equal(t, []string{"after"}, childNames(findRustClass(t, parseRust(t, impl), "impl S")))
+}
+
+// variant returns the enum variant called name among class's fields. The test
+// fails when there is none.
+func variant(t *testing.T, class *ir.DistilledClass, name string) *ir.DistilledField {
+	t.Helper()
+	for _, child := range class.Children {
+		if f, ok := child.(*ir.DistilledField); ok && f.Name == name {
+			return f
+		}
+	}
+	require.Failf(t, "variant not found", "no variant %q in %q", name, class.Name)
+	return nil
+}
+
+func TestRust_EnumDiscriminantsAndPayloads(t *testing.T) {
+	t.Run("one line", func(t *testing.T) {
+		file := parseRust(t, "pub enum Code { Ok = 0, Err = 1 << 2, Big = -1 }\npub enum P { V(Vec<(i32, i32)>), S { a: (u8, u8) }, U }\n")
+		code := findRustClass(t, file, "Code")
+		assert.Equal(t, []string{"Ok", "Err", "Big"}, childNames(code))
+		assert.Equal(t, "0", variant(t, code, "Ok").DefaultValue)
+		assert.Equal(t, "1 << 2", variant(t, code, "Err").DefaultValue)
+		assert.Equal(t, "-1", variant(t, code, "Big").DefaultValue)
+		p := findRustClass(t, file, "P")
+		assert.Equal(t, []string{"V", "S", "U"}, childNames(p))
+		assert.Equal(t, "(Vec<(i32, i32)>)", variant(t, p, "V").Type.Name)
+		assert.Equal(t, "{ a: (u8, u8) }", variant(t, p, "S").Type.Name)
+		assert.Nil(t, variant(t, p, "U").Type)
+	})
+	t.Run("multi line", func(t *testing.T) {
+		src := "pub enum M {\n" +
+			"    /// The first one.\n" +
+			"    A = 1, // trailing comment\n" +
+			"    #[serde(rename = \"b, c\")]\n" +
+			"    B(Vec<(i32, i32)>),\n" +
+			"    C {\n" +
+			"        x: i32,\n" +
+			"        y: (u8, u8),\n" +
+			"    },\n" +
+			"    D = 1 << 3,\n" +
+			"    E\n" +
+			"}\n" +
+			"pub fn after() {}\n"
+		file := parseRust(t, src)
+		m := findRustClass(t, file, "M")
+		assert.Equal(t, []string{"A", "B", "C", "D", "E"}, childNames(m))
+		assert.Equal(t, "1", variant(t, m, "A").DefaultValue)
+		assert.Equal(t, 3, variant(t, m, "A").Location.StartLine)
+		assert.Equal(t, "(Vec<(i32, i32)>)", variant(t, m, "B").Type.Name)
+		assert.Equal(t, 5, variant(t, m, "B").Location.StartLine)
+		assert.Equal(t, "{ x: i32, y: (u8, u8), }", variant(t, m, "C").Type.Name)
+		assert.Equal(t, "1 << 3", variant(t, m, "D").DefaultValue)
+		findRustFn(t, file, "after")
+	})
 }

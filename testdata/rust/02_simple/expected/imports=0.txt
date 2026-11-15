@@ -10,7 +10,7 @@ pub trait Summarizable {
 
     fn summary(&self) -> String;
 
-    pub fn short_summary(&self) -> String
+    fn short_summary(&self) -> String
 }
 
 impl SourceFile {
@@ -23,6 +23,8 @@ impl SourceFile {
 }
 
 impl Summarizable for SourceFile {
+
+    fn summary(&self) -> String
 }
 // Additional trait for file operations
 
@@ -42,5 +44,9 @@ pub enum FileError {
 }
 
 impl FileOperations for SourceFile {
+
+    fn read_content(&self) -> Result<&str, Self::Error>
+
+    fn write_content(&mut self, content: String) -> Result<(), Self::Error>
 }
 </file>

@@ -10,7 +10,14 @@ pub trait Summarizable {
 
     fn summary(&self) -> String;
 
-    pub fn short_summary(&self) -> String
+    fn short_summary(&self) -> String {
+        let full = self.summary();
+        if full.len() > 50 {
+            format!("{}...", &full[..47])
+        } else {
+            full
+        }
+    }
 }
 
 impl SourceFile {
@@ -32,6 +39,14 @@ impl SourceFile {
 }
 
 impl Summarizable for SourceFile {
+
+    fn summary(&self) -> String {
+        let extension = self.get_file_extension().unwrap_or("unknown");
+        format!(
+            "File '{}' ({} lines, type: {})",
+            self.path, self.lines_of_code, extension
+        )
+    }
 }
 // Additional trait for file operations
 
@@ -51,5 +66,19 @@ pub enum FileError {
 }
 
 impl FileOperations for SourceFile {
+
+    fn read_content(&self) -> Result<&str, Self::Error> {
+        if self.is_valid() {
+            Ok(&self.content)
+        } else {
+            Err(FileError::InvalidContent)
+        }
+    }
+
+    fn write_content(&mut self, content: String) -> Result<(), Self::Error> {
+        self.content = content;
+        self.process_internal();
+        Ok(())
+    }
 }
 </file>

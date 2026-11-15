@@ -15,7 +15,7 @@ pub trait DataSource {
 
     fn get_content(&self) -> Result<Self::Content, AnalysisError>;
 
-    pub fn content_slice<'a>(&'a self) -> Option<&'a [u8]> where Self::Content: 'a
+    fn content_slice<'a>(&'a self) -> Option<&'a [u8]> where Self::Content: 'a
 }
 // A generic container for an analysis result.
 // It's generic over the type `T` which must implement `Display`.
