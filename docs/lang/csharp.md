@@ -1,6 +1,6 @@
 # C# Language Support
 
-AI Distiller supports C# codebases through the [tree-sitter-c-sharp](https://github.com/tree-sitter/tree-sitter-c-sharp) grammar, compiled into the `aid` binary. It extracts namespaces, types, methods, properties and fields; the gaps are listed under Known Issues.
+AI Distiller supports C# codebases through the [tree-sitter-c-sharp](https://github.com/tree-sitter/tree-sitter-c-sharp) grammar (v0.23.5), compiled into the `aid` binary. It extracts namespaces, types, methods, properties and fields; the gaps are listed under Known Issues.
 
 ## Overview
 

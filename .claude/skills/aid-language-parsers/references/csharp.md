@@ -5,7 +5,7 @@
 - Wired: `internal/language/csharp/processor.go#Processor.ProcessWithOptions`
   creates `NewTreeSitterProcessor()` per call and runs
   `internal/language/csharp/tree_sitter_processor.go#TreeSitterProcessor.ProcessSource`.
-- Grammar: `github.com/tree-sitter/tree-sitter-c-sharp/bindings/go`, wrapped
+- Grammar: `github.com/tree-sitter/tree-sitter-c-sharp/bindings/go` (official, v0.23.5, ABI 15), wrapped
   with `sitter.NewLanguage`. Tree: `go run ./cmd/ast-dump --lang csharp`.
 - Extensions: `.cs`. The processor registers as `csharp`.
 - Dispatch: `internal/language/csharp/tree_sitter_processor.go#TreeSitterProcessor.processNode`
