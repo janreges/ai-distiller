@@ -6,6 +6,7 @@ import (
 
 	"github.com/janreges/ai-distiller/internal/ir"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewStripper(t *testing.T) {
@@ -518,4 +519,87 @@ func TestExpandSymbols_QualifiedName(t *testing.T) {
 		fn := file.Accept(s).(*ir.DistilledFile).Children[0].(*ir.DistilledFunction)
 		assert.Equal(t, tc.want, fn.Implementation == body, "--expand=%s on %s", tc.pattern, tc.name)
 	}
+}
+
+func TestRemovePublic_RemovesPublicMembers(t *testing.T) {
+	file := &ir.DistilledFile{Children: []ir.DistilledNode{
+		&ir.DistilledFunction{Name: "Top", Visibility: ir.VisibilityPublic},
+		&ir.DistilledFunction{Name: "low", Visibility: ir.VisibilityPrivate},
+	}}
+	got := New(Options{RemovePublic: true}).Visit(file).(*ir.DistilledFile)
+	require.Len(t, got.Children, 1)
+	assert.Equal(t, "low", got.Children[0].(*ir.DistilledFunction).Name)
+}
+
+func TestRemovePublic_KeepsContainersWithSurvivors(t *testing.T) {
+	file := &ir.DistilledFile{Children: []ir.DistilledNode{
+		&ir.DistilledClass{Name: "A", Visibility: ir.VisibilityPublic, Children: []ir.DistilledNode{
+			&ir.DistilledFunction{Name: "pub", Visibility: ir.VisibilityPublic},
+			&ir.DistilledFunction{Name: "priv", Visibility: ir.VisibilityPrivate},
+		}},
+		&ir.DistilledClass{Name: "Empty", Visibility: ir.VisibilityPublic, Children: []ir.DistilledNode{
+			&ir.DistilledFunction{Name: "onlyPub", Visibility: ir.VisibilityPublic},
+		}},
+	}}
+	got := New(Options{RemovePublic: true}).Visit(file).(*ir.DistilledFile)
+	require.Len(t, got.Children, 1)
+	a := got.Children[0].(*ir.DistilledClass)
+	assert.Equal(t, "A", a.Name)
+	require.Len(t, a.Children, 1)
+	assert.Equal(t, "priv", a.Children[0].(*ir.DistilledFunction).Name)
+}
+
+func TestRemovePublic_ContainerKindsAndInputUnchanged(t *testing.T) {
+	mk := func() *ir.DistilledFile {
+		return &ir.DistilledFile{Children: []ir.DistilledNode{
+			&ir.DistilledInterface{Name: "I", Visibility: ir.VisibilityPublic, Children: []ir.DistilledNode{
+				&ir.DistilledFunction{Name: "m", Visibility: ir.VisibilityPublic}}},
+			&ir.DistilledStruct{Name: "S", Visibility: ir.VisibilityPublic, Children: []ir.DistilledNode{
+				&ir.DistilledField{Name: "f", Visibility: ir.VisibilityPublic},
+				&ir.DistilledField{Name: "g", Visibility: ir.VisibilityPrivate}}},
+			&ir.DistilledEnum{Name: "E", Visibility: ir.VisibilityPublic, Children: []ir.DistilledNode{
+				&ir.DistilledField{Name: "V", Visibility: ir.VisibilityPublic}}},
+			&ir.DistilledPackage{Name: "P", Children: []ir.DistilledNode{
+				&ir.DistilledTypeAlias{Name: "T", Visibility: ir.VisibilityPublic}}},
+			&ir.DistilledPackage{Name: "Q", Children: []ir.DistilledNode{
+				&ir.DistilledTypeAlias{Name: "U", Visibility: ir.VisibilityPrivate}}},
+			&ir.DistilledPackage{Name: "clause"},
+		}}
+	}
+	in := mk()
+	got := New(Options{RemovePublic: true}).Visit(in).(*ir.DistilledFile)
+	require.Len(t, got.Children, 3)
+	s := got.Children[0].(*ir.DistilledStruct)
+	require.Len(t, s.Children, 1)
+	assert.Equal(t, "g", s.Children[0].(*ir.DistilledField).Name)
+	assert.Equal(t, "Q", got.Children[1].(*ir.DistilledPackage).Name)
+	assert.Equal(t, "clause", got.Children[2].(*ir.DistilledPackage).Name, "childless package clause is kept")
+	assert.Equal(t, mk(), in, "input IR must stay unchanged")
+}
+
+func TestRemovePublic_CountsAsOption(t *testing.T) {
+	assert.True(t, Options{RemovePublic: true}.HasAnyOption())
+}
+
+func TestRemovePublic_NonPublicContainerKeepsPublicTaggedMembers(t *testing.T) {
+	file := &ir.DistilledFile{Children: []ir.DistilledNode{
+		&ir.DistilledEnum{Name: "Color", Visibility: ir.VisibilityPrivate, Children: []ir.DistilledNode{
+			&ir.DistilledField{Name: "RED", Visibility: ir.VisibilityPublic},
+			&ir.DistilledField{Name: "GREEN", Visibility: ir.VisibilityPublic}}},
+		&ir.DistilledInterface{Name: "Cb", Visibility: ir.VisibilityPackage, Children: []ir.DistilledNode{
+			&ir.DistilledFunction{Name: "call", Visibility: ir.VisibilityPublic}}},
+		&ir.DistilledClass{Name: "Pub", Visibility: ir.VisibilityPublic, Children: []ir.DistilledNode{
+			&ir.DistilledFunction{Name: "gone", Visibility: ir.VisibilityPublic},
+			&ir.DistilledClass{Name: "Inner", Visibility: ir.VisibilityPrivate, Children: []ir.DistilledNode{
+				&ir.DistilledFunction{Name: "kept", Visibility: ir.VisibilityPublic}}},
+			&ir.DistilledFunction{Name: "gone2", Visibility: ir.VisibilityPublic}}},
+	}}
+	got := New(Options{RemovePublic: true}).Visit(file).(*ir.DistilledFile)
+	require.Len(t, got.Children, 3)
+	assert.Len(t, got.Children[0].(*ir.DistilledEnum).Children, 2)
+	assert.Len(t, got.Children[1].(*ir.DistilledInterface).Children, 1)
+	pub := got.Children[2].(*ir.DistilledClass)
+	require.Len(t, pub.Children, 1, "scope flag restored after the non-public inner class")
+	assert.Equal(t, "Inner", pub.Children[0].(*ir.DistilledClass).Name)
+	assert.Len(t, pub.Children[0].(*ir.DistilledClass).Children, 1)
 }

@@ -816,3 +816,24 @@ func TestFieldsMethodsProcessorOptionsMapping(t *testing.T) {
 		assert.False(t, opts.IncludeMethods, "IncludeMethods should be false when methods excluded")
 	})
 }
+func TestPublicZeroSetsRemovePublic(t *testing.T) {
+	resetAllFlags()
+	no, yes := false, true
+	includePublic, includePrivate = &no, &yes
+	assert.True(t, createProcessOptionsFromFlags().RemovePublic)
+
+	resetAllFlags()
+	assert.False(t, createProcessOptionsFromFlags().RemovePublic, "default keeps public members")
+}
+
+func TestIncludeListRemovePublic(t *testing.T) {
+	assert.True(t, processIncludeList("private").RemovePublic)
+	assert.False(t, processIncludeList("public,private").RemovePublic)
+	assert.False(t, processIncludeList("comments").RemovePublic, "no visibility category listed")
+}
+
+func TestExcludeListRemovePublic(t *testing.T) {
+	assert.True(t, processExcludeList("public").RemovePublic)
+	assert.True(t, processExcludeList("public,comments").RemovePublic)
+	assert.False(t, processExcludeList("private").RemovePublic, "public not listed")
+}

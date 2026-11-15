@@ -980,6 +980,7 @@ func createProcessOptionsFromFlags() processor.ProcessOptions {
 	
 	// Store visibility levels for formatter instructions
 	opts.IncludePublic = includePublicVal
+	opts.RemovePublic = !includePublicVal
 	opts.IncludeProtected = includeProtectedVal
 	opts.IncludeInternal = includeInternalVal
 	
@@ -1080,6 +1081,9 @@ func processIncludeList(list string) processor.ProcessOptions {
 		}
 	}
 	
+	// Listing visibility categories without "public" asks for non-public members only
+	opts.RemovePublic = (includeProtected || includeInternal || includePrivate) && !includePublic
+
 	// Apply visibility logic similar to normal flag processing
 	if includePublic && !includeProtected && !includeInternal && !includePrivate {
 		// Only public members
@@ -1116,6 +1120,8 @@ func processExcludeList(list string) processor.ProcessOptions {
 	items := strings.Split(list, ",")
 	for _, item := range items {
 		switch strings.TrimSpace(item) {
+		case "public":
+			opts.RemovePublic = true
 		case "private":
 			opts.RemovePrivateOnly = true
 		case "protected":

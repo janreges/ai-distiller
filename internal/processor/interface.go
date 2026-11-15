@@ -46,6 +46,9 @@ type ProcessOptions struct {
 	// IncludePrivate includes private/internal declarations (legacy - removes both private and protected)
 	IncludePrivate bool
 	
+	// RemovePublic removes public members (set by --public=0)
+	RemovePublic bool
+
 	// RemovePrivateOnly removes only private members (not protected)
 	RemovePrivateOnly bool
 	
@@ -235,6 +238,7 @@ func (p BaseProcessor) CanProcess(filename string) bool {
 // ToStripperOptions converts ProcessOptions to stripper.Options
 func (opts ProcessOptions) ToStripperOptions() stripper.Options {
 	return stripper.Options{
+		RemovePublic:          opts.RemovePublic,
 		RemovePrivate:         !opts.IncludePrivate,
 		RemovePrivateOnly:     opts.RemovePrivateOnly,
 		RemoveProtectedOnly:   opts.RemoveProtectedOnly,

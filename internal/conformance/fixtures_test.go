@@ -36,6 +36,8 @@ func standard(m markers) []check {
 		{Cap: "comment-with-comments", Flags: []string{"--comments=1"}, Contains: []string{"CONF_LINE_COMMENT"}},
 		{Cap: "doc-by-default", Contains: []string{"CONF_DOC_COMMENT"}},
 		{Cap: "doc-off", Flags: []string{"--docstrings=0"}, NotContains: []string{"CONF_DOC_COMMENT"}},
+		{Cap: "public-off", Flags: []string{"--public=0", "--private=1", "--protected=1", "--internal=1"},
+			Contains: []string{m.Private[0]}, NotContains: []string{m.ExpandSym}},
 		{Cap: "stdin-detect", ViaStdin: true, Contains: []string{m.Public[0]}},
 	}
 }
@@ -120,6 +122,9 @@ var fixtures = []fixture{
 	}), check{Cap: "throws-kept", Contains: []string{"confThrows() throws java.io.IOException"}},
 		check{Cap: "body-indent", Flags: []string{"--implementation=1"},
 			Contains: []string{"        String a = \"CONF_BODY_A\";\n        return a;\n"}})},
+	{Lang: "java", File: "java/ConfVisibility.java", Checks: []check{
+		{Cap: "public-off-keeps-private-enum-constants", Flags: []string{"--public=0", "--private=1"},
+			Contains: []string{"package com.example.conf", "CONF_RED", "CONF_GREEN"}, NotContains: []string{"confPublicField"}}}},
 	{Lang: "csharp", File: "csharp/ConfWidget.cs", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "ConfField", "ConfPublic", "ConfOther"},
 		Private:   []string{"ConfPrivate"},

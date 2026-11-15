@@ -9,6 +9,7 @@ import (
 
 // Options configures what to strip from the IR
 type Options struct {
+	RemovePublic          bool  // Removes public/open members; public containers survive only with surviving children
 	RemovePrivate         bool  // Removes both private and protected (legacy)
 	RemovePrivateOnly     bool  // Removes only private members
 	RemoveProtectedOnly   bool  // Removes only protected members
@@ -53,7 +54,7 @@ func (o Options) shouldExpand(name string) bool {
 
 // HasAnyOption returns true if any stripping option is enabled
 func (o Options) HasAnyOption() bool {
-	return o.RemovePrivate || o.RemovePrivateOnly || o.RemoveProtectedOnly || o.RemoveInternalOnly ||
+	return o.RemovePublic || o.RemovePrivate || o.RemovePrivateOnly || o.RemoveProtectedOnly || o.RemoveInternalOnly ||
 		o.RemoveImplementations || o.RemoveComments || o.RemoveImports || 
 		o.RemoveDocstrings || o.RemoveAnnotations || o.RemoveFields || o.RemoveMethods
 }
@@ -68,6 +69,10 @@ type Stripper struct {
 	// support nesting. Safe as instance state: a Stripper is created per file
 	// and the traversal is synchronous.
 	inExpandedScope bool
+
+	// inNonPublicScope is true while traversing the children of a container
+	// that is not public (see removedAsPublicMember). Saved/restored per scope.
+	inNonPublicScope bool
 }
 
 // New creates a new stripper with the given options
@@ -186,12 +191,18 @@ func (s *Stripper) visitPackage(n *ir.DistilledPackage) ir.DistilledNode {
 
 	result.Children = s.removeOrphanedDocstrings(result.Children)
 
+	// A namespace block is dropped once all its members went. A childless
+	// package clause (Go, Java) has nothing to lose and is kept.
+	if len(n.Children) > 0 && s.publicContainerEmptied(ir.VisibilityPublic, result.Children) {
+		return nil
+	}
+
 	return &result
 }
 
 func (s *Stripper) visitFunction(n *ir.DistilledFunction) ir.DistilledNode {
 	// Check if methods should be removed entirely
-	if s.options.RemoveMethods {
+	if s.options.RemoveMethods || s.removedAsPublicMember(n.Visibility) {
 		return nil
 	}
 	
@@ -229,6 +240,7 @@ func (s *Stripper) visitClass(n *ir.DistilledClass) ir.DistilledNode {
 	// Copy every field, then change only what the options require
 	result := *n
 	result.Children = nil
+	defer s.enterContainer(n.Visibility)()
 
 	// Visit children. If this class name matched --expand, keep all of its
 	// methods' implementations.
@@ -245,6 +257,10 @@ func (s *Stripper) visitClass(n *ir.DistilledClass) ir.DistilledNode {
 
 	// Post-process to remove orphaned docstrings
 	result.Children = s.removeOrphanedDocstrings(result.Children)
+
+	if s.publicContainerEmptied(n.Visibility, result.Children) {
+		return nil
+	}
 	
 	// Strip decorators/annotations if requested
 	if s.options.RemoveAnnotations {
@@ -263,6 +279,7 @@ func (s *Stripper) visitInterface(n *ir.DistilledInterface) ir.DistilledNode {
 	// Copy every field, then change only what the options require
 	result := *n
 	result.Children = nil
+	defer s.enterContainer(n.Visibility)()
 	
 	// Visit children
 	for _, child := range n.Children {
@@ -270,7 +287,11 @@ func (s *Stripper) visitInterface(n *ir.DistilledInterface) ir.DistilledNode {
 			result.Children = append(result.Children, visited)
 		}
 	}
-	
+
+	if s.publicContainerEmptied(n.Visibility, result.Children) {
+		return nil
+	}
+
 	return &result
 }
 
@@ -283,6 +304,7 @@ func (s *Stripper) visitStruct(n *ir.DistilledStruct) ir.DistilledNode {
 	// Copy every field, then change only what the options require
 	result := *n
 	result.Children = nil
+	defer s.enterContainer(n.Visibility)()
 
 	// Visit children. If this struct name matched --expand, keep all of its
 	// methods' implementations.
@@ -297,6 +319,10 @@ func (s *Stripper) visitStruct(n *ir.DistilledStruct) ir.DistilledNode {
 	}
 	s.inExpandedScope = prevExpandedScope
 
+	if s.publicContainerEmptied(n.Visibility, result.Children) {
+		return nil
+	}
+
 	return &result
 }
 
@@ -309,6 +335,7 @@ func (s *Stripper) visitEnum(n *ir.DistilledEnum) ir.DistilledNode {
 	// Copy every field, then change only what the options require
 	result := *n
 	result.Children = nil
+	defer s.enterContainer(n.Visibility)()
 	
 	// Visit children
 	for _, child := range n.Children {
@@ -316,13 +343,17 @@ func (s *Stripper) visitEnum(n *ir.DistilledEnum) ir.DistilledNode {
 			result.Children = append(result.Children, visited)
 		}
 	}
-	
+
+	if s.publicContainerEmptied(n.Visibility, result.Children) {
+		return nil
+	}
+
 	return &result
 }
 
 func (s *Stripper) visitField(n *ir.DistilledField) ir.DistilledNode {
 	// Check if fields should be removed entirely
-	if s.options.RemoveFields {
+	if s.options.RemoveFields || s.removedAsPublicMember(n.Visibility) {
 		return nil
 	}
 	
@@ -341,6 +372,9 @@ func (s *Stripper) visitField(n *ir.DistilledField) ir.DistilledNode {
 }
 
 func (s *Stripper) visitTypeAlias(n *ir.DistilledTypeAlias) ir.DistilledNode {
+	if s.removedAsPublicMember(n.Visibility) {
+		return nil
+	}
 	// Check if should remove by visibility
 	if s.shouldRemoveByVisibility(n.Name, n.Visibility) {
 		return nil
@@ -355,6 +389,46 @@ func (s *Stripper) visitChildren(node ir.DistilledNode) ir.DistilledNode {
 	// For unknown node types, just return as-is
 	// In a real implementation, we'd need to handle all node types
 	return node
+}
+
+// removedAsPublicMember reports whether RemovePublic drops a leaf member
+// (function, field, type alias) of this visibility.
+// Members of a non-public type are only as visible as the type (enum
+// constants and interface methods are tagged public), so the rule is off there.
+func (s *Stripper) removedAsPublicMember(visibility ir.Visibility) bool {
+	return s.options.RemovePublic && !s.inNonPublicScope && isPublicVisibility(visibility)
+}
+
+// enterContainer marks the children of a non-public container and returns the
+// function that restores the previous scope.
+func (s *Stripper) enterContainer(visibility ir.Visibility) func() {
+	prev := s.inNonPublicScope
+	if visibility != "" && !isPublicVisibility(visibility) {
+		s.inNonPublicScope = true
+	}
+	return func() { s.inNonPublicScope = prev }
+}
+
+// publicContainerEmptied reports whether a public container (class, interface,
+// struct, enum, package) has to go under RemovePublic: it is public itself and
+// none of its visited children survived. Comments and imports do not count as
+// surviving members.
+func (s *Stripper) publicContainerEmptied(visibility ir.Visibility, visitedChildren []ir.DistilledNode) bool {
+	if !s.options.RemovePublic || !isPublicVisibility(visibility) {
+		return false
+	}
+	for _, child := range visitedChildren {
+		switch child.(type) {
+		case *ir.DistilledComment, *ir.DistilledImport:
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func isPublicVisibility(v ir.Visibility) bool {
+	return v == ir.VisibilityPublic || v == ir.VisibilityOpen
 }
 
 // shouldRemoveByVisibility checks if a node should be removed based on visibility settings
