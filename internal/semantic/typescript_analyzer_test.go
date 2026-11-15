@@ -11,6 +11,7 @@ func TestTypeScriptAnalyzer_AnalyzeFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TypeScript analyzer: %v", err)
 	}
+	defer analyzer.Close()
 
 	testCode := `
 // TypeScript test file with comprehensive language features
@@ -272,6 +273,7 @@ func TestTypeScriptAnalyzer_ExtractGenericTypes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TypeScript analyzer: %v", err)
 	}
+	defer analyzer.Close()
 
 	testCode := `
 interface Repository<T, K = string> {
@@ -338,6 +340,7 @@ func TestTypeScriptAnalyzer_ModernLanguageFeatures(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TypeScript analyzer: %v", err)
 	}
+	defer analyzer.Close()
 
 	testCode := `
 // Modern TypeScript features
@@ -477,6 +480,7 @@ func TestTypeScriptAnalyzer_ErrorHandling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create TypeScript analyzer: %v", err)
 	}
+	defer analyzer.Close()
 
 	// Test with partially malformed TypeScript code that still has extractable parts
 	invalidCode := `

@@ -8,7 +8,8 @@ import (
 	"strings"
 	"time"
 
-	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/janreges/ai-distiller/internal/language/tsparse"
+	sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_python "github.com/tree-sitter/tree-sitter-python/bindings/go"
 )
 
@@ -23,23 +24,40 @@ type Analyzer struct {
 	queries     map[string]*sitter.Query
 }
 
-// NewAnalyzer creates a new semantic analyzer for Python
+// NewAnalyzer creates a new semantic analyzer for Python. The caller closes it.
 func NewAnalyzer(projectRoot string) (*Analyzer, error) {
+	language := sitter.NewLanguage(tree_sitter_python.Language())
+	parser, err := tsparse.NewParser(language)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Python parser: %w", err)
+	}
+
 	analyzer := &Analyzer{
-		language:    sitter.NewLanguage(tree_sitter_python.Language()),
-		parser:      sitter.NewParser(),
+		language:    language,
+		parser:      parser,
 		projectRoot: projectRoot,
 		queries:     make(map[string]*sitter.Query),
 	}
 
-	analyzer.parser.SetLanguage(analyzer.language)
-
 	// Load tree-sitter queries
 	if err := analyzer.loadQueries(); err != nil {
+		analyzer.Close()
 		return nil, fmt.Errorf("failed to load queries: %w", err)
 	}
 
 	return analyzer, nil
+}
+
+// Close frees the parser and the compiled queries.
+func (a *Analyzer) Close() {
+	for name, query := range a.queries {
+		query.Close()
+		delete(a.queries, name)
+	}
+	if a.parser != nil {
+		a.parser.Close()
+		a.parser = nil
+	}
 }
 
 // loadQueries loads all tree-sitter query files
@@ -53,9 +71,9 @@ func (a *Analyzer) loadQueries() error {
 			return fmt.Errorf("failed to read query file %s: %w", queryPath, err)
 		}
 
-		query, err := sitter.NewQuery(queryBytes, a.language)
-		if err != nil {
-			return fmt.Errorf("failed to compile query %s: %w", queryName, err)
+		query, queryErr := sitter.NewQuery(a.language, string(queryBytes))
+		if queryErr != nil {
+			return fmt.Errorf("failed to compile query %s: %w", queryName, queryErr)
 		}
 
 		a.queries[queryName] = query
@@ -75,7 +93,7 @@ func (a *Analyzer) AnalyzeFile(ctx context.Context, reader io.Reader, filePath s
 	}
 
 	// Parse with tree-sitter
-	tree, err := a.parser.ParseCtx(ctx, nil, content)
+	tree, err := tsparse.Parse(ctx, a.parser, content)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse file: %w", err)
 	}
@@ -91,7 +109,6 @@ func (a *Analyzer) AnalyzeFile(ctx context.Context, reader io.Reader, filePath s
 		SymbolTable:  symbolTable,
 		Dependencies: make([]DependencyInfo, 0),
 		CallSites:    make([]CallSite, 0),
-		AST:          tree,
 		Content:      content,
 		AnalysisTime: time.Since(startTime),
 	}
@@ -121,17 +138,11 @@ func (a *Analyzer) extractDeclarations(tree *sitter.Tree, analysis *FileAnalysis
 	qc := sitter.NewQueryCursor()
 	defer qc.Close()
 
-	qc.Exec(query, tree.RootNode())
-
-	for {
-		match, ok := qc.NextMatch()
-		if !ok {
-			break
-		}
-
+	matches := qc.Matches(query, tree.RootNode(), analysis.Content)
+	for match := matches.Next(); match != nil; match = matches.Next() {
 		for _, capture := range match.Captures {
-			captureName := query.CaptureNameForId(capture.Index)
-			node := capture.Node
+			captureName := query.CaptureNames()[capture.Index]
+			node := &capture.Node
 
 			if err := a.processDeclarationCapture(captureName, node, analysis); err != nil {
 				return fmt.Errorf("failed to process declaration capture %s: %w", captureName, err)
@@ -182,10 +193,10 @@ func (a *Analyzer) processFunctionDeclaration(captureName string, node *sitter.N
 	funcName := nodeText(nameNode, content)
 	location := FileLocation{
 		FilePath:  analysis.FilePath,
-		StartLine: int(node.StartPoint().Row) + 1,
-		EndLine:   int(node.EndPoint().Row) + 1,
-		StartCol:  int(node.StartPoint().Column),
-		EndCol:    int(node.EndPoint().Column),
+		StartLine: int(node.StartPosition().Row) + 1,
+		EndLine:   int(node.EndPosition().Row) + 1,
+		StartCol:  int(node.StartPosition().Column),
+		EndCol:    int(node.EndPosition().Column),
 	}
 
 	// Extract function signature
@@ -220,7 +231,7 @@ func (a *Analyzer) processFunctionDeclaration(captureName string, node *sitter.N
 		Metadata: SymbolMeta{
 			Parameters: parameters,
 			Decorators: decorators,
-			LineCount:  int(node.EndPoint().Row - node.StartPoint().Row + 1),
+			LineCount:  int(node.EndPosition().Row - node.StartPosition().Row + 1),
 		},
 	}
 
@@ -242,10 +253,10 @@ func (a *Analyzer) processClassDeclaration(captureName string, node *sitter.Node
 	className := nodeText(nameNode, content)
 	location := FileLocation{
 		FilePath:  analysis.FilePath,
-		StartLine: int(node.StartPoint().Row) + 1,
-		EndLine:   int(node.EndPoint().Row) + 1,
-		StartCol:  int(node.StartPoint().Column),
-		EndCol:    int(node.EndPoint().Column),
+		StartLine: int(node.StartPosition().Row) + 1,
+		EndLine:   int(node.EndPosition().Row) + 1,
+		StartCol:  int(node.StartPosition().Column),
+		EndCol:    int(node.EndPosition().Column),
 	}
 
 	// Extract base classes
@@ -275,7 +286,7 @@ func (a *Analyzer) processClassDeclaration(captureName string, node *sitter.Node
 		Metadata: SymbolMeta{
 			Extends:    extends,
 			Decorators: decorators,
-			LineCount:  int(node.EndPoint().Row - node.StartPoint().Row + 1),
+			LineCount:  int(node.EndPosition().Row - node.StartPosition().Row + 1),
 		},
 	}
 
@@ -304,10 +315,10 @@ func (a *Analyzer) processMethodDeclaration(captureName string, node *sitter.Nod
 
 	location := FileLocation{
 		FilePath:  analysis.FilePath,
-		StartLine: int(node.StartPoint().Row) + 1,
-		EndLine:   int(node.EndPoint().Row) + 1,
-		StartCol:  int(node.StartPoint().Column),
-		EndCol:    int(node.EndPoint().Column),
+		StartLine: int(node.StartPosition().Row) + 1,
+		EndLine:   int(node.EndPosition().Row) + 1,
+		StartCol:  int(node.StartPosition().Column),
+		EndCol:    int(node.EndPosition().Column),
 	}
 
 	// Extract method signature
@@ -356,7 +367,7 @@ func (a *Analyzer) processMethodDeclaration(captureName string, node *sitter.Nod
 		Metadata: SymbolMeta{
 			Parameters: parameters,
 			Decorators: decorators,
-			LineCount:  int(node.EndPoint().Row - node.StartPoint().Row + 1),
+			LineCount:  int(node.EndPosition().Row - node.StartPosition().Row + 1),
 		},
 	}
 
@@ -382,10 +393,10 @@ func (a *Analyzer) processVariableDeclaration(captureName string, node *sitter.N
 
 	location := FileLocation{
 		FilePath:  analysis.FilePath,
-		StartLine: int(node.StartPoint().Row) + 1,
-		EndLine:   int(node.EndPoint().Row) + 1,
-		StartCol:  int(node.StartPoint().Column),
-		EndCol:    int(node.EndPoint().Column),
+		StartLine: int(node.StartPosition().Row) + 1,
+		EndLine:   int(node.EndPosition().Row) + 1,
+		StartCol:  int(node.StartPosition().Column),
+		EndCol:    int(node.EndPosition().Column),
 	}
 
 	// Determine visibility
@@ -428,10 +439,10 @@ func (a *Analyzer) processConstantDeclaration(captureName string, node *sitter.N
 
 	location := FileLocation{
 		FilePath:  analysis.FilePath,
-		StartLine: int(node.StartPoint().Row) + 1,
-		EndLine:   int(node.EndPoint().Row) + 1,
-		StartCol:  int(node.StartPoint().Column),
-		EndCol:    int(node.EndPoint().Column),
+		StartLine: int(node.StartPosition().Row) + 1,
+		EndLine:   int(node.EndPosition().Row) + 1,
+		StartCol:  int(node.StartPosition().Column),
+		EndCol:    int(node.EndPosition().Column),
 	}
 
 	symbol := &Symbol{
@@ -468,10 +479,10 @@ func (a *Analyzer) processPropertyDeclaration(captureName string, node *sitter.N
 
 	location := FileLocation{
 		FilePath:  analysis.FilePath,
-		StartLine: int(node.StartPoint().Row) + 1,
-		EndLine:   int(node.EndPoint().Row) + 1,
-		StartCol:  int(node.StartPoint().Column),
-		EndCol:    int(node.EndPoint().Column),
+		StartLine: int(node.StartPosition().Row) + 1,
+		EndLine:   int(node.EndPosition().Row) + 1,
+		StartCol:  int(node.StartPosition().Column),
+		EndCol:    int(node.EndPosition().Column),
 	}
 
 	symbol := &Symbol{
@@ -557,8 +568,8 @@ func (a *Analyzer) extractParameters(node *sitter.Node, content []byte) []Parame
 
 	// Iterate through parameter children
 	for i := 0; i < int(paramsNode.ChildCount()); i++ {
-		child := paramsNode.Child(i)
-		if child.Type() == "identifier" {
+		child := paramsNode.Child(uint(i))
+		if child.Kind() == "identifier" {
 			paramName := nodeText(child, content)
 			param := ParameterInfo{
 				Name:       paramName,
@@ -579,11 +590,11 @@ func (a *Analyzer) extractDecorators(node *sitter.Node, content []byte) []string
 	// Look for parent decorated_definition
 	parent := node.Parent()
 	for parent != nil {
-		if parent.Type() == "decorated_definition" {
+		if parent.Kind() == "decorated_definition" {
 			// Find decorator_list
 			for i := 0; i < int(parent.ChildCount()); i++ {
-				child := parent.Child(i)
-				if child.Type() == "decorator_list" {
+				child := parent.Child(uint(i))
+				if child.Kind() == "decorator_list" {
 					decorators = a.extractDecoratorsFromList(child, content)
 					break
 				}
@@ -601,8 +612,8 @@ func (a *Analyzer) extractDecoratorsFromList(node *sitter.Node, content []byte) 
 	var decorators []string
 
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "decorator" {
+		child := node.Child(uint(i))
+		if child.Kind() == "decorator" {
 			decoratorText := strings.TrimPrefix(nodeText(child, content), "@")
 			decorators = append(decorators, decoratorText)
 		}
@@ -616,8 +627,8 @@ func (a *Analyzer) extractSuperclasses(node *sitter.Node, content []byte) []stri
 	var superclasses []string
 
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "identifier" {
+		child := node.Child(uint(i))
+		if child.Kind() == "identifier" {
 			superclasses = append(superclasses, nodeText(child, content))
 		}
 	}
@@ -629,7 +640,7 @@ func (a *Analyzer) extractSuperclasses(node *sitter.Node, content []byte) []stri
 func (a *Analyzer) findContainingClass(node *sitter.Node, content []byte) string {
 	current := node.Parent()
 	for current != nil {
-		if current.Type() == "class_definition" {
+		if current.Kind() == "class_definition" {
 			if nameNode := current.ChildByFieldName("name"); nameNode != nil {
 				return nodeText(nameNode, content)
 			}
@@ -645,17 +656,11 @@ func (a *Analyzer) extractImports(tree *sitter.Tree, analysis *FileAnalysis) err
 	qc := sitter.NewQueryCursor()
 	defer qc.Close()
 
-	qc.Exec(query, tree.RootNode())
-
-	for {
-		match, ok := qc.NextMatch()
-		if !ok {
-			break
-		}
-
+	matches := qc.Matches(query, tree.RootNode(), analysis.Content)
+	for match := matches.Next(); match != nil; match = matches.Next() {
 		for _, capture := range match.Captures {
-			captureName := query.CaptureNameForId(capture.Index)
-			node := capture.Node
+			captureName := query.CaptureNames()[capture.Index]
+			node := &capture.Node
 
 			if err := a.processImportCapture(captureName, node, analysis); err != nil {
 				return fmt.Errorf("failed to process import capture %s: %w", captureName, err)
@@ -685,10 +690,10 @@ func (a *Analyzer) processImportStatement(node *sitter.Node, content []byte, ana
 
 	location := FileLocation{
 		FilePath:  analysis.FilePath,
-		StartLine: int(node.StartPoint().Row) + 1,
-		EndLine:   int(node.EndPoint().Row) + 1,
-		StartCol:  int(node.StartPoint().Column),
-		EndCol:    int(node.EndPoint().Column),
+		StartLine: int(node.StartPosition().Row) + 1,
+		EndLine:   int(node.EndPosition().Row) + 1,
+		StartCol:  int(node.StartPosition().Column),
+		EndCol:    int(node.EndPosition().Column),
 	}
 
 	// Extract module name
@@ -698,7 +703,7 @@ func (a *Analyzer) processImportStatement(node *sitter.Node, content []byte, ana
 	}
 
 	var moduleName, alias string
-	if moduleNode.Type() == "aliased_import" {
+	if moduleNode.Kind() == "aliased_import" {
 		// import module as alias
 		if nameNode := moduleNode.ChildByFieldName("name"); nameNode != nil {
 			moduleName = nodeText(nameNode, content)
@@ -732,10 +737,10 @@ func (a *Analyzer) processFromImportStatement(node *sitter.Node, content []byte,
 
 	location := FileLocation{
 		FilePath:  analysis.FilePath,
-		StartLine: int(node.StartPoint().Row) + 1,
-		EndLine:   int(node.EndPoint().Row) + 1,
-		StartCol:  int(node.StartPoint().Column),
-		EndCol:    int(node.EndPoint().Column),
+		StartLine: int(node.StartPosition().Row) + 1,
+		EndLine:   int(node.EndPosition().Row) + 1,
+		StartCol:  int(node.StartPosition().Column),
+		EndCol:    int(node.EndPosition().Column),
 	}
 
 	// Extract module and symbol information
@@ -750,10 +755,10 @@ func (a *Analyzer) processFromImportStatement(node *sitter.Node, content []byte,
 	nameNode := node.ChildByFieldName("name")
 	if nameNode != nil {
 		for i := 0; i < int(nameNode.ChildCount()); i++ {
-			child := nameNode.Child(i)
-			if child.Type() == "identifier" {
+			child := nameNode.Child(uint(i))
+			if child.Kind() == "identifier" {
 				symbolName = nodeText(child, content)
-			} else if child.Type() == "aliased_import" {
+			} else if child.Kind() == "aliased_import" {
 				if symNode := child.ChildByFieldName("name"); symNode != nil {
 					symbolName = nodeText(symNode, content)
 				}
@@ -790,10 +795,10 @@ func (a *Analyzer) processWildcardImport(captureName string, node *sitter.Node, 
 
 	location := FileLocation{
 		FilePath:  analysis.FilePath,
-		StartLine: int(node.StartPoint().Row) + 1,
-		EndLine:   int(node.EndPoint().Row) + 1,
-		StartCol:  int(node.StartPoint().Column),
-		EndCol:    int(node.EndPoint().Column),
+		StartLine: int(node.StartPosition().Row) + 1,
+		EndLine:   int(node.EndPosition().Row) + 1,
+		StartCol:  int(node.StartPosition().Column),
+		EndCol:    int(node.EndPosition().Column),
 	}
 
 	moduleNode := node.ChildByFieldName("module_name")
@@ -826,17 +831,17 @@ func (a *Analyzer) processRelativeImport(captureName string, node *sitter.Node, 
 
 	location := FileLocation{
 		FilePath:  analysis.FilePath,
-		StartLine: int(node.StartPoint().Row) + 1,
-		EndLine:   int(node.EndPoint().Row) + 1,
-		StartCol:  int(node.StartPoint().Column),
-		EndCol:    int(node.EndPoint().Column),
+		StartLine: int(node.StartPosition().Row) + 1,
+		EndLine:   int(node.EndPosition().Row) + 1,
+		StartCol:  int(node.StartPosition().Column),
+		EndCol:    int(node.EndPosition().Column),
 	}
 
 	// Extract relative module information
 	moduleNode := node.ChildByFieldName("module_name")
 	var moduleName string
 	if moduleNode != nil {
-		if relativeNode := moduleNode.Child(0); relativeNode != nil && relativeNode.Type() == "relative_import" {
+		if relativeNode := moduleNode.Child(0); relativeNode != nil && relativeNode.Kind() == "relative_import" {
 			moduleName = nodeText(moduleNode, content)
 		}
 	}
@@ -863,17 +868,11 @@ func (a *Analyzer) extractCalls(tree *sitter.Tree, analysis *FileAnalysis) error
 	qc := sitter.NewQueryCursor()
 	defer qc.Close()
 
-	qc.Exec(query, tree.RootNode())
-
-	for {
-		match, ok := qc.NextMatch()
-		if !ok {
-			break
-		}
-
+	matches := qc.Matches(query, tree.RootNode(), analysis.Content)
+	for match := matches.Next(); match != nil; match = matches.Next() {
 		for _, capture := range match.Captures {
-			captureName := query.CaptureNameForId(capture.Index)
-			node := capture.Node
+			captureName := query.CaptureNames()[capture.Index]
+			node := &capture.Node
 
 			if err := a.processCallCapture(captureName, node, analysis); err != nil {
 				return fmt.Errorf("failed to process call capture %s: %w", captureName, err)
@@ -910,10 +909,10 @@ func (a *Analyzer) processFunctionCall(captureName string, node *sitter.Node, co
 
 	location := FileLocation{
 		FilePath:  analysis.FilePath,
-		StartLine: int(node.StartPoint().Row) + 1,
-		EndLine:   int(node.EndPoint().Row) + 1,
-		StartCol:  int(node.StartPoint().Column),
-		EndCol:    int(node.EndPoint().Column),
+		StartLine: int(node.StartPosition().Row) + 1,
+		EndLine:   int(node.EndPosition().Row) + 1,
+		StartCol:  int(node.StartPosition().Column),
+		EndCol:    int(node.EndPosition().Column),
 	}
 
 	// Extract call information
@@ -923,10 +922,10 @@ func (a *Analyzer) processFunctionCall(captureName string, node *sitter.Node, co
 	}
 
 	var calleeName string
-	if functionNode.Type() == "identifier" {
+	if functionNode.Kind() == "identifier" {
 		// Simple function call
 		calleeName = nodeText(functionNode, content)
-	} else if functionNode.Type() == "attribute" {
+	} else if functionNode.Kind() == "attribute" {
 		// Method call - extract the method name
 		if attrNode := functionNode.ChildByFieldName("attribute"); attrNode != nil {
 			calleeName = nodeText(attrNode, content)
@@ -960,15 +959,15 @@ func (a *Analyzer) processConstructorCall(captureName string, node *sitter.Node,
 
 	location := FileLocation{
 		FilePath:  analysis.FilePath,
-		StartLine: int(node.StartPoint().Row) + 1,
-		EndLine:   int(node.EndPoint().Row) + 1,
-		StartCol:  int(node.StartPoint().Column),
-		EndCol:    int(node.EndPoint().Column),
+		StartLine: int(node.StartPosition().Row) + 1,
+		EndLine:   int(node.EndPosition().Row) + 1,
+		StartCol:  int(node.StartPosition().Column),
+		EndCol:    int(node.EndPosition().Column),
 	}
 
 	// Extract class name
 	functionNode := node.ChildByFieldName("function")
-	if functionNode == nil || functionNode.Type() != "identifier" {
+	if functionNode == nil || functionNode.Kind() != "identifier" {
 		return nil
 	}
 
@@ -995,10 +994,10 @@ func (a *Analyzer) processSuperCall(captureName string, node *sitter.Node, conte
 
 	location := FileLocation{
 		FilePath:  analysis.FilePath,
-		StartLine: int(node.StartPoint().Row) + 1,
-		EndLine:   int(node.EndPoint().Row) + 1,
-		StartCol:  int(node.StartPoint().Column),
-		EndCol:    int(node.EndPoint().Column),
+		StartLine: int(node.StartPosition().Row) + 1,
+		EndLine:   int(node.EndPosition().Row) + 1,
+		StartCol:  int(node.StartPosition().Column),
+		EndCol:    int(node.EndPosition().Column),
 	}
 
 	callerID := a.findCallerContext(node, content, analysis.FilePath)
@@ -1030,7 +1029,7 @@ func (a *Analyzer) processBuiltinCall(captureName string, node *sitter.Node, con
 func (a *Analyzer) findCallerContext(node *sitter.Node, content []byte, filePath string) SymbolID {
 	current := node.Parent()
 	for current != nil {
-		if current.Type() == "function_definition" {
+		if current.Kind() == "function_definition" {
 			if nameNode := current.ChildByFieldName("name"); nameNode != nil {
 				funcName := nodeText(nameNode, content)
 
@@ -1053,7 +1052,6 @@ type FileAnalysis struct {
 	SymbolTable  *SymbolTable     `json:"symbol_table"`
 	Dependencies []DependencyInfo `json:"dependencies"`
 	CallSites    []CallSite       `json:"call_sites"`
-	AST          *sitter.Tree     `json:"-"` // Not serialized
 	Content      []byte           `json:"-"` // Not serialized
 	AnalysisTime time.Duration    `json:"analysis_time"`
 }

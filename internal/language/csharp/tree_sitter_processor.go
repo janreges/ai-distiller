@@ -7,29 +7,31 @@ import (
 
 	"github.com/janreges/ai-distiller/internal/ir"
 	"github.com/janreges/ai-distiller/internal/language/commentutil"
-	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/janreges/ai-distiller/internal/language/tsparse"
+	sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_c_sharp "github.com/tree-sitter/tree-sitter-c-sharp/bindings/go"
 )
 
 // TreeSitterProcessor uses tree-sitter for C# parsing
-type TreeSitterProcessor struct {
-	parser *sitter.Parser
-}
+type TreeSitterProcessor struct{}
 
 // NewTreeSitterProcessor creates a new tree-sitter based processor
 func NewTreeSitterProcessor() *TreeSitterProcessor {
-	parser := sitter.NewParser()
-	parser.SetLanguage(sitter.NewLanguage(tree_sitter_c_sharp.Language()))
-
-	return &TreeSitterProcessor{
-		parser: parser,
-	}
+	return &TreeSitterProcessor{}
 }
 
 // ProcessSource processes C# source code using tree-sitter
 func (p *TreeSitterProcessor) ProcessSource(ctx context.Context, source []byte, filename string) (*ir.DistilledFile, error) {
+	// The parser lives as long as this call: the tree and every node taken
+	// from it are used only here.
+	parser, err := tsparse.NewParser(sitter.NewLanguage(tree_sitter_c_sharp.Language()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create C# parser: %w", err)
+	}
+	defer parser.Close()
+
 	// Parse the source code
-	tree, err := p.parser.ParseCtx(ctx, nil, source)
+	tree, err := tsparse.Parse(ctx, parser, source)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse C# code: %w", err)
 	}
@@ -40,7 +42,7 @@ func (p *TreeSitterProcessor) ProcessSource(ctx context.Context, source []byte, 
 		BaseNode: ir.BaseNode{
 			Location: ir.Location{
 				StartLine: 1,
-				EndLine:   int(tree.RootNode().EndPoint().Row) + 1,
+				EndLine:   int(tree.RootNode().EndPosition().Row) + 1,
 			},
 		},
 		Path:     filename,
@@ -58,7 +60,7 @@ func (p *TreeSitterProcessor) ProcessSource(ctx context.Context, source []byte, 
 
 // processNode recursively processes tree-sitter nodes
 func (p *TreeSitterProcessor) processNode(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
-	nodeType := node.Type()
+	nodeType := node.Kind()
 
 	switch nodeType {
 	case "compilation_unit":
@@ -102,7 +104,7 @@ func (p *TreeSitterProcessor) processNode(node *sitter.Node, source []byte, file
 		p.addToParent(file, parent, rawContent)
 	default:
 		// Check if this could be a preprocessor directive
-		if strings.HasPrefix(node.Type(), "preproc_") || node.Type() == "ERROR" {
+		if strings.HasPrefix(node.Kind(), "preproc_") || node.Kind() == "ERROR" {
 			// Sometimes directives are parsed as ERROR nodes
 			nodeText := string(source[node.StartByte():node.EndByte()])
 			if strings.HasPrefix(nodeText, "#") {
@@ -123,7 +125,7 @@ func (p *TreeSitterProcessor) processNode(node *sitter.Node, source []byte, file
 
 		// Recursively process children
 		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
+			child := node.Child(uint(i))
 			p.processNode(child, source, file, parent)
 		}
 	}
@@ -140,8 +142,8 @@ func (p *TreeSitterProcessor) processNamespaceDeclaration(node *sitter.Node, sou
 
 	// Extract namespace name
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "identifier", "qualified_name":
 			ns.Name = string(source[child.StartByte():child.EndByte()])
 		case "declaration_list":
@@ -151,13 +153,13 @@ func (p *TreeSitterProcessor) processNamespaceDeclaration(node *sitter.Node, sou
 	}
 
 	// For file-scoped namespaces, continue processing at the same level
-	if node.Type() == "file_scoped_namespace_declaration" {
+	if node.Kind() == "file_scoped_namespace_declaration" {
 		// Add namespace to file
 		file.Children = append(file.Children, ns)
 		// Continue processing the rest of the file in this namespace context
 		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
-			if child.Type() != "namespace" && child.Type() != "identifier" && child.Type() != "qualified_name" && child.Type() != ";" {
+			child := node.Child(uint(i))
+			if child.Kind() != "namespace" && child.Kind() != "identifier" && child.Kind() != "qualified_name" && child.Kind() != ";" {
 				p.processNode(child, source, file, ns)
 			}
 		}
@@ -177,21 +179,21 @@ func (p *TreeSitterProcessor) processUsingDirective(node *sitter.Node, source []
 	}
 
 	// Check if it's a global using
-	if node.Type() == "global_using_directive" {
+	if node.Kind() == "global_using_directive" {
 		imp.ImportType = "global using"
 	}
 
 	// Extract the namespace or type being imported
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "identifier", "qualified_name":
 			imp.Module = string(source[child.StartByte():child.EndByte()])
 		case "name_equals":
 			// Handle using alias (e.g., using Console = System.Console)
 			for j := 0; j < int(child.ChildCount()); j++ {
-				aliasChild := child.Child(j)
-				if aliasChild.Type() == "identifier" {
+				aliasChild := child.Child(uint(j))
+				if aliasChild.Kind() == "identifier" {
 					alias := string(source[aliasChild.StartByte():aliasChild.EndByte()])
 					imp.Symbols = append(imp.Symbols, ir.ImportedSymbol{Alias: alias})
 					break
@@ -220,8 +222,8 @@ func (p *TreeSitterProcessor) processClassDeclaration(node *sitter.Node, source 
 
 	// Extract modifiers, attributes, name, type parameters, base types
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "modifier":
 			p.extractClassModifiers(child, source, class)
 		case "attribute_list":
@@ -232,8 +234,8 @@ func (p *TreeSitterProcessor) processClassDeclaration(node *sitter.Node, source 
 			p.extractTypeParameters(child, source, class)
 		case "type_parameter_constraints_clauses": // Handle the plural wrapper node
 			for j := 0; j < int(child.ChildCount()); j++ {
-				constraintClause := child.Child(j)
-				if constraintClause.Type() == "type_parameter_constraints_clause" {
+				constraintClause := child.Child(uint(j))
+				if constraintClause.Kind() == "type_parameter_constraints_clause" {
 					p.extractTypeParameterConstraints(constraintClause, source, class.TypeParams)
 				}
 			}
@@ -266,8 +268,8 @@ func (p *TreeSitterProcessor) processInterfaceDeclaration(node *sitter.Node, sou
 
 	// Extract modifiers, attributes, name, type parameters, base interfaces
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "modifier":
 			p.extractInterfaceModifiers(child, source, iface)
 		case "attribute_list":
@@ -278,8 +280,8 @@ func (p *TreeSitterProcessor) processInterfaceDeclaration(node *sitter.Node, sou
 			p.extractInterfaceTypeParameters(child, source, iface)
 		case "type_parameter_constraints_clauses": // Handle the plural wrapper node
 			for j := 0; j < int(child.ChildCount()); j++ {
-				constraintClause := child.Child(j)
-				if constraintClause.Type() == "type_parameter_constraints_clause" {
+				constraintClause := child.Child(uint(j))
+				if constraintClause.Kind() == "type_parameter_constraints_clause" {
 					p.extractTypeParameterConstraints(constraintClause, source, iface.TypeParams)
 				}
 			}
@@ -312,8 +314,8 @@ func (p *TreeSitterProcessor) processStructDeclaration(node *sitter.Node, source
 
 	// Extract modifiers, attributes, name, type parameters, interfaces
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "modifier":
 			p.extractStructModifiers(child, source, strct)
 		case "attribute_list":
@@ -324,8 +326,8 @@ func (p *TreeSitterProcessor) processStructDeclaration(node *sitter.Node, source
 			p.extractStructTypeParameters(child, source, strct)
 		case "type_parameter_constraints_clauses": // Handle the plural wrapper node
 			for j := 0; j < int(child.ChildCount()); j++ {
-				constraintClause := child.Child(j)
-				if constraintClause.Type() == "type_parameter_constraints_clause" {
+				constraintClause := child.Child(uint(j))
+				if constraintClause.Kind() == "type_parameter_constraints_clause" {
 					p.extractTypeParameterConstraints(constraintClause, source, strct.TypeParams)
 				}
 			}
@@ -359,8 +361,8 @@ func (p *TreeSitterProcessor) processEnumDeclaration(node *sitter.Node, source [
 
 	// Extract modifiers, attributes, name, base type
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "modifier":
 			p.extractEnumModifiers(child, source, enum)
 		case "attribute_list":
@@ -370,8 +372,8 @@ func (p *TreeSitterProcessor) processEnumDeclaration(node *sitter.Node, source [
 		case "enum_base_clause":
 			// Extract underlying type (e.g., : byte)
 			for j := 0; j < int(child.ChildCount()); j++ {
-				baseChild := child.Child(j)
-				if baseChild.Type() == "predefined_type" || baseChild.Type() == "identifier" {
+				baseChild := child.Child(uint(j))
+				if baseChild.Kind() == "predefined_type" || baseChild.Kind() == "identifier" {
 					enum.Type = &ir.TypeRef{Name: string(source[baseChild.StartByte():baseChild.EndByte()])}
 					break
 				}
@@ -393,7 +395,7 @@ func (p *TreeSitterProcessor) processEnumDeclaration(node *sitter.Node, source [
 func (p *TreeSitterProcessor) processRecordDeclaration(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
 	// Records are classes or structs with special compiler-generated members
 	// We represent both as classes with different modifiers
-	isStruct := node.Type() == "record_struct_declaration"
+	isStruct := node.Kind() == "record_struct_declaration"
 
 	record := &ir.DistilledClass{
 		BaseNode: ir.BaseNode{
@@ -411,8 +413,8 @@ func (p *TreeSitterProcessor) processRecordDeclaration(node *sitter.Node, source
 
 	// Extract modifiers, attributes, name, parameters, base types
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "modifier":
 			p.extractClassModifiers(child, source, record)
 		case "attribute_list":
@@ -453,8 +455,8 @@ func (p *TreeSitterProcessor) processDelegateDeclaration(node *sitter.Node, sour
 	var parameters []string
 
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "modifier":
 			if vis, ok := declaredVisibility(child, source); ok {
 				delegate.Visibility = vis
@@ -501,8 +503,8 @@ func (p *TreeSitterProcessor) processMethodDeclaration(node *sitter.Node, source
 	// We need to be careful about the order - return type comes before method name
 	hasSeenType := false
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "modifier":
 			p.extractMethodModifiers(child, source, method)
 		case "attribute_list":
@@ -532,8 +534,8 @@ func (p *TreeSitterProcessor) processMethodDeclaration(node *sitter.Node, source
 			p.extractMethodTypeParameters(child, source, method)
 		case "type_parameter_constraints_clauses": // Handle the plural wrapper node
 			for j := 0; j < int(child.ChildCount()); j++ {
-				constraintClause := child.Child(j)
-				if constraintClause.Type() == "type_parameter_constraints_clause" {
+				constraintClause := child.Child(uint(j))
+				if constraintClause.Kind() == "type_parameter_constraints_clause" {
 					p.extractTypeParameterConstraints(constraintClause, source, method.TypeParams)
 				}
 			}
@@ -587,8 +589,8 @@ func (p *TreeSitterProcessor) processConstructorDeclaration(node *sitter.Node, s
 
 	// Extract modifiers, attributes, name, parameters, initializer, body
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "modifier":
 			p.extractMethodModifiers(child, source, constructor)
 		case "attribute_list":
@@ -631,8 +633,8 @@ func (p *TreeSitterProcessor) processPropertyDeclaration(node *sitter.Node, sour
 	// Extract modifiers, attributes, type, name, accessors
 	hasSeenType := false
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "modifier":
 			p.extractFieldModifiers(child, source, property)
 		case "attribute_list":
@@ -655,10 +657,10 @@ func (p *TreeSitterProcessor) processPropertyDeclaration(node *sitter.Node, sour
 		case "accessor_list":
 			// Parse get/set/init accessors
 			for j := 0; j < int(child.ChildCount()); j++ {
-				accessor := child.Child(j)
-				if accessor.Type() == "accessor_declaration" {
+				accessor := child.Child(uint(j))
+				if accessor.Kind() == "accessor_declaration" {
 					for k := 0; k < int(accessor.ChildCount()); k++ {
-						accChild := accessor.Child(k)
+						accChild := accessor.Child(uint(k))
 						text := string(source[accChild.StartByte():accChild.EndByte()])
 						switch text {
 						case "get":
@@ -678,8 +680,8 @@ func (p *TreeSitterProcessor) processPropertyDeclaration(node *sitter.Node, sour
 		case "equals_value_clause":
 			// Property initializer
 			for j := 0; j < int(child.ChildCount()); j++ {
-				valueChild := child.Child(j)
-				if valueChild.Type() != "=" {
+				valueChild := child.Child(uint(j))
+				if valueChild.Kind() != "=" {
 					property.DefaultValue = string(source[valueChild.StartByte():valueChild.EndByte()])
 					break
 				}
@@ -714,8 +716,8 @@ func (p *TreeSitterProcessor) processFieldDeclaration(node *sitter.Node, source 
 
 	// Extract modifiers and type
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "modifier":
 			mod, _ := p.extractFieldModifier(child, source)
 			if mod != "" {
@@ -734,8 +736,8 @@ func (p *TreeSitterProcessor) processFieldDeclaration(node *sitter.Node, source 
 			// Extract type from variable_declaration if we haven't found it yet
 			if fieldType == nil {
 				for j := 0; j < int(child.ChildCount()); j++ {
-					varChild := child.Child(j)
-					switch varChild.Type() {
+					varChild := child.Child(uint(j))
+					switch varChild.Kind() {
 					case "predefined_type", "array_type", "generic_name", "qualified_name", "identifier":
 						fieldType = p.extractType(varChild, source)
 						break
@@ -745,8 +747,8 @@ func (p *TreeSitterProcessor) processFieldDeclaration(node *sitter.Node, source 
 
 			// Process variable declarators
 			for j := 0; j < int(child.ChildCount()); j++ {
-				varChild := child.Child(j)
-				if varChild.Type() == "variable_declarator" {
+				varChild := child.Child(uint(j))
+				if varChild.Kind() == "variable_declarator" {
 					field := &ir.DistilledField{
 						BaseNode: ir.BaseNode{
 							Location: p.nodeLocation(varChild),
@@ -760,8 +762,8 @@ func (p *TreeSitterProcessor) processFieldDeclaration(node *sitter.Node, source 
 					// Extract field name and value
 					hasSeenEquals := false
 					for k := 0; k < int(varChild.ChildCount()); k++ {
-						declChild := varChild.Child(k)
-						switch declChild.Type() {
+						declChild := varChild.Child(uint(k))
+						switch declChild.Kind() {
 						case "identifier":
 							if !hasSeenEquals {
 								field.Name = string(source[declChild.StartByte():declChild.EndByte()])
@@ -771,8 +773,8 @@ func (p *TreeSitterProcessor) processFieldDeclaration(node *sitter.Node, source 
 						case "equals_value_clause":
 							// Extract initializer
 							for l := 0; l < int(declChild.ChildCount()); l++ {
-								valueChild := declChild.Child(l)
-								if valueChild.Type() != "=" {
+								valueChild := declChild.Child(uint(l))
+								if valueChild.Kind() != "=" {
 									field.DefaultValue = string(source[valueChild.StartByte():valueChild.EndByte()])
 									break
 								}
@@ -810,8 +812,8 @@ func (p *TreeSitterProcessor) processEventDeclaration(node *sitter.Node, source 
 
 	// Extract modifiers, attributes, type, name
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "modifier":
 			p.extractFieldModifiers(child, source, event)
 		case "attribute_list":
@@ -823,11 +825,11 @@ func (p *TreeSitterProcessor) processEventDeclaration(node *sitter.Node, source 
 		case "variable_declaration":
 			// Extract event name(s)
 			for j := 0; j < int(child.ChildCount()); j++ {
-				varChild := child.Child(j)
-				if varChild.Type() == "variable_declarator" {
+				varChild := child.Child(uint(j))
+				if varChild.Kind() == "variable_declarator" {
 					for k := 0; k < int(varChild.ChildCount()); k++ {
-						declChild := varChild.Child(k)
-						if declChild.Type() == "identifier" {
+						declChild := varChild.Child(uint(k))
+						if declChild.Kind() == "identifier" {
 							event.Name = string(source[declChild.StartByte():declChild.EndByte()])
 							break
 						}
@@ -883,7 +885,7 @@ func declaredVisibility(modifier *sitter.Node, source []byte) (ir.Visibility, bo
 	}
 	var tokens []string
 	for i := 0; i < int(decl.ChildCount()); i++ {
-		if c := decl.Child(i); c.Type() == "modifier" {
+		if c := decl.Child(uint(i)); c.Kind() == "modifier" {
 			tokens = append(tokens, string(source[c.StartByte():c.EndByte()]))
 		}
 	}
@@ -1010,8 +1012,8 @@ func (p *TreeSitterProcessor) extractFieldModifier(node *sitter.Node, source []b
 // extractAttributes extracts attributes (decorators in IR terms)
 func (p *TreeSitterProcessor) extractAttributes(node *sitter.Node, source []byte, decorators *[]string) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "attribute" {
+		child := node.Child(uint(i))
+		if child.Kind() == "attribute" {
 			// Extract the full attribute text
 			attrText := string(source[child.StartByte():child.EndByte()])
 			*decorators = append(*decorators, "["+attrText+"]")
@@ -1022,8 +1024,8 @@ func (p *TreeSitterProcessor) extractAttributes(node *sitter.Node, source []byte
 // extractTypeParameters extracts generic type parameters
 func (p *TreeSitterProcessor) extractTypeParameters(node *sitter.Node, source []byte, class *ir.DistilledClass) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "type_parameter" {
+		child := node.Child(uint(i))
+		if child.Kind() == "type_parameter" {
 			typeParam := ir.TypeParam{
 				Name:        "",
 				Constraints: []ir.TypeRef{},
@@ -1031,8 +1033,8 @@ func (p *TreeSitterProcessor) extractTypeParameters(node *sitter.Node, source []
 
 			// Extract parameter name and constraints
 			for j := 0; j < int(child.ChildCount()); j++ {
-				paramChild := child.Child(j)
-				if paramChild.Type() == "identifier" {
+				paramChild := child.Child(uint(j))
+				if paramChild.Kind() == "identifier" {
 					typeParam.Name = string(source[paramChild.StartByte():paramChild.EndByte()])
 				}
 			}
@@ -1045,8 +1047,8 @@ func (p *TreeSitterProcessor) extractTypeParameters(node *sitter.Node, source []
 // extractInterfaceTypeParameters extracts generic type parameters for interfaces
 func (p *TreeSitterProcessor) extractInterfaceTypeParameters(node *sitter.Node, source []byte, iface *ir.DistilledInterface) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "type_parameter" {
+		child := node.Child(uint(i))
+		if child.Kind() == "type_parameter" {
 			typeParam := ir.TypeParam{
 				Name:        "",
 				Constraints: []ir.TypeRef{},
@@ -1054,8 +1056,8 @@ func (p *TreeSitterProcessor) extractInterfaceTypeParameters(node *sitter.Node, 
 
 			// Extract parameter name
 			for j := 0; j < int(child.ChildCount()); j++ {
-				paramChild := child.Child(j)
-				if paramChild.Type() == "identifier" {
+				paramChild := child.Child(uint(j))
+				if paramChild.Kind() == "identifier" {
 					typeParam.Name = string(source[paramChild.StartByte():paramChild.EndByte()])
 				}
 			}
@@ -1068,8 +1070,8 @@ func (p *TreeSitterProcessor) extractInterfaceTypeParameters(node *sitter.Node, 
 // extractStructTypeParameters extracts generic type parameters for structs
 func (p *TreeSitterProcessor) extractStructTypeParameters(node *sitter.Node, source []byte, strct *ir.DistilledStruct) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "type_parameter" {
+		child := node.Child(uint(i))
+		if child.Kind() == "type_parameter" {
 			typeParam := ir.TypeParam{
 				Name:        "",
 				Constraints: []ir.TypeRef{},
@@ -1077,8 +1079,8 @@ func (p *TreeSitterProcessor) extractStructTypeParameters(node *sitter.Node, sou
 
 			// Extract parameter name
 			for j := 0; j < int(child.ChildCount()); j++ {
-				paramChild := child.Child(j)
-				if paramChild.Type() == "identifier" {
+				paramChild := child.Child(uint(j))
+				if paramChild.Kind() == "identifier" {
 					typeParam.Name = string(source[paramChild.StartByte():paramChild.EndByte()])
 				}
 			}
@@ -1091,8 +1093,8 @@ func (p *TreeSitterProcessor) extractStructTypeParameters(node *sitter.Node, sou
 // extractMethodTypeParameters extracts generic type parameters for methods
 func (p *TreeSitterProcessor) extractMethodTypeParameters(node *sitter.Node, source []byte, method *ir.DistilledFunction) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "type_parameter" {
+		child := node.Child(uint(i))
+		if child.Kind() == "type_parameter" {
 			typeParam := ir.TypeParam{
 				Name:        "",
 				Constraints: []ir.TypeRef{},
@@ -1100,8 +1102,8 @@ func (p *TreeSitterProcessor) extractMethodTypeParameters(node *sitter.Node, sou
 
 			// Extract parameter name
 			for j := 0; j < int(child.ChildCount()); j++ {
-				paramChild := child.Child(j)
-				if paramChild.Type() == "identifier" {
+				paramChild := child.Child(uint(j))
+				if paramChild.Kind() == "identifier" {
 					typeParam.Name = string(source[paramChild.StartByte():paramChild.EndByte()])
 				}
 			}
@@ -1114,8 +1116,8 @@ func (p *TreeSitterProcessor) extractMethodTypeParameters(node *sitter.Node, sou
 // extractBaseList extracts base class and interfaces
 func (p *TreeSitterProcessor) extractBaseList(node *sitter.Node, source []byte, class *ir.DistilledClass) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == ":" {
+		child := node.Child(uint(i))
+		if child.Kind() == ":" {
 			continue
 		}
 
@@ -1136,8 +1138,8 @@ func (p *TreeSitterProcessor) extractBaseList(node *sitter.Node, source []byte, 
 // extractInterfaceBaseList extracts base interfaces
 func (p *TreeSitterProcessor) extractInterfaceBaseList(node *sitter.Node, source []byte, iface *ir.DistilledInterface) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == ":" || child.Type() == "," {
+		child := node.Child(uint(i))
+		if child.Kind() == ":" || child.Kind() == "," {
 			continue
 		}
 
@@ -1155,8 +1157,8 @@ func (p *TreeSitterProcessor) extractStructInterfaces(node *sitter.Node, source 
 // extractRecordParameters extracts record parameters as properties
 func (p *TreeSitterProcessor) extractRecordParameters(node *sitter.Node, source []byte, record ir.DistilledNode) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "parameter" {
+		child := node.Child(uint(i))
+		if child.Kind() == "parameter" {
 			// Create a property for each record parameter
 			property := &ir.DistilledField{
 				BaseNode: ir.BaseNode{
@@ -1171,8 +1173,8 @@ func (p *TreeSitterProcessor) extractRecordParameters(node *sitter.Node, source 
 
 			// Extract parameter attributes, type and name
 			for j := 0; j < int(child.ChildCount()); j++ {
-				paramChild := child.Child(j)
-				switch paramChild.Type() {
+				paramChild := child.Child(uint(j))
+				switch paramChild.Kind() {
 				case "attribute_list":
 					// Handle property attributes like [property: StringRange(3, 12)]
 					// For record parameters, preserve the full attribute text including target
@@ -1205,7 +1207,7 @@ func (p *TreeSitterProcessor) extractRecordParameters(node *sitter.Node, source 
 
 // extractType extracts type information
 func (p *TreeSitterProcessor) extractType(node *sitter.Node, source []byte) *ir.TypeRef {
-	nodeType := node.Type()
+	nodeType := node.Kind()
 
 	switch nodeType {
 	case "predefined_type", "identifier", "qualified_name":
@@ -1216,15 +1218,15 @@ func (p *TreeSitterProcessor) extractType(node *sitter.Node, source []byte) *ir.
 		var generics []ir.TypeRef
 
 		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
-			switch child.Type() {
+			child := node.Child(uint(i))
+			switch child.Kind() {
 			case "identifier":
 				typeName = string(source[child.StartByte():child.EndByte()])
 			case "type_argument_list":
 				// Extract generic arguments
 				for j := 0; j < int(child.ChildCount()); j++ {
-					argChild := child.Child(j)
-					if argChild.Type() != "<" && argChild.Type() != ">" && argChild.Type() != "," {
+					argChild := child.Child(uint(j))
+					if argChild.Kind() != "<" && argChild.Kind() != ">" && argChild.Kind() != "," {
 						argType := p.extractType(argChild, source)
 						generics = append(generics, *argType)
 					}
@@ -1242,8 +1244,8 @@ func (p *TreeSitterProcessor) extractType(node *sitter.Node, source []byte) *ir.
 		var ranks []string
 
 		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
-			if child.Type() == "array_rank_specifier" {
+			child := node.Child(uint(i))
+			if child.Kind() == "array_rank_specifier" {
 				// Count dimensions
 				ranks = append(ranks, string(source[child.StartByte():child.EndByte()]))
 			} else if elementType == nil {
@@ -1285,8 +1287,8 @@ func (p *TreeSitterProcessor) extractType(node *sitter.Node, source []byte) *ir.
 // extractParameters extracts method parameters
 func (p *TreeSitterProcessor) extractParameters(node *sitter.Node, source []byte, method *ir.DistilledFunction) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "parameter" {
+		child := node.Child(uint(i))
+		if child.Kind() == "parameter" {
 			param := p.extractParameter(child, source)
 			method.Parameters = append(method.Parameters, *param)
 		}
@@ -1298,8 +1300,8 @@ func (p *TreeSitterProcessor) extractParameter(node *sitter.Node, source []byte)
 	param := &ir.Parameter{}
 
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "attribute_list":
 			// Handle parameter attributes
 		case "modifier":
@@ -1339,8 +1341,8 @@ func (p *TreeSitterProcessor) extractParameter(node *sitter.Node, source []byte)
 		case "equals_value_clause":
 			// Extract default value
 			for j := 0; j < int(child.ChildCount()); j++ {
-				valueChild := child.Child(j)
-				if valueChild.Type() != "=" {
+				valueChild := child.Child(uint(j))
+				if valueChild.Kind() != "=" {
 					param.DefaultValue = string(source[valueChild.StartByte():valueChild.EndByte()])
 					param.IsOptional = true
 					break
@@ -1355,12 +1357,12 @@ func (p *TreeSitterProcessor) extractParameter(node *sitter.Node, source []byte)
 // extractDelegateParameters extracts delegate parameter types
 func (p *TreeSitterProcessor) extractDelegateParameters(node *sitter.Node, source []byte, parameters *[]string) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "parameter" {
+		child := node.Child(uint(i))
+		if child.Kind() == "parameter" {
 			// Extract parameter type
 			for j := 0; j < int(child.ChildCount()); j++ {
-				paramChild := child.Child(j)
-				switch paramChild.Type() {
+				paramChild := child.Child(uint(j))
+				switch paramChild.Kind() {
 				case "predefined_type", "array_type", "generic_name", "qualified_name", "identifier":
 					typeRef := p.extractType(paramChild, source)
 					*parameters = append(*parameters, typeRef.Name)
@@ -1400,9 +1402,9 @@ func (p *TreeSitterProcessor) processStructBody(node *sitter.Node, source []byte
 func (p *TreeSitterProcessor) processStatements(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
 	list := p.childList(file, parent)
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 		switch {
-		case child.Type() == "comment":
+		case child.Kind() == "comment":
 			p.processComment(child, source, file, parent)
 			continue
 		case !child.IsNamed():
@@ -1436,8 +1438,8 @@ func (p *TreeSitterProcessor) processComment(node *sitter.Node, source []byte, f
 // processEnumBody processes the body of an enum
 func (p *TreeSitterProcessor) processEnumBody(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "comment":
 			p.processComment(child, source, file, parent)
 		case "enum_member_declaration":
@@ -1457,8 +1459,8 @@ func (p *TreeSitterProcessor) processEnumMember(node *sitter.Node, source []byte
 	}
 
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "attribute_list":
 			p.extractAttributes(child, source, &field.Decorators)
 		case "identifier":
@@ -1466,8 +1468,8 @@ func (p *TreeSitterProcessor) processEnumMember(node *sitter.Node, source []byte
 		case "equals_value_clause":
 			// Extract enum value
 			for j := 0; j < int(child.ChildCount()); j++ {
-				valueChild := child.Child(j)
-				if valueChild.Type() != "=" {
+				valueChild := child.Child(uint(j))
+				if valueChild.Kind() != "=" {
 					field.DefaultValue = string(source[valueChild.StartByte():valueChild.EndByte()])
 					break
 				}
@@ -1491,10 +1493,10 @@ func (p *TreeSitterProcessor) processEnumMember(node *sitter.Node, source []byte
 // nodeLocation converts tree-sitter node position to IR location
 func (p *TreeSitterProcessor) nodeLocation(node *sitter.Node) ir.Location {
 	return ir.Location{
-		StartLine:   int(node.StartPoint().Row) + 1,
-		StartColumn: int(node.StartPoint().Column) + 1,
-		EndLine:     int(node.EndPoint().Row) + 1,
-		EndColumn:   int(node.EndPoint().Column) + 1,
+		StartLine:   int(node.StartPosition().Row) + 1,
+		StartColumn: int(node.StartPosition().Column) + 1,
+		EndLine:     int(node.EndPosition().Row) + 1,
+		EndColumn:   int(node.EndPosition().Column) + 1,
 	}
 }
 
@@ -1548,8 +1550,8 @@ func (p *TreeSitterProcessor) extractTypeParameterConstraints(node *sitter.Node,
 	var constraints []ir.TypeRef
 
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "identifier":
 			// This is the type parameter name (e.g., TUser)
 			paramName = string(source[child.StartByte():child.EndByte()])
@@ -1583,8 +1585,8 @@ func (p *TreeSitterProcessor) extractTypeConstraint(node *sitter.Node, source []
 
 	// Otherwise check child nodes
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "class_constraint":
 			return &ir.TypeRef{Name: "class"}
 		case "struct_constraint":
@@ -1616,8 +1618,8 @@ func (p *TreeSitterProcessor) processOperatorDeclaration(node *sitter.Node, sour
 
 	// Extract modifiers, return type, operator symbol, parameters
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "modifier":
 			p.extractMethodModifiers(child, source, operator)
 		case "predefined_type", "array_type", "generic_name", "qualified_name", "identifier":
@@ -1627,7 +1629,7 @@ func (p *TreeSitterProcessor) processOperatorDeclaration(node *sitter.Node, sour
 		case "operator":
 			// Next child should be the operator symbol
 			if i+1 < int(node.ChildCount()) {
-				nextChild := node.Child(i + 1)
+				nextChild := node.Child(uint(i + 1))
 				operatorSymbol := string(source[nextChild.StartByte():nextChild.EndByte()])
 				operator.Name = "operator " + operatorSymbol
 				i++ // Skip the operator symbol

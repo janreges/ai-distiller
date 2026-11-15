@@ -90,10 +90,13 @@ function the package's `ProcessWithOptions` calls.
 | cpp | `internal/language/cpp/tree_sitter_processor.go#TreeSitterProcessor.ProcessSource` | `github.com/tree-sitter/tree-sitter-cpp/bindings/go` | `references/cpp.md` |
 | php | `internal/language/php/tree_sitter_processor.go#TreeSitterProcessor.ProcessSource` | `github.com/tree-sitter/tree-sitter-php/bindings/go` | `references/php.md` |
 
-All tree-sitter languages run on the binding `github.com/smacker/go-tree-sitter`;
-the grammars from `github.com/tree-sitter/...` and `github.com/fwcd/...` are wrapped with
-`sitter.NewLanguage(...)`. The Go package is `internal/language/golang/`, and its
-processor registers as `go`.
+All tree-sitter languages run on the official binding
+`github.com/tree-sitter/go-tree-sitter`; the grammars from `github.com/tree-sitter/...`
+and `github.com/fwcd/...` are wrapped with `sitter.NewLanguage(...)`. The binding
+has no finalizers and its nodes do not keep their tree alive: the rules for
+closing parsers and trees and for using nodes are in
+`references/tree-sitter-cgo.md`. The Go package is `internal/language/golang/`,
+and its processor registers as `go`.
 
 Rust and Swift are distilled by their line parsers only; they have no
 tree-sitter parser. A failed tree-sitter parse returns an
@@ -160,7 +163,7 @@ module [0:0-3:0]
   `.ts` file with JSX is one case: the TypeScript grammar reads `<div>` as a
   type assertion, the TSX grammar (`--lang tsx`) as `jsx_element`.
 
-Processors dispatch with `switch node.Type()`. A switch whose `default:` recurses
+Processors dispatch with `switch node.Kind()`. A switch whose `default:` recurses
 into the children (Java's
 `internal/language/java/tree_sitter_processor.go#TreeSitterProcessor.processNode`)
 searches through node types it does not list. A switch without such a default

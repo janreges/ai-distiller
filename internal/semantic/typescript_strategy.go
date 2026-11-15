@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	sitter "github.com/smacker/go-tree-sitter"
+	sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
 // TypeScriptStrategy implements LanguageStrategy for TypeScript/JavaScript
@@ -118,7 +118,7 @@ func (ts *TypeScriptStrategy) DetermineScope(node *sitter.Node, fileAST *sitter.
 	current := node.Parent()
 
 	for current != nil {
-		switch current.Type() {
+		switch current.Kind() {
 		case "function_declaration", "method_definition":
 			if nameNode := ts.findNameNode(current); nameNode != nil {
 				funcName := string(content[nameNode.StartByte():nameNode.EndByte()])
@@ -201,7 +201,7 @@ func (ts *TypeScriptStrategy) inferVariableType(symbol *Symbol, context *Resolut
 func (ts *TypeScriptStrategy) findContainingClass(node *sitter.Node, content []byte) string {
 	current := node.Parent()
 	for current != nil {
-		if current.Type() == "class_declaration" {
+		if current.Kind() == "class_declaration" {
 			if nameNode := ts.findNameNode(current); nameNode != nil {
 				return string(content[nameNode.StartByte():nameNode.EndByte()])
 			}
@@ -224,8 +224,8 @@ func (ts *TypeScriptStrategy) findNameNode(node *sitter.Node) *sitter.Node {
 
 	// Fallback: look for identifier or type_identifier children
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "identifier" || child.Type() == "type_identifier" || child.Type() == "property_identifier" {
+		child := node.Child(uint(i))
+		if child.Kind() == "identifier" || child.Kind() == "type_identifier" || child.Kind() == "property_identifier" {
 			return child
 		}
 	}

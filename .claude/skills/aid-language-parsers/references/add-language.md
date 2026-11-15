@@ -18,7 +18,10 @@ processor registers under and the IR's `Language`.
      and keep the conventions in `references/ir-conventions.md`.
    - Unit tests beside it.
 2. Grammar: add the grammar module to `go.mod` and wrap it with
-   `sitter.NewLanguage(...)` (`references/tree-sitter-cgo.md`), and add it to
+   `sitter.NewLanguage(...)`; the processor creates its parser with
+   `internal/language/tsparse/tsparse.go#NewParser`, parses with
+   `internal/language/tsparse/tsparse.go#Parse` and closes both parser and
+   tree (`references/tree-sitter-cgo.md`, "The runtime"), and add it to
    `cmd/ast-dump/main.go#language` and the usage string in the same file, so
    the tree can be dumped.
 3. Registration: `internal/language/registry_cgo.go#RegisterAll`.

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	sitter "github.com/smacker/go-tree-sitter"
+	sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
 // LanguageStrategy defines the interface for language-specific resolution logic

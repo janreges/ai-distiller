@@ -3,19 +3,46 @@
 ## Why cgo
 
 Tree-sitter grammars are generated C parsers. Go reaches them through the
-binding `github.com/smacker/go-tree-sitter`, which is itself cgo code: without
-cgo its package has no `Node` type, and every grammar package is excluded by
-its build constraints. Nine processors use it (all but Go, Rust and Swift), and
-so does `internal/semantic` (Python grammar, official module), which
-`internal/processor/dependency.go` imports. So nothing in aid compiles without
-cgo, not even `internal/language` on its own.
+official binding `github.com/tree-sitter/go-tree-sitter` (version in `go.mod`),
+which is itself cgo code: without cgo its package has no `Node`, `Parser` or
+`Language` type, and every grammar package is excluded by its build
+constraints. Nine processors use it (all but Go, Rust and Swift), and so do
+`internal/semantic` (Python and TypeScript grammars), which
+`internal/processor/dependency.go` imports, and `cmd/ast-dump`. So nothing in
+aid compiles without cgo, not even `internal/language` on its own.
+
+## The runtime
+
+The binding v0.25.0 bundles the tree-sitter C library 0.25 and loads grammars
+of ABI 13 to 15. Code that uses it imports it as
+`sitter "github.com/tree-sitter/go-tree-sitter"` and follows four rules:
+
+- Close what you create. The binding has no finalizers: every `Parser`,
+  `Tree`, `Query` and `QueryCursor` gets `defer x.Close()` right after it is
+  created, or a `Close` method of its owner that the creator defers (the
+  JavaScript and PHP `TreeSitterProcessor`, `semantic.Analyzer`,
+  `semantic.TypeScriptAnalyzer`). A second `Close` of the same object frees
+  it twice.
+- A `*sitter.Node` does not keep its tree alive. Use a node only while its
+  tree is open, and never store one in a struct field, map, channel or
+  closure that outlives the function that closes the tree.
+- Create and run the parser through `internal/language/tsparse`:
+  `internal/language/tsparse/tsparse.go#NewParser` returns the error of an
+  incompatible grammar, and `internal/language/tsparse/tsparse.go#Parse`
+  honours the context. Do not call `Parser.ParseCtx`: in v0.25.0 a context
+  cancelled during the parse makes it dereference a nil cancellation flag and
+  crash the process.
+- Every `Child`, `Parent` or sibling call returns a new `*sitter.Node`, so `==`
+  between two nodes is false even for the same node; compare with
+  `a.Equals(*b)`. `Kind()` is the node type, `StartPosition()` and
+  `EndPosition()` the points, and counts, indexes and byte offsets are `uint`.
 
 ## Grammar sources
 
 | Language | Go import | Where the C code comes from |
 |---|---|---|
 | python, javascript, java, csharp, cpp, ruby, php | `github.com/tree-sitter/tree-sitter-<name>/bindings/go` | the grammar's own Go module (version in `go.mod`); the processor wraps its pointer with `sitter.NewLanguage(...)`, PHP with `LanguagePHP()` |
-| kotlin | `github.com/fwcd/tree-sitter-kotlin/bindings/go` | the grammar's own Go module (fwcd, pinned to commit `d6af96d2` in `go.mod`, ABI 14); its `parser.c` is about 35 MB; measured once when it replaced smacker's copy, a cold `go build -a` went from 27.3 s to 31.3 s and the binary grew by 2.0 MB; wrapped with `sitter.NewLanguage(...)` |
+| kotlin | `github.com/fwcd/tree-sitter-kotlin/bindings/go` | the grammar's own Go module (fwcd, pinned to commit `d6af96d2` in `go.mod`, ABI 14); its `parser.c` is about 35 MB; measured once when it replaced the copy bundled with the previous Go binding, a cold `go build -a` went from 27.3 s to 31.3 s and the binary grew by 2.0 MB; wrapped with `sitter.NewLanguage(...)` |
 | typescript, tsx | `tree-sitter-typescript` | a local wrapper module, see below |
 | swift | none | line parser (`references/swift.md`) |
 | go | none | standard library `go/parser` |
@@ -61,7 +88,7 @@ fails at compile time, with errors such as:
 
 ```text
 github.com/tree-sitter/tree-sitter-python/bindings/go: build constraints exclude all Go files in ...
-../go/pkg/mod/github.com/smacker/go-tree-sitter@.../iter.go:17:18: undefined: Node
+internal/language/tsparse/tsparse.go:24:29: undefined: sitter.Language
 ```
 
 The module does not compile with `CGO_ENABLED=0`, and there is no `!cgo` stub

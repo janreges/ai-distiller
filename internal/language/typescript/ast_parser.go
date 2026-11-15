@@ -8,13 +8,13 @@ import (
 
 	"github.com/janreges/ai-distiller/internal/ir"
 	"github.com/janreges/ai-distiller/internal/language/commentutil"
-	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/janreges/ai-distiller/internal/language/tsparse"
+	sitter "github.com/tree-sitter/go-tree-sitter"
 	typescript "tree-sitter-typescript"
 )
 
 // ASTParser provides tree-sitter based TypeScript parsing
 type ASTParser struct {
-	parser   *sitter.Parser
 	source   []byte
 	filename string
 	isTSX    bool
@@ -22,12 +22,7 @@ type ASTParser struct {
 
 // NewASTParser creates a new tree-sitter TypeScript parser
 func NewASTParser() *ASTParser {
-	parser := sitter.NewParser()
-	// Language will be set in ProcessSource based on file type
-
-	return &ASTParser{
-		parser: parser,
-	}
+	return &ASTParser{}
 }
 
 // ProcessSource processes TypeScript source using tree-sitter
@@ -48,10 +43,16 @@ func (p *ASTParser) ProcessSource(ctx context.Context, source []byte, filename s
 		return nil, fmt.Errorf("tree-sitter-typescript is not available (CGO disabled)")
 	}
 
-	p.parser.SetLanguage(sitter.NewLanguage(lang))
+	// The parser lives as long as this call: the tree and every node taken
+	// from it are used only here.
+	parser, err := tsparse.NewParser(sitter.NewLanguage(lang))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TypeScript parser: %w", err)
+	}
+	defer parser.Close()
 
 	// Parse the source code
-	tree, err := p.parser.ParseCtx(ctx, nil, source)
+	tree, err := tsparse.Parse(ctx, parser, source)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse TypeScript: %w", err)
 	}
@@ -64,7 +65,7 @@ func (p *ASTParser) ProcessSource(ctx context.Context, source []byte, filename s
 		BaseNode: ir.BaseNode{
 			Location: ir.Location{
 				StartLine: 1,
-				EndLine:   int(rootNode.EndPoint().Row) + 1,
+				EndLine:   int(rootNode.EndPosition().Row) + 1,
 			},
 		},
 		Path:     filename,
@@ -75,7 +76,7 @@ func (p *ASTParser) ProcessSource(ctx context.Context, source []byte, filename s
 	}
 
 	// Parse the program
-	if rootNode.Type() == "program" {
+	if rootNode.Kind() == "program" {
 		p.parseProgram(rootNode, file)
 	}
 
@@ -89,7 +90,7 @@ func (p *ASTParser) ProcessSource(ctx context.Context, source []byte, filename s
 // parseProgram parses the top-level program node
 func (p *ASTParser) parseProgram(node *sitter.Node, file *ir.DistilledFile) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 		if child == nil {
 			continue
 		}
@@ -102,7 +103,7 @@ func (p *ASTParser) parseProgram(node *sitter.Node, file *ir.DistilledFile) {
 // drops the doc comments of a statement that yields no declaration (a
 // re-export, `export default {...}`, an expression).
 func appendStatement(list []ir.DistilledNode, statement *sitter.Node, parsed []ir.DistilledNode) []ir.DistilledNode {
-	if statement.Type() == "comment" || !statement.IsNamed() {
+	if statement.Kind() == "comment" || !statement.IsNamed() {
 		return append(list, parsed...)
 	}
 	return commentutil.AppendStatement(list, parsed)
@@ -112,7 +113,7 @@ func appendStatement(list []ir.DistilledNode, statement *sitter.Node, parsed []i
 // program root, export statements and namespace bodies.
 func (p *ASTParser) parseStatement(node *sitter.Node, isExported bool) []ir.DistilledNode {
 	var nodes []ir.DistilledNode
-	switch node.Type() {
+	switch node.Kind() {
 	case "comment":
 		nodes = append(nodes, p.parseComment(node))
 	case "import_statement":
@@ -145,7 +146,7 @@ func (p *ASTParser) parseStatement(node *sitter.Node, isExported bool) []ir.Dist
 		nodes = append(nodes, p.parseVariableDeclaration(node, isExported)...)
 	case "expression_statement":
 		// `namespace A { ... }` is wrapped in an expression statement.
-		if first := node.NamedChild(0); first != nil && first.Type() == "internal_module" {
+		if first := node.NamedChild(0); first != nil && first.Kind() == "internal_module" {
 			if ns := p.parseNamespace(first); ns != nil {
 				nodes = append(nodes, ns)
 			}
@@ -157,7 +158,7 @@ func (p *ASTParser) parseStatement(node *sitter.Node, isExported bool) []ir.Dist
 	case "ambient_declaration":
 		// `declare ...` wraps the real declaration.
 		for i := 0; i < int(node.NamedChildCount()); i++ {
-			nodes = append(nodes, p.parseStatement(node.NamedChild(i), isExported)...)
+			nodes = append(nodes, p.parseStatement(node.NamedChild(uint(i)), isExported)...)
 		}
 	}
 	return nodes
@@ -173,7 +174,7 @@ func (p *ASTParser) parseComment(node *sitter.Node) *ir.DistilledComment {
 		Text:     text,
 		Format:   format,
 	}
-	if parent := node.Parent(); format == ir.CommentDoc && parent != nil && parent.Type() == "program" {
+	if parent := node.Parent(); format == ir.CommentDoc && parent != nil && parent.Kind() == "program" {
 		comment.Inner = commentutil.DocumentsFile(text)
 	}
 	return comment
@@ -196,7 +197,7 @@ func (p *ASTParser) parseNamespace(node *sitter.Node) *ir.DistilledPackage {
 	ambient := insideAmbientDeclaration(node)
 	if body := node.ChildByFieldName("body"); body != nil {
 		for i := 0; i < int(body.NamedChildCount()); i++ {
-			statement := body.NamedChild(i)
+			statement := body.NamedChild(uint(i))
 			members := p.parseStatement(statement, false)
 			if ambient {
 				for _, member := range members {
@@ -213,7 +214,7 @@ func (p *ASTParser) parseNamespace(node *sitter.Node) *ir.DistilledPackage {
 // (ambient_declaration) node.
 func insideAmbientDeclaration(node *sitter.Node) bool {
 	for n := node.Parent(); n != nil; n = n.Parent() {
-		if n.Type() == "ambient_declaration" {
+		if n.Kind() == "ambient_declaration" {
 			return true
 		}
 	}
@@ -276,12 +277,12 @@ func (p *ASTParser) parseImport(node *sitter.Node) *ir.DistilledImport {
 // parseImportClause parses the import clause
 func (p *ASTParser) parseImportClause(node *sitter.Node, imp *ir.DistilledImport) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 		if child == nil {
 			continue
 		}
 
-		switch child.Type() {
+		switch child.Kind() {
 		case "identifier":
 			// Default import
 			imp.Symbols = append(imp.Symbols, ir.ImportedSymbol{
@@ -305,8 +306,8 @@ func (p *ASTParser) parseImportClause(node *sitter.Node, imp *ir.DistilledImport
 // parseNamedImports parses named imports
 func (p *ASTParser) parseNamedImports(node *sitter.Node, imp *ir.DistilledImport) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child == nil || child.Type() != "import_specifier" {
+		child := node.Child(uint(i))
+		if child == nil || child.Kind() != "import_specifier" {
 			continue
 		}
 
@@ -315,12 +316,12 @@ func (p *ASTParser) parseNamedImports(node *sitter.Node, imp *ir.DistilledImport
 
 		// Find name and alias
 		for j := 0; j < int(child.ChildCount()); j++ {
-			subchild := child.Child(j)
+			subchild := child.Child(uint(j))
 			if subchild == nil {
 				continue
 			}
 
-			if subchild.Type() == "identifier" {
+			if subchild.Kind() == "identifier" {
 				if name == "" {
 					name = p.nodeText(subchild)
 				} else {
@@ -342,7 +343,7 @@ func (p *ASTParser) parseNamedImports(node *sitter.Node, imp *ir.DistilledImport
 func (p *ASTParser) parseExport(node *sitter.Node) []ir.DistilledNode {
 	var nodes []ir.DistilledNode
 	for i := 0; i < int(node.NamedChildCount()); i++ {
-		nodes = append(nodes, p.parseStatement(node.NamedChild(i), true)...)
+		nodes = append(nodes, p.parseStatement(node.NamedChild(uint(i)), true)...)
 	}
 	return nodes
 }
@@ -382,12 +383,12 @@ func (p *ASTParser) parseClass(node *sitter.Node, isExported bool) *ir.Distilled
 	extendsClause := p.findChild(node, "class_heritage")
 	if extendsClause != nil {
 		for i := 0; i < int(extendsClause.ChildCount()); i++ {
-			child := extendsClause.Child(i)
+			child := extendsClause.Child(uint(i))
 			if child == nil {
 				continue
 			}
 
-			if child.Type() == "extends_clause" {
+			if child.Kind() == "extends_clause" {
 				// Look for type_identifier or identifier
 				typeNode := p.findChild(child, "type_identifier")
 				if typeNode == nil {
@@ -406,19 +407,19 @@ func (p *ASTParser) parseClass(node *sitter.Node, isExported bool) *ir.Distilled
 						Name: typeName,
 					})
 				}
-			} else if child.Type() == "implements_clause" {
+			} else if child.Kind() == "implements_clause" {
 				// Parse implements
 				for j := 0; j < int(child.ChildCount()); j++ {
-					implChild := child.Child(j)
+					implChild := child.Child(uint(j))
 					if implChild == nil {
 						continue
 					}
 
-					if implChild.Type() == "type_identifier" {
+					if implChild.Kind() == "type_identifier" {
 						class.Implements = append(class.Implements, ir.TypeRef{
 							Name: p.nodeText(implChild),
 						})
-					} else if implChild.Type() == "generic_type" {
+					} else if implChild.Kind() == "generic_type" {
 						// Handle generic implements like Cacheable<string, User>
 						baseType := p.findChild(implChild, "type_identifier")
 						if baseType != nil {
@@ -465,12 +466,12 @@ func (p *ASTParser) parseClassBody(node *sitter.Node, class *ir.DistilledClass) 
 	}
 
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 		if child == nil {
 			continue
 		}
 
-		switch child.Type() {
+		switch child.Kind() {
 		case "comment":
 			pendingComments = append(pendingComments, p.parseComment(child))
 		case "decorated_definition":
@@ -478,11 +479,11 @@ func (p *ASTParser) parseClassBody(node *sitter.Node, class *ir.DistilledClass) 
 			var localDecs []string
 			var def *sitter.Node
 			for j := 0; j < int(child.ChildCount()); j++ {
-				sub := child.Child(j)
+				sub := child.Child(uint(j))
 				if sub == nil {
 					continue
 				}
-				if sub.Type() == "decorator" {
+				if sub.Kind() == "decorator" {
 					if d := p.parseDecorator(sub); d != "" {
 						localDecs = append(localDecs, d)
 					}
@@ -491,14 +492,14 @@ func (p *ASTParser) parseClassBody(node *sitter.Node, class *ir.DistilledClass) 
 				}
 			}
 			if def != nil {
-				switch def.Type() {
+				switch def.Kind() {
 				case "method_definition":
 					if m := p.parseMethod(def); m != nil {
 						m.Decorators = append(m.Decorators, localDecs...)
 						if m.Name == "constructor" {
 							constructorGroup = withComments(m)
 							for k := 0; k < int(def.ChildCount()); k++ {
-								if fc := def.Child(k); fc != nil && fc.Type() == "formal_parameters" {
+								if fc := def.Child(uint(k)); fc != nil && fc.Kind() == "formal_parameters" {
 									for _, f := range p.parseParameterProperties(fc) {
 										fields = append(fields, f)
 									}
@@ -533,8 +534,8 @@ func (p *ASTParser) parseClassBody(node *sitter.Node, class *ir.DistilledClass) 
 					constructorGroup = withComments(method)
 					// Find parameter properties from constructor
 					for j := 0; j < int(child.ChildCount()); j++ {
-						methodChild := child.Child(j)
-						if methodChild != nil && methodChild.Type() == "formal_parameters" {
+						methodChild := child.Child(uint(j))
+						if methodChild != nil && methodChild.Kind() == "formal_parameters" {
 							paramProps := p.parseParameterProperties(methodChild)
 							// Add parameter properties to fields
 							for _, field := range paramProps {
@@ -566,7 +567,7 @@ func (p *ASTParser) parseClassBody(node *sitter.Node, class *ir.DistilledClass) 
 
 				// Mark as abstract if it's an abstract_method_signature
 				// (and parseMethodSignature didn't already add it)
-				if child.Type() == "abstract_method_signature" {
+				if child.Kind() == "abstract_method_signature" {
 					hasAbstract := false
 					for _, mod := range method.Modifiers {
 						if mod == ir.ModifierAbstract {
@@ -610,12 +611,12 @@ func (p *ASTParser) parseMethod(node *sitter.Node) *ir.DistilledFunction {
 
 	// Parse accessibility modifiers and decorators
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 		if child == nil {
 			continue
 		}
 
-		switch child.Type() {
+		switch child.Kind() {
 		case "decorator":
 			// Process decorators that are children of the method_definition
 			if decoratorText := p.parseDecorator(child); decoratorText != "" {
@@ -640,7 +641,7 @@ func (p *ASTParser) parseMethod(node *sitter.Node) *ir.DistilledFunction {
 			method.Modifiers = append(method.Modifiers, ir.ModifierReadonly)
 		case "property_name":
 			if nameChild := child.Child(0); nameChild != nil {
-				if nameChild.Type() == "identifier" || nameChild.Type() == "property_identifier" {
+				if nameChild.Kind() == "identifier" || nameChild.Kind() == "property_identifier" {
 					method.Name = p.nodeText(nameChild)
 				}
 			}
@@ -677,12 +678,12 @@ func (p *ASTParser) parseMethodSignature(node *sitter.Node) *ir.DistilledFunctio
 
 	// Parse method signature components
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 		if child == nil {
 			continue
 		}
 
-		switch child.Type() {
+		switch child.Kind() {
 		case "accessibility_modifier":
 			switch p.nodeText(child) {
 			case "private":
@@ -696,7 +697,7 @@ func (p *ASTParser) parseMethodSignature(node *sitter.Node) *ir.DistilledFunctio
 			method.Modifiers = append(method.Modifiers, ir.ModifierAbstract)
 		case "property_name":
 			if nameChild := child.Child(0); nameChild != nil {
-				if nameChild.Type() == "identifier" || nameChild.Type() == "property_identifier" {
+				if nameChild.Kind() == "identifier" || nameChild.Kind() == "property_identifier" {
 					method.Name = p.nodeText(nameChild)
 				}
 			}
@@ -725,22 +726,22 @@ func (p *ASTParser) parseField(node *sitter.Node) *ir.DistilledField {
 	}
 
 	// Debug
-	// fmt.Printf("Parsing field, node type: %s, children: %d\n", node.Type(), node.ChildCount())
+	// fmt.Printf("Parsing field, node type: %s, children: %d\n", node.Kind(), node.ChildCount())
 	// for i := 0; i < int(node.ChildCount()); i++ {
 	// 	child := node.Child(i)
 	// 	if child != nil {
-	// 		fmt.Printf("  Child %d: type=%s, text=%q\n", i, child.Type(), p.nodeText(child))
+	// 		fmt.Printf("  Child %d: type=%s, text=%q\n", i, child.Kind(), p.nodeText(child))
 	// 	}
 	// }
 
 	// Parse field components
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 		if child == nil {
 			continue
 		}
 
-		switch child.Type() {
+		switch child.Kind() {
 		case "accessibility_modifier":
 			switch p.nodeText(child) {
 			case "private":
@@ -756,7 +757,7 @@ func (p *ASTParser) parseField(node *sitter.Node) *ir.DistilledField {
 			field.Modifiers = append(field.Modifiers, ir.ModifierReadonly)
 		case "property_name":
 			if nameChild := child.Child(0); nameChild != nil {
-				switch nameChild.Type() {
+				switch nameChild.Kind() {
 				case "identifier", "property_identifier":
 					field.Name = p.nodeText(nameChild)
 				case "private_property_identifier":
@@ -778,11 +779,11 @@ func (p *ASTParser) parseField(node *sitter.Node) *ir.DistilledField {
 
 	// Look for field initializer (e.g., = null)
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child != nil && child.Type() == "=" {
+		child := node.Child(uint(i))
+		if child != nil && child.Kind() == "=" {
 			// Next child should be the initializer value
 			if i+1 < int(node.ChildCount()) {
-				valueNode := node.Child(i + 1)
+				valueNode := node.Child(uint(i + 1))
 				if valueNode != nil {
 					field.DefaultValue = p.nodeText(valueNode)
 				}
@@ -810,11 +811,11 @@ func (p *ASTParser) parseInterface(node *sitter.Node, isExported bool) *ir.Disti
 	}
 
 	// Debug: print interface AST structure
-	// fmt.Printf("Interface AST for node at line %d:\n", node.StartPoint().Row+1)
+	// fmt.Printf("Interface AST for node at line %d:\n", node.StartPosition().Row+1)
 	// for i := 0; i < int(node.ChildCount()); i++ {
 	// 	child := node.Child(i)
 	// 	if child != nil {
-	// 		fmt.Printf("  Child %d: type=%s, text=%q\n", i, child.Type(), p.nodeText(child))
+	// 		fmt.Printf("  Child %d: type=%s, text=%q\n", i, child.Kind(), p.nodeText(child))
 	// 	}
 	// }
 
@@ -838,13 +839,13 @@ func (p *ASTParser) parseInterface(node *sitter.Node, isExported bool) *ir.Disti
 		// for i := 0; i < int(extendsClause.ChildCount()); i++ {
 		// 	child := extendsClause.Child(i)
 		// 	if child != nil {
-		// 		fmt.Printf("  Child %d: type=%s, text=%q\n", i, child.Type(), p.nodeText(child))
+		// 		fmt.Printf("  Child %d: type=%s, text=%q\n", i, child.Kind(), p.nodeText(child))
 		// 	}
 		// }
 
 		for i := 0; i < int(extendsClause.ChildCount()); i++ {
-			child := extendsClause.Child(i)
-			if child != nil && (child.Type() == "type_identifier" || child.Type() == "identifier") {
+			child := extendsClause.Child(uint(i))
+			if child != nil && (child.Kind() == "type_identifier" || child.Kind() == "identifier") {
 				intf.Extends = append(intf.Extends, ir.TypeRef{
 					Name: p.nodeText(child),
 				})
@@ -864,12 +865,12 @@ func (p *ASTParser) parseInterface(node *sitter.Node, isExported bool) *ir.Disti
 // parseInterfaceBody parses interface body members
 func (p *ASTParser) parseInterfaceBody(node *sitter.Node, intf *ir.DistilledInterface) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 		if child == nil {
 			continue
 		}
 
-		switch child.Type() {
+		switch child.Kind() {
 		case "property_signature":
 			if field := p.parsePropertySignature(child); field != nil {
 				intf.Children = append(intf.Children, field)
@@ -894,17 +895,17 @@ func (p *ASTParser) parsePropertySignature(node *sitter.Node) *ir.DistilledField
 
 	// Parse property signature components
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 		if child == nil {
 			continue
 		}
 
-		switch child.Type() {
+		switch child.Kind() {
 		case "readonly":
 			field.Modifiers = append(field.Modifiers, ir.ModifierReadonly)
 		case "property_name":
 			if nameChild := child.Child(0); nameChild != nil {
-				if nameChild.Type() == "identifier" || nameChild.Type() == "property_identifier" {
+				if nameChild.Kind() == "identifier" || nameChild.Kind() == "property_identifier" {
 					field.Name = p.nodeText(nameChild)
 				}
 			}
@@ -913,8 +914,8 @@ func (p *ASTParser) parsePropertySignature(node *sitter.Node) *ir.DistilledField
 		case "type_annotation":
 			// Extract the actual type from the type annotation (skip the colon)
 			for j := 0; j < int(child.ChildCount()); j++ {
-				typeChild := child.Child(j)
-				if typeChild != nil && typeChild.Type() != ":" {
+				typeChild := child.Child(uint(j))
+				if typeChild != nil && typeChild.Kind() != ":" {
 					field.Type = &ir.TypeRef{Name: p.nodeText(typeChild)}
 					break
 				}
@@ -955,7 +956,7 @@ func (p *ASTParser) parseTypeAlias(node *sitter.Node, isExported bool) *ir.Disti
 	// The type could be a union_type, intersection_type, or other type node
 	foundEquals := false
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 		if child == nil {
 			continue
 		}
@@ -967,7 +968,7 @@ func (p *ASTParser) parseTypeAlias(node *sitter.Node, isExported bool) *ir.Disti
 		}
 
 		// After equals, the next non-punctuation node is our type
-		if foundEquals && child.Type() != "=" {
+		if foundEquals && child.Kind() != "=" {
 			alias.Type = ir.TypeRef{Name: p.nodeText(child)}
 			break
 		}
@@ -1004,12 +1005,12 @@ func (p *ASTParser) parseEnum(node *sitter.Node, isExported bool) *ir.DistilledE
 // parseEnumBody parses enum body members
 func (p *ASTParser) parseEnumBody(node *sitter.Node, enum *ir.DistilledEnum) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 		if child == nil {
 			continue
 		}
 
-		if child.Type() == "enum_assignment" {
+		if child.Kind() == "enum_assignment" {
 			// Parse enum assignment like ADMIN = "admin"
 			nameNode := p.findChild(child, "property_identifier")
 			if nameNode != nil {
@@ -1029,7 +1030,7 @@ func (p *ASTParser) parseEnumBody(node *sitter.Node, enum *ir.DistilledEnum) {
 
 				enum.Children = append(enum.Children, field)
 			}
-		} else if child.Type() == "property_identifier" {
+		} else if child.Kind() == "property_identifier" {
 			// Simple enum member without assignment
 			field := &ir.DistilledField{
 				BaseNode: ir.BaseNode{
@@ -1062,12 +1063,12 @@ func (p *ASTParser) parseFunction(node *sitter.Node, isExported bool) *ir.Distil
 
 	// Parse function components
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 		if child == nil {
 			continue
 		}
 
-		switch child.Type() {
+		switch child.Kind() {
 		case "async":
 			fn.Modifiers = append(fn.Modifiers, ir.ModifierAsync)
 		case "identifier":
@@ -1099,8 +1100,8 @@ func (p *ASTParser) typeFromAnnotation(node *sitter.Node) *ir.TypeRef {
 		return nil
 	}
 	for i := 0; i < int(node.ChildCount()); i++ {
-		c := node.Child(i)
-		if c != nil && c.Type() != ":" {
+		c := node.Child(uint(i))
+		if c != nil && c.Kind() != ":" {
 			return &ir.TypeRef{Name: p.nodeText(c)}
 		}
 	}
@@ -1116,8 +1117,8 @@ func (p *ASTParser) parseVariableDeclaration(node *sitter.Node, isExported bool)
 
 	// Find variable declarators
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child == nil || child.Type() != "variable_declarator" {
+		child := node.Child(uint(i))
+		if child == nil || child.Kind() != "variable_declarator" {
 			continue
 		}
 
@@ -1187,8 +1188,8 @@ func (p *ASTParser) parseVariableDeclaration(node *sitter.Node, isExported bool)
 
 			// Keep short single-line initialisers; large literals would bloat the output.
 			for j := 0; j+1 < int(child.ChildCount()); j++ {
-				if c := child.Child(j); c != nil && c.Type() == "=" {
-					if v := p.nodeText(child.Child(j + 1)); !strings.Contains(v, "\n") && len(v) <= maxConstValueLen {
+				if c := child.Child(uint(j)); c != nil && c.Kind() == "=" {
+					if v := p.nodeText(child.Child(uint(j + 1))); !strings.Contains(v, "\n") && len(v) <= maxConstValueLen {
 						field.DefaultValue = v
 					}
 					break
@@ -1214,22 +1215,22 @@ func (p *ASTParser) parseArrowFunction(node *sitter.Node, isExported bool) *ir.D
 	}
 
 	// Debug: print the AST structure
-	// fmt.Printf("\nArrow function AST for node at line %d:\n", node.StartPoint().Row+1)
+	// fmt.Printf("\nArrow function AST for node at line %d:\n", node.StartPosition().Row+1)
 	// for i := 0; i < int(node.ChildCount()); i++ {
 	// 	child := node.Child(i)
 	// 	if child != nil {
-	// 		fmt.Printf("  Child %d: type=%s, text=%q\n", i, child.Type(), p.nodeText(child))
+	// 		fmt.Printf("  Child %d: type=%s, text=%q\n", i, child.Kind(), p.nodeText(child))
 	// 	}
 	// }
 
 	// Parse arrow function components
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 		if child == nil {
 			continue
 		}
 
-		switch child.Type() {
+		switch child.Kind() {
 		case "async":
 			fn.Modifiers = append(fn.Modifiers, ir.ModifierAsync)
 		case "formal_parameters":
@@ -1250,11 +1251,11 @@ func (p *ASTParser) parseArrowFunction(node *sitter.Node, isExported bool) *ir.D
 			continue
 		default:
 			// If it's not one of the above and we're past the arrow, it's likely the body
-			if fn.Implementation == "" && child.Type() != "=>" {
+			if fn.Implementation == "" && child.Kind() != "=>" {
 				// Check if we've seen the arrow already
 				hasArrow := false
 				for j := 0; j < i; j++ {
-					if prev := node.Child(j); prev != nil && prev.Type() == "=>" {
+					if prev := node.Child(uint(j)); prev != nil && prev.Kind() == "=>" {
 						hasArrow = true
 						break
 					}
@@ -1282,12 +1283,12 @@ func (p *ASTParser) parseParameterProperties(node *sitter.Node) []*ir.DistilledF
 	var fields []*ir.DistilledField
 
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 		if child == nil {
 			continue
 		}
 
-		switch child.Type() {
+		switch child.Kind() {
 		case "required_parameter", "optional_parameter":
 			// Check if this parameter has visibility modifiers
 			var visibility ir.Visibility
@@ -1296,12 +1297,12 @@ func (p *ASTParser) parseParameterProperties(node *sitter.Node) []*ir.DistilledF
 			var paramType *ir.TypeRef
 
 			for j := 0; j < int(child.ChildCount()); j++ {
-				subchild := child.Child(j)
+				subchild := child.Child(uint(j))
 				if subchild == nil {
 					continue
 				}
 
-				switch subchild.Type() {
+				switch subchild.Kind() {
 				case "accessibility_modifier":
 					hasVisibility = true
 					switch p.nodeText(subchild) {
@@ -1317,8 +1318,8 @@ func (p *ASTParser) parseParameterProperties(node *sitter.Node) []*ir.DistilledF
 				case "type_annotation":
 					// Get the actual type node
 					for k := 0; k < int(subchild.ChildCount()); k++ {
-						typeChild := subchild.Child(k)
-						if typeChild != nil && typeChild.Type() != ":" {
+						typeChild := subchild.Child(uint(k))
+						if typeChild != nil && typeChild.Kind() != ":" {
 							paramType = &ir.TypeRef{Name: p.nodeText(typeChild)}
 							break
 						}
@@ -1353,34 +1354,34 @@ func (p *ASTParser) parseParameters(node *sitter.Node) []ir.Parameter {
 	// fmt.Printf("Parsing parameters, node has %d children\n", node.ChildCount())
 
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 		if child == nil {
 			continue
 		}
 
-		// fmt.Printf("  Param child %d: type=%s\n", i, child.Type())
+		// fmt.Printf("  Param child %d: type=%s\n", i, child.Kind())
 
-		switch child.Type() {
+		switch child.Kind() {
 		case "required_parameter", "optional_parameter":
 			param := ir.Parameter{
-				IsOptional: child.Type() == "optional_parameter",
+				IsOptional: child.Kind() == "optional_parameter",
 			}
 
 			// Parse parameter components
 			for j := 0; j < int(child.ChildCount()); j++ {
-				subchild := child.Child(j)
+				subchild := child.Child(uint(j))
 				if subchild == nil {
 					continue
 				}
 
-				switch subchild.Type() {
+				switch subchild.Kind() {
 				case "identifier":
 					param.Name = p.nodeText(subchild)
 				case "type_annotation":
 					// Get the actual type node, which is the first child after the colon
 					for k := 0; k < int(subchild.ChildCount()); k++ {
-						typeChild := subchild.Child(k)
-						if typeChild != nil && typeChild.Type() != ":" {
+						typeChild := subchild.Child(uint(k))
+						if typeChild != nil && typeChild.Kind() != ":" {
 							param.Type = ir.TypeRef{Name: p.nodeText(typeChild)}
 							break
 						}
@@ -1400,8 +1401,8 @@ func (p *ASTParser) parseTypeParameters(node *sitter.Node) []ir.TypeParam {
 	var typeParams []ir.TypeParam
 
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child == nil || child.Type() != "type_parameter" {
+		child := node.Child(uint(i))
+		if child == nil || child.Kind() != "type_parameter" {
 			continue
 		}
 
@@ -1449,10 +1450,10 @@ func (p *ASTParser) parseDecorator(node *sitter.Node) string {
 
 func (p *ASTParser) nodeToLocation(node *sitter.Node) ir.Location {
 	return ir.Location{
-		StartLine:   int(node.StartPoint().Row) + 1,
-		StartColumn: int(node.StartPoint().Column) + 1,
-		EndLine:     int(node.EndPoint().Row) + 1,
-		EndColumn:   int(node.EndPoint().Column) + 1,
+		StartLine:   int(node.StartPosition().Row) + 1,
+		StartColumn: int(node.StartPosition().Column) + 1,
+		EndLine:     int(node.EndPosition().Row) + 1,
+		EndColumn:   int(node.EndPosition().Column) + 1,
 		StartByte:   int(node.StartByte()),
 		EndByte:     int(node.EndByte()),
 	}
@@ -1464,7 +1465,7 @@ func (p *ASTParser) nodeText(node *sitter.Node) string {
 	}
 	start := node.StartByte()
 	end := node.EndByte()
-	sourceLen := uint32(len(p.source))
+	sourceLen := uint(len(p.source))
 	if start > end || end > sourceLen {
 		return ""
 	}
@@ -1473,8 +1474,8 @@ func (p *ASTParser) nodeText(node *sitter.Node) string {
 
 func (p *ASTParser) findChild(node *sitter.Node, childType string) *sitter.Node {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child != nil && child.Type() == childType {
+		child := node.Child(uint(i))
+		if child != nil && child.Kind() == childType {
 			return child
 		}
 	}
@@ -1483,8 +1484,8 @@ func (p *ASTParser) findChild(node *sitter.Node, childType string) *sitter.Node 
 
 func (p *ASTParser) hasModifier(node *sitter.Node, modifier string) bool {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child != nil && child.Type() == modifier {
+		child := node.Child(uint(i))
+		if child != nil && child.Kind() == modifier {
 			return true
 		}
 	}
@@ -1493,7 +1494,7 @@ func (p *ASTParser) hasModifier(node *sitter.Node, modifier string) bool {
 
 func (p *ASTParser) hasToken(node *sitter.Node, token string) bool {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 		if child != nil && p.nodeText(child) == token {
 			return true
 		}

@@ -14,7 +14,8 @@ import (
 	"strings"
 
 	tree_sitter_kotlin "github.com/fwcd/tree-sitter-kotlin/bindings/go"
-	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/janreges/ai-distiller/internal/language/tsparse"
+	sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_c_sharp "github.com/tree-sitter/tree-sitter-c-sharp/bindings/go"
 	tree_sitter_cpp "github.com/tree-sitter/tree-sitter-cpp/bindings/go"
 	tree_sitter_java "github.com/tree-sitter/tree-sitter-java/bindings/go"
@@ -62,10 +63,12 @@ func dump(lang string, src []byte, all bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	parser := sitter.NewParser()
+	parser, err := tsparse.NewParser(l)
+	if err != nil {
+		return "", fmt.Errorf("parser for %s: %w", lang, err)
+	}
 	defer parser.Close()
-	parser.SetLanguage(l)
-	tree, err := parser.ParseCtx(context.Background(), nil, src)
+	tree, err := tsparse.Parse(context.Background(), parser, src)
 	if err != nil {
 		return "", fmt.Errorf("parse %s: %w", lang, err)
 	}
@@ -81,18 +84,18 @@ func writeNode(sb *strings.Builder, n *sitter.Node, field string, depth int, src
 	if field != "" {
 		sb.WriteString(field + ": ")
 	}
-	s, e := n.StartPoint(), n.EndPoint()
-	fmt.Fprintf(sb, "%s [%d:%d-%d:%d]", n.Type(), s.Row, s.Column, e.Row, e.Column)
+	s, e := n.StartPosition(), n.EndPosition()
+	fmt.Fprintf(sb, "%s [%d:%d-%d:%d]", n.Kind(), s.Row, s.Column, e.Row, e.Column)
 	if n.NamedChildCount() == 0 {
 		sb.WriteString(" \"" + nodeText(n, src) + "\"")
 	}
 	sb.WriteString("\n")
-	for i := 0; i < int(n.ChildCount()); i++ {
+	for i := uint(0); i < n.ChildCount(); i++ {
 		c := n.Child(i)
 		if !all && !c.IsNamed() {
 			continue
 		}
-		writeNode(sb, c, n.FieldNameForChild(i), depth+1, src, all)
+		writeNode(sb, c, n.FieldNameForChild(uint32(i)), depth+1, src, all)
 	}
 }
 

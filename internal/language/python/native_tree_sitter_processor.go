@@ -7,7 +7,8 @@ import (
 
 	"github.com/janreges/ai-distiller/internal/debug"
 	"github.com/janreges/ai-distiller/internal/ir"
-	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/janreges/ai-distiller/internal/language/tsparse"
+	sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_python "github.com/tree-sitter/tree-sitter-python/bindings/go"
 )
 
@@ -20,8 +21,10 @@ type NativeTreeSitterProcessor struct {
 
 // NewNativeTreeSitterProcessor creates a new native tree-sitter processor
 func NewNativeTreeSitterProcessor() (*NativeTreeSitterProcessor, error) {
-	parser := sitter.NewParser()
-	parser.SetLanguage(sitter.NewLanguage(tree_sitter_python.Language()))
+	parser, err := tsparse.NewParser(sitter.NewLanguage(tree_sitter_python.Language()))
+	if err != nil {
+		return nil, err
+	}
 
 	return &NativeTreeSitterProcessor{
 		parser: parser,
@@ -39,7 +42,7 @@ func (p *NativeTreeSitterProcessor) ProcessSource(ctx context.Context, source []
 	dbg.Logf(debug.LevelDetailed, "Parsing %d bytes with tree-sitter", len(source))
 
 	// Parse with tree-sitter
-	tree, err := p.parser.ParseCtx(ctx, nil, source)
+	tree, err := tsparse.Parse(ctx, p.parser, source)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse: %w", err)
 	}
@@ -55,7 +58,7 @@ func (p *NativeTreeSitterProcessor) ProcessSource(ctx context.Context, source []
 		BaseNode: ir.BaseNode{
 			Location: ir.Location{
 				StartLine: 1,
-				EndLine:   int(tree.RootNode().EndPoint().Row) + 1,
+				EndLine:   int(tree.RootNode().EndPosition().Row) + 1,
 			},
 		},
 		Path:     filename,
@@ -87,13 +90,13 @@ func (p *NativeTreeSitterProcessor) processNode(node *sitter.Node, file *ir.Dist
 		return
 	}
 
-	nodeType := node.Type()
+	nodeType := node.Kind()
 
 	// Only process named nodes unless it's a special case
 	if !node.IsNamed() && nodeType != "comment" {
 		// Process children for anonymous nodes
 		for i := 0; i < int(node.ChildCount()); i++ {
-			p.processNode(node.Child(i), file, parent)
+			p.processNode(node.Child(uint(i)), file, parent)
 		}
 		return
 	}
@@ -105,10 +108,10 @@ func (p *NativeTreeSitterProcessor) processNode(node *sitter.Node, file *ir.Dist
 		doc := docstringIndex(node)
 		for i := 0; i < int(node.ChildCount()); i++ {
 			if i == doc {
-				p.addNode(file, parent, p.docstringComment(node.Child(i).NamedChild(0), true))
+				p.addNode(file, parent, p.docstringComment(node.Child(uint(i)).NamedChild(0), true))
 				continue
 			}
-			p.processNode(node.Child(i), file, parent)
+			p.processNode(node.Child(uint(i)), file, parent)
 		}
 
 	case "import_statement":
@@ -136,12 +139,12 @@ func (p *NativeTreeSitterProcessor) processNode(node *sitter.Node, file *ir.Dist
 		// Check for bare strings and assignments
 		if node.ChildCount() > 0 {
 			child := node.Child(0)
-			if child.Type() == "string" {
+			if child.Kind() == "string" {
 				// Only module-level strings, not those inside function bodies
 				if parent == nil { // parent == nil means it's at module level
 					p.processBareString(child, file, parent)
 				}
-			} else if child.Type() == "assignment" {
+			} else if child.Kind() == "assignment" {
 				p.processAssignment(child, file, parent)
 			}
 		}
@@ -152,7 +155,7 @@ func (p *NativeTreeSitterProcessor) processNode(node *sitter.Node, file *ir.Dist
 	default:
 		// Process children for other node types
 		for i := 0; i < int(node.ChildCount()); i++ {
-			p.processNode(node.Child(i), file, parent)
+			p.processNode(node.Child(uint(i)), file, parent)
 		}
 	}
 }
@@ -167,8 +170,8 @@ func (p *NativeTreeSitterProcessor) processImport(node *sitter.Node, file *ir.Di
 
 	// Find module name and alias
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "dotted_name", "identifier":
 			if imp.Module == "" {
 				imp.Module = p.getNodeText(child)
@@ -258,8 +261,8 @@ func (p *NativeTreeSitterProcessor) processClass(node *sitter.Node, file *ir.Dis
 
 	// Walk through children
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "identifier":
 			if class.Name == "" {
 				class.Name = p.getNodeText(child)
@@ -268,8 +271,8 @@ func (p *NativeTreeSitterProcessor) processClass(node *sitter.Node, file *ir.Dis
 		case "argument_list":
 			// Base classes
 			for j := 0; j < int(child.ChildCount()); j++ {
-				arg := child.Child(j)
-				if arg.IsNamed() && (arg.Type() == "identifier" || arg.Type() == "attribute") {
+				arg := child.Child(uint(j))
+				if arg.IsNamed() && (arg.Kind() == "identifier" || arg.Kind() == "attribute") {
 					class.Extends = append(class.Extends, ir.TypeRef{
 						Name: p.getNodeText(arg),
 					})
@@ -297,15 +300,15 @@ func (p *NativeTreeSitterProcessor) processClass(node *sitter.Node, file *ir.Dis
 func (p *NativeTreeSitterProcessor) processClassBody(node *sitter.Node, file *ir.DistilledFile, class *ir.DistilledClass) {
 	doc := docstringIndex(node)
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 		if i == doc {
 			// The class docstring documents the class itself
 			p.addNode(file, class, p.docstringComment(child.NamedChild(0), true))
 			continue
 		}
-		switch child.Type() {
+		switch child.Kind() {
 		case "function_definition", "async_function_definition":
-			p.processFunction(child, file, class, child.Type() == "async_function_definition")
+			p.processFunction(child, file, class, child.Kind() == "async_function_definition")
 
 		case "decorated_definition":
 			p.processDecoratedDefinition(child, file, class)
@@ -317,9 +320,9 @@ func (p *NativeTreeSitterProcessor) processClassBody(node *sitter.Node, file *ir
 			// Check for bare strings or assignments
 			if child.ChildCount() > 0 {
 				expr := child.Child(0)
-				if expr.Type() == "string" {
+				if expr.Kind() == "string" {
 					p.processBareString(expr, file, class)
-				} else if expr.Type() == "assignment" {
+				} else if expr.Kind() == "assignment" {
 					p.processAssignment(expr, file, class)
 				}
 			}
@@ -348,8 +351,8 @@ func (p *NativeTreeSitterProcessor) processFunction(node *sitter.Node, file *ir.
 
 	// Walk through children
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "identifier":
 			if fn.Name == "" {
 				fn.Name = p.getNodeText(child)
@@ -369,11 +372,11 @@ func (p *NativeTreeSitterProcessor) processFunction(node *sitter.Node, file *ir.
 			startByte := child.StartByte()
 			endByte := child.EndByte()
 			if i := docstringIndex(child); i >= 0 {
-				doc = p.docstringComment(child.Child(i).NamedChild(0), false)
+				doc = p.docstringComment(child.Child(uint(i)).NamedChild(0), false)
 				startByte = endByte
 				fn.DocOnlyBody = true
 				for j := i + 1; j < int(child.ChildCount()); j++ {
-					if next := child.Child(j); next.IsNamed() {
+					if next := child.Child(uint(j)); next.IsNamed() {
 						startByte = next.StartByte()
 						fn.DocOnlyBody = false
 						break
@@ -388,7 +391,7 @@ func (p *NativeTreeSitterProcessor) processFunction(node *sitter.Node, file *ir.
 			// This allows us to extract field assignments like self.field = value
 			// We pass a special context that includes both the function and its parent (class)
 			for j := 0; j < int(child.ChildCount()); j++ {
-				blockChild := child.Child(j)
+				blockChild := child.Child(uint(j))
 				p.processNodeWithClassContext(blockChild, file, fn, parent)
 			}
 		}
@@ -417,16 +420,16 @@ func (p *NativeTreeSitterProcessor) processDecoratedDefinition(node *sitter.Node
 
 	// Collect decorators and find the definition
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "decorator" {
+		child := node.Child(uint(i))
+		if child.Kind() == "decorator" {
 			// Extract decorator name (skip @ symbol)
 			for j := 0; j < int(child.ChildCount()); j++ {
-				decChild := child.Child(j)
-				if decChild.Type() == "identifier" || decChild.Type() == "attribute" || decChild.Type() == "call" {
+				decChild := child.Child(uint(j))
+				if decChild.Kind() == "identifier" || decChild.Kind() == "attribute" || decChild.Kind() == "call" {
 					decorators = append(decorators, p.getNodeText(decChild))
 				}
 			}
-		} else if child.Type() == "function_definition" || child.Type() == "async_function_definition" || child.Type() == "class_definition" {
+		} else if child.Kind() == "function_definition" || child.Kind() == "async_function_definition" || child.Kind() == "class_definition" {
 			definition = child
 		}
 	}
@@ -440,9 +443,9 @@ func (p *NativeTreeSitterProcessor) processDecoratedDefinition(node *sitter.Node
 	// and the docstring come before the method. The definition starts at its
 	// first decorator.
 	start := p.nodeLocation(node).Location
-	switch definition.Type() {
+	switch definition.Kind() {
 	case "function_definition", "async_function_definition":
-		fn := p.processFunction(definition, file, parent, definition.Type() == "async_function_definition")
+		fn := p.processFunction(definition, file, parent, definition.Kind() == "async_function_definition")
 		fn.Decorators = decorators
 		startAt(&fn.Location, start)
 
@@ -461,7 +464,7 @@ func startAt(loc *ir.Location, from ir.Location) {
 // processParameters processes function parameters
 func (p *NativeTreeSitterProcessor) processParameters(node *sitter.Node, fn *ir.DistilledFunction) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 
 		// Skip punctuation
 		if !child.IsNamed() {
@@ -470,17 +473,17 @@ func (p *NativeTreeSitterProcessor) processParameters(node *sitter.Node, fn *ir.
 
 		param := &ir.Parameter{}
 
-		switch child.Type() {
+		switch child.Kind() {
 		case "identifier":
 			param.Name = p.getNodeText(child)
 
 		case "typed_parameter":
 			// parameter: type
 			for j := 0; j < int(child.ChildCount()); j++ {
-				subChild := child.Child(j)
-				if subChild.Type() == "identifier" && param.Name == "" {
+				subChild := child.Child(uint(j))
+				if subChild.Kind() == "identifier" && param.Name == "" {
 					param.Name = p.getNodeText(subChild)
-				} else if subChild.Type() == "type" {
+				} else if subChild.Kind() == "type" {
 					param.Type = ir.TypeRef{
 						Name: p.getNodeText(subChild),
 					}
@@ -490,8 +493,8 @@ func (p *NativeTreeSitterProcessor) processParameters(node *sitter.Node, fn *ir.
 		case "default_parameter":
 			// parameter = default
 			for j := 0; j < int(child.ChildCount()); j++ {
-				subChild := child.Child(j)
-				if subChild.Type() == "identifier" && param.Name == "" {
+				subChild := child.Child(uint(j))
+				if subChild.Kind() == "identifier" && param.Name == "" {
 					param.Name = p.getNodeText(subChild)
 				} else if subChild.IsNamed() && j > 0 { // Skip identifier and =
 					param.DefaultValue = p.getNodeText(subChild)
@@ -502,10 +505,10 @@ func (p *NativeTreeSitterProcessor) processParameters(node *sitter.Node, fn *ir.
 			// parameter: type = default
 			foundType := false
 			for j := 0; j < int(child.ChildCount()); j++ {
-				subChild := child.Child(j)
-				if subChild.Type() == "identifier" && param.Name == "" {
+				subChild := child.Child(uint(j))
+				if subChild.Kind() == "identifier" && param.Name == "" {
 					param.Name = p.getNodeText(subChild)
-				} else if subChild.Type() == "type" && !foundType {
+				} else if subChild.Kind() == "type" && !foundType {
 					param.Type = ir.TypeRef{
 						Name: p.getNodeText(subChild),
 					}
@@ -519,7 +522,7 @@ func (p *NativeTreeSitterProcessor) processParameters(node *sitter.Node, fn *ir.
 			// *args
 			if child.ChildCount() > 0 {
 				nameNode := child.Child(0)
-				if nameNode != nil && nameNode.Type() == "identifier" {
+				if nameNode != nil && nameNode.Kind() == "identifier" {
 					param.Name = "*" + p.getNodeText(nameNode)
 				}
 			}
@@ -528,7 +531,7 @@ func (p *NativeTreeSitterProcessor) processParameters(node *sitter.Node, fn *ir.
 			// **kwargs
 			if child.ChildCount() > 0 {
 				nameNode := child.Child(0)
-				if nameNode != nil && nameNode.Type() == "identifier" {
+				if nameNode != nil && nameNode.Kind() == "identifier" {
 					param.Name = "**" + p.getNodeText(nameNode)
 				}
 			}
@@ -547,7 +550,7 @@ func (p *NativeTreeSitterProcessor) processParameters(node *sitter.Node, fn *ir.
 func (p *NativeTreeSitterProcessor) assignmentParts(node *sitter.Node) (name string, typeRef *ir.TypeRef, value string, leftNode *sitter.Node) {
 	leftNode = node.ChildByFieldName("left")
 	if leftNode != nil {
-		switch leftNode.Type() {
+		switch leftNode.Kind() {
 		case "identifier":
 			name = p.getNodeText(leftNode)
 		case "attribute":
@@ -589,7 +592,7 @@ func (p *NativeTreeSitterProcessor) processAssignment(node *sitter.Node, file *i
 		// If this is an attribute assignment (self.field = value) and we're inside a function
 		// that's inside a class, associate the field with the class instead of the function
 		targetParent := parent
-		if leftNode != nil && leftNode.Type() == "attribute" {
+		if leftNode != nil && leftNode.Kind() == "attribute" {
 			// Check if we're in a function that's inside a class
 			if function, ok := parent.(*ir.DistilledFunction); ok {
 				// Look through the file to find which class contains this function
@@ -605,7 +608,7 @@ func (p *NativeTreeSitterProcessor) processAssignment(node *sitter.Node, file *i
 
 // processNodeWithClassContext processes a node with knowledge of both function and class context
 func (p *NativeTreeSitterProcessor) processNodeWithClassContext(node *sitter.Node, file *ir.DistilledFile, function *ir.DistilledFunction, classParent ir.DistilledNode) {
-	switch node.Type() {
+	switch node.Kind() {
 	case "assignment":
 		p.processAssignmentWithClassContext(node, file, function, classParent)
 
@@ -613,7 +616,7 @@ func (p *NativeTreeSitterProcessor) processNodeWithClassContext(node *sitter.Nod
 		// Check for assignments within expression statements
 		if node.ChildCount() > 0 {
 			child := node.Child(0)
-			if child.Type() == "assignment" {
+			if child.Kind() == "assignment" {
 				p.processAssignmentWithClassContext(child, file, function, classParent)
 			}
 		}
@@ -621,7 +624,7 @@ func (p *NativeTreeSitterProcessor) processNodeWithClassContext(node *sitter.Nod
 	default:
 		// For other node types, recurse into children with the same context
 		for i := 0; i < int(node.ChildCount()); i++ {
-			p.processNodeWithClassContext(node.Child(i), file, function, classParent)
+			p.processNodeWithClassContext(node.Child(uint(i)), file, function, classParent)
 		}
 	}
 }
@@ -647,7 +650,7 @@ func (p *NativeTreeSitterProcessor) processAssignmentWithClassContext(node *sitt
 
 		// Determine target parent: if this is a self.field assignment and we have a class context, use the class
 		var targetParent ir.DistilledNode = function // default to function
-		if leftNode != nil && leftNode.Type() == "attribute" && classParent != nil {
+		if leftNode != nil && leftNode.Kind() == "attribute" && classParent != nil {
 			if class, ok := classParent.(*ir.DistilledClass); ok {
 				targetParent = class
 			}
@@ -679,11 +682,11 @@ func (p *NativeTreeSitterProcessor) findClassContainingFunction(file *ir.Distill
 // the block of a class or function.
 func docstringIndex(body *sitter.Node) int {
 	for i := 0; i < int(body.ChildCount()); i++ {
-		child := body.Child(i)
-		if !child.IsNamed() || child.Type() == "comment" {
+		child := body.Child(uint(i))
+		if !child.IsNamed() || child.Kind() == "comment" {
 			continue
 		}
-		if child.Type() == "expression_statement" && child.NamedChildCount() == 1 && child.NamedChild(0).Type() == "string" {
+		if child.Kind() == "expression_statement" && child.NamedChildCount() == 1 && child.NamedChild(0).Kind() == "string" {
 			return i
 		}
 		return -1
@@ -719,7 +722,7 @@ func (p *NativeTreeSitterProcessor) processBareString(node *sitter.Node, file *i
 func (p *NativeTreeSitterProcessor) stringContent(node *sitter.Node) string {
 	start, end := node.StartByte(), node.EndByte()
 	for i := 0; i < int(node.ChildCount()); i++ {
-		switch child := node.Child(i); child.Type() {
+		switch child := node.Child(uint(i)); child.Kind() {
 		case "string_start":
 			start = child.EndByte()
 		case "string_end":
@@ -801,8 +804,8 @@ func (p *NativeTreeSitterProcessor) isPrivateName(name string) bool {
 }
 
 func (p *NativeTreeSitterProcessor) nodeLocation(node *sitter.Node) ir.BaseNode {
-	startPoint := node.StartPoint()
-	endPoint := node.EndPoint()
+	startPoint := node.StartPosition()
+	endPoint := node.EndPosition()
 
 	return ir.BaseNode{
 		Location: ir.Location{
@@ -965,12 +968,12 @@ func (p *NativeTreeSitterProcessor) dumpTree(node *sitter.Node, depth int) map[s
 	}
 
 	result := map[string]interface{}{
-		"type":      node.Type(),
+		"type":      node.Kind(),
 		"named":     node.IsNamed(),
-		"startLine": node.StartPoint().Row + 1,
-		"endLine":   node.EndPoint().Row + 1,
-		"startCol":  node.StartPoint().Column,
-		"endCol":    node.EndPoint().Column,
+		"startLine": node.StartPosition().Row + 1,
+		"endLine":   node.EndPosition().Row + 1,
+		"startCol":  node.StartPosition().Column,
+		"endCol":    node.EndPosition().Column,
 	}
 
 	// Add node text for leaf nodes or small nodes
@@ -985,7 +988,7 @@ func (p *NativeTreeSitterProcessor) dumpTree(node *sitter.Node, depth int) map[s
 	if node.ChildCount() > 0 {
 		children := make([]map[string]interface{}, 0, node.ChildCount())
 		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
+			child := node.Child(uint(i))
 			if child != nil {
 				children = append(children, p.dumpTree(child, depth+1))
 			}

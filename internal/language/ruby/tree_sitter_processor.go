@@ -7,13 +7,13 @@ import (
 
 	"github.com/janreges/ai-distiller/internal/ir"
 	"github.com/janreges/ai-distiller/internal/language/commentutil"
-	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/janreges/ai-distiller/internal/language/tsparse"
+	sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_ruby "github.com/tree-sitter/tree-sitter-ruby/bindings/go"
 )
 
 // TreeSitterProcessor uses tree-sitter for Ruby parsing
 type TreeSitterProcessor struct {
-	parser *sitter.Parser
 	// visibility holds the current `private`/`protected`/`public` section of
 	// each class or module body being processed; the top is the active one.
 	visibility []ir.Visibility
@@ -21,18 +21,21 @@ type TreeSitterProcessor struct {
 
 // NewTreeSitterProcessor creates a new tree-sitter based processor
 func NewTreeSitterProcessor() *TreeSitterProcessor {
-	parser := sitter.NewParser()
-	parser.SetLanguage(sitter.NewLanguage(tree_sitter_ruby.Language()))
-
-	return &TreeSitterProcessor{
-		parser: parser,
-	}
+	return &TreeSitterProcessor{}
 }
 
 // ProcessSource processes Ruby source code using tree-sitter
 func (p *TreeSitterProcessor) ProcessSource(ctx context.Context, source []byte, filename string) (*ir.DistilledFile, error) {
+	// The parser lives as long as this call: the tree and every node taken
+	// from it are used only here.
+	parser, err := tsparse.NewParser(sitter.NewLanguage(tree_sitter_ruby.Language()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Ruby parser: %w", err)
+	}
+	defer parser.Close()
+
 	// Parse the source code
-	tree, err := p.parser.ParseCtx(ctx, nil, source)
+	tree, err := tsparse.Parse(ctx, parser, source)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse Ruby code: %w", err)
 	}
@@ -43,7 +46,7 @@ func (p *TreeSitterProcessor) ProcessSource(ctx context.Context, source []byte, 
 		BaseNode: ir.BaseNode{
 			Location: ir.Location{
 				StartLine: 1,
-				EndLine:   int(tree.RootNode().EndPoint().Row) + 1,
+				EndLine:   int(tree.RootNode().EndPosition().Row) + 1,
 			},
 		},
 		Path:     filename,
@@ -61,7 +64,7 @@ func (p *TreeSitterProcessor) ProcessSource(ctx context.Context, source []byte, 
 
 // processNode recursively processes tree-sitter nodes
 func (p *TreeSitterProcessor) processNode(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
-	nodeType := node.Type()
+	nodeType := node.Kind()
 
 	switch nodeType {
 	case "program":
@@ -83,7 +86,7 @@ func (p *TreeSitterProcessor) processNode(node *sitter.Node, source []byte, file
 	default:
 		// Recursively process children
 		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
+			child := node.Child(uint(i))
 			p.processNode(child, source, file, parent)
 		}
 	}
@@ -101,15 +104,15 @@ func (p *TreeSitterProcessor) processClass(node *sitter.Node, source []byte, fil
 
 	// Extract class name and superclass
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "constant", "scope_resolution":
 			class.Name = string(source[child.StartByte():child.EndByte()])
 		case "superclass":
 			// Find the constant within superclass
 			for j := 0; j < int(child.ChildCount()); j++ {
-				superChild := child.Child(j)
-				if superChild.Type() == "constant" || superChild.Type() == "scope_resolution" {
+				superChild := child.Child(uint(j))
+				if superChild.Kind() == "constant" || superChild.Kind() == "scope_resolution" {
 					superclassName := string(source[superChild.StartByte():superChild.EndByte()])
 					class.Extends = append(class.Extends, ir.TypeRef{Name: superclassName})
 					break
@@ -154,8 +157,8 @@ func (p *TreeSitterProcessor) processModule(node *sitter.Node, source []byte, fi
 
 	// Extract module name
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "constant", "scope_resolution":
 			module.Name = string(source[child.StartByte():child.EndByte()])
 		}
@@ -179,7 +182,7 @@ func (p *TreeSitterProcessor) processMethod(node *sitter.Node, source []byte, fi
 	fn.Visibility = p.getCurrentVisibility(parent)
 
 	// Check if it's a singleton method (class method)
-	if node.Type() == "singleton_method" {
+	if node.Kind() == "singleton_method" {
 		fn.Modifiers = append(fn.Modifiers, ir.ModifierStatic)
 		// `def self.x` stays public inside a private section; only
 		// `private_class_method :x` hides it (processPrivateClassMethod).
@@ -188,8 +191,8 @@ func (p *TreeSitterProcessor) processMethod(node *sitter.Node, source []byte, fi
 
 	// Extract method components
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "identifier", "constant", "operator":
 			fn.Name = string(source[child.StartByte():child.EndByte()])
 		case "method_parameters", "parameters":
@@ -217,8 +220,8 @@ func (p *TreeSitterProcessor) processAssignment(node *sitter.Node, source []byte
 	var isInstanceVar bool
 
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "constant":
 			name = string(source[child.StartByte():child.EndByte()])
 			isConstant = true
@@ -259,14 +262,14 @@ func (p *TreeSitterProcessor) processCall(node *sitter.Node, source []byte, file
 	var arguments []string
 
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "identifier" {
+		child := node.Child(uint(i))
+		if child.Kind() == "identifier" {
 			methodName = string(source[child.StartByte():child.EndByte()])
-		} else if child.Type() == "argument_list" {
+		} else if child.Kind() == "argument_list" {
 			// Extract arguments
 			for j := 0; j < int(child.ChildCount()); j++ {
-				arg := child.Child(j)
-				switch arg.Type() {
+				arg := child.Child(uint(j))
+				switch arg.Kind() {
 				case "symbol", "simple_symbol", "string", "constant", "scope_resolution":
 					arguments = append(arguments, string(source[arg.StartByte():arg.EndByte()]))
 				}
@@ -277,7 +280,7 @@ func (p *TreeSitterProcessor) processCall(node *sitter.Node, source []byte, file
 	// Keyword calls have no receiver: `YAML.load(x)` and `Foo.include Bar`
 	// are ordinary method calls, not declarations. `self.include X` and
 	// `self.attr_reader :x` in a class body are the keyword calls written out.
-	if receiver := node.ChildByFieldName("receiver"); receiver != nil && receiver.Type() != "self" {
+	if receiver := node.ChildByFieldName("receiver"); receiver != nil && receiver.Kind() != "self" {
 		return
 	}
 
@@ -375,8 +378,8 @@ func (p *TreeSitterProcessor) processVisibilityCall(vis ir.Visibility, node *sit
 	}
 	var names []string
 	for i := 0; i < int(args.ChildCount()); i++ {
-		arg := args.Child(i)
-		switch arg.Type() {
+		arg := args.Child(uint(i))
+		switch arg.Kind() {
 		case "simple_symbol", "string":
 			names = append(names, strings.Trim(string(source[arg.StartByte():arg.EndByte()]), "\":' "))
 		case "call":
@@ -396,7 +399,7 @@ func (p *TreeSitterProcessor) processVisibilityCall(vis ir.Visibility, node *sit
 		case "method", "singleton_method":
 			p.processMethod(arg, source, file, parent)
 			if children := childrenOf(parent); children != nil && len(*children) > 0 {
-				if fn, ok := (*children)[len(*children)-1].(*ir.DistilledFunction); ok && arg.Type() == "method" {
+				if fn, ok := (*children)[len(*children)-1].(*ir.DistilledFunction); ok && arg.Kind() == "method" {
 					fn.Visibility = vis
 				}
 			}
@@ -427,8 +430,8 @@ func (p *TreeSitterProcessor) processPrivateClassMethod(node *sitter.Node, file 
 		return
 	}
 	for i := 0; i < int(args.ChildCount()); i++ {
-		arg := args.Child(i)
-		if arg.Type() != "simple_symbol" && arg.Type() != "string" {
+		arg := args.Child(uint(i))
+		if arg.Kind() != "simple_symbol" && arg.Kind() != "string" {
 			continue
 		}
 		name := strings.Trim(string(source[arg.StartByte():arg.EndByte()]), "\":' ")
@@ -474,7 +477,7 @@ func (p *TreeSitterProcessor) processBody(node *sitter.Node, source []byte, file
 func bodyStatements(node *sitter.Node) []*sitter.Node {
 	var stmts []*sitter.Node
 	for _, child := range childNodes(node) {
-		switch child.Type() {
+		switch child.Kind() {
 		case "comment":
 			stmts = append(stmts, child)
 		case "body_statement", "statements":
@@ -487,7 +490,7 @@ func bodyStatements(node *sitter.Node) []*sitter.Node {
 func childNodes(node *sitter.Node) []*sitter.Node {
 	nodes := make([]*sitter.Node, 0, node.ChildCount())
 	for i := 0; i < int(node.ChildCount()); i++ {
-		nodes = append(nodes, node.Child(i))
+		nodes = append(nodes, node.Child(uint(i)))
 	}
 	return nodes
 }
@@ -508,14 +511,14 @@ func (p *TreeSitterProcessor) processStatements(stmts []*sitter.Node, source []b
 	for i := 0; i < len(stmts); i++ {
 		stmt := stmts[i]
 		switch {
-		case stmt.Type() == "comment":
+		case stmt.Kind() == "comment":
 			end := commentRunEnd(stmts, i, source)
 			p.processComments(stmts[i:end], end < len(stmts) && documents(stmts[i:end], stmts[end], source), source, file, parent)
 			i = end - 1
 			continue
 		case !stmt.IsNamed():
 			continue
-		case len(p.visibility) > 0 && stmt.Type() == "identifier":
+		case len(p.visibility) > 0 && stmt.Kind() == "identifier":
 			switch name := string(source[stmt.StartByte():stmt.EndByte()]); name {
 			case "private", "protected", "public":
 				p.visibility[len(p.visibility)-1] = ir.Visibility(name)
@@ -537,8 +540,8 @@ func commentRunEnd(stmts []*sitter.Node, i int, source []byte) int {
 	if !isOwnLineHashComment(stmts[i], source) {
 		return end
 	}
-	for end < len(stmts) && stmts[end].Type() == "comment" && isOwnLineHashComment(stmts[end], source) &&
-		stmts[end].StartPoint().Row == stmts[end-1].EndPoint().Row+1 {
+	for end < len(stmts) && stmts[end].Kind() == "comment" && isOwnLineHashComment(stmts[end], source) &&
+		stmts[end].StartPosition().Row == stmts[end-1].EndPosition().Row+1 {
 		end++
 	}
 	return end
@@ -549,16 +552,16 @@ func commentRunEnd(stmts []*sitter.Node, i int, source []byte) int {
 // def passed to a call, as in `private def x`).
 func documents(run []*sitter.Node, next *sitter.Node, source []byte) bool {
 	last := run[len(run)-1]
-	if !isOwnLineHashComment(last, source) || next.StartPoint().Row != last.EndPoint().Row+1 {
+	if !isOwnLineHashComment(last, source) || next.StartPosition().Row != last.EndPosition().Row+1 {
 		return false
 	}
-	switch next.Type() {
+	switch next.Kind() {
 	case "class", "module", "singleton_class", "method", "singleton_method":
 		return true
 	case "call":
 		if args := next.ChildByFieldName("arguments"); args != nil {
 			for i := 0; i < int(args.NamedChildCount()); i++ {
-				if t := args.NamedChild(i).Type(); t == "method" || t == "singleton_method" {
+				if t := args.NamedChild(uint(i)).Kind(); t == "method" || t == "singleton_method" {
 					return true
 				}
 			}
@@ -646,8 +649,8 @@ func (p *TreeSitterProcessor) processAlias(node *sitter.Node, source []byte, fil
 	var newName, oldName string
 
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "identifier" || child.Type() == "symbol" {
+		child := node.Child(uint(i))
+		if child.Kind() == "identifier" || child.Kind() == "symbol" {
 			text := string(source[child.StartByte():child.EndByte()])
 			if newName == "" {
 				newName = strings.TrimPrefix(text, ":")
@@ -704,13 +707,13 @@ func (p *TreeSitterProcessor) processRequire(methodName string, node *sitter.Nod
 // plainStringLiteral returns the content of node when it is a string literal
 // without interpolation or escape sequences, and false otherwise.
 func plainStringLiteral(node *sitter.Node, source []byte) (string, bool) {
-	if node.Type() != "string" {
+	if node.Kind() != "string" {
 		return "", false
 	}
 	content := ""
 	for i := 0; i < int(node.NamedChildCount()); i++ {
-		part := node.NamedChild(i)
-		if part.Type() != "string_content" {
+		part := node.NamedChild(uint(i))
+		if part.Kind() != "string_content" {
 			return "", false
 		}
 		content += string(source[part.StartByte():part.EndByte()])
@@ -733,18 +736,18 @@ func (p *TreeSitterProcessor) processModuleBody(node *sitter.Node, source []byte
 // nodeLocation converts tree-sitter node position to IR location
 func (p *TreeSitterProcessor) nodeLocation(node *sitter.Node) ir.Location {
 	return ir.Location{
-		StartLine:   int(node.StartPoint().Row) + 1,
-		StartColumn: int(node.StartPoint().Column) + 1,
-		EndLine:     int(node.EndPoint().Row) + 1,
-		EndColumn:   int(node.EndPoint().Column) + 1,
+		StartLine:   int(node.StartPosition().Row) + 1,
+		StartColumn: int(node.StartPosition().Column) + 1,
+		EndLine:     int(node.EndPosition().Row) + 1,
+		EndColumn:   int(node.EndPosition().Column) + 1,
 	}
 }
 
 // extractParameters extracts method parameters
 func (p *TreeSitterProcessor) extractParameters(node *sitter.Node, source []byte, fn *ir.DistilledFunction) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "identifier":
 			// Simple parameter
 			param := ir.Parameter{
@@ -756,8 +759,8 @@ func (p *TreeSitterProcessor) extractParameters(node *sitter.Node, source []byte
 			// Parameter with default value
 			var paramName string
 			for j := 0; j < int(child.ChildCount()); j++ {
-				subChild := child.Child(j)
-				if subChild.Type() == "identifier" && paramName == "" {
+				subChild := child.Child(uint(j))
+				if subChild.Kind() == "identifier" && paramName == "" {
 					paramName = string(source[subChild.StartByte():subChild.EndByte()])
 				}
 			}
@@ -774,8 +777,8 @@ func (p *TreeSitterProcessor) extractParameters(node *sitter.Node, source []byte
 			// Keyword parameter (name:)
 			var paramName string
 			for j := 0; j < int(child.ChildCount()); j++ {
-				subChild := child.Child(j)
-				if subChild.Type() == "identifier" {
+				subChild := child.Child(uint(j))
+				if subChild.Kind() == "identifier" {
 					paramName = string(source[subChild.StartByte():subChild.EndByte()])
 					break
 				}
@@ -790,8 +793,8 @@ func (p *TreeSitterProcessor) extractParameters(node *sitter.Node, source []byte
 		case "splat_parameter":
 			// *args
 			for j := 0; j < int(child.ChildCount()); j++ {
-				subChild := child.Child(j)
-				if subChild.Type() == "identifier" {
+				subChild := child.Child(uint(j))
+				if subChild.Kind() == "identifier" {
 					param := ir.Parameter{
 						Name:       "*" + string(source[subChild.StartByte():subChild.EndByte()]),
 						Type:       ir.TypeRef{Name: "Array"},
@@ -804,8 +807,8 @@ func (p *TreeSitterProcessor) extractParameters(node *sitter.Node, source []byte
 		case "hash_splat_parameter":
 			// **kwargs
 			for j := 0; j < int(child.ChildCount()); j++ {
-				subChild := child.Child(j)
-				if subChild.Type() == "identifier" {
+				subChild := child.Child(uint(j))
+				if subChild.Kind() == "identifier" {
 					param := ir.Parameter{
 						Name: "**" + string(source[subChild.StartByte():subChild.EndByte()]),
 						Type: ir.TypeRef{Name: "Hash"},
@@ -817,8 +820,8 @@ func (p *TreeSitterProcessor) extractParameters(node *sitter.Node, source []byte
 		case "block_parameter":
 			// &block
 			for j := 0; j < int(child.ChildCount()); j++ {
-				subChild := child.Child(j)
-				if subChild.Type() == "identifier" {
+				subChild := child.Child(uint(j))
+				if subChild.Kind() == "identifier" {
 					param := ir.Parameter{
 						Name: "&" + string(source[subChild.StartByte():subChild.EndByte()]),
 						Type: ir.TypeRef{Name: "Proc"},

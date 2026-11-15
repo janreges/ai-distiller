@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	sitter "github.com/smacker/go-tree-sitter"
+	sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
 // PythonStrategy implements LanguageStrategy for Python
@@ -130,7 +130,7 @@ func (ps *PythonStrategy) DetermineScope(node *sitter.Node, fileAST *sitter.Tree
 	current := node.Parent()
 
 	for current != nil {
-		switch current.Type() {
+		switch current.Kind() {
 		case "function_definition":
 			if nameNode := current.ChildByFieldName("name"); nameNode != nil {
 				funcName := string(content[nameNode.StartByte():nameNode.EndByte()])
@@ -199,7 +199,7 @@ func (ps *PythonStrategy) inferVariableType(symbol *Symbol, context *ResolutionC
 func (ps *PythonStrategy) findContainingClass(node *sitter.Node, content []byte) string {
 	current := node.Parent()
 	for current != nil {
-		if current.Type() == "class_definition" {
+		if current.Kind() == "class_definition" {
 			if nameNode := current.ChildByFieldName("name"); nameNode != nil {
 				return string(content[nameNode.StartByte():nameNode.EndByte()])
 			}

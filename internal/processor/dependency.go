@@ -71,7 +71,7 @@ type DependencyAnalyzer struct {
 	originalContent map[string][]byte              // file path -> original content
 }
 
-// NewDependencyAnalyzer creates a new dependency analyzer
+// NewDependencyAnalyzer creates a new dependency analyzer. The caller closes it.
 func NewDependencyAnalyzer(projectRoot string, maxDepth int) (*DependencyAnalyzer, error) {
 	analyzer, err := semantic.NewAnalyzer(projectRoot)
 	if err != nil {
@@ -90,6 +90,11 @@ func NewDependencyAnalyzer(projectRoot string, maxDepth int) (*DependencyAnalyze
 		classDefs:       make(map[string]*ClassDefinition),
 		originalContent: make(map[string][]byte),
 	}, nil
+}
+
+// Close frees the tree-sitter parser and queries of the semantic analyzer.
+func (da *DependencyAnalyzer) Close() {
+	da.analyzer.Close()
 }
 
 // AnalyzeDependencies performs dependency-aware analysis on a distilled file
@@ -2183,6 +2188,7 @@ func ProcessWithDependencyAnalysis(ctx context.Context, proc *Processor, filePat
 		dbg.Logf(debug.LevelBasic, "Failed to create dependency analyzer: %v, returning normal result", err)
 		return file, nil
 	}
+	defer analyzer.Close()
 
 	// Run dependency analysis regardless of whether regular processor found content
 	// The dependency analyzer has its own parsing logic and can work with raw source

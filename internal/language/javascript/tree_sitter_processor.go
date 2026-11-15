@@ -7,7 +7,8 @@ import (
 
 	"github.com/janreges/ai-distiller/internal/ir"
 	"github.com/janreges/ai-distiller/internal/language/commentutil"
-	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/janreges/ai-distiller/internal/language/tsparse"
+	sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_javascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
 )
 
@@ -40,8 +41,10 @@ type JSDocInfo struct {
 
 // NewTreeSitterProcessor creates a new tree-sitter based processor
 func NewTreeSitterProcessor() (*TreeSitterProcessor, error) {
-	parser := sitter.NewParser()
-	parser.SetLanguage(sitter.NewLanguage(tree_sitter_javascript.Language()))
+	parser, err := tsparse.NewParser(sitter.NewLanguage(tree_sitter_javascript.Language()))
+	if err != nil {
+		return nil, err
+	}
 
 	return &TreeSitterProcessor{
 		parser:        parser,
@@ -60,7 +63,7 @@ func (p *TreeSitterProcessor) ProcessSource(ctx context.Context, source []byte, 
 	p.jsdocComments = make(map[int]*JSDocInfo)
 
 	// Parse with tree-sitter
-	tree, err := p.parser.ParseCtx(ctx, nil, source)
+	tree, err := tsparse.Parse(ctx, p.parser, source)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse: %w", err)
 	}
@@ -71,7 +74,7 @@ func (p *TreeSitterProcessor) ProcessSource(ctx context.Context, source []byte, 
 		BaseNode: ir.BaseNode{
 			Location: ir.Location{
 				StartLine: 1,
-				EndLine:   int(tree.RootNode().EndPoint().Row) + 1,
+				EndLine:   int(tree.RootNode().EndPosition().Row) + 1,
 			},
 		},
 		Path:     filename,
@@ -96,7 +99,7 @@ func (p *TreeSitterProcessor) collectJSDocComments(node *sitter.Node) {
 		return
 	}
 
-	nodeType := node.Type()
+	nodeType := node.Kind()
 
 	// Check if this is a JSDoc comment
 	if nodeType == "comment" {
@@ -116,7 +119,7 @@ func (p *TreeSitterProcessor) collectJSDocComments(node *sitter.Node) {
 
 	// Process children
 	for i := 0; i < int(node.ChildCount()); i++ {
-		p.collectJSDocComments(node.Child(i))
+		p.collectJSDocComments(node.Child(uint(i)))
 	}
 }
 
@@ -129,17 +132,17 @@ func (p *TreeSitterProcessor) findNextCodeLine(commentNode *sitter.Node) int {
 
 	foundComment := false
 	for i := 0; i < int(parent.ChildCount()); i++ {
-		child := parent.Child(i)
-		if child == commentNode {
+		child := parent.Child(uint(i))
+		if child.Equals(*commentNode) {
 			foundComment = true
 			continue
 		}
 
 		if foundComment && child.IsNamed() {
-			nodeType := child.Type()
+			nodeType := child.Kind()
 			// Skip other comments
 			if nodeType != "comment" {
-				return int(child.StartPoint().Row) + 1
+				return int(child.StartPosition().Row) + 1
 			}
 		}
 	}
@@ -240,13 +243,13 @@ func (p *TreeSitterProcessor) processNode(node *sitter.Node, file *ir.DistilledF
 		return
 	}
 
-	nodeType := node.Type()
+	nodeType := node.Kind()
 
 	// Skip non-named nodes except specific ones
 	if !node.IsNamed() && nodeType != "comment" {
 		// Process children for anonymous nodes
 		for i := 0; i < int(node.ChildCount()); i++ {
-			p.processNode(node.Child(i), file, parent)
+			p.processNode(node.Child(uint(i)), file, parent)
 		}
 		return
 	}
@@ -257,10 +260,10 @@ func (p *TreeSitterProcessor) processNode(node *sitter.Node, file *ir.DistilledF
 		// that yields no declaration (a re-export, `module.exports = ...`, a
 		// call) are dropped, so they do not document the next declaration.
 		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
+			child := node.Child(uint(i))
 			before := len(file.Children)
 			p.processNode(child, file, parent)
-			if child.IsNamed() && child.Type() != "comment" {
+			if child.IsNamed() && child.Kind() != "comment" {
 				added := append([]ir.DistilledNode(nil), file.Children[before:]...)
 				file.Children = commentutil.AppendStatement(file.Children[:before], added)
 			}
@@ -297,7 +300,7 @@ func (p *TreeSitterProcessor) processNode(node *sitter.Node, file *ir.DistilledF
 	default:
 		// Process children for other node types
 		for i := 0; i < int(node.ChildCount()); i++ {
-			p.processNode(node.Child(i), file, parent)
+			p.processNode(node.Child(uint(i)), file, parent)
 		}
 	}
 }
@@ -312,8 +315,8 @@ func (p *TreeSitterProcessor) processImport(node *sitter.Node, file *ir.Distille
 
 	// Process import parts
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "import_clause":
 			p.processImportClause(child, imp)
 		case "string":
@@ -328,8 +331,8 @@ func (p *TreeSitterProcessor) processImport(node *sitter.Node, file *ir.Distille
 // processImportClause processes the import clause (what's being imported)
 func (p *TreeSitterProcessor) processImportClause(node *sitter.Node, imp *ir.DistilledImport) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "identifier":
 			// Default import
 			imp.Symbols = append(imp.Symbols, ir.ImportedSymbol{
@@ -341,8 +344,8 @@ func (p *TreeSitterProcessor) processImportClause(node *sitter.Node, imp *ir.Dis
 		case "namespace_import":
 			// * as name
 			for j := 0; j < int(child.ChildCount()); j++ {
-				grandchild := child.Child(j)
-				if grandchild.Type() == "identifier" {
+				grandchild := child.Child(uint(j))
+				if grandchild.Kind() == "identifier" {
 					imp.Symbols = append(imp.Symbols, ir.ImportedSymbol{
 						Name:  "*",
 						Alias: p.getNodeText(grandchild),
@@ -356,8 +359,8 @@ func (p *TreeSitterProcessor) processImportClause(node *sitter.Node, imp *ir.Dis
 // processNamedImports processes named imports { a, b as c }
 func (p *TreeSitterProcessor) processNamedImports(node *sitter.Node, imp *ir.DistilledImport) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "import_specifier" {
+		child := node.Child(uint(i))
+		if child.Kind() == "import_specifier" {
 			var name, alias string
 
 			// Use field names for more reliable parsing
@@ -374,8 +377,8 @@ func (p *TreeSitterProcessor) processNamedImports(node *sitter.Node, imp *ir.Dis
 			// Fallback to positional if fields not available
 			if name == "" {
 				for j := 0; j < int(child.ChildCount()); j++ {
-					grandchild := child.Child(j)
-					if grandchild.Type() == "identifier" {
+					grandchild := child.Child(uint(j))
+					if grandchild.Kind() == "identifier" {
 						if name == "" {
 							name = p.getNodeText(grandchild)
 						} else {
@@ -397,8 +400,8 @@ func (p *TreeSitterProcessor) processNamedImports(node *sitter.Node, imp *ir.Dis
 func (p *TreeSitterProcessor) processExport(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) {
 	// Process the exported declaration
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "class_declaration":
 			p.processClass(child, file, parent)
 		case "function_declaration":
@@ -418,8 +421,8 @@ func (p *TreeSitterProcessor) processExportClause(node *sitter.Node, file *ir.Di
 	// TODO: Add proper export tracking in IR
 	var exports []string
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "export_specifier" {
+		child := node.Child(uint(i))
+		if child.Kind() == "export_specifier" {
 			exports = append(exports, p.getNodeText(child))
 		}
 	}
@@ -452,7 +455,7 @@ func (p *TreeSitterProcessor) processClass(node *sitter.Node, file *ir.Distilled
 	p.insideClass = true
 
 	// Check for JSDoc
-	nodeLine := int(node.StartPoint().Row) + 1
+	nodeLine := int(node.StartPosition().Row) + 1
 	if jsdoc, exists := p.jsdocComments[nodeLine]; exists {
 		if jsdoc.isPrivate {
 			class.Visibility = ir.VisibilityPrivate
@@ -463,8 +466,8 @@ func (p *TreeSitterProcessor) processClass(node *sitter.Node, file *ir.Distilled
 
 	// Process class parts
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "identifier":
 			class.Name = p.getNodeText(child)
 			p.currentClass = class.Name
@@ -472,8 +475,8 @@ func (p *TreeSitterProcessor) processClass(node *sitter.Node, file *ir.Distilled
 		case "class_heritage":
 			// extends clause
 			for j := 0; j < int(child.ChildCount()); j++ {
-				grandchild := child.Child(j)
-				if grandchild.Type() == "identifier" || grandchild.Type() == "member_expression" {
+				grandchild := child.Child(uint(j))
+				if grandchild.Kind() == "identifier" || grandchild.Kind() == "member_expression" {
 					class.Extends = append(class.Extends, ir.TypeRef{
 						Name: p.getNodeText(grandchild),
 					})
@@ -496,8 +499,8 @@ func (p *TreeSitterProcessor) processClass(node *sitter.Node, file *ir.Distilled
 // processClassBody processes the body of a class
 func (p *TreeSitterProcessor) processClassBody(node *sitter.Node, file *ir.DistilledFile, class *ir.DistilledClass) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "comment":
 			p.processComment(child, file, class)
 
@@ -533,7 +536,7 @@ func (p *TreeSitterProcessor) processMethod(node *sitter.Node, file *ir.Distille
 	var propertyName string
 
 	// Check for JSDoc
-	nodeLine := int(node.StartPoint().Row) + 1
+	nodeLine := int(node.StartPosition().Row) + 1
 	if jsdoc, exists := p.jsdocComments[nodeLine]; exists {
 		if jsdoc.isPrivate {
 			fn.Visibility = ir.VisibilityPrivate
@@ -548,10 +551,10 @@ func (p *TreeSitterProcessor) processMethod(node *sitter.Node, file *ir.Distille
 
 	// Process method parts
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 		text := p.getNodeText(child)
 
-		switch child.Type() {
+		switch child.Kind() {
 		case "get":
 			isGetter = true
 		case "set":
@@ -644,7 +647,7 @@ func (p *TreeSitterProcessor) processField(node *sitter.Node, file *ir.Distilled
 	var isStatic bool
 
 	// Check for JSDoc
-	nodeLine := int(node.StartPoint().Row) + 1
+	nodeLine := int(node.StartPosition().Row) + 1
 	if jsdoc, exists := p.jsdocComments[nodeLine]; exists {
 		if jsdoc.isPrivate {
 			field.Visibility = ir.VisibilityPrivate
@@ -658,8 +661,8 @@ func (p *TreeSitterProcessor) processField(node *sitter.Node, file *ir.Distilled
 
 	// Process field parts
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "static":
 			isStatic = true
 
@@ -677,7 +680,7 @@ func (p *TreeSitterProcessor) processField(node *sitter.Node, file *ir.Distilled
 
 		default:
 			// Initializer expression
-			if child.Type() != "=" && field.DefaultValue == "" {
+			if child.Kind() != "=" && field.DefaultValue == "" {
 				field.DefaultValue = p.getNodeText(child)
 			}
 		}
@@ -703,7 +706,7 @@ func (p *TreeSitterProcessor) processFunction(node *sitter.Node, file *ir.Distil
 	var isGenerator bool
 
 	// Check for JSDoc
-	nodeLine := int(node.StartPoint().Row) + 1
+	nodeLine := int(node.StartPosition().Row) + 1
 	if jsdoc, exists := p.jsdocComments[nodeLine]; exists {
 		if jsdoc.isPrivate {
 			fn.Visibility = ir.VisibilityPrivate
@@ -721,8 +724,8 @@ func (p *TreeSitterProcessor) processFunction(node *sitter.Node, file *ir.Distil
 
 	// Process function parts
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "async":
 			isAsync = true
 
@@ -764,13 +767,13 @@ func (p *TreeSitterProcessor) processFunction(node *sitter.Node, file *ir.Distil
 func (p *TreeSitterProcessor) processParameters(node *sitter.Node, fn *ir.DistilledFunction) {
 	// Get JSDoc for this function
 	var jsdocParamTypes map[string]string
-	fnLine := int(node.Parent().StartPoint().Row) + 1
+	fnLine := int(node.Parent().StartPosition().Row) + 1
 	if jsdoc, exists := p.jsdocComments[fnLine]; exists && jsdoc.paramTypes != nil {
 		jsdocParamTypes = jsdoc.paramTypes
 	}
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "identifier":
 			param := ir.Parameter{
 				Name: p.getNodeText(child),
@@ -786,12 +789,12 @@ func (p *TreeSitterProcessor) processParameters(node *sitter.Node, fn *ir.Distil
 		case "rest_pattern":
 			// ...args
 			for j := 0; j < int(child.ChildCount()); j++ {
-				if child.Child(j).Type() == "identifier" {
+				if child.Child(uint(j)).Kind() == "identifier" {
 					param := ir.Parameter{
-						Name: "..." + p.getNodeText(child.Child(j)),
+						Name: "..." + p.getNodeText(child.Child(uint(j))),
 					}
 					if jsdocParamTypes != nil {
-						if jsdocType, exists := jsdocParamTypes[p.getNodeText(child.Child(j))]; exists {
+						if jsdocType, exists := jsdocParamTypes[p.getNodeText(child.Child(uint(j)))]; exists {
 							param.Type = ir.TypeRef{Name: jsdocType}
 						}
 					}
@@ -803,10 +806,10 @@ func (p *TreeSitterProcessor) processParameters(node *sitter.Node, fn *ir.Distil
 			// param = defaultValue
 			var paramName, defaultValue string
 			for j := 0; j < int(child.ChildCount()); j++ {
-				grandchild := child.Child(j)
-				if grandchild.Type() == "identifier" {
+				grandchild := child.Child(uint(j))
+				if grandchild.Kind() == "identifier" {
 					paramName = p.getNodeText(grandchild)
-				} else if grandchild.Type() != "=" {
+				} else if grandchild.Kind() != "=" {
 					defaultValue = p.getNodeText(grandchild)
 				}
 			}
@@ -835,8 +838,8 @@ func (p *TreeSitterProcessor) processParameters(node *sitter.Node, fn *ir.Distil
 func (p *TreeSitterProcessor) processVariableDeclaration(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) {
 	// Process each variable declarator
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "variable_declarator" {
+		child := node.Child(uint(i))
+		if child.Kind() == "variable_declarator" {
 			p.processVariableDeclarator(child, file, parent, "var")
 		}
 	}
@@ -848,17 +851,17 @@ func (p *TreeSitterProcessor) processLexicalDeclaration(node *sitter.Node, file 
 
 	// Determine if let or const
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "let" || child.Type() == "const" {
-			kind = child.Type()
+		child := node.Child(uint(i))
+		if child.Kind() == "let" || child.Kind() == "const" {
+			kind = child.Kind()
 			break
 		}
 	}
 
 	// Process each variable declarator
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "variable_declarator" {
+		child := node.Child(uint(i))
+		if child.Kind() == "variable_declarator" {
 			p.processVariableDeclarator(child, file, parent, kind)
 		}
 	}
@@ -878,7 +881,7 @@ func (p *TreeSitterProcessor) processVariableDeclarator(node *sitter.Node, file 
 	}
 
 	// Check for JSDoc
-	nodeLine := int(node.StartPoint().Row) + 1
+	nodeLine := int(node.StartPosition().Row) + 1
 	if jsdoc, exists := p.jsdocComments[nodeLine]; exists {
 		if jsdoc.isPrivate {
 			field.Visibility = ir.VisibilityPrivate
@@ -892,8 +895,8 @@ func (p *TreeSitterProcessor) processVariableDeclarator(node *sitter.Node, file 
 
 	// Process declarator parts
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "identifier":
 			field.Name = p.getNodeText(child)
 			// Check for underscore prefix convention
@@ -907,9 +910,9 @@ func (p *TreeSitterProcessor) processVariableDeclarator(node *sitter.Node, file 
 
 		default:
 			// Initializer
-			if child.Type() != "=" && field.DefaultValue == "" {
+			if child.Kind() != "=" && field.DefaultValue == "" {
 				// Check if it's a function expression, generator function, or arrow function
-				if child.Type() == "function_expression" || child.Type() == "arrow_function" || child.Type() == "generator_function" {
+				if child.Kind() == "function_expression" || child.Kind() == "arrow_function" || child.Kind() == "generator_function" {
 					// Store as a function instead
 					fn := &ir.DistilledFunction{
 						BaseNode:   p.nodeLocation(child),
@@ -920,7 +923,7 @@ func (p *TreeSitterProcessor) processVariableDeclarator(node *sitter.Node, file 
 					}
 
 					// Process function expression
-					if child.Type() == "arrow_function" {
+					if child.Kind() == "arrow_function" {
 						p.processArrowFunction(child, fn)
 					} else {
 						p.processFunctionExpression(child, fn)
@@ -928,7 +931,7 @@ func (p *TreeSitterProcessor) processVariableDeclarator(node *sitter.Node, file 
 
 					p.addNode(file, parent, fn)
 					return
-				} else if child.Type() == "object" {
+				} else if child.Kind() == "object" {
 					// Simple object literal analysis
 					field.DefaultValue = p.processObjectLiteral(child)
 				} else {
@@ -944,8 +947,8 @@ func (p *TreeSitterProcessor) processVariableDeclarator(node *sitter.Node, file 
 // processArrowFunction processes arrow function expressions
 func (p *TreeSitterProcessor) processArrowFunction(node *sitter.Node, fn *ir.DistilledFunction) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "async":
 			fn.Modifiers = append(fn.Modifiers, ir.ModifierAsync)
 
@@ -971,8 +974,8 @@ func (p *TreeSitterProcessor) processArrowFunction(node *sitter.Node, fn *ir.Dis
 // processFunctionExpression processes function expressions
 func (p *TreeSitterProcessor) processFunctionExpression(node *sitter.Node, fn *ir.DistilledFunction) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "async":
 			fn.Modifiers = append(fn.Modifiers, ir.ModifierAsync)
 
@@ -1002,8 +1005,8 @@ func (p *TreeSitterProcessor) processFunctionExpression(node *sitter.Node, fn *i
 func (p *TreeSitterProcessor) processExpressionStatement(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) {
 	// Look for assignment expressions
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "assignment_expression" {
+		child := node.Child(uint(i))
+		if child.Kind() == "assignment_expression" {
 			// Check if it's module.exports = ...
 			left := child.ChildByFieldName("left")
 			right := child.ChildByFieldName("right")
@@ -1036,7 +1039,7 @@ func (p *TreeSitterProcessor) processComment(node *sitter.Node, file *ir.Distill
 		Text:     text,
 		Format:   format,
 	}
-	if treeParent := node.Parent(); format == ir.CommentDoc && treeParent != nil && treeParent.Type() == "program" {
+	if treeParent := node.Parent(); format == ir.CommentDoc && treeParent != nil && treeParent.Kind() == "program" {
 		comment.Inner = commentutil.DocumentsFile(text)
 	}
 
@@ -1046,8 +1049,8 @@ func (p *TreeSitterProcessor) processComment(node *sitter.Node, file *ir.Distill
 // Helper methods
 
 func (p *TreeSitterProcessor) nodeLocation(node *sitter.Node) ir.BaseNode {
-	startPoint := node.StartPoint()
-	endPoint := node.EndPoint()
+	startPoint := node.StartPosition()
+	endPoint := node.EndPosition()
 
 	return ir.BaseNode{
 		Location: ir.Location{
@@ -1091,8 +1094,8 @@ func (p *TreeSitterProcessor) processObjectLiteral(node *sitter.Node) string {
 	var members []string
 
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		childType := child.Type()
+		child := node.Child(uint(i))
+		childType := child.Kind()
 
 		// Skip punctuation nodes
 		if childType == "{" || childType == "}" || childType == "," {
@@ -1118,7 +1121,7 @@ func (p *TreeSitterProcessor) processObjectLiteral(node *sitter.Node) string {
 			}
 
 			if valueNode != nil {
-				valueType := valueNode.Type()
+				valueType := valueNode.Kind()
 				if valueType == "function_expression" || valueType == "arrow_function" {
 					// It's a method - extract parameters, async prefix and return type
 					params := p.extractFunctionParams(valueNode)
@@ -1135,7 +1138,7 @@ func (p *TreeSitterProcessor) processObjectLiteral(node *sitter.Node) string {
 					members = append(members, key)
 				}
 			}
-		} else if child.Type() == "method_definition" {
+		} else if child.Kind() == "method_definition" {
 			// Handle method definitions (including getters/setters)
 			methodStr := p.processMethodDefinition(child)
 			if methodStr != "" {
@@ -1156,24 +1159,24 @@ func (p *TreeSitterProcessor) extractFunctionParams(node *sitter.Node) string {
 
 	// Find formal_parameters node
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "formal_parameters" {
+		child := node.Child(uint(i))
+		if child.Kind() == "formal_parameters" {
 			// Extract each parameter
 			for j := 0; j < int(child.ChildCount()); j++ {
-				paramNode := child.Child(j)
-				switch paramNode.Type() {
+				paramNode := child.Child(uint(j))
+				switch paramNode.Kind() {
 				case "identifier":
 					params = append(params, p.getNodeText(paramNode))
 				case "assignment_pattern":
 					// Parameter with default value
 					for k := 0; k < int(paramNode.ChildCount()); k++ {
-						if paramNode.Child(k).Type() == "identifier" {
-							paramName := p.getNodeText(paramNode.Child(k))
+						if paramNode.Child(uint(k)).Kind() == "identifier" {
+							paramName := p.getNodeText(paramNode.Child(uint(k)))
 							// Find default value
 							var defaultVal string
 							for l := k + 1; l < int(paramNode.ChildCount()); l++ {
-								if paramNode.Child(l).Type() != "=" {
-									defaultVal = p.getNodeText(paramNode.Child(l))
+								if paramNode.Child(uint(l)).Kind() != "=" {
+									defaultVal = p.getNodeText(paramNode.Child(uint(l)))
 									break
 								}
 							}
@@ -1188,8 +1191,8 @@ func (p *TreeSitterProcessor) extractFunctionParams(node *sitter.Node) string {
 				case "rest_pattern":
 					// ...args
 					for k := 0; k < int(paramNode.ChildCount()); k++ {
-						if paramNode.Child(k).Type() == "identifier" {
-							params = append(params, "..."+p.getNodeText(paramNode.Child(k)))
+						if paramNode.Child(uint(k)).Kind() == "identifier" {
+							params = append(params, "..."+p.getNodeText(paramNode.Child(uint(k))))
 						}
 					}
 				case "object_pattern", "array_pattern":
@@ -1198,7 +1201,7 @@ func (p *TreeSitterProcessor) extractFunctionParams(node *sitter.Node) string {
 				}
 			}
 			break
-		} else if child.Type() == "identifier" && node.Type() == "arrow_function" {
+		} else if child.Kind() == "identifier" && node.Kind() == "arrow_function" {
 			// Single parameter arrow function without parentheses
 			params = append(params, p.getNodeText(child))
 			break
@@ -1214,8 +1217,8 @@ func (p *TreeSitterProcessor) processMethodDefinition(node *sitter.Node) string 
 	var isGetter, isSetter, isAsync, isGenerator bool
 
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "get":
 			isGetter = true
 		case "set":
@@ -1250,7 +1253,7 @@ func (p *TreeSitterProcessor) processMethodDefinition(node *sitter.Node) string 
 	} else if name != "" {
 		// Check for return type from JSDoc
 		returnType := ""
-		nodeLine := int(node.StartPoint().Row) + 1
+		nodeLine := int(node.StartPosition().Row) + 1
 		if jsdoc, exists := p.jsdocComments[nodeLine]; exists && jsdoc.returnType != "" {
 			returnType = jsdoc.returnType
 		} else if isAsync {
@@ -1272,15 +1275,15 @@ func (p *TreeSitterProcessor) extractParametersFromNode(node *sitter.Node) strin
 	var params []string
 
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "identifier":
 			params = append(params, p.getNodeText(child))
 		case "assignment_pattern":
 			// Parameter with default value
 			for j := 0; j < int(child.ChildCount()); j++ {
-				if child.Child(j).Type() == "identifier" {
-					params = append(params, p.getNodeText(child.Child(j)))
+				if child.Child(uint(j)).Kind() == "identifier" {
+					params = append(params, p.getNodeText(child.Child(uint(j))))
 					break
 				}
 			}
@@ -1294,14 +1297,14 @@ func (p *TreeSitterProcessor) extractParametersFromNode(node *sitter.Node) strin
 func (p *TreeSitterProcessor) extractReturnType(node *sitter.Node) string {
 	// Check if it's an async function
 	for i := 0; i < int(node.ChildCount()); i++ {
-		if node.Child(i).Type() == "async" {
+		if node.Child(uint(i)).Kind() == "async" {
 			// For now, just mark async functions as returning Promise
 			return "Promise"
 		}
 	}
 
 	// Check JSDoc comments for return type
-	nodeLine := int(node.StartPoint().Row) + 1
+	nodeLine := int(node.StartPosition().Row) + 1
 	if jsdoc, exists := p.jsdocComments[nodeLine]; exists && jsdoc.returnType != "" {
 		return jsdoc.returnType
 	}
@@ -1314,8 +1317,8 @@ func (p *TreeSitterProcessor) extractAsyncPrefix(node *sitter.Node) string {
 	var isAsync, isGenerator bool
 
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		switch child.Type() {
+		child := node.Child(uint(i))
+		switch child.Kind() {
 		case "async":
 			isAsync = true
 		case "*":
@@ -1334,10 +1337,12 @@ func (p *TreeSitterProcessor) extractAsyncPrefix(node *sitter.Node) string {
 	return prefix
 }
 
-// Close cleans up resources
+// Close frees the parser. Trees parsed by it are closed by ProcessSource; a
+// second Close does nothing.
 func (p *TreeSitterProcessor) Close() error {
 	if p.parser != nil {
 		p.parser.Close()
+		p.parser = nil
 	}
 	return nil
 }

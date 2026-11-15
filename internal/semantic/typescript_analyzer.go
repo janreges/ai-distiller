@@ -6,7 +6,8 @@ import (
 	"io"
 	"strings"
 
-	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/janreges/ai-distiller/internal/language/tsparse"
+	sitter "github.com/tree-sitter/go-tree-sitter"
 	typescript "tree-sitter-typescript"
 )
 
@@ -24,13 +25,17 @@ type TypeScriptQueries struct {
 	imports      *sitter.Query
 }
 
-// NewTypeScriptAnalyzer creates a new TypeScript semantic analyzer
+// NewTypeScriptAnalyzer creates a new TypeScript semantic analyzer. The caller
+// closes it.
 func NewTypeScriptAnalyzer() (*TypeScriptAnalyzer, error) {
-	parser := sitter.NewParser()
-	parser.SetLanguage(sitter.NewLanguage(typescript.Language()))
+	parser, err := tsparse.NewParser(sitter.NewLanguage(typescript.Language()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TypeScript parser: %w", err)
+	}
 
 	queries, err := compileTypeScriptQueries()
 	if err != nil {
+		parser.Close()
 		return nil, fmt.Errorf("failed to compile TypeScript queries: %w", err)
 	}
 
@@ -39,6 +44,27 @@ func NewTypeScriptAnalyzer() (*TypeScriptAnalyzer, error) {
 		strategy: NewTypeScriptStrategy(),
 		queries:  queries,
 	}, nil
+}
+
+// Close frees the parser and the compiled queries.
+func (tsa *TypeScriptAnalyzer) Close() {
+	if tsa.queries != nil {
+		tsa.queries.close()
+		tsa.queries = nil
+	}
+	if tsa.parser != nil {
+		tsa.parser.Close()
+		tsa.parser = nil
+	}
+}
+
+// close frees the compiled queries that are set.
+func (q *TypeScriptQueries) close() {
+	for _, query := range []*sitter.Query{q.declarations, q.calls, q.imports} {
+		if query != nil {
+			query.Close()
+		}
+	}
 }
 
 // compileTypeScriptQueries compiles all tree-sitter queries for TypeScript
@@ -133,26 +159,28 @@ func compileTypeScriptQueries() (*TypeScriptQueries, error) {
 (export_statement) @export.statement
 `
 
-	declarations, err := sitter.NewQuery([]byte(declarationsQuery), sitter.NewLanguage(typescript.Language()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to compile declarations query: %w", err)
+	language := sitter.NewLanguage(typescript.Language())
+	queries := &TypeScriptQueries{}
+	var queryErr *sitter.QueryError
+
+	queries.declarations, queryErr = sitter.NewQuery(language, declarationsQuery)
+	if queryErr != nil {
+		return nil, fmt.Errorf("failed to compile declarations query: %w", queryErr)
 	}
 
-	calls, err := sitter.NewQuery([]byte(callsQuery), sitter.NewLanguage(typescript.Language()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to compile calls query: %w", err)
+	queries.calls, queryErr = sitter.NewQuery(language, callsQuery)
+	if queryErr != nil {
+		queries.close()
+		return nil, fmt.Errorf("failed to compile calls query: %w", queryErr)
 	}
 
-	imports, err := sitter.NewQuery([]byte(importsQuery), sitter.NewLanguage(typescript.Language()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to compile imports query: %w", err)
+	queries.imports, queryErr = sitter.NewQuery(language, importsQuery)
+	if queryErr != nil {
+		queries.close()
+		return nil, fmt.Errorf("failed to compile imports query: %w", queryErr)
 	}
 
-	return &TypeScriptQueries{
-		declarations: declarations,
-		calls:        calls,
-		imports:      imports,
-	}, nil
+	return queries, nil
 }
 
 // AnalyzeFile performs semantic analysis on a TypeScript file
@@ -164,7 +192,7 @@ func (tsa *TypeScriptAnalyzer) AnalyzeFile(ctx context.Context, reader io.Reader
 	}
 
 	// Parse the file
-	tree, err := tsa.parser.ParseCtx(ctx, nil, content)
+	tree, err := tsparse.Parse(ctx, tsa.parser, content)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse TypeScript file: %w", err)
 	}
@@ -205,17 +233,11 @@ func (tsa *TypeScriptAnalyzer) extractSymbols(tree *sitter.Tree, content []byte,
 	qc := sitter.NewQueryCursor()
 	defer qc.Close()
 
-	qc.Exec(tsa.queries.declarations, rootNode)
-
-	for {
-		match, ok := qc.NextMatch()
-		if !ok {
-			break
-		}
-
+	matches := qc.Matches(tsa.queries.declarations, rootNode, content)
+	for match := matches.Next(); match != nil; match = matches.Next() {
 		for _, capture := range match.Captures {
-			node := capture.Node
-			captureName := tsa.queries.declarations.CaptureNameForId(capture.Index)
+			node := &capture.Node
+			captureName := tsa.queries.declarations.CaptureNames()[capture.Index]
 
 			switch captureName {
 			case "function.name", "arrow_function.name":
@@ -455,17 +477,11 @@ func (tsa *TypeScriptAnalyzer) extractCallSites(tree *sitter.Tree, content []byt
 	qc := sitter.NewQueryCursor()
 	defer qc.Close()
 
-	qc.Exec(tsa.queries.calls, rootNode)
-
-	for {
-		match, ok := qc.NextMatch()
-		if !ok {
-			break
-		}
-
+	matches := qc.Matches(tsa.queries.calls, rootNode, content)
+	for match := matches.Next(); match != nil; match = matches.Next() {
 		for _, capture := range match.Captures {
-			node := capture.Node
-			captureName := tsa.queries.calls.CaptureNameForId(capture.Index)
+			node := &capture.Node
+			captureName := tsa.queries.calls.CaptureNames()[capture.Index]
 
 			var calleeName string
 
@@ -508,16 +524,10 @@ func (tsa *TypeScriptAnalyzer) extractDependencies(tree *sitter.Tree, content []
 	qc := sitter.NewQueryCursor()
 	defer qc.Close()
 
-	qc.Exec(tsa.queries.imports, rootNode)
-
-	for {
-		match, ok := qc.NextMatch()
-		if !ok {
-			break
-		}
-
+	matches := qc.Matches(tsa.queries.imports, rootNode, content)
+	for match := matches.Next(); match != nil; match = matches.Next() {
 		for _, capture := range match.Captures {
-			node := capture.Node
+			node := &capture.Node
 
 			// Extract import path from different import types
 			if importPath := tsa.extractImportPath(node, content); importPath != "" {
@@ -540,10 +550,10 @@ func (tsa *TypeScriptAnalyzer) extractDependencies(tree *sitter.Tree, content []
 
 func (tsa *TypeScriptAnalyzer) extractImportPath(node *sitter.Node, content []byte) string {
 	// Handle different import statement types
-	switch node.Type() {
+	switch node.Kind() {
 	case "import_statement":
 		if sourceNode := node.ChildByFieldName("source"); sourceNode != nil {
-			if sourceNode.Type() == "string" {
+			if sourceNode.Kind() == "string" {
 				// Remove quotes from string literal
 				source := string(content[sourceNode.StartByte():sourceNode.EndByte()])
 				return strings.Trim(source, "\"'")
@@ -551,14 +561,14 @@ func (tsa *TypeScriptAnalyzer) extractImportPath(node *sitter.Node, content []by
 		}
 	case "variable_declarator":
 		// Handle require() calls: const config = require('./config')
-		if valueNode := node.ChildByFieldName("value"); valueNode != nil && valueNode.Type() == "call_expression" {
+		if valueNode := node.ChildByFieldName("value"); valueNode != nil && valueNode.Kind() == "call_expression" {
 			if funcNode := valueNode.ChildByFieldName("function"); funcNode != nil {
 				funcName := string(content[funcNode.StartByte():funcNode.EndByte()])
 				if funcName == "require" {
 					if argsNode := valueNode.ChildByFieldName("arguments"); argsNode != nil {
 						for i := 0; i < int(argsNode.ChildCount()); i++ {
-							child := argsNode.Child(i)
-							if child.Type() == "string" {
+							child := argsNode.Child(uint(i))
+							if child.Kind() == "string" {
 								source := string(content[child.StartByte():child.EndByte()])
 								return strings.Trim(source, "\"'")
 							}
@@ -570,11 +580,11 @@ func (tsa *TypeScriptAnalyzer) extractImportPath(node *sitter.Node, content []by
 	case "call_expression":
 		// Handle dynamic imports and other call expressions
 		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
-			if child.Type() == "arguments" {
+			child := node.Child(uint(i))
+			if child.Kind() == "arguments" {
 				for j := 0; j < int(child.ChildCount()); j++ {
-					arg := child.Child(j)
-					if arg.Type() == "string" {
+					arg := child.Child(uint(j))
+					if arg.Kind() == "string" {
 						source := string(content[arg.StartByte():arg.EndByte()])
 						return strings.Trim(source, "\"'")
 					}
@@ -590,8 +600,8 @@ func (tsa *TypeScriptAnalyzer) extractParameters(node *sitter.Node, content []by
 
 	if paramsNode := node.ChildByFieldName("parameters"); paramsNode != nil {
 		for i := 0; i < int(paramsNode.ChildCount()); i++ {
-			child := paramsNode.Child(i)
-			if child.Type() == "required_parameter" || child.Type() == "optional_parameter" {
+			child := paramsNode.Child(uint(i))
+			if child.Kind() == "required_parameter" || child.Kind() == "optional_parameter" {
 				if nameNode := child.ChildByFieldName("pattern"); nameNode != nil {
 					paramName := string(content[nameNode.StartByte():nameNode.EndByte()])
 					paramType := ""
@@ -624,8 +634,8 @@ func (tsa *TypeScriptAnalyzer) extractTypeParameters(node *sitter.Node, content 
 
 	if typeParamsNode := node.ChildByFieldName("type_parameters"); typeParamsNode != nil {
 		for i := 0; i < int(typeParamsNode.ChildCount()); i++ {
-			child := typeParamsNode.Child(i)
-			if child.Type() == "type_parameter" {
+			child := typeParamsNode.Child(uint(i))
+			if child.Kind() == "type_parameter" {
 				if nameNode := child.ChildByFieldName("name"); nameNode != nil {
 					typeParams = append(typeParams, string(content[nameNode.StartByte():nameNode.EndByte()]))
 				}
@@ -640,11 +650,11 @@ func (tsa *TypeScriptAnalyzer) extractTypeReferences(node *sitter.Node, content 
 	var refs []string
 
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "extends_clause" {
+		child := node.Child(uint(i))
+		if child.Kind() == "extends_clause" {
 			for j := 0; j < int(child.ChildCount()); j++ {
-				typeNode := child.Child(j)
-				if typeNode.Type() == "type_identifier" || typeNode.Type() == "generic_type" {
+				typeNode := child.Child(uint(j))
+				if typeNode.Kind() == "type_identifier" || typeNode.Kind() == "generic_type" {
 					typeName := string(content[typeNode.StartByte():typeNode.EndByte()])
 					refs = append(refs, typeName)
 				}
@@ -672,7 +682,7 @@ func (tsa *TypeScriptAnalyzer) extractPropertyType(node *sitter.Node, content []
 func (tsa *TypeScriptAnalyzer) determineVisibility(node *sitter.Node, content []byte) string {
 	// Look for access modifiers
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
+		child := node.Child(uint(i))
 		text := string(content[child.StartByte():child.EndByte()])
 
 		switch text {
@@ -691,8 +701,8 @@ func (tsa *TypeScriptAnalyzer) determineVisibility(node *sitter.Node, content []
 
 // nodeToLocation converts a tree-sitter node to a FileLocation
 func nodeToLocation(node *sitter.Node, filePath string) FileLocation {
-	startPoint := node.StartPoint()
-	endPoint := node.EndPoint()
+	startPoint := node.StartPosition()
+	endPoint := node.EndPosition()
 
 	return FileLocation{
 		FilePath:  filePath,

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/janreges/ai-distiller/internal/ir"
-	sitter "github.com/smacker/go-tree-sitter"
+	sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
 // StripCStyle classifies a raw C-family comment token and removes its delimiters.
@@ -107,8 +107,8 @@ func IsTripleSlashDoc(raw string) bool {
 // Otherwise nothing changes and nil is returned.
 func JoinLineDoc(list []ir.DistilledNode, c *ir.DistilledComment, token *sitter.Node, source []byte, isLineDoc func(raw string) bool) *ir.DistilledComment {
 	prev := token.PrevSibling()
-	if len(list) == 0 || prev == nil || prev.Type() != token.Type() ||
-		prev.EndPoint().Row+1 != token.StartPoint().Row ||
+	if len(list) == 0 || prev == nil || prev.Kind() != token.Kind() ||
+		prev.EndPosition().Row+1 != token.StartPosition().Row ||
 		!isLineDoc(tokenText(token, source)) || !isLineDoc(tokenText(prev, source)) {
 		return nil
 	}
@@ -124,7 +124,7 @@ func JoinLineDoc(list []ir.DistilledNode, c *ir.DistilledComment, token *sitter.
 
 func tokenText(token *sitter.Node, source []byte) string {
 	start, end := token.StartByte(), token.EndByte()
-	if start > end || end > uint32(len(source)) {
+	if start > end || end > uint(len(source)) {
 		return ""
 	}
 	return string(source[start:end])
