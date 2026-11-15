@@ -79,6 +79,7 @@ Every package, and which of them run: `.claude/skills/aid-architecture/reference
 | Running or updating tests, a test fails, finding a bug's layer, `-v` debug output | `.claude/skills/aid-testing-debugging/SKILL.md` |
 | A language's output is wrong, parser or visibility change, adding a language | `.claude/skills/aid-language-parsers/SKILL.md` |
 | Where something is implemented, adding a CLI flag or mode, file selection, the stripper, git mode, AI actions | `.claude/skills/aid-architecture/SKILL.md` |
+| The IR is right but the printed output is wrong, changing how something prints, a new IR field in the output, a new output format, imports missing from the text, the summary line | `.claude/skills/aid-output-formatting/SKILL.md` |
 
 The index of skills is `.claude/skills/README.md`.
 

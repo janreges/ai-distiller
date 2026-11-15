@@ -76,8 +76,8 @@ A path run in the normal mode, step by step:
 | Symptom or intent | Where | Read |
 |---|---|---|
 | A construct is missing or wrong in one language's IR; wrong visibility | `internal/language/<lang>/` | `aid-language-parsers` |
-| The IR is right but the printed text is wrong | `internal/formatter/<lang>_formatter.go` | the formatting skill in `.claude/skills/README.md` |
-| An import vanished from the text output | `internal/importfilter` (text only) | the formatting skill |
+| The IR is right but the printed text is wrong | `internal/formatter/<lang>_formatter.go` | `aid-output-formatting` |
+| An import vanished from the text output | `internal/importfilter` (text only) | `aid-output-formatting` `references/import-filter.md` |
 | Add or change a flag | `internal/cli/root.go` | `references/cli-flags.md` |
 | A flag combination selects the wrong members | `internal/cli/root.go#createProcessOptionsFromFlags` | section 4, `references/cli-flags.md` |
 | What a flag removes (bodies, comments, docs, members) | `internal/stripper/stripper.go` | `references/ir-and-stripper.md` |
@@ -90,7 +90,7 @@ A path run in the normal mode, step by step:
 | Git log output | `internal/cli/root.go#handleGitMode` | `references/modes.md` |
 | An AI action or its prompt text | `internal/aiactions`, `internal/aiactions/templates` | `references/modes.md` |
 | `--dependency-aware` | `internal/processor/dependency.go` | `references/modes.md` |
-| The summary line | `internal/summary` | the formatting skill |
+| The summary line | `internal/summary` | `aid-output-formatting` `references/summary.md` |
 | A test fails, `-v` output, snapshots | | `aid-testing-debugging` |
 
 ## 3. Modes

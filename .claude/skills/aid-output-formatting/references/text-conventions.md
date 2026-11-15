@@ -1,0 +1,78 @@
+# Text format conventions per language
+
+These are the conventions the twelve text formatters follow today, recorded
+from aid's own output. They are not a specification. The languages disagree
+(a visibility keyword, a prefix or nothing; braces or indentation;
+`class X:` in JavaScript), and whether to unify them is an open design
+question. Changing a convention changes every snapshot of the language that
+shows it, so it is a decision, not a cleanup.
+
+## How the rows were produced
+
+Each row comes from the language's conformance fixture in
+`internal/conformance/testdata/<lang>/`, run three times: with default flags,
+with everything included, and without the import filter:
+
+```bash
+export CGO_ENABLED=1 CGO_CFLAGS=-w
+tmp=$(mktemp -d) && go build -o "$tmp/aid" ./cmd/aid
+for f in internal/conformance/testdata/*/*; do
+  echo "== $f"
+  "$tmp/aid" "$f" --stdout --summary-type=off </dev/null
+  "$tmp/aid" "$f" --stdout --summary-type=off --private=1 --protected=1 --internal=1 --comments=1 --implementation=1 </dev/null
+  "$tmp/aid" "$f" --stdout --summary-type=off --filter-imports=false </dev/null
+done
+```
+
+The examples in the tables are lines of that output. Where a fixture does not
+show a case, the cell names the formatter function it was read from. Members
+are indented four spaces per level in every language; a printed body keeps its
+own relative indentation under the signature.
+
+## Declarations
+
+| Language | Visibility | Function, no body (default) | Body (`--implementation=1`) |
+|---|---|---|---|
+| cpp | nothing: the private `confHiddenOut()` prints like a public member | `int confInnerOpen()` in a class; `ConfWidget::confOut();` out of class | braces |
+| csharp | keyword: `public`, `private`, `protected internal string ConfProtInt()` | `public string ConfPublic();` | braces |
+| go | nothing; the name's case is the visibility | `func (w *ConfWidget) ConfPublic() string` | braces |
+| java | keyword: `public`, `private`; package-private prints nothing (`internal/formatter/java_formatter.go#JavaFormatter.getJavaVisibilityKeyword`) | `public String confPublic();` | braces |
+| javascript | nothing; `#confPrivate()` keeps the `#` of its name | `confPublic()` | braces |
+| kotlin | keyword, `public` left out: `private fun confPrivate()`, `fun confPublic()` | `fun confPublic(): String` | braces |
+| php | keyword on members: `public int $confField;`, `private confPrivate(): string`; none on top-level functions (`internal/formatter/php_formatter.go#PHPFormatter.formatFunction`) | `public confPublic(): string` (no `function`) | braces |
+| python | prefix `-` on private functions and fields: `-def _conf_private(self):` | `conf_public(self)`, no `def` and no colon, its docstring indented below | `def conf_public(self):`, then the indented body, no delimiter |
+| ruby | a `# private` line above the method and above its doc (`internal/formatter/ruby_formatter.go#RubyFormatter.getRubyVisibilityComment`) | `def conf_public` | the indented body, no `end` |
+| rust | `pub`; private prints nothing: `fn conf_private`; `pub(crate)` and `pub(super)` for internal and protected (`internal/formatter/rust_formatter.go#RustFormatter.getRustVisibilityKeyword`) | `pub fn conf_public(&self) -> &'static str`; in a trait `fn conf_area(&self) -> i32;` | braces |
+| swift | keyword: `public func confPublic()`, `private func confPrivate()` | `public func confPublic() -> String` | braces |
+| typescript | keyword on class members, `public` included: `public confPublic()`, `private #confSecret`; top-level declarations print `export` instead | `public confPublic(): string` | braces |
+
+"Braces" means `{` on the signature line, the body one level deeper and `}` at
+the signature's indentation (section 3 of `SKILL.md`).
+
+## Comments, types, imports
+
+| Language | Line comment (`--comments=1`) | Doc comment | Types | Imports (`--filter-imports=false`; source then printed) |
+|---|---|---|---|---|
+| cpp | `// CONF_LINE_COMMENT` | `/** CONF_DOC_COMMENT */` | `class ConfWidget {` ... `};`; out-of-class definitions follow at file level; a namespace's members print without the namespace line | `#include <string>` prints `#include "string"` |
+| csharp | `// CONF_LINE_COMMENT` | `/// <summary>CONF_DOC_COMMENT</summary>` | `public class ConfWidget {` ... `}`; `namespace Conf;` | `using System.IO;` unchanged |
+| go | `// CONF_LINE_COMMENT` | `// CONF_DOC_COMMENT` | `type ConfWidget struct {` ... `}`; methods at file level with their receiver | `import "strings"` prints an `import (` block, one quoted path per line, then `)` |
+| java | `// CONF_LINE_COMMENT` | `/**`, ` * CONF_DOC_COMMENT`, ` */` on three lines | `public class ConfWidget {` ... `}`; `package com.example.conf`; a nested `private enum ConfColor {` with constants as `public static final ConfColor CONF_RED;` | `import java.io.File;` prints `import java.io.File` |
+| javascript | `// CONF_LINE_COMMENT` | `/** CONF_DOC_COMMENT */` | `class ConfWidget:`, then the members indented, no closing line | `import { sep } from "node:path";` prints `import sep from 'node:path'` |
+| kotlin | `// CONF_LINE_COMMENT` | `/** CONF_DOC_COMMENT */` | `class ConfWidget {` ... `}`; no `package` line | `import java.io.File` unchanged |
+| php | `// CONF_LINE_COMMENT` | `/** x */` where a docblock prints (`internal/formatter/php_formatter.go#PHPFormatter.formatComment`) | `class ConfWidget {` ... `}`; `namespace Conf;` | `use DateTimeImmutable;` unchanged |
+| python | `# CONF_LINE_COMMENT` | `"""CONF_DOC_COMMENT"""`, indented under the `class` or function line | `class ConfWidget:`, then the members indented; decorators above (`@dataclass`) | `import os`, `from dataclasses import dataclass` unchanged |
+| ruby | `# CONF_LINE_COMMENT` | `# CONF_DOC_COMMENT` | `class ConfWidget`, then the members indented, no `end`; `include Comparable` as a member line | `require "json"` prints `require 'json'` |
+| rust | `// CONF_LINE_COMMENT` | `// CONF_DOC_COMMENT` (a `///` doc prints with `//`) | `pub struct ConfWidget {` fields `}`; methods in `impl ConfWidget {` and `impl ConfShape for ConfWidget {` blocks; `pub trait ConfShape {`; `pub enum ConfColor {`, one variant per line | `use std::path::MAIN_SEPARATOR;` unchanged |
+| swift | `//` for every comment node (`internal/formatter/swift_formatter.go#SwiftFormatter.formatComment`) | `// CONF_DOC_COMMENT` | `public class ConfWidget {` ... `}` | `import Foundation` unchanged |
+| typescript | `// CONF_LINE_COMMENT` | `/** CONF_DOC_COMMENT */` | `export class ConfWidget {` ... `}`; `namespace ConfSpace {`, `declare module "conf-ambient" {`; `export enum ConfColor {`, one member per line without commas | `import { sep } from "path";` prints `import 'path'` |
+
+Where a fixture prints no comment of a kind or drops a declaration line (PHP
+class and method docblocks, Swift `//` comments, the C++ namespace and Kotlin
+package lines), the reason is listed in
+`internal/conformance/known_gaps_test.go` or in
+`internal/conformance/unhandled_test.go#knownUnhandled`; read those lists
+rather than this table for what is missing.
+
+How an import line prints also decides how the import filter reads it: the
+C++ quotes and the TypeScript `import 'path'` above make the filter keep those
+lines whatever the code uses (`import-filter.md`).
