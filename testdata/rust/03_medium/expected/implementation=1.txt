@@ -50,7 +50,6 @@ pub fn analyze<'a, S>(source: &'a S) -> Result<AnalysisResult<String>, AnalysisE
 
     Ok(AnalysisResult::new("mock_id".to_string(), analysis_summary))
 }
-// Advanced generic function with multiple lifetime parameters
 
 impl DataSource for InMemorySource {
 

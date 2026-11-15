@@ -160,16 +160,20 @@ func (s *Stripper) Visit(node ir.DistilledNode) ir.DistilledNode {
 func (s *Stripper) visitFile(n *ir.DistilledFile) *ir.DistilledFile {
 	result := *n
 	result.Children = nil
-	
-	// Visit children
-	for _, child := range n.Children {
-		if visited := child.Accept(s); visited != nil {
-			result.Children = append(result.Children, visited)
-		}
+	children := n.Children
+
+	// Doc comments that open a file with no declaration after them (an import
+	// comes next, or nothing) are the file's header and stay. When a
+	// declaration comes next they are its doc, like any other run.
+	head := 0
+	for head < len(children) && isComment(children[head]) {
+		head++
 	}
-	
-	// Post-process to remove orphaned docstrings
-	result.Children = s.removeOrphanedDocstrings(result.Children)
+	if head == len(children) || !isDeclaration(children[head]) {
+		result.Children = s.visitComments(children[:head], true)
+		children = children[head:]
+	}
+	result.Children = append(result.Children, s.visitChildList(children)...)
 
 	return &result
 }
@@ -181,15 +185,7 @@ func (s *Stripper) visitFile(n *ir.DistilledFile) *ir.DistilledFile {
 // anything inside the namespace.
 func (s *Stripper) visitPackage(n *ir.DistilledPackage) ir.DistilledNode {
 	result := *n
-	result.Children = nil
-
-	for _, child := range n.Children {
-		if visited := child.Accept(s); visited != nil {
-			result.Children = append(result.Children, visited)
-		}
-	}
-
-	result.Children = s.removeOrphanedDocstrings(result.Children)
+	result.Children = s.visitChildList(n.Children)
 
 	// A namespace block is dropped once all its members went. A childless
 	// package clause (Go, Java) has nothing to lose and is kept.
@@ -239,7 +235,6 @@ func (s *Stripper) visitClass(n *ir.DistilledClass) ir.DistilledNode {
 	
 	// Copy every field, then change only what the options require
 	result := *n
-	result.Children = nil
 	defer s.enterContainer(n.Visibility)()
 
 	// Visit children. If this class name matched --expand, keep all of its
@@ -248,15 +243,8 @@ func (s *Stripper) visitClass(n *ir.DistilledClass) ir.DistilledNode {
 	if s.options.shouldExpand(n.Name) {
 		s.inExpandedScope = true
 	}
-	for _, child := range n.Children {
-		if visited := child.Accept(s); visited != nil {
-			result.Children = append(result.Children, visited)
-		}
-	}
+	result.Children = s.visitChildList(n.Children)
 	s.inExpandedScope = prevExpandedScope
-
-	// Post-process to remove orphaned docstrings
-	result.Children = s.removeOrphanedDocstrings(result.Children)
 
 	if s.publicContainerEmptied(n.Visibility, result.Children) {
 		return nil
@@ -278,15 +266,8 @@ func (s *Stripper) visitInterface(n *ir.DistilledInterface) ir.DistilledNode {
 	
 	// Copy every field, then change only what the options require
 	result := *n
-	result.Children = nil
 	defer s.enterContainer(n.Visibility)()
-	
-	// Visit children
-	for _, child := range n.Children {
-		if visited := child.Accept(s); visited != nil {
-			result.Children = append(result.Children, visited)
-		}
-	}
+	result.Children = s.visitChildList(n.Children)
 
 	if s.publicContainerEmptied(n.Visibility, result.Children) {
 		return nil
@@ -303,7 +284,6 @@ func (s *Stripper) visitStruct(n *ir.DistilledStruct) ir.DistilledNode {
 	
 	// Copy every field, then change only what the options require
 	result := *n
-	result.Children = nil
 	defer s.enterContainer(n.Visibility)()
 
 	// Visit children. If this struct name matched --expand, keep all of its
@@ -312,11 +292,7 @@ func (s *Stripper) visitStruct(n *ir.DistilledStruct) ir.DistilledNode {
 	if s.options.shouldExpand(n.Name) {
 		s.inExpandedScope = true
 	}
-	for _, child := range n.Children {
-		if visited := child.Accept(s); visited != nil {
-			result.Children = append(result.Children, visited)
-		}
-	}
+	result.Children = s.visitChildList(n.Children)
 	s.inExpandedScope = prevExpandedScope
 
 	if s.publicContainerEmptied(n.Visibility, result.Children) {
@@ -334,15 +310,8 @@ func (s *Stripper) visitEnum(n *ir.DistilledEnum) ir.DistilledNode {
 	
 	// Copy every field, then change only what the options require
 	result := *n
-	result.Children = nil
 	defer s.enterContainer(n.Visibility)()
-	
-	// Visit children
-	for _, child := range n.Children {
-		if visited := child.Accept(s); visited != nil {
-			result.Children = append(result.Children, visited)
-		}
-	}
+	result.Children = s.visitChildList(n.Children)
 
 	if s.publicContainerEmptied(n.Visibility, result.Children) {
 		return nil
@@ -486,46 +455,69 @@ func (s *Stripper) shouldRemoveByVisibility(name string, visibility ir.Visibilit
 	return false
 }
 
-// removeOrphanedDocstrings removes docstring comments that appear to be orphaned
-// (i.e., not followed by any declaration they could be documenting)
-func (s *Stripper) removeOrphanedDocstrings(children []ir.DistilledNode) []ir.DistilledNode {
-	if len(children) == 0 {
-		return children
-	}
-	
-	result := make([]ir.DistilledNode, 0, len(children))
-	
-	for i, child := range children {
-		// Check if this is a docstring comment
-		if comment, ok := child.(*ir.DistilledComment); ok && comment.Format == "doc" {
-			// Check if this docstring is followed by a declaration
-			hasFollowingDeclaration := false
-			for j := i + 1; j < len(children); j++ {
-				next := children[j]
-				switch next.(type) {
-				case *ir.DistilledFunction, *ir.DistilledField, *ir.DistilledClass, 
-					 *ir.DistilledInterface, *ir.DistilledStruct, *ir.DistilledEnum:
-					hasFollowingDeclaration = true
-					break
-				case *ir.DistilledComment:
-					// Skip other comments
-					continue
-				default:
-					// Stop at first non-comment
-					break
-				}
-			}
-			
-			// If it's the last element and it's a docstring, it's likely orphaned
-			// OR if there's no following declaration, it's orphaned
-			if !hasFollowingDeclaration {
-				// Skip this orphaned docstring
-				continue
-			}
+// visitChildList visits a container's children in order. A run of doc
+// comments belongs to the next non-comment sibling and is kept only when that
+// sibling is a declaration that survives, so the doc of a removed member never
+// appears to document the next one. Other comments, inner docs included, are
+// kept or removed on their own; the comments waiting for their sibling keep
+// their order.
+func (s *Stripper) visitChildList(children []ir.DistilledNode) []ir.DistilledNode {
+	var out, pending []ir.DistilledNode
+	for _, child := range children {
+		if isComment(child) {
+			pending = append(pending, child)
+			continue
 		}
-		
-		result = append(result, child)
+		visited := child.Accept(s)
+		out = append(out, s.visitComments(pending, visited != nil && isDeclaration(child))...)
+		pending = pending[:0]
+		if visited != nil {
+			out = append(out, visited)
+		}
 	}
-	
-	return result
+	return append(out, s.visitComments(pending, false)...)
+}
+
+// visitComments visits comments in order. Doc comments are dropped unless
+// keepDocs is set; the other comments follow their own rules in Visit.
+func (s *Stripper) visitComments(comments []ir.DistilledNode, keepDocs bool) []ir.DistilledNode {
+	var out []ir.DistilledNode
+	for _, comment := range comments {
+		if !keepDocs && isDocComment(comment) {
+			continue
+		}
+		if visited := comment.Accept(s); visited != nil {
+			out = append(out, visited)
+		}
+	}
+	return out
+}
+
+func isComment(node ir.DistilledNode) bool {
+	_, ok := node.(*ir.DistilledComment)
+	return ok
+}
+
+// isDocComment reports whether a node is a doc comment that documents the
+// declaration after it. An inner doc (Rust //!) documents its enclosing
+// container instead, and a PHP API docblock is always kept (see Visit); both
+// follow only their own rules.
+func isDocComment(node ir.DistilledNode) bool {
+	c, ok := node.(*ir.DistilledComment)
+	if !ok || c.Inner || (c.Extensions != nil && c.Extensions.PHP != nil && c.Extensions.PHP.IsAPIDocblock) {
+		return false
+	}
+	return c.Format == "doc" || c.Format == "docblock"
+}
+
+// isDeclaration reports whether a node is a declaration a doc comment can
+// document. A package clause or namespace counts: its doc stays with it and
+// goes when the namespace is removed.
+func isDeclaration(node ir.DistilledNode) bool {
+	switch node.(type) {
+	case *ir.DistilledFunction, *ir.DistilledField, *ir.DistilledClass, *ir.DistilledInterface,
+		*ir.DistilledStruct, *ir.DistilledEnum, *ir.DistilledTypeAlias, *ir.DistilledPackage:
+		return true
+	}
+	return false
 }

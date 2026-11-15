@@ -16,11 +16,6 @@ var knownGaps = map[string]string{
 	"java/comment-with-comments":       "H5: comments do not reach the output",
 	"python/doc-by-default":            "H5: docstrings follow --comments",
 
-	"go/private-hidden":    "H1: doc comment of a removed member stays",
-	"java/private-hidden":  "H1: doc comment of a removed member stays",
-	"swift/private-hidden": "H1: doc comment of a removed member stays",
-	"rust/private-hidden":  "H1: doc comment of a removed member stays",
-
 	// The fixture is detected as "typescript" before C# is scored, because the
 	// TypeScript pattern <\w+> matches <summary>; without that tag the detector
 	// returns "c#". Both have to be fixed for the check to pass.

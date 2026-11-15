@@ -18,7 +18,6 @@ public class Clamped {
 public enum ValidationResult {
     case success(String)
     case failure(String)
-    // Private helper for result categorization
 }
 // A result builder for creating an array of `ValidationResult` declaratively.
 

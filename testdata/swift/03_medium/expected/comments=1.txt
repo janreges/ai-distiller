@@ -20,7 +20,6 @@ public enum MathError {
     case emptyStack
     case divideByZero
     case negativeValue
-    // Private helper for error categorization
 }
 //  - Protocol & Extension with AssociatedType
 // Describes a cache that stores key/value pairs.
@@ -29,7 +28,6 @@ public protocol Cacheable {
     public func value(key: Key) -> Value?
     public func contains(key: Key) -> Bool
 }
-// Dictionary already satisfies `Cacheable` when paired properly.
 // Generic cache with expiration
 
 public class ExpiringCache {

@@ -29,7 +29,6 @@ public enum MathError {
     case emptyStack
     case divideByZero
     case negativeValue
-    // Private helper for error categorization
 }
 // Describes a cache that stores key/value pairs.
 

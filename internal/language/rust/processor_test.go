@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/janreges/ai-distiller/internal/ir"
+	"github.com/janreges/ai-distiller/internal/processor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -489,4 +490,57 @@ func TestRust_EnumDiscriminantsAndPayloads(t *testing.T) {
 		assert.Equal(t, "1 << 3", variant(t, m, "D").DefaultValue)
 		findRustFn(t, file, "after")
 	})
+}
+
+func TestRust_InnerDocCommentsAreMarked(t *testing.T) {
+	file := parseRust(t, "//! Crate doc.\n/*! Block crate doc. */\n/// Outer doc.\npub fn api() {}\n")
+	var inner []bool
+	for _, node := range file.Children {
+		if c, ok := node.(*ir.DistilledComment); ok {
+			require.Equal(t, "doc", c.Format, c.Text)
+			inner = append(inner, c.Inner)
+		}
+	}
+	assert.Equal(t, []bool{true, true, false}, inner)
+}
+
+// rustPublicOnly matches the CLI defaults: public members with their doc
+// comments, no other comments, no bodies.
+var rustPublicOnly = processor.ProcessOptions{
+	IncludeImports: true, IncludeDocstrings: true, IncludeAnnotations: true, IncludeFields: true, IncludeMethods: true,
+}
+
+// distillRustTop runs the processor with opts and returns the top-level
+// comments and functions that survive, in order.
+func distillRustTop(t *testing.T, src string, opts processor.ProcessOptions) []string {
+	t.Helper()
+	file, err := NewProcessor().ProcessWithOptions(context.Background(), strings.NewReader(src), "test.rs", opts)
+	require.NoError(t, err)
+	var out []string
+	for _, node := range file.Children {
+		switch n := node.(type) {
+		case *ir.DistilledComment:
+			out = append(out, "doc:"+n.Text)
+		case *ir.DistilledFunction:
+			out = append(out, "fn:"+n.Name)
+		}
+	}
+	return out
+}
+
+func TestRust_DocOfHiddenFirstFunctionIsHidden(t *testing.T) {
+	src := "/// helper doc.\nfn helper() {}\n\n/// Public api.\npub fn api() {}\n"
+	assert.Equal(t, []string{"doc:Public api.", "fn:api"}, distillRustTop(t, src, rustPublicOnly))
+}
+
+func TestRust_CrateDocStaysOuterDocLeavesWithItsFunction(t *testing.T) {
+	src := "//! Crate doc.\n//! More crate doc.\n\n/// helper doc.\nfn helper() {}\n\npub fn api() {}\n"
+	assert.Equal(t, []string{"doc:Crate doc.", "doc:More crate doc.", "fn:api"}, distillRustTop(t, src, rustPublicOnly))
+}
+
+func TestRust_PublicOffDropsTheDocOfPublicFunction(t *testing.T) {
+	opts := rustPublicOnly
+	opts.RemovePublic, opts.IncludePrivate = true, true
+	src := "/// Public api.\npub fn api() {}\n\n/// helper doc.\nfn helper() {}\n"
+	assert.Equal(t, []string{"doc:helper doc.", "fn:helper"}, distillRustTop(t, src, opts))
 }

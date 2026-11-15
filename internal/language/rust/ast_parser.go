@@ -952,7 +952,8 @@ func (p *ASTParser) parseLineComment(node *sitter.Node, file *ir.DistilledFile, 
 	text = strings.TrimPrefix(text, "//")
 
 	format := "line"
-	if strings.HasPrefix(text, "/") || strings.HasPrefix(text, "!") {
+	inner := strings.HasPrefix(text, "!") // //! documents the enclosing item
+	if strings.HasPrefix(text, "/") || inner {
 		format = "doc"
 		text = strings.TrimPrefix(text, "/")
 		text = strings.TrimPrefix(text, "!")
@@ -967,6 +968,7 @@ func (p *ASTParser) parseLineComment(node *sitter.Node, file *ir.DistilledFile, 
 		},
 		Text:   strings.TrimSpace(text),
 		Format: format,
+		Inner:  inner,
 	}
 
 	p.addChild(file, parent, comment)
@@ -979,7 +981,8 @@ func (p *ASTParser) parseBlockComment(node *sitter.Node, file *ir.DistilledFile,
 	text = strings.TrimSuffix(text, "*/")
 
 	format := "block"
-	if strings.HasPrefix(text, "*") || strings.HasPrefix(text, "!") {
+	inner := strings.HasPrefix(text, "!") // /*! documents the enclosing item
+	if strings.HasPrefix(text, "*") || inner {
 		format = "doc"
 		text = strings.TrimPrefix(text, "*")
 		text = strings.TrimPrefix(text, "!")
@@ -994,6 +997,7 @@ func (p *ASTParser) parseBlockComment(node *sitter.Node, file *ir.DistilledFile,
 		},
 		Text:   strings.TrimSpace(text),
 		Format: format,
+		Inner:  inner,
 	}
 
 	p.addChild(file, parent, comment)

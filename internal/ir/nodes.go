@@ -266,6 +266,10 @@ type DistilledComment struct {
 	BaseNode
 	Text   string `json:"text"`
 	Format string `json:"format"` // "line", "block", "doc"
+	// Inner marks a doc comment that documents its enclosing container (the
+	// file, module or type it sits in, like Rust //! and /*!), not the
+	// declaration after it.
+	Inner bool `json:"inner,omitempty"`
 }
 
 // GetNodeKind implements DistilledNode

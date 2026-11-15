@@ -1,7 +1,6 @@
 <file path="source.rs">
 // 01_basic.rs
 // A test case for basic Rust constructs.
-// The main entry point of the application.
 // A module to handle application settings.
 // This tests the parser's ability to handle inline module definitions.
 

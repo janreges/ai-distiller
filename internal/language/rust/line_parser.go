@@ -943,7 +943,8 @@ func (p *LineParser) parseLineComment(file *ir.DistilledFile, parent ir.Distille
 	text := strings.TrimPrefix(strings.TrimSpace(line), "//")
 
 	format := "line"
-	if strings.HasPrefix(text, "/") || strings.HasPrefix(text, "!") {
+	inner := strings.HasPrefix(text, "!") // //! documents the enclosing item
+	if strings.HasPrefix(text, "/") || inner {
 		format = "doc"
 		text = strings.TrimPrefix(text, "/")
 		text = strings.TrimPrefix(text, "!")
@@ -958,6 +959,7 @@ func (p *LineParser) parseLineComment(file *ir.DistilledFile, parent ir.Distille
 		},
 		Text:   strings.TrimSpace(text),
 		Format: format,
+		Inner:  inner,
 	}
 
 	if parent != nil {
@@ -991,7 +993,8 @@ func (p *LineParser) parseBlockComment(file *ir.DistilledFile, parent ir.Distill
 	text = strings.TrimSuffix(text, "*/")
 
 	format := "block"
-	if strings.HasPrefix(text, "*") || strings.HasPrefix(text, "!") {
+	inner := strings.HasPrefix(text, "!") // /*! documents the enclosing item
+	if strings.HasPrefix(text, "*") || inner {
 		format = "doc"
 		text = strings.TrimPrefix(text, "*")
 		text = strings.TrimPrefix(text, "!")
@@ -1006,6 +1009,7 @@ func (p *LineParser) parseBlockComment(file *ir.DistilledFile, parent ir.Distill
 		},
 		Text:   strings.TrimSpace(text),
 		Format: format,
+		Inner:  inner,
 	}
 
 	if parent != nil {

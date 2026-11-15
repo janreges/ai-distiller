@@ -603,3 +603,145 @@ func TestRemovePublic_NonPublicContainerKeepsPublicTaggedMembers(t *testing.T) {
 	assert.Equal(t, "Inner", pub.Children[0].(*ir.DistilledClass).Name)
 	assert.Len(t, pub.Children[0].(*ir.DistilledClass).Children, 1)
 }
+
+func doc(text string) *ir.DistilledComment { return &ir.DistilledComment{Text: text, Format: "doc"} }
+
+func childLabels(nodes []ir.DistilledNode) []string {
+	var out []string
+	for _, n := range nodes {
+		switch v := n.(type) {
+		case *ir.DistilledComment:
+			out = append(out, "doc:"+v.Text)
+		case *ir.DistilledFunction:
+			out = append(out, "fn:"+v.Name)
+		case *ir.DistilledClass:
+			out = append(out, "class:"+v.Name)
+		case *ir.DistilledTypeAlias:
+			out = append(out, "alias:"+v.Name)
+		case *ir.DistilledImport:
+			out = append(out, "import")
+		case *ir.DistilledPackage:
+			out = append(out, "package:"+v.Name)
+		}
+	}
+	return out
+}
+
+func TestDocCommentOfRemovedDeclarationIsRemoved(t *testing.T) {
+	file := &ir.DistilledFile{Children: []ir.DistilledNode{
+		doc("Foo"), &ir.DistilledFunction{Name: "Foo", Visibility: ir.VisibilityPublic},
+		doc("bar 1"), doc("bar 2"), &ir.DistilledFunction{Name: "bar", Visibility: ir.VisibilityPrivate},
+		doc("T"), &ir.DistilledClass{Name: "T", Visibility: ir.VisibilityPublic},
+	}}
+	got := New(Options{RemovePrivate: true}).Visit(file).(*ir.DistilledFile)
+	assert.Equal(t, []string{"doc:Foo", "fn:Foo", "doc:T", "class:T"}, childLabels(got.Children))
+}
+
+func TestDocCommentBeforeTypeAliasIsKept(t *testing.T) {
+	file := &ir.DistilledFile{Children: []ir.DistilledNode{doc("A"), &ir.DistilledTypeAlias{Name: "A", Visibility: ir.VisibilityPublic}}}
+	got := New(Options{RemoveComments: true}).Visit(file).(*ir.DistilledFile)
+	assert.Equal(t, []string{"doc:A", "alias:A"}, childLabels(got.Children))
+}
+
+func TestDocCommentWithoutDeclarationIsRemoved(t *testing.T) {
+	file := &ir.DistilledFile{Children: []ir.DistilledNode{
+		&ir.DistilledFunction{Name: "F", Visibility: ir.VisibilityPublic}, doc("trailing"),
+		doc("before import"), &ir.DistilledImport{Module: "x"},
+	}}
+	got := New(Options{RemoveComments: true}).Visit(file).(*ir.DistilledFile)
+	assert.Equal(t, []string{"fn:F", "import"}, childLabels(got.Children))
+}
+
+func TestDocCommentRuleAppliesInsideClasses(t *testing.T) {
+	cls := &ir.DistilledClass{Name: "C", Visibility: ir.VisibilityPublic, Children: []ir.DistilledNode{
+		doc("secret"), &ir.DistilledFunction{Name: "secret", Visibility: ir.VisibilityPrivate},
+		doc("open"), &ir.DistilledFunction{Name: "open", Visibility: ir.VisibilityPublic},
+	}}
+	got := New(Options{RemovePrivate: true}).Visit(cls).(*ir.DistilledClass)
+	assert.Equal(t, []string{"doc:open", "fn:open"}, childLabels(got.Children))
+}
+
+func TestLeadingFileDocCommentIsKept(t *testing.T) {
+	file := &ir.DistilledFile{Children: []ir.DistilledNode{doc("module"), &ir.DistilledImport{Module: "x"}}}
+	got := New(Options{RemoveComments: true}).Visit(file).(*ir.DistilledFile)
+	assert.Equal(t, []string{"doc:module", "import"}, childLabels(got.Children))
+}
+
+func TestFileHeaderBeforeImportIsKept(t *testing.T) {
+	file := &ir.DistilledFile{Children: []ir.DistilledNode{
+		&ir.DistilledComment{Text: "license", Format: "line"}, doc("header 1"), doc("header 2"),
+		&ir.DistilledImport{Module: "x"},
+		doc("hidden"), &ir.DistilledFunction{Name: "hidden", Visibility: ir.VisibilityPrivate},
+	}}
+	got := New(Options{RemovePrivate: true, RemoveComments: true}).Visit(file).(*ir.DistilledFile)
+	assert.Equal(t, []string{"doc:header 1", "doc:header 2", "import"}, childLabels(got.Children))
+}
+
+// Doc comments that open a file belong to the declaration right after them.
+func TestLeadingDocBelongsToFirstDeclaration(t *testing.T) {
+	file := &ir.DistilledFile{Children: []ir.DistilledNode{
+		doc("helper doc."), &ir.DistilledFunction{Name: "helper", Visibility: ir.VisibilityPrivate},
+		doc("Public api."), &ir.DistilledFunction{Name: "api", Visibility: ir.VisibilityPublic},
+	}}
+	got := New(Options{RemovePrivate: true}).Visit(file).(*ir.DistilledFile)
+	assert.Equal(t, []string{"doc:Public api.", "fn:api"}, childLabels(got.Children))
+}
+
+func TestInnerDocStaysInPlace(t *testing.T) {
+	inner := func(text string) *ir.DistilledComment {
+		return &ir.DistilledComment{Text: text, Format: "doc", Inner: true}
+	}
+	file := &ir.DistilledFile{Children: []ir.DistilledNode{
+		inner("crate 1"), inner("crate 2"),
+		doc("helper doc."), &ir.DistilledFunction{Name: "helper", Visibility: ir.VisibilityPrivate},
+		&ir.DistilledClass{Name: "M", Visibility: ir.VisibilityPublic, Children: []ir.DistilledNode{
+			inner("module doc"), &ir.DistilledFunction{Name: "secret", Visibility: ir.VisibilityPrivate}}},
+		&ir.DistilledFunction{Name: "api", Visibility: ir.VisibilityPublic},
+	}}
+	got := New(Options{RemovePrivate: true}).Visit(file).(*ir.DistilledFile)
+	require.Equal(t, []string{"doc:crate 1", "doc:crate 2", "class:M", "fn:api"}, childLabels(got.Children))
+	assert.Equal(t, []string{"doc:module doc"}, childLabels(got.Children[2].(*ir.DistilledClass).Children))
+
+	got = New(Options{RemoveDocstrings: true}).Visit(file).(*ir.DistilledFile)
+	assert.Equal(t, []string{"fn:helper", "class:M", "fn:api"}, childLabels(got.Children), "an inner doc still follows --docstrings")
+}
+
+func TestDocCommentBeforePackage(t *testing.T) {
+	file := &ir.DistilledFile{Children: []ir.DistilledNode{
+		doc("package doc"), &ir.DistilledPackage{Name: "p"},
+		&ir.DistilledImport{Module: "x"},
+		doc("namespace doc"), &ir.DistilledPackage{Name: "Q", Children: []ir.DistilledNode{
+			&ir.DistilledTypeAlias{Name: "U", Visibility: ir.VisibilityPublic}}},
+	}}
+	got := New(Options{RemovePrivate: true}).Visit(file).(*ir.DistilledFile)
+	assert.Equal(t, []string{"doc:package doc", "package:p", "import", "doc:namespace doc", "package:Q"}, childLabels(got.Children))
+
+	got = New(Options{RemovePublic: true}).Visit(file).(*ir.DistilledFile)
+	assert.Equal(t, []string{"doc:package doc", "package:p", "import"}, childLabels(got.Children), "the doc of an emptied namespace goes with it")
+}
+
+func TestDocCommentRuleLeavesOtherCommentsInPlace(t *testing.T) {
+	mk := func() *ir.DistilledFile {
+		return &ir.DistilledFile{Children: []ir.DistilledNode{
+			&ir.DistilledImport{Module: "x"},
+			doc("hidden"), &ir.DistilledComment{Text: "note", Format: "line"},
+			&ir.DistilledFunction{Name: "hidden", Visibility: ir.VisibilityPrivate},
+			&ir.DistilledComment{Text: "block", Format: "block"}, doc("Open"),
+			&ir.DistilledFunction{Name: "Open", Visibility: ir.VisibilityPublic},
+		}}
+	}
+	in := mk()
+	got := New(Options{RemovePrivate: true}).Visit(in).(*ir.DistilledFile)
+	assert.Equal(t, []string{"import", "doc:note", "doc:block", "doc:Open", "fn:Open"}, childLabels(got.Children))
+	assert.Equal(t, "line", got.Children[1].(*ir.DistilledComment).Format)
+	assert.Equal(t, mk(), in, "input IR must stay unchanged")
+}
+
+func TestRemovePublic_DocCommentLeavesWithPublicDeclaration(t *testing.T) {
+	file := &ir.DistilledFile{Children: []ir.DistilledNode{
+		doc("Public api."), &ir.DistilledFunction{Name: "api", Visibility: ir.VisibilityPublic},
+		doc("helper doc."), &ir.DistilledFunction{Name: "helper", Visibility: ir.VisibilityPrivate},
+	}}
+	got := New(Options{RemovePublic: true}).Visit(file).(*ir.DistilledFile)
+	assert.Equal(t, []string{"doc:helper doc.", "fn:helper"}, childLabels(got.Children))
+}

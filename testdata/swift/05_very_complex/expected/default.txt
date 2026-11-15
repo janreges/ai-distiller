@@ -10,9 +10,6 @@ public protocol Event {
 public protocol EventHandler: AnyObject {
     public func handle(event: HandledEvent)
 }
-// A weak reference wrapper to prevent retain cycles in the subscriber list.
-// A type-erased wrapper for any `EventHandler`.
-// This allows storing handlers for different event types in the same collection.
 // An actor that manages event subscriptions and dispatches events concurrently.
 
 public class EventBus {

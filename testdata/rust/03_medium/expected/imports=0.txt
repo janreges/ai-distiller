@@ -30,7 +30,6 @@ impl AnalysisResult<T> {
 // It analyzes a data source and returns a result.
 
 pub fn analyze<'a, S>(source: &'a S) -> Result<AnalysisResult<String>, AnalysisError> where S: DataSource + ?Sized, // `?Sized` is an interesting bound to parse.
-// Advanced generic function with multiple lifetime parameters
 
 impl DataSource for InMemorySource {
 

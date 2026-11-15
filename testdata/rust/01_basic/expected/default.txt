@@ -1,5 +1,4 @@
 <file path="source.rs">
-// The main entry point of the application.
 // A module to handle application settings.
 // This tests the parser's ability to handle inline module definitions.
 
