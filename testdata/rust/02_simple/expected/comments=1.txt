@@ -25,7 +25,6 @@ impl SourceFile {
     // A public method to access a derived property.
 
     pub fn line_count(&self) -> u32
-    // A private helper method.
 }
 // Implementation of the Summarizable trait for SourceFile.
 // This is a critical pattern: `impl Trait for Struct`.

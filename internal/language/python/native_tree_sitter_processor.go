@@ -432,14 +432,25 @@ func (p *NativeTreeSitterProcessor) processDecoratedDefinition(node *sitter.Node
 
 	// Process the definition and give it the decorators. The node it adds is
 	// not necessarily the first new child: fields assigned in a method body
-	// and the docstring come before the method.
+	// and the docstring come before the method. The definition starts at its
+	// first decorator.
+	start := p.nodeLocation(node).Location
 	switch definition.Type() {
 	case "function_definition", "async_function_definition":
-		p.processFunction(definition, file, parent, definition.Type() == "async_function_definition").Decorators = decorators
+		fn := p.processFunction(definition, file, parent, definition.Type() == "async_function_definition")
+		fn.Decorators = decorators
+		startAt(&fn.Location, start)
 
 	case "class_definition":
-		p.processClass(definition, file, parent).Decorators = decorators
+		class := p.processClass(definition, file, parent)
+		class.Decorators = decorators
+		startAt(&class.Location, start)
 	}
+}
+
+// startAt moves the start of loc to the start of from.
+func startAt(loc *ir.Location, from ir.Location) {
+	loc.StartLine, loc.StartColumn, loc.StartByte = from.StartLine, from.StartColumn, from.StartByte
 }
 
 // processParameters processes function parameters

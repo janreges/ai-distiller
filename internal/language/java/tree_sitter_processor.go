@@ -1241,6 +1241,7 @@ func (p *TreeSitterProcessor) processComment(node *sitter.Node, source []byte, f
 	text, format := commentutil.StripCStyle(raw)
 	if format == ir.CommentDoc && strings.HasPrefix(raw, "/**") {
 		if javaDoc := p.parseJavaDoc(raw); javaDoc != nil {
+			javaDoc.Location = p.nodeLocation(node)
 			p.addToParent(file, parent, javaDoc)
 		}
 		return

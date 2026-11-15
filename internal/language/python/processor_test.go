@@ -491,3 +491,17 @@ class Q:
 </file>
 `, distillPy(t, src, nil))
 }
+
+// A comment directly above a removed function goes with it, also above its
+// decorators and when the function has a docstring; a comment separated by a
+// blank line stays (spec H1). The parser's line numbers decide.
+func TestPython_CommentDirectlyAboveRemovedFunctionLeavesWithIt(t *testing.T) {
+	src := "# Helpers.\n\n# about _hidden\ndef _hidden():\n    \"\"\"Hidden doc.\"\"\"\n    pass\n# about _other\n@staticmethod\ndef _other():\n    pass\n# about api\ndef api(x):\n    pass\n"
+	withComments := func(o *processor.ProcessOptions) { o.IncludeComments = true }
+	assert.Equal(t, "<file path=\"test.py\">\n# Helpers.\n# about api\napi(x)\n</file>\n", distillPy(t, src, withComments))
+
+	all := distillPy(t, src, func(o *processor.ProcessOptions) { o.IncludeComments = true; o.IncludePrivate = true })
+	for _, line := range []string{"# about _hidden", "# about _other", "@staticmethod"} {
+		assert.Contains(t, all, line, "with --private=1 everything stays")
+	}
+}

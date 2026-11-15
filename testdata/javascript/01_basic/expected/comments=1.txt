@@ -6,7 +6,6 @@
 // Public constants
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MIN_PASSWORD_LENGTH = 8
-// Private helper constant
 /**
  * Validates an email address
  * @param {string} email - Email to validate

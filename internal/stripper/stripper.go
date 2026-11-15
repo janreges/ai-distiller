@@ -455,24 +455,63 @@ func (s *Stripper) shouldRemoveByVisibility(name string, visibility ir.Visibilit
 // visitChildList visits a container's children in order. A run of doc
 // comments belongs to the next non-comment sibling and is kept only when that
 // sibling is a declaration that survives, so the doc of a removed member never
-// appears to document the next one. Other comments, inner docs included, are
-// kept or removed on their own; the comments waiting for their sibling keep
-// their order.
+// appears to document the next one. The comments of any kind directly above a
+// removed declaration go with it too (commentsAbove). Other comments, inner
+// docs included, are kept or removed on their own; the comments waiting for
+// their sibling keep their order.
 func (s *Stripper) visitChildList(children []ir.DistilledNode) []ir.DistilledNode {
 	var out, pending []ir.DistilledNode
+	prevEnd := 0
 	for _, child := range children {
 		if isComment(child) {
 			pending = append(pending, child)
 			continue
 		}
 		visited := child.Accept(s)
-		out = append(out, s.visitComments(pending, visited != nil && isDeclaration(child))...)
+		comments := pending
+		if visited == nil && isDeclaration(child) {
+			comments = comments[:len(comments)-commentsAbove(comments, child, prevEnd)]
+		}
+		out = append(out, s.visitComments(comments, visited != nil && isDeclaration(child))...)
 		pending = pending[:0]
+		prevEnd = child.GetLocation().EndLine
 		if visited != nil {
 			out = append(out, visited)
 		}
 	}
 	return append(out, s.visitComments(pending, false)...)
+}
+
+// commentsAbove returns how many comments at the end of comments sit directly
+// above the declaration decl by their IR line numbers: the last one ends on
+// the line before decl starts, each one before it on the line before the start
+// of the one after it, with no blank line between. Doc comments that lie
+// inside decl's lines right before it in the list (a Python docstring, which
+// the parser puts before its function) are part of the run. The run stops at
+// a comment without line information (no evidence it is next to the
+// declaration), at a comment that follows its own rules (an inner doc, a PHP
+// API docblock) and at a comment that starts on prevEnd, the line where the
+// previous sibling ends (a comment after that sibling's code belongs to it).
+func commentsAbove(comments []ir.DistilledNode, decl ir.DistilledNode, prevEnd int) int {
+	span := decl.GetLocation()
+	below := span.StartLine
+	n := 0
+	for i := len(comments) - 1; i >= 0 && below > 0; i-- {
+		c := comments[i].(*ir.DistilledComment)
+		loc := c.GetLocation()
+		if loc.StartLine <= 0 || loc.EndLine < loc.StartLine || keptOnItsOwn(c) {
+			break
+		}
+		inside := below == span.StartLine && loc.StartLine >= span.StartLine && loc.EndLine <= span.EndLine
+		if !inside {
+			if loc.EndLine+1 != below || loc.StartLine == prevEnd {
+				break
+			}
+			below = loc.StartLine
+		}
+		n++
+	}
+	return n
 }
 
 // visitComments visits comments in order. Doc comments are dropped unless
@@ -501,10 +540,16 @@ func isComment(node ir.DistilledNode) bool {
 // follow only their own rules.
 func isDocComment(node ir.DistilledNode) bool {
 	c, ok := node.(*ir.DistilledComment)
-	if !ok || c.Inner || (c.Extensions != nil && c.Extensions.PHP != nil && c.Extensions.PHP.IsAPIDocblock) {
+	if !ok || keptOnItsOwn(c) {
 		return false
 	}
 	return c.IsDoc()
+}
+
+// keptOnItsOwn reports whether a comment follows only its own rules, whatever
+// happens to the declaration after it: an inner doc or a PHP API docblock.
+func keptOnItsOwn(c *ir.DistilledComment) bool {
+	return c.Inner || (c.Extensions != nil && c.Extensions.PHP != nil && c.Extensions.PHP.IsAPIDocblock)
 }
 
 // isDeclaration reports whether a node is a declaration a doc comment can

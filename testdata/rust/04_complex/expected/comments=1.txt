@@ -29,7 +29,6 @@ impl AnalysisService {
     // This tests `async fn` syntax and `unsafe` blocks.
 
     pub async fn validate_code(&self, code: &str) -> Result<bool, &'static str>
-    // A private helper method.
 }
 // Advanced trait with async methods
 
@@ -53,6 +52,4 @@ impl FFIData {
 
     pub fn get_integer(&self) -> i64
 }
-// Note: This requires a tokio runtime to execute.
-// e.g., `#[tokio::main]`
 </file>

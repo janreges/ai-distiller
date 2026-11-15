@@ -745,3 +745,101 @@ func TestRemovePublic_DocCommentLeavesWithPublicDeclaration(t *testing.T) {
 	got := New(Options{RemovePublic: true}).Visit(file).(*ir.DistilledFile)
 	assert.Equal(t, []string{"doc:helper doc.", "fn:helper"}, childLabels(got.Children))
 }
+
+// onLines returns a base node placed on lines start to end.
+func onLines(start, end int) ir.BaseNode {
+	return ir.BaseNode{Location: ir.Location{StartLine: start, EndLine: end}}
+}
+
+func lineCommentOn(text string, start, end int) *ir.DistilledComment {
+	return &ir.DistilledComment{BaseNode: onLines(start, end), Text: text, Format: ir.CommentLine}
+}
+
+func fnOn(name string, visibility ir.Visibility, start, end int) *ir.DistilledFunction {
+	return &ir.DistilledFunction{BaseNode: onLines(start, end), Name: name, Visibility: visibility}
+}
+
+// A comment directly above a removed declaration (no blank line between, by
+// the IR line numbers) goes with it, at file level and in a class body.
+func TestCommentDirectlyAboveRemovedDeclarationIsRemoved(t *testing.T) {
+	file := &ir.DistilledFile{Children: []ir.DistilledNode{
+		lineCommentOn("about hidden 1", 1, 1),
+		&ir.DistilledComment{BaseNode: onLines(2, 4), Text: "about hidden 2", Format: ir.CommentBlock},
+		fnOn("hidden", ir.VisibilityPrivate, 5, 6),
+		&ir.DistilledClass{BaseNode: onLines(7, 12), Name: "C", Visibility: ir.VisibilityPublic, Children: []ir.DistilledNode{
+			lineCommentOn("about secret", 8, 8),
+			fnOn("secret", ir.VisibilityPrivate, 9, 10),
+			fnOn("open", ir.VisibilityPublic, 11, 11),
+		}},
+	}}
+	got := New(Options{RemovePrivate: true}).Visit(file).(*ir.DistilledFile)
+	require.Equal(t, []string{"class:C"}, childLabels(got.Children))
+	assert.Equal(t, []string{"fn:open"}, childLabels(got.Children[0].(*ir.DistilledClass).Children))
+}
+
+// A blank line ends the run: a comment separated from the removed
+// declaration by a blank line stays, the comment right above it goes.
+func TestCommentSeparatedByBlankLineIsKept(t *testing.T) {
+	file := &ir.DistilledFile{Children: []ir.DistilledNode{
+		lineCommentOn("section", 1, 1),
+		lineCommentOn("about hidden", 3, 3),
+		fnOn("hidden", ir.VisibilityPrivate, 4, 5),
+		fnOn("api", ir.VisibilityPublic, 6, 7),
+	}}
+	got := New(Options{RemovePrivate: true}).Visit(file).(*ir.DistilledFile)
+	assert.Equal(t, []string{"doc:section", "fn:api"}, childLabels(got.Children))
+}
+
+// A plain comment above the doc of a removed declaration goes with the doc.
+func TestPlainCommentAndDocRunAreRemovedTogether(t *testing.T) {
+	file := &ir.DistilledFile{Children: []ir.DistilledNode{
+		lineCommentOn("note", 1, 1),
+		&ir.DistilledComment{BaseNode: onLines(2, 3), Text: "hidden doc", Format: ir.CommentDoc},
+		fnOn("hidden", ir.VisibilityPrivate, 4, 5),
+		fnOn("api", ir.VisibilityPublic, 6, 7),
+	}}
+	got := New(Options{RemovePrivate: true}).Visit(file).(*ir.DistilledFile)
+	assert.Equal(t, []string{"fn:api"}, childLabels(got.Children))
+}
+
+// Without line information there is no evidence that a comment is directly
+// above the declaration, so it stays.
+func TestCommentWithoutLineInformationIsKept(t *testing.T) {
+	file := &ir.DistilledFile{Children: []ir.DistilledNode{
+		&ir.DistilledComment{Text: "comment without lines", Format: ir.CommentLine},
+		fnOn("hidden", ir.VisibilityPrivate, 2, 3),
+		lineCommentOn("above a declaration without lines", 4, 4),
+		&ir.DistilledFunction{Name: "other", Visibility: ir.VisibilityPrivate},
+		fnOn("api", ir.VisibilityPublic, 6, 7),
+	}}
+	got := New(Options{RemovePrivate: true}).Visit(file).(*ir.DistilledFile)
+	assert.Equal(t, []string{"doc:comment without lines", "doc:above a declaration without lines", "fn:api"}, childLabels(got.Children))
+}
+
+// A comment after code on the line where the previous declaration ends
+// belongs to that declaration, and an inner doc to its container: neither is
+// part of the run above the next declaration.
+func TestTrailingCommentAndInnerDocAreNotPartOfTheRun(t *testing.T) {
+	file := &ir.DistilledFile{Children: []ir.DistilledNode{
+		fnOn("api", ir.VisibilityPublic, 1, 1),
+		lineCommentOn("after api", 1, 1),
+		fnOn("hidden", ir.VisibilityPrivate, 2, 2),
+		lineCommentOn("above the inner doc", 3, 3),
+		&ir.DistilledComment{BaseNode: onLines(4, 4), Text: "inner", Format: ir.CommentDoc, Inner: true},
+		fnOn("other", ir.VisibilityPrivate, 5, 5),
+	}}
+	got := New(Options{RemovePrivate: true}).Visit(file).(*ir.DistilledFile)
+	assert.Equal(t, []string{"fn:api", "doc:after api", "doc:above the inner doc", "doc:inner"}, childLabels(got.Children))
+}
+
+// When the declaration stays, so do the comments above it.
+func TestCommentsAboveKeptDeclarationStay(t *testing.T) {
+	file := &ir.DistilledFile{Children: []ir.DistilledNode{
+		lineCommentOn("note", 1, 1),
+		&ir.DistilledComment{BaseNode: onLines(2, 2), Text: "hidden doc", Format: ir.CommentDoc},
+		fnOn("hidden", ir.VisibilityPrivate, 3, 4),
+		fnOn("api", ir.VisibilityPublic, 5, 6),
+	}}
+	got := New(Options{}).Visit(file).(*ir.DistilledFile)
+	assert.Equal(t, []string{"doc:note", "doc:hidden doc", "fn:hidden", "fn:api"}, childLabels(got.Children))
+}

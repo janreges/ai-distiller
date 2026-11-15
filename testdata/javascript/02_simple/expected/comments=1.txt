@@ -5,7 +5,6 @@
  */
 /** User model class with validation and formatting */
 class UserModel:
-    // Private fields (ES2022)
     /**
      * Creates a new user
      * @param {number} id - User ID

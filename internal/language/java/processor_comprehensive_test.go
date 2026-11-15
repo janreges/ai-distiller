@@ -330,3 +330,19 @@ func TestJava_DocOfInitializerDoesNotMoveToNextMember(t *testing.T) {
 	file = parseJava(t, "public interface I {\n    /** constant doc */\n    int X = 1;\n    void m();\n}\n")
 	assert.Equal(t, []string{"m"}, labels(file.Children[0].(*ir.DistilledInterface).Children))
 }
+
+// A plain comment above the Javadoc of a removed member goes with the doc and
+// the member (spec H1): the Javadoc carries its line numbers, so the stripper
+// sees the comments as one run directly above the member.
+func TestJava_CommentAboveJavadocOfRemovedMemberLeavesWithIt(t *testing.T) {
+	src := "public class A {\n    // about secret\n    /**\n     * Secret doc.\n     */\n    private int secret;\n\n    // Public API.\n\n    public void open() {}\n}\n"
+	opts := processor.DefaultProcessOptions()
+	opts.IncludePrivate = false
+	opts.IncludeComments = true
+	file, err := NewProcessor().ProcessWithOptions(context.Background(), strings.NewReader(src), "Test.java", opts)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"line:Public API.", "open"}, labels(file.Children[0].(*ir.DistilledClass).Children))
+
+	doc := parseJava(t, src).Children[0].(*ir.DistilledClass).Children[1].(*ir.DistilledComment)
+	assert.Equal(t, [2]int{3, 5}, [2]int{doc.Location.StartLine, doc.Location.EndLine}, "the Javadoc keeps its lines")
+}

@@ -5,7 +5,6 @@ import java.io.Serializable
 
 public class Advanced<T extends Number & Runnable & Serializable> {
     // 1. Static initializer block
-    // 2. A field with a complex generic type
     // 3. Method with generic return type, bounded wildcard, and annotated parameter
     public <U extends T> U process(@NotNull U input) throws Exception;
     // 4. Anonymous inner class

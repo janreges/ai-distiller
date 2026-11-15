@@ -35,7 +35,6 @@ impl AnalysisResult<T> {
 // The parser must correctly handle lifetimes and `where` clauses.
 
 pub fn analyze<'a, S>(source: &'a S) -> Result<AnalysisResult<String>, AnalysisError> where S: DataSource + ?Sized, // `?Sized` is an interesting bound to parse.
-// An example implementation of our DataSource.
 
 impl DataSource for InMemorySource {
 

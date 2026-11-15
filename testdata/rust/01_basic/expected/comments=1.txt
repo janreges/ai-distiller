@@ -8,12 +8,9 @@ pub mod settings {
     // The public name of the application.
 
     pub const APP_NAME: &str = "AI Distiller";
-    // A private constant, not visible outside this module.
     // Returns the full version string.
     // This function is public and can be called from outside `settings`.
 
     pub fn get_version() -> String
-    // A private function, only callable within the `settings` module.
-    // The parser should correctly identify its scope and visibility.
 }
 </file>

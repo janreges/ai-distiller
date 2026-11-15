@@ -1,9 +1,6 @@
 <file path="source.java">
 // Level 4: ModernJava.java
 package com.aidi.test.modern
-// 1. A sealed interface to control implementations
-// 2. A record implementing the sealed interface
-// 3. A final class implementing the sealed interface
 
 public class ModernJava {
     public static void main(String[] args);
