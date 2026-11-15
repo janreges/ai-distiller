@@ -282,10 +282,12 @@ func (f *CppFormatter) formatFunction(fn *ir.DistilledFunction, indent int) stri
 		}
 	}
 
-	// Note: Implementation is not shown in text format
-	// The stripper should have already removed it if --implementation=0
-	// Only show semicolon for top-level declarations
-	if indent == 0 {
+	// A function with a body prints it after the signature; the stripper has
+	// already removed bodies that were not requested. A declaration without a
+	// body gets a semicolon at top level.
+	if fn.Implementation != "" {
+		signature += strings.TrimRight(renderBody(fn.Implementation, indentStr), "\n")
+	} else if indent == 0 {
 		signature += ";"
 	}
 

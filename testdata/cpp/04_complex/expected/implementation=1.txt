@@ -14,71 +14,186 @@
 #include "thread"
 #include "future"
 #include "chrono"
-factorial(int n) const;
+factorial(int n) const {
+    return (n <= 1) ? 1 : n * factorial(n - 1);
+}
 bool is_callable_v;
 template<typename Derived>
 class Comparable {
-    bool operator!=(const Derived& other) const
-    bool operator>(const Derived& other) const
-    bool operator<=(const Derived& other) const
-    bool operator>=(const Derived& other) const
+    bool operator!=(const Derived& other) const {
+        return !static_cast<const Derived*>(this)->operator==(other);
+    }
+    bool operator>(const Derived& other) const {
+        return other < static_cast<const Derived&>(*this);
+    }
+    bool operator<=(const Derived& other) const {
+        return !(static_cast<const Derived&>(*this) > other);
+    }
+    bool operator>=(const Derived& other) const {
+        return !(static_cast<const Derived&>(*this) < other);
+    }
 };
 class Point {
-    Point(double x, double y)
-    bool operator==(const Point& other) const
-    bool operator<(const Point& other) const
-    double distance() const
+    Point(double x, double y) {}
+    bool operator==(const Point& other) const {
+        return std::abs(x_ - other.x_) < 1e-9 && std::abs(y_ - other.y_) < 1e-9;
+    }
+    bool operator<(const Point& other) const {
+        return (x_ < other.x_) || (x_ == other.x_ && y_ < other.y_);
+    }
+    double distance() const {
+        return std::sqrt(x_ * x_ + y_ * y_);
+    }
 };
 class VariadicProcessor {
-    VariadicProcessor()
-    get()
+    VariadicProcessor() {}
+    get() {
+        return std::get<Index>(data_);
+    }
     template<typename F>
-    void forEach(F& f)
-    static size_t size()
+    void forEach(F& f) {
+        forEachImpl(std::forward<F>(f), std::index_sequence_for<Args...>{});
+    }
+    static size_t size() {
+        return sizeof...(Args);
+    }
     template<typename F>
-    void forEachImpl(F& f, auto )
+    void forEachImpl(F& f, auto ) {
+        (f(std::get<Indices>(data_)), ...);  // C++17 fold expression
+    }
 };
 template<typename Container, typename T>
-insert_if_possible(Container& container, T& value);
+insert_if_possible(Container& container, T& value) {
+    container.insert(std::forward<T>(value));
+}
 template<typename Container, typename T>
-insert_if_possible(Container& container, T& value);
+insert_if_possible(Container& container, T& value) {
+    container.push_back(std::forward<T>(value));
+}
 CompileTimeString(const char );
 template<typename T>
 class Factory {
-    static create()
+    static create() {
+        return std::make_unique<T>(std::forward<Args>(args)...);
+    }
     template<typename Tuple>
-    static createFromTuple(Tuple& tuple)
+    static createFromTuple(Tuple& tuple) {
+        return createFromTupleImpl(std::forward<Tuple>(tuple),
+                                  std::make_index_sequence<std::tuple_size_v<std::decay_t<Tuple>>>{});
+    }
     template<typename Tuple>
-    static createFromTupleImpl(Tuple& tuple, auto )
+    static createFromTupleImpl(Tuple& tuple, auto ) {
+        return std::make_unique<T>(std::get<Indices>(std::forward<Tuple>(tuple))...);
+    }
 };
 struct DataVisitor {
-    operator()(int value) const
-    operator()(double value) const
-    operator()(const & value) const
+    operator()(int value) const {
+        return "Integer: " + std::to_string(value);
+    }
+    operator()(double value) const {
+        return "Double: " + std::to_string(value);
+    }
+    operator()(const & value) const {
+        return "String: " + value;
+    }
 };
 template<typename T>
 class AdvancedContainer {
-    AdvancedContainer(const Compare& comp, const Allocator& alloc)
-    void insert(const T& value)
-    void emplace()
-    find(const T& value) const
-    size_t size() const
-    begin() const
-    end() const
+    AdvancedContainer(const Compare& comp, const Allocator& alloc) {}
+    void insert(const T& value) {
+        auto it = std::lower_bound(data_.begin(), data_.end(), value, compare_);
+        data_.insert(it, value);
+    }
+    void emplace() {
+        T value(std::forward<Args>(args)...);
+        insert(value);
+    }
+    find(const T& value) const {
+        auto it = std::lower_bound(data_.begin(), data_.end(), value, compare_);
+        return (it != data_.end() && !compare_(value, *it)) ? it : data_.end();
+    }
+    size_t size() const { return data_.size(); }
+    begin() const { return data_.begin(); }
+    end() const { return data_.end(); }
 };
 template<typename T, typename Allocator, typename Compare>
 class  {
-    AdvancedContainer()
-    void insert(T* ptr)
-    size_t size() const
+    AdvancedContainer() = default
+    void insert(T* ptr) {
+        if (ptr) {
+            pointers_.push_back(ptr);
+        }
+    }
+    size_t size() const { return pointers_.size(); }
 };
 class AsyncProcessor {
     template<typename T>
-    processWithTimeout(const T& data, int timeoutMs)
+    processWithTimeout(const T& data, int timeoutMs) {
+        auto future = std::async(std::launch::async, [data]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            return processData(data);
+        });
+
+        if (future.wait_for(std::chrono::milliseconds(timeoutMs)) == std::future_status::ready) {
+            return future.get();
+        }
+
+        return std::nullopt;
+    }
     template<typename Container>
-    processParallel(const Container& items)
+    processParallel(const Container& items) {
+        std::vector<std::future<std::string>> futures;
+
+        for (const auto& item : items) {
+            futures.push_back(std::async(std::launch::async, [item]() {
+                return processData(item);
+            }));
+        }
+
+        std::vector<std::string> results;
+        for (auto& future : futures) {
+            results.push_back(future.get());
+        }
+
+        return results;
+    }
     template<typename T>
-    static processData(const T& data)
+    static processData(const T& data) {
+        return "Processed: " + std::to_string(data);
+    }
 };
-void demonstrateComplexFeatures();
+void demonstrateComplexFeatures() {
+    // Compile-time computation
+    constexpr auto fact5 = factorial(5);
+
+    // CRTP demonstration
+    Point p1(1.0, 2.0);
+    Point p2(3.0, 4.0);
+    bool isLess = p1 < p2;
+
+    // Variadic template
+    VariadicProcessor<int, double, std::string> processor(42, 3.14, "Hello");
+
+    // Variant visitor
+    std::vector<DataVariant> variants = {42, 3.14, std::string("test")};
+    for (const auto& var : variants) {
+        std::string result = std::visit(DataVisitor{}, var);
+        std::cout << result << std::endl;
+    }
+
+    // Advanced container
+    AdvancedContainer<int> container;
+    container.insert(3);
+    container.insert(1);
+    container.insert(4);
+
+    // Async processing
+    AsyncProcessor asyncProc;
+    auto result = asyncProc.processWithTimeout(42, 200);
+
+    std::cout << "Factorial(5): " << fact5 << std::endl;
+    std::cout << "Point comparison: " << (isLess ? "true" : "false") << std::endl;
+    std::cout << "Container size: " << container.size() << std::endl;
+    std::cout << "Async result: " << (result ? *result : "timeout") << std::endl;
+}
 </file>

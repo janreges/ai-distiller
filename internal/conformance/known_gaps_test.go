@@ -3,8 +3,6 @@ package conformance
 // knownGaps lists the checks that fail today, keyed "<lang>/<cap>", with the
 // reason. A fix deletes its entry: a listed check that passes fails the suite.
 var knownGaps = map[string]string{
-	"cpp/body-with-implementation":    "C1: formatter never prints bodies",
-	"cpp/expand-by-name":              "C1: formatter never prints bodies",
 	"swift/body-with-implementation":  "C1: line parser does not capture bodies",
 	"swift/expand-by-name":            "C1: line parser does not capture bodies",
 	"kotlin/body-with-implementation": "C1: block bodies are not captured",

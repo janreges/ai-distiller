@@ -95,11 +95,12 @@ var fixtures = []fixture{
 		Private:   []string{"confPrivate"},
 		ExpandSym: "confPublic",
 	})},
-	{Lang: "cpp", File: "cpp/sample.cpp", Checks: standard(markers{
+	{Lang: "cpp", File: "cpp/sample.cpp", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
 		Private:   []string{"confPrivate"},
 		ExpandSym: "confPublic",
-	})},
+	}), check{Cap: "body-indent", Flags: []string{"--implementation=1"},
+		Contains: []string{"        std::string a = \"CONF_BODY_A\";\n        return a;\n    }\n"}})},
 	{Lang: "php", File: "php/sample.php", Checks: standard(markers{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
 		Private:   []string{"confPrivate"},

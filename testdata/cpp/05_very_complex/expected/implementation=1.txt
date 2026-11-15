@@ -19,10 +19,22 @@
 #include "ranges"
 #include "span"
 struct SimpleTask {
-    SimpleTask(auto h)
-    ~SimpleTask()
-    SimpleTask(SimpleTask& other)
-    SimpleTask& operator=(SimpleTask& other)
+    SimpleTask(auto h) {}
+    ~SimpleTask() {
+        if (handle_) {
+            handle_.destroy();
+        }
+    }
+    SimpleTask(SimpleTask& other) {}
+    SimpleTask& operator=(SimpleTask& other) {
+        if (this != &other) {
+            if (handle_) {
+                handle_.destroy();
+            }
+            handle_ = std::exchange(other.handle_, {});
+        }
+        return *this;
+    }
     SimpleTask(const SimpleTask )
     SimpleTask& operator=(const SimpleTask )
 };
@@ -41,24 +53,127 @@ class HasAdvancedMethods {
 };
 template<typename AdvancedNumeric>
 class AdvancedProcessor {
-    AdvancedProcessor(const & name)
-    T process(const T& data)
+    AdvancedProcessor(const & name) {}
+    T process(const T& data) {
+        T result = data;
+        ++result;
+        return result * static_cast<T>(2);
+    }
     template<typename Container>
-    processContainer(const Container& container)
-    generateSequence(T start, size_t count)
-    SimpleTask processAsync(const T& data)
+    processContainer(const Container& container) {
+
+        std::vector<T> results;
+        results.reserve(container.size());
+
+        for (const auto& item : container) {
+            results.push_back(process(item));
+        }
+
+        return results;
+    }
+    generateSequence(T start, size_t count) {
+        for (size_t i = 0; i < count; ++i) {
+            co_yield start + static_cast<T>(i);
+        }
+    }
+    SimpleTask processAsync(const T& data) {
+        // Simulate async work
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        auto result = process(data);
+        std::cout << name_ << " processed " << data << " -> " << result << std::endl;
+        co_return;
+    }
 };
 class TypeErasedContainer {
     template<typename T>
-    void store(T& value)
-    void processAll(F& f) const
+    void store(T& value) {
+        using DecayedT = std::decay_t<T>;
+
+        data_.emplace_back(std::make_unique<Wrapper<DecayedT>>(std::forward<T>(value)));
+    }
+    void processAll(F& f) const {
+        for (const auto& wrapper : data_) {
+            f(wrapper->getValue());
+        }
+    }
     template<typename T>
-    get() const
-    size_t size() const
+    get() const {
+        for (const auto& wrapper : data_) {
+            if (auto* typed = dynamic_cast<const Wrapper<T>*>(wrapper.get())) {
+                return std::any_cast<T>(typed->getValue());
+            }
+        }
+        return std::nullopt;
+    }
+    size_t size() const { return data_.size(); }
 };
-size_t processString(const char* str);
+size_t processString(const char* str) {
+    size_t len = 0;
+    while (str[len] != '\0') {
+        ++len;
+    }
+    return len;
+}
 template<typename AdvancedNumeric>
-T complexCalculation(T value) const;
-processRange(Range& range);
-void demonstrateVeryComplexFeatures();
+T complexCalculation(T value) const {
+    T result = value;
+    for (int i = 0; i < 5; ++i) {
+        result = result * static_cast<T>(2) + static_cast<T>(1);
+    }
+    return result;
+}
+processRange(Range& range) {
+    namespace views = std::views;
+
+    return range | views::filter([](const auto& x) { return x > 0; })
+                | views::transform([](const auto& x) { return x * 2; })
+                | views::take(10);
+}
+void demonstrateVeryComplexFeatures() {
+    // Concepts demonstration
+    AdvancedProcessor<int> intProcessor("IntProcessor");
+    auto result = intProcessor.process(42);
+
+    // Coroutine demonstration
+    auto generator = intProcessor.generateSequence(1, 5);
+    std::vector<int> generated;
+    while (generator.next()) {
+        generated.push_back(generator.value());
+    }
+
+    // Type-erased container
+    TypeErasedContainer container;
+    container.store(123);
+    container.store(3.14);
+    container.store(std::string("Hello"));
+
+    // Process with lambda
+    container.processAll([](const std::any& value) {
+        // Type inspection would go here
+        std::cout << "Processing stored value" << std::endl;
+    });
+
+    // Consteval demonstration
+    constexpr auto strLen = AdvancedFeatures::processString("Hello, World!");
+    constexpr auto calcResult = AdvancedFeatures::complexCalculation(5);
+
+    // Ranges demonstration (C++20)
+    std::vector<int> numbers = {-2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+    auto processed = AdvancedFeatures::processRange(numbers);
+
+    std::cout << "Int processor result: " << result << std::endl;
+    std::cout << "Generated values: " << generated.size() << std::endl;
+    std::cout << "Container size: " << container.size() << std::endl;
+    std::cout << "String length (consteval): " << strLen << std::endl;
+    std::cout << "Calculation result (constexpr): " << calcResult << std::endl;
+
+    // Type analysis demonstration
+    using IntAnalysis = TypeAnalyzer<int>;
+    std::cout << "Int category: " << IntAnalysis::category() << std::endl;
+    std::cout << "Int size: " << IntAnalysis::size << std::endl;
+
+    // Advanced method detection
+    constexpr bool hasSerialize = HasAdvancedMethods<std::string>::has_serialize;
+    std::cout << "String has serialize: " << (hasSerialize ? "true" : "false") << std::endl;
+}
 </file>

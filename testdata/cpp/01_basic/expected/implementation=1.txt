@@ -3,31 +3,59 @@
 #include "string"
 #include "vector"
 class Point {
-    Point()
-    Point(double x, double y)
-    Point(const Point& other)
-    virtual ~Point()
-    double getX() const
-    double getY() const
-    void setX(double x)
-    void setY(double y)
-    virtual double distanceFromOrigin() const
+    Point() {}
+    Point(double x, double y) {}
+    Point(const Point& other) {}
+    virtual ~Point() = default
+    double getX() const { return x_; }
+    double getY() const { return y_; }
+    void setX(double x) { x_ = x; }
+    void setY(double y) { y_ = y; }
+    virtual double distanceFromOrigin() const {
+        return std::sqrt(x_ * x_ + y_ * y_);
+    }
 };
 class Point3D : public Point {
-    Point3D(double x, double y, double z)
-    double getZ() const
-    void setZ(double z)
-    double distanceFromOrigin() const
+    Point3D(double x, double y, double z) {}
+    double getZ() const { return z_; }
+    void setZ(double z) { z_ = z; }
+    double distanceFromOrigin() const {
+        return std::sqrt(getX() * getX() + getY() * getY() + z_ * z_);
+    }
 };
 template<typename T>
 class Container {
-    Container(const T& value)
-    const T& getValue() const
-    void setValue(const T& value)
+    Container(const T& value) {}
+    const T& getValue() const { return value_; }
+    void setValue(const T& value) { value_ = value; }
 };
 template<typename T>
-T max(const T& a, const T& b);
+T max(const T& a, const T& b) {
+    return (a > b) ? a : b;
+}
 template<typename T>
-T min(const T& a, const T& b);
-int main();
+T min(const T& a, const T& b) {
+    return (a < b) ? a : b;
+}
+int main() {
+    // Create some points
+    Point p1(3.0, 4.0);
+    Point3D p2(1.0, 2.0, 3.0);
+
+    // Use containers
+    Container<int> intContainer(42);
+    Container<std::string> stringContainer("Hello");
+
+    // Use utility functions
+    int maxVal = MathUtils::max(10, 20);
+    double minVal = MathUtils::min(1.5, 2.5);
+
+    // Output results
+    std::cout << "Point distance: " << p1.distanceFromOrigin() << std::endl;
+    std::cout << "3D Point distance: " << p2.distanceFromOrigin() << std::endl;
+    std::cout << "Container value: " << intContainer.getValue() << std::endl;
+    std::cout << "Max value: " << maxVal << std::endl;
+
+    return 0;
+}
 </file>
