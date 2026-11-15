@@ -251,6 +251,18 @@ jobs:
           echo "Checking ${URL}"
           curl -fsSL -o /dev/null "${URL}"
           echo "OK: release binary is reachable"
+          # postinstall refuses to install without a checksum entry for the archive
+          SUMS_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/checksums.txt"
+          echo "Checking ${SUMS_URL}"
+          curl -fsSL -o checksums.txt "${SUMS_URL}"
+          grep -F "aid-linux-amd64-v${VERSION}.tar.gz" checksums.txt
+          echo "OK: checksums.txt lists the linux-amd64 archive"
+
+      - name: Install and test
+        working-directory: mcp-npm
+        run: |
+          npm ci
+          npm test
 
       - name: Sync package version and binary version
         working-directory: mcp-npm
@@ -265,11 +277,9 @@ jobs:
           grep -q "const AID_VERSION = '${VERSION}'" scripts/postinstall.js
           node -p "require('./package.json').version" | grep -qx "${VERSION}"
 
-      - name: Install and build
+      - name: Build
         working-directory: mcp-npm
-        run: |
-          npm install
-          npm run build
+        run: npm run build
 
       - name: Publish to npm (Trusted Publishing + provenance)
         working-directory: mcp-npm
