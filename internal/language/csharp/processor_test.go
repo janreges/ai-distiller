@@ -517,3 +517,68 @@ func convertToString(file *ir.DistilledFile) string {
 
 	return sb.String()
 }
+
+func TestVisibilityFromModifiers(t *testing.T) {
+	cases := []struct {
+		in   []string
+		want ir.Visibility
+		ok   bool
+	}{
+		{[]string{"public", "static"}, ir.VisibilityPublic, true},
+		{[]string{"protected", "internal"}, ir.VisibilityProtectedInternal, true},
+		{[]string{"internal", "protected"}, ir.VisibilityProtectedInternal, true},
+		{[]string{"private", "protected"}, ir.VisibilityPrivateProtected, true},
+		{[]string{"protected"}, ir.VisibilityProtected, true},
+		{[]string{"static", "readonly"}, "", false},
+	}
+	for _, c := range cases {
+		got, ok := visibilityFromModifiers(c.in)
+		assert.Equal(t, c.want, got, c.in)
+		assert.Equal(t, c.ok, ok, c.in)
+	}
+}
+
+func parseCSharp(t *testing.T, code string) *ir.DistilledFile {
+	t.Helper()
+	result, err := NewProcessor().Process(context.Background(), strings.NewReader(code), "test.cs")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	return result
+}
+
+func findCSharpClass(t *testing.T, file *ir.DistilledFile, name string) *ir.DistilledClass {
+	t.Helper()
+	var found *ir.DistilledClass
+	var walk func(nodes []ir.DistilledNode)
+	walk = func(nodes []ir.DistilledNode) {
+		for _, n := range nodes {
+			switch v := n.(type) {
+			case *ir.DistilledClass:
+				if v.Name == name {
+					found = v
+				}
+			case *ir.DistilledPackage:
+				walk(v.Children)
+			}
+		}
+	}
+	walk(file.Children)
+	require.NotNil(t, found, "class %s not found", name)
+	return found
+}
+
+func TestCSharp_CompoundVisibilityOnMembers(t *testing.T) {
+	cls := findCSharpClass(t, parseCSharp(t, "public class A {\n  protected internal void M1() {}\n  private protected int F1;\n  internal void M2() {}\n}\n"), "A")
+	vis := map[string]ir.Visibility{}
+	for _, c := range cls.Children {
+		switch n := c.(type) {
+		case *ir.DistilledFunction:
+			vis[n.Name] = n.Visibility
+		case *ir.DistilledField:
+			vis[n.Name] = n.Visibility
+		}
+	}
+	assert.Equal(t, ir.VisibilityProtectedInternal, vis["M1"])
+	assert.Equal(t, ir.VisibilityPrivateProtected, vis["F1"])
+	assert.Equal(t, ir.VisibilityInternal, vis["M2"])
+}

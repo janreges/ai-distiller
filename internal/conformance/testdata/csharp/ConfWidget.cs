@@ -18,6 +18,8 @@ public class ConfWidget {
         return Path.GetTempPath();
     }
 
+    protected internal string ConfProtInt() { return "x"; }
+
     public string ConfOther() {
         string b = "CONF_BODY_B";
         return b;

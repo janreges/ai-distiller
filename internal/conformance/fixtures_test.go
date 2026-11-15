@@ -117,11 +117,12 @@ var fixtures = []fixture{
 	}), check{Cap: "throws-kept", Contains: []string{"confThrows() throws java.io.IOException"}},
 		check{Cap: "body-indent", Flags: []string{"--implementation=1"},
 			Contains: []string{"        String a = \"CONF_BODY_A\";\n        return a;\n"}})},
-	{Lang: "csharp", File: "csharp/ConfWidget.cs", Checks: standard(markers{
+	{Lang: "csharp", File: "csharp/ConfWidget.cs", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "ConfField", "ConfPublic", "ConfOther"},
 		Private:   []string{"ConfPrivate"},
 		ExpandSym: "ConfPublic",
-	})},
+	}), check{Cap: "compound-hidden-by-default", NotContains: []string{"ConfProtInt"}},
+		check{Cap: "compound-with-protected", Flags: []string{"--protected=1"}, Contains: []string{"protected internal string ConfProtInt"}})},
 	{Lang: "kotlin", File: "kotlin/ConfWidget.kt", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
 		Private:   []string{"confPrivate"},

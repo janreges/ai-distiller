@@ -455,16 +455,8 @@ func (p *TreeSitterProcessor) processDelegateDeclaration(node *sitter.Node, sour
 		child := node.Child(i)
 		switch child.Type() {
 		case "modifier":
-			text := string(source[child.StartByte():child.EndByte()])
-			switch text {
-			case "public":
-				delegate.Visibility = ir.VisibilityPublic
-			case "private":
-				delegate.Visibility = ir.VisibilityPrivate
-			case "protected":
-				delegate.Visibility = ir.VisibilityProtected
-			case "internal":
-				delegate.Visibility = ir.VisibilityInternal
+			if vis, ok := declaredVisibility(child, source); ok {
+				delegate.Visibility = vis
 			}
 		case "void_keyword":
 			returnType = "void"
@@ -724,11 +716,11 @@ func (p *TreeSitterProcessor) processFieldDeclaration(node *sitter.Node, source 
 		child := node.Child(i)
 		switch child.Type() {
 		case "modifier":
-			mod, vis := p.extractFieldModifier(child, source)
+			mod, _ := p.extractFieldModifier(child, source)
 			if mod != "" {
 				modifiers = append(modifiers, mod)
 			}
-			if vis != "" {
+			if vis, ok := declaredVisibility(child, source); ok {
 				visibility = vis
 			}
 		case "attribute_list":
@@ -857,19 +849,54 @@ func (p *TreeSitterProcessor) processEventDeclaration(node *sitter.Node, source 
 
 // Helper methods
 
+// visibilityFromModifiers derives the visibility from all modifier tokens of a
+// declaration. It reports false when no access modifier is present.
+func visibilityFromModifiers(tokens []string) (ir.Visibility, bool) {
+	has := map[string]bool{}
+	for _, t := range tokens {
+		has[t] = true
+	}
+	switch {
+	case has["protected"] && has["internal"]:
+		return ir.VisibilityProtectedInternal, true
+	case has["private"] && has["protected"]:
+		return ir.VisibilityPrivateProtected, true
+	case has["public"]:
+		return ir.VisibilityPublic, true
+	case has["private"]:
+		return ir.VisibilityPrivate, true
+	case has["protected"]:
+		return ir.VisibilityProtected, true
+	case has["internal"]:
+		return ir.VisibilityInternal, true
+	}
+	return "", false
+}
+
+// declaredVisibility collects the modifier tokens of the declaration that owns
+// the given modifier node and derives its visibility.
+func declaredVisibility(modifier *sitter.Node, source []byte) (ir.Visibility, bool) {
+	decl := modifier.Parent()
+	if decl == nil {
+		return "", false
+	}
+	var tokens []string
+	for i := 0; i < int(decl.ChildCount()); i++ {
+		if c := decl.Child(i); c.Type() == "modifier" {
+			tokens = append(tokens, string(source[c.StartByte():c.EndByte()]))
+		}
+	}
+	return visibilityFromModifiers(tokens)
+}
+
 // extractClassModifiers extracts modifiers for classes
 func (p *TreeSitterProcessor) extractClassModifiers(node *sitter.Node, source []byte, class *ir.DistilledClass) {
+	if vis, ok := declaredVisibility(node, source); ok {
+		class.Visibility = vis
+	}
 	text := string(source[node.StartByte():node.EndByte()])
 
 	switch text {
-	case "public":
-		class.Visibility = ir.VisibilityPublic
-	case "private":
-		class.Visibility = ir.VisibilityPrivate
-	case "protected":
-		class.Visibility = ir.VisibilityProtected
-	case "internal":
-		class.Visibility = ir.VisibilityInternal
 	case "abstract":
 		class.Modifiers = append(class.Modifiers, ir.ModifierAbstract)
 	case "sealed":
@@ -883,33 +910,23 @@ func (p *TreeSitterProcessor) extractClassModifiers(node *sitter.Node, source []
 
 // extractInterfaceModifiers extracts modifiers for interfaces
 func (p *TreeSitterProcessor) extractInterfaceModifiers(node *sitter.Node, source []byte, iface *ir.DistilledInterface) {
+	if vis, ok := declaredVisibility(node, source); ok {
+		iface.Visibility = vis
+	}
 	text := string(source[node.StartByte():node.EndByte()])
 
 	switch text {
-	case "public":
-		iface.Visibility = ir.VisibilityPublic
-	case "private":
-		iface.Visibility = ir.VisibilityPrivate
-	case "protected":
-		iface.Visibility = ir.VisibilityProtected
-	case "internal":
-		iface.Visibility = ir.VisibilityInternal
 	}
 }
 
 // extractStructModifiers extracts modifiers for structs
 func (p *TreeSitterProcessor) extractStructModifiers(node *sitter.Node, source []byte, strct *ir.DistilledStruct) {
+	if vis, ok := declaredVisibility(node, source); ok {
+		strct.Visibility = vis
+	}
 	text := string(source[node.StartByte():node.EndByte()])
 
 	switch text {
-	case "public":
-		strct.Visibility = ir.VisibilityPublic
-	case "private":
-		strct.Visibility = ir.VisibilityPrivate
-	case "protected":
-		strct.Visibility = ir.VisibilityProtected
-	case "internal":
-		strct.Visibility = ir.VisibilityInternal
 	case "readonly":
 		// TODO: Add readonly struct support
 	case "ref":
@@ -919,33 +936,23 @@ func (p *TreeSitterProcessor) extractStructModifiers(node *sitter.Node, source [
 
 // extractEnumModifiers extracts modifiers for enums
 func (p *TreeSitterProcessor) extractEnumModifiers(node *sitter.Node, source []byte, enum *ir.DistilledEnum) {
+	if vis, ok := declaredVisibility(node, source); ok {
+		enum.Visibility = vis
+	}
 	text := string(source[node.StartByte():node.EndByte()])
 
 	switch text {
-	case "public":
-		enum.Visibility = ir.VisibilityPublic
-	case "private":
-		enum.Visibility = ir.VisibilityPrivate
-	case "protected":
-		enum.Visibility = ir.VisibilityProtected
-	case "internal":
-		enum.Visibility = ir.VisibilityInternal
 	}
 }
 
 // extractMethodModifiers extracts modifiers for methods
 func (p *TreeSitterProcessor) extractMethodModifiers(node *sitter.Node, source []byte, method *ir.DistilledFunction) {
+	if vis, ok := declaredVisibility(node, source); ok {
+		method.Visibility = vis
+	}
 	text := string(source[node.StartByte():node.EndByte()])
 
 	switch text {
-	case "public":
-		method.Visibility = ir.VisibilityPublic
-	case "private":
-		method.Visibility = ir.VisibilityPrivate
-	case "protected":
-		method.Visibility = ir.VisibilityProtected
-	case "internal":
-		method.Visibility = ir.VisibilityInternal
 	case "abstract":
 		method.Modifiers = append(method.Modifiers, ir.ModifierAbstract)
 	case "virtual":
@@ -969,11 +976,11 @@ func (p *TreeSitterProcessor) extractMethodModifiers(node *sitter.Node, source [
 
 // extractFieldModifiers extracts modifiers for fields
 func (p *TreeSitterProcessor) extractFieldModifiers(node *sitter.Node, source []byte, field *ir.DistilledField) {
-	mod, vis := p.extractFieldModifier(node, source)
+	mod, _ := p.extractFieldModifier(node, source)
 	if mod != "" {
 		field.Modifiers = append(field.Modifiers, mod)
 	}
-	if vis != "" {
+	if vis, ok := declaredVisibility(node, source); ok {
 		field.Visibility = vis
 	}
 }
@@ -983,14 +990,6 @@ func (p *TreeSitterProcessor) extractFieldModifier(node *sitter.Node, source []b
 	text := string(source[node.StartByte():node.EndByte()])
 
 	switch text {
-	case "public":
-		return "", ir.VisibilityPublic
-	case "private":
-		return "", ir.VisibilityPrivate
-	case "protected":
-		return "", ir.VisibilityProtected
-	case "internal":
-		return "", ir.VisibilityInternal
 	case "static":
 		return ir.ModifierStatic, ""
 	case "readonly":
