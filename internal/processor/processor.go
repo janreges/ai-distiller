@@ -11,7 +11,6 @@ import (
 	"sync"
 
 	"github.com/janreges/ai-distiller/internal/debug"
-	"github.com/janreges/ai-distiller/internal/ignore"
 	"github.com/janreges/ai-distiller/internal/ir"
 	"github.com/janreges/ai-distiller/internal/stripper"
 )
@@ -243,148 +242,10 @@ func (p *Processor) Process(ctx context.Context, reader io.Reader, filename stri
 	return proc.Process(ctx, reader, filename)
 }
 
+// processDirectory walks dir with processDirectoryConcurrent for every worker
+// count; Workers == 1 means one worker goroutine, 0 means auto.
 func (p *Processor) processDirectory(dir string, opts ProcessOptions) (*ir.DistilledDirectory, error) {
-	// Use concurrent processing if workers > 1
-	if opts.Workers == 0 || opts.Workers > 1 {
-		return p.processDirectoryConcurrent(dir, opts)
-	}
-
-	// Create ignore matcher for the directory
-	ignoreMatcher, ignoreErr := ignore.New(dir)
-	if ignoreErr != nil {
-		// Log warning but continue without ignore functionality
-		fmt.Fprintf(os.Stderr, "Warning: failed to create ignore matcher: %v\n", ignoreErr)
-		ignoreMatcher = nil
-	}
-
-	// Calculate display path for directory
-	displayPath := dir
-	if opts.FilePathType == "relative" && opts.BasePath != "" {
-		// Try to make path relative to base path
-		absBase, err := filepath.Abs(opts.BasePath)
-		if err == nil {
-			relPath, err := filepath.Rel(absBase, dir)
-			if err == nil && !strings.HasPrefix(relPath, "..") {
-				displayPath = relPath
-				
-				// Apply prefix if specified
-				if opts.RelativePathPrefix != "" {
-					prefix := opts.RelativePathPrefix
-					// Ensure prefix ends with separator if not empty and doesn't already
-					if !strings.HasSuffix(prefix, "/") && !strings.HasSuffix(prefix, string(filepath.Separator)) {
-						prefix += "/"
-					}
-					displayPath = prefix + displayPath
-				}
-			}
-		}
-	}
-
-	// Serial processing (workers == 1)
-	result := &ir.DistilledDirectory{
-		BaseNode: ir.BaseNode{},
-		Path:     displayPath,
-		Children: []ir.DistilledNode{},
-	}
-
-	// Walk directory
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Check if path should be ignored
-		if ignoreMatcher != nil && ignoreMatcher.ShouldIgnore(path) {
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		// Skip directories
-		if info.IsDir() {
-			basename := filepath.Base(path)
-			
-			// Skip .aid directories completely
-			if basename == ".aid" {
-				return filepath.SkipDir
-			}
-			
-			// Skip default ignored directories unless explicitly included in .aidignore
-			// or unless they contain explicitly included files
-			if isDefaultIgnoredDir(basename) && ignoreMatcher != nil {
-				// Check if directory is explicitly included
-				if ignoreMatcher.IsExplicitlyIncluded(path) {
-					return nil // Don't skip, process the directory
-				}
-				// Check if any files within this directory might be explicitly included
-				if !ignoreMatcher.MightContainExplicitIncludes(path) {
-					return filepath.SkipDir
-				}
-			} else if isDefaultIgnoredDir(basename) && ignoreMatcher == nil {
-				// No .aidignore, skip default ignored dirs
-				return filepath.SkipDir
-			}
-			
-			// If not recursive and not the root directory, skip subdirectories
-			if !opts.Recursive && path != dir {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		// Skip files containing '.aid.' anywhere in filename
-		basename := filepath.Base(path)
-		if strings.Contains(basename, ".aid.") {
-			return nil
-		}
-
-		// Check include/exclude patterns
-		if !MatchesPatterns(path, opts.IncludePatterns, opts.ExcludePatterns) {
-			return nil
-		}
-
-		// Check if we can process this file
-		if opts.RawMode {
-			// In raw mode, process all files
-			// Skip directories which are already filtered out above
-		} else {
-			// Normal mode - check if we have a processor
-			_, hasProcessor := GetByFilename(path)
-			
-			// Check if file is explicitly included via !pattern in .aidignore
-			explicitlyIncluded := ignoreMatcher != nil && ignoreMatcher.IsExplicitlyIncluded(path)
-			
-			if !hasProcessor && !explicitlyIncluded {
-				return nil
-			}
-		}
-
-		// Process file
-		fileOpts := opts
-		// Check if file is explicitly included
-		if ignoreMatcher != nil && ignoreMatcher.IsExplicitlyIncluded(path) {
-			fileOpts.ExplicitInclude = true
-		}
-		file, err := p.ProcessFile(path, fileOpts)
-		if err != nil {
-			// Log error but continue
-			fmt.Fprintf(os.Stderr, "Warning: failed to process %s: %v\n", path, err)
-			return nil
-		}
-
-		// Skip nil files (e.g., binary files in RawMode)
-		if file != nil {
-			result.Children = append(result.Children, file)
-		}
-		return nil
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to walk directory: %w", err)
-	}
-
-	return result, nil
+	return p.processDirectoryConcurrent(dir, opts)
 }
 
 // GetSupportedExtensions returns all supported file extensions

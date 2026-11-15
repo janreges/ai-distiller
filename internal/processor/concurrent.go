@@ -41,7 +41,10 @@ func (p *Processor) processDirectoryConcurrent(dir string, opts ProcessOptions) 
 
 	// Calculate number of workers
 	numWorkers := opts.Workers
-	if numWorkers == 0 {
+	if numWorkers < 0 {
+		// Negative counts used to run serially; keep that as one worker.
+		numWorkers = 1
+	} else if numWorkers == 0 {
 		// Default to 80% of CPU cores
 		numWorkers = int(float64(runtime.NumCPU()) * 0.8)
 		if numWorkers < 1 {
@@ -104,8 +107,12 @@ func (p *Processor) processDirectoryConcurrent(dir string, opts ProcessOptions) 
 			return nil
 		}
 
-		// Check include/exclude patterns
-		if !MatchesPatterns(path, opts.IncludePatterns, opts.ExcludePatterns) {
+		// Check include/exclude patterns; directory names above the walk root never match
+		relPath, relErr := filepath.Rel(dir, path)
+		if relErr != nil {
+			relPath = path
+		}
+		if !matchPatterns(relPath, path, opts.IncludePatterns, opts.ExcludePatterns) {
 			return nil
 		}
 
@@ -139,11 +146,34 @@ func (p *Processor) processDirectoryConcurrent(dir string, opts ProcessOptions) 
 		return nil, fmt.Errorf("failed to walk directory: %w", err)
 	}
 
+	// Calculate display path for directory
+	displayPath := dir
+	if opts.FilePathType == "relative" && opts.BasePath != "" {
+		// Try to make path relative to base path
+		absBase, err := filepath.Abs(opts.BasePath)
+		if err == nil {
+			relPath, err := filepath.Rel(absBase, dir)
+			if err == nil && !strings.HasPrefix(relPath, "..") {
+				displayPath = relPath
+				
+				// Apply prefix if specified
+				if opts.RelativePathPrefix != "" {
+					prefix := opts.RelativePathPrefix
+					// Ensure prefix ends with separator if not empty and doesn't already
+					if !strings.HasSuffix(prefix, "/") && !strings.HasSuffix(prefix, string(filepath.Separator)) {
+						prefix += "/"
+					}
+					displayPath = prefix + displayPath
+				}
+			}
+		}
+	}
+
 	// If no files to process, return empty result
 	if len(files) == 0 {
 		return &ir.DistilledDirectory{
 			BaseNode: ir.BaseNode{},
-			Path:     dir,
+			Path:     displayPath,
 			Children: []ir.DistilledNode{},
 		}, nil
 	}
@@ -189,29 +219,6 @@ func (p *Processor) processDirectoryConcurrent(dir string, opts ProcessOptions) 
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].Index < results[j].Index
 	})
-
-	// Calculate display path for directory
-	displayPath := dir
-	if opts.FilePathType == "relative" && opts.BasePath != "" {
-		// Try to make path relative to base path
-		absBase, err := filepath.Abs(opts.BasePath)
-		if err == nil {
-			relPath, err := filepath.Rel(absBase, dir)
-			if err == nil && !strings.HasPrefix(relPath, "..") {
-				displayPath = relPath
-				
-				// Apply prefix if specified
-				if opts.RelativePathPrefix != "" {
-					prefix := opts.RelativePathPrefix
-					// Ensure prefix ends with separator if not empty and doesn't already
-					if !strings.HasSuffix(prefix, "/") && !strings.HasSuffix(prefix, string(filepath.Separator)) {
-						prefix += "/"
-					}
-					displayPath = prefix + displayPath
-				}
-			}
-		}
-	}
 
 	// Build final directory result
 	dirResult := &ir.DistilledDirectory{
