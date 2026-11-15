@@ -19,20 +19,19 @@ set -o pipefail # Pipeline fails on first command failure
 
 # --- Parse arguments ---
 USE_SUDO=false
-VERSION="1.3.1"
+VERSION=""
 
 for arg in "$@"; do
     case "$arg" in
         --sudo)
             USE_SUDO=true
             ;;
-        v*)
+        v[0-9]* | [0-9]*)
             VERSION="${arg#v}"  # Remove 'v' prefix if present
             ;;
         *)
-            if [ -z "${VERSION}" ]; then
-                VERSION="$arg"
-            fi
+            echo "aid-installer: Error: unknown argument '$arg'. Usage: install.sh [--sudo] [v]MAJOR.MINOR.PATCH" >&2
+            exit 1
             ;;
     esac
 done
@@ -68,8 +67,17 @@ main() {
     # 1. Detect if we're on Windows with Git Bash/MSYS/Cygwin and delegate to PowerShell
     if uname | grep -qiE 'mingw|msys|cygwin'; then
         say "Detected Windows environment. Delegating to PowerShell installer..."
+        ps_prefix=""
+        if [ -n "$VERSION" ]; then
+            ps_prefix="\$env:AID_VERSION='${VERSION}'; "
+        fi
+        ps_command="${ps_prefix}iwr https://raw.githubusercontent.com/${REPO}/main/install.ps1 -useb | iex"
+        if [ "${AID_INSTALLER_DRY_RUN:-}" = 1 ]; then
+            echo "powershell_command=$ps_command"
+            exit 0
+        fi
         powershell.exe -NoProfile -ExecutionPolicy Bypass \
-            -Command "iwr https://raw.githubusercontent.com/${REPO}/main/install.ps1 -useb | iex"
+            -Command "$ps_command"
         exit $?
     fi
 
@@ -107,10 +115,20 @@ main() {
             ;;
     esac
 
-    # 4. Construct download URLs
+    # 4. Resolve the version (when not given) and construct download URLs
+    if [ -z "$VERSION" ]; then
+        latest_url=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "${AID_LATEST_URL:-https://github.com/$REPO/releases/latest}") || latest_url=""
+        VERSION=$(printf '%s' "$latest_url" | sed -n 's#.*/tag/v\{0,1\}\([0-9][^/]*\)$#\1#p')
+        [ -n "$VERSION" ] || { say "Error: could not determine the latest version. Pass one explicitly, for example: bash -s -- v1.4.0"; exit 1; }
+    fi
     download_url="https://github.com/${REPO}/releases/download/v${VERSION}/aid-${os}-${arch}-v${VERSION}.tar.gz"
     checksum_url="https://github.com/${REPO}/releases/download/v${VERSION}/checksums.txt"
     archive_name="aid-${os}-${arch}-v${VERSION}.tar.gz"
+
+    if [ "${AID_INSTALLER_DRY_RUN:-}" = 1 ]; then
+        echo "download_url=$download_url"
+        exit 0
+    fi
 
     # 5. Create secure temporary directory
     tmp_dir=$(mktemp -d 2>/dev/null || mktemp -d -t aid-install.XXXXXX)

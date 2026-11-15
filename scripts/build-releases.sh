@@ -12,7 +12,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Read version
-VERSION=$(cat VERSION)
+VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo dev)
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
 BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 

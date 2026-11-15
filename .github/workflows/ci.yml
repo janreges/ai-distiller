@@ -58,3 +58,7 @@ jobs:
         run: CGO_ENABLED=1 CGO_CFLAGS=-w go vet $(go list -e ./... | grep -vE '/tools/|/test_project/|/cmd/aid-validate')
       - name: go mod tidy is clean
         run: go mod tidy && git diff --exit-code go.mod go.sum
+      - name: No pinned versions
+        run: sh scripts/version-drift.sh
+      - name: Installer version resolution
+        run: sh scripts/tests/install_sh_test.sh

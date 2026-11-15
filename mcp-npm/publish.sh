@@ -18,6 +18,12 @@ if [ ! -f "package.json" ]; then
     exit 1
 fi
 
+# Refuse to publish the placeholder version: its postinstall installs no binary
+if [ "$(node -p "require('./package.json').version")" = "0.0.0-dev" ]; then
+    echo -e "${RED}Error: package.json is at 0.0.0-dev (placeholder). Set the real release version before publishing by hand; the release workflow normally does this from the tag.${NC}"
+    exit 1
+fi
+
 # Check if logged in to npm
 if ! npm whoami &> /dev/null; then
     echo -e "${RED}Error: Not logged in to npm. Run 'npm login' first${NC}"

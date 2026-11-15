@@ -5,8 +5,8 @@ BINARY_NAME = aid
 BUILD_DIR = build
 INSTALL_DIR = /usr/local/bin
 
-# Read version from VERSION file
-VERSION := $(shell cat VERSION)
+# Version comes from the latest git tag (single source of truth)
+VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo dev)
 # Get git metadata
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 BUILD_DATE := $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')

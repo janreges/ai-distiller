@@ -261,6 +261,9 @@ jobs:
           # AID_VERSION decides which GitHub binary release the postinstall fetches.
           sed -i "s/const AID_VERSION = '[^']*'/const AID_VERSION = '${VERSION}'/" scripts/postinstall.js
           grep "const AID_VERSION" scripts/postinstall.js
+          # A failed stamp must stop the publish.
+          grep -q "const AID_VERSION = '${VERSION}'" scripts/postinstall.js
+          node -p "require('./package.json').version" | grep -qx "${VERSION}"
 
       - name: Install and build
         working-directory: mcp-npm

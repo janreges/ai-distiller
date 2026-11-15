@@ -1,6 +1,6 @@
 {
   "name": "@janreges/ai-distiller-mcp",
-  "version": "1.3.3",
+  "version": "0.0.0-dev",
   "description": "AI Distiller (aid) - Essential code structure extractor for LLMs. Provides AI with accurate code signatures, data types, and API contracts from your actual codebase, reducing guesswork and trial-error coding. Accelerates analysis workflows including security audits, performance reviews, git history insights, refactoring suggestions, and comprehensive structural analysis.",
   "keywords": [
     "mcp",

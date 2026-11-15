@@ -10,8 +10,17 @@
 $ErrorActionPreference = "Stop"
 
 # Configuration
-$Version = if ($env:AID_VERSION) { $env:AID_VERSION } else { "1.3.1" }
 $Repo = "janreges/ai-distiller"
+if ($env:AID_VERSION) {
+    $Version = $env:AID_VERSION.TrimStart('v')
+} else {
+    try {
+        $Version = (Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest").tag_name.TrimStart('v')
+    } catch {
+        Write-Host "aid-installer: could not determine the latest version; set `$env:AID_VERSION" -ForegroundColor Red
+        exit 1
+    }
+}
 $InstallRoot = if ($env:AID_INSTALL_ROOT) { $env:AID_INSTALL_ROOT } else { "$env:USERPROFILE\.aid" }
 $BinDir = "$InstallRoot\bin"
 

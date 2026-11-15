@@ -10,7 +10,7 @@ const tar = require('tar');
 
 // AI Distiller binary version to download
 // This can be different from the MCP package version
-const AID_VERSION = '1.3.1'; // Update this when new aid releases are available
+const AID_VERSION = '0.0.0-dev'; // stamped by .github/workflows/release.yml at publish time
 const MCP_VERSION = require('../package.json').version;
 
 function getPlatformInfo() {
@@ -127,6 +127,10 @@ async function extractArchive(archivePath, destDir, platform) {
 }
 
 async function install() {
+  if (AID_VERSION === '0.0.0-dev') {
+    console.log('development checkout: build aid and copy it to mcp-npm/bin/');
+    return;
+  }
   const startTime = Date.now();
   try {
     const { platform, arch, ext } = getPlatformInfo();
