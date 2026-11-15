@@ -162,7 +162,7 @@ func (f *PHPFormatter) formatClass(class *ir.DistilledClass, indent int) string 
 	}
 
 	// Format children (methods, properties, etc.)
-	for _, child := range class.Children {
+	parts = append(parts, formatCommentedNodes(class.Children, "", f.commentWriter(indent+1), func(child ir.DistilledNode) (string, bool) {
 		switch n := child.(type) {
 		case *ir.DistilledFunction:
 			// Skip common magic methods - they're never called directly
@@ -188,28 +188,37 @@ func (f *PHPFormatter) formatClass(class *ir.DistilledClass, indent int) string 
 			}
 
 			if skip, found := magicMethods[n.Name]; found && skip {
-				continue
+				return "", false
 			}
 
 			// Special case: skip __construct if it has no parameters
 			if n.Name == "__construct" && len(n.Parameters) == 0 {
-				continue
+				return "", false
 			}
 
-			parts = append(parts, f.formatFunction(n, indent+1))
+			return f.formatFunction(n, indent+1), true
 		case *ir.DistilledField:
 			// Skip virtual fields from docblock - they're already shown in the docblock
 			if n.Extensions != nil && n.Extensions.PHP != nil && n.Extensions.PHP.Origin == ir.FieldOriginDocblock {
-				continue
+				return "", false
 			}
-			parts = append(parts, f.formatField(n, indent+1))
+			return f.formatField(n, indent+1), true
 		}
-	}
+		return "", false
+	})...)
 
 	// Add closing brace
 	parts = append(parts, indentStr+"}")
 
 	return strings.Join(parts, "\n")
+}
+
+// commentWriter returns the comment writer formatCommentedNodes needs for
+// members printed at the given indent level.
+func (f *PHPFormatter) commentWriter(indent int) func(io.Writer, *ir.DistilledComment, string) {
+	return func(w io.Writer, c *ir.DistilledComment, _ string) {
+		fmt.Fprintln(w, f.formatComment(c, indent))
+	}
 }
 
 func (f *PHPFormatter) formatInterface(intf *ir.DistilledInterface, indent int) string {
@@ -230,12 +239,13 @@ func (f *PHPFormatter) formatInterface(intf *ir.DistilledInterface, indent int) 
 
 	parts = append(parts, indentStr+intfDecl+" {")
 
-	// Format children (methods)
-	for _, child := range intf.Children {
+	// Format children (methods and their comments)
+	parts = append(parts, formatCommentedNodes(intf.Children, "", f.commentWriter(indent+1), func(child ir.DistilledNode) (string, bool) {
 		if fn, ok := child.(*ir.DistilledFunction); ok {
-			parts = append(parts, f.formatFunction(fn, indent+1))
+			return f.formatFunction(fn, indent+1), true
 		}
-	}
+		return "", false
+	})...)
 
 	// Add closing brace
 	parts = append(parts, indentStr+"}")
@@ -258,10 +268,10 @@ func (f *PHPFormatter) formatEnum(enum *ir.DistilledEnum, indent int) string {
 	parts = append(parts, indentStr+enumDecl+" {")
 
 	// Format enum members and methods
-	for _, child := range enum.Children {
+	parts = append(parts, formatCommentedNodes(enum.Children, "", f.commentWriter(indent+1), func(child ir.DistilledNode) (string, bool) {
 		switch n := child.(type) {
 		case *ir.DistilledFunction:
-			parts = append(parts, f.formatFunction(n, indent+1))
+			return f.formatFunction(n, indent+1), true
 		case *ir.DistilledField:
 			// Enum cases are represented as fields
 			caseStr := indentStr + "    case " + n.Name
@@ -269,9 +279,10 @@ func (f *PHPFormatter) formatEnum(enum *ir.DistilledEnum, indent int) string {
 				caseStr += " = " + n.DefaultValue
 			}
 			caseStr += ";"
-			parts = append(parts, caseStr)
+			return caseStr, true
 		}
-	}
+		return "", false
+	})...)
 
 	// Add closing brace
 	parts = append(parts, indentStr+"}")

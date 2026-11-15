@@ -1,5 +1,7 @@
 <file path="source.php">
 namespace App\PSR19Showcase;
+use InvalidArgumentException;
+use RuntimeException;
 use DateTimeInterface;
 /**
  * User entity with comprehensive PSR-19 annotations
@@ -35,15 +37,51 @@ class User {
     public static findByEmail(string $email): User[]
     public hasRole(string $role): bool
     public sendNotification(string $message, array $options = $[]): void
+    /**
+     * Create new user instance
+     *
+     * @param string $email User's email address
+     * @param string $name User's full name
+     *
+     * @throws InvalidArgumentException When email format is invalid
+     * @throws RuntimeException When user creation fails
+     *
+     * @see User::validateEmail() For email validation rules
+     * @since 1.0.0
+     * @api
+     */
     public __construct(string $email, string $name) {
         $this->validateEmail($email);
         $this->data['email'] = $email;
         $this->data['name'] = $name;
         $this->displayName = $name;
     }
+    /**
+     * Get user's email address
+     *
+     * @return string The user's email
+     *
+     * @api
+     * @since 1.0.0
+     */
     public getEmail(): string The user's email {
         return $this->data['email'];
     }
+    /**
+     * Update user's email address
+     *
+     * @param string $email New email address
+     * @return void
+     *
+     * @throws InvalidArgumentException When email format is invalid
+     * @throws RuntimeException When email is already taken
+     *
+     * @uses EmailValidator::validate() For email validation
+     * @usedby UserController::updateEmail()
+     *
+     * @api
+     * @since 1.2.0
+     */
     public setEmail(string $email): void {
         $this->validateEmail($email);
         $this->checkEmailUniqueness($email);
@@ -68,9 +106,31 @@ class UserRepository {
     public findOneBy(array $criteria): User|null
     public findBy(array $criteria, array $orderBy = $[]): User[]
     public count(array $criteria = $[]): int
+    /**
+     * Find user by ID
+     *
+     * @param int $id User identifier
+     * @return User|null Found user or null
+     *
+     * @api
+     * @since 1.0.0
+     * @deprecated 2.0.0 Use UserService::getUser() instead
+     */
     public find(int $id): ?User {
         return $this->users[$id] ?? null;
     }
+    /**
+     * Save user to repository
+     *
+     * @param User $user User to save
+     * @return void
+     *
+     * @throws RuntimeException When save operation fails
+     *
+     * @api
+     * @since 1.0.0
+     * @deprecated 2.0.0 Use UserService::saveUser() instead
+     */
     public save(User $user): void {
         // Implementation
     }
@@ -91,10 +151,43 @@ class UserRepository {
  * @usedby AuthenticationService
  */
 class UserService {
+    /**
+     * Get user by ID with caching
+     *
+     * @param int $id User identifier
+     * @return User|null Found user or null
+     *
+     * @throws RuntimeException When database connection fails
+     *
+     * @api
+     * @since 2.0.0
+     * @see User::find() Legacy method this replaces
+     */
     public getUser(int $id): ?User {
         // Implementation with caching
         return null;
     }
+    /**
+     * Create new user
+     *
+     * @param array{email: string, name: string, roles?: list<string>} $data User data
+     * @return User Created user instance
+     *
+     * @throws InvalidArgumentException When required data is missing
+     * @throws RuntimeException When user creation fails
+     *
+     * @api
+     * @since 2.0.0
+     *
+     * @example
+     * ```php
+     * $user = $userService->createUser([
+     * 'email' => 'user@example.com',
+     * 'name' => 'John Doe',
+     * 'roles' => ['user', 'editor']
+     * ]);
+     * ```
+     */
     public createUser(array{email: string, name: string, roles?: list<string>} $data): User {
         // Implementation
         return new User($data['email'], $data['name']);

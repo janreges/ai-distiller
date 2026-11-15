@@ -9,79 +9,329 @@ use WeakMap;
 use WeakReference;
 use SplObjectStorage;
 use Fiber;
+/** Advanced meta-programming attribute for dynamic proxy creation */
 #[Attribute(Attribute::TARGET_CLASS)]
 class ProxyTarget {
     public readonly array $interceptMethods;
     public readonly string $proxyClass;
+    /**
+     * Create proxy target attribute
+     *
+     * @param list<string> $interceptMethods Methods to intercept
+     * @param string $proxyClass Proxy class name
+     */
     public __construct(string[] $interceptMethods = [], string $proxyClass = '')
 }
+/** Method interceptor attribute */
 #[Attribute(Attribute::TARGET_METHOD)]
 class Intercept {
     public readonly string $before;
     public readonly string $after;
     public readonly bool $cache;
+    /**
+     * Create interceptor attribute
+     *
+     * @param string $before Before method hook
+     * @param string $after After method hook
+     * @param bool $cache Whether to cache results
+     */
     public __construct(string $before = '', string $after = '', bool $cache = false)
 }
+/** Memoization attribute for expensive operations */
 #[Attribute(Attribute::TARGET_METHOD)]
 class Memoize {
     public readonly int $ttl;
     public readonly string $keyGenerator;
+    /**
+     * Create memoization attribute
+     *
+     * @param int $ttl Time to live in seconds
+     * @param string $keyGenerator Key generator method
+     */
     public __construct(int $ttl = 3600, string $keyGenerator = '')
 }
+/** Advanced dynamic proxy factory using reflection and code generation */
 class DynamicProxyFactory {
+    /** @var WeakMap Cache for generated proxy classes */
     private WeakMap $proxyCache;
+    /** @var array<string, WeakReference<callable>> Method interceptors */
     private array<string, WeakReference<callable>> Method interceptors $interceptors;
+    /** @var SplObjectStorage Memoization cache */
     private SplObjectStorage $memoCache;
+    /**
+     * Create dynamic proxy for an object
+     *
+     * @param object $target Target object
+     * @return object Proxy object
+     */
     public createProxy(object $target): object Proxy object
+    /**
+     * Generate proxy object dynamically
+     *
+     * @param object $target Target object
+     * @param ReflectionClass $reflection Target reflection
+     * @param ProxyTarget $config Proxy configuration
+     * @return object
+     */
     private generateProxy(object $target, ReflectionClass $reflection, ProxyTarget $config): object
+    /**
+     * Generate proxy class code dynamically
+     *
+     * @param ReflectionClass $reflection Target reflection
+     * @param ProxyTarget $config Proxy configuration
+     * @return string Generated proxy class name
+     */
     private generateProxyClass(ReflectionClass $reflection, ProxyTarget $config): string Generated proxy class name
+    /**
+     * Build proxy class code
+     *
+     * @param ReflectionClass $reflection Target reflection
+     * @param string $proxyClassName Proxy class name
+     * @param ProxyTarget $config Proxy configuration
+     * @return string Generated class code
+     */
     private buildProxyClassCode(ReflectionClass $reflection, string $proxyClassName, ProxyTarget $config): string Generated class code
+    /**
+     * Generate proxy method code
+     *
+     * @param ReflectionMethod $method Method reflection
+     * @return string Generated method code
+     */
     private generateProxyMethod(ReflectionMethod $method): string Generated method code
+    /**
+     * Build parameter list for method
+     *
+     * @param ReflectionMethod $method Method reflection
+     * @return string Parameter list
+     */
     private buildParameterList(ReflectionMethod $method): string Parameter list
+    /**
+     * Build parameter names for method call
+     *
+     * @param ReflectionMethod $method Method reflection
+     * @return string Parameter names
+     */
     private buildParameterNames(ReflectionMethod $method): string Parameter names
+    /**
+     * Intercept method call
+     *
+     * @param object $target Target object
+     * @param string $methodName Method name
+     * @param array<int, mixed> $arguments Method arguments
+     * @return mixed
+     */
     public interceptMethod(object $target, string $methodName, array<int, mixed> $arguments): mixed
+    /**
+     * Generate cache key for memoization
+     *
+     * @param object $target Target object
+     * @param string $methodName Method name
+     * @param array $arguments Method arguments
+     * @param Memoize $config Memoization configuration
+     * @return string Cache key
+     */
     private generateCacheKey(object $target, string $methodName, array $arguments, Memoize $config): string Cache key
+    /**
+     * Call interceptor method
+     *
+     * @param object $target Target object
+     * @param string $interceptorMethod Interceptor method name
+     * @param array $arguments Arguments
+     */
     private callInterceptor(object $target, string $interceptorMethod, array $arguments): void
 }
 /** Proxy interface */
 interface ProxyInterface {
+    /**
+     * Get the target object
+     *
+     * @return object
+     */
     public __getTarget(): object
 }
+/** Advanced async operation manager using Fibers */
 class AsyncOperationManager {
+    /** @var array<string, Fiber<mixed, mixed, mixed, mixed>> Active fibers */
     private array<string, Fiber<mixed, mixed, mixed, mixed>> Active fibers $fibers;
+    /** @var array<string, mixed> Fiber results */
     private array<string, mixed> Fiber results $results;
+    /**
+     * Execute async operation
+     *
+     * @param string $id Operation ID
+     * @param Closure $operation Operation to execute
+     */
     public execute(string $id, Closure $operation): void
+    /**
+     * Resume fiber execution
+     *
+     * @param string $id Fiber ID
+     * @param mixed $value Value to resume with
+     */
     public resume(string $id, mixed $value = null): void
+    /**
+     * Get operation result
+     *
+     * @param string $id Operation ID
+     * @return mixed
+     */
     public getResult(string $id): mixed
+    /**
+     * Check if operation is complete
+     *
+     * @param string $id Operation ID
+     * @return bool
+     */
     public isComplete(string $id): bool
+    /**
+     * Wait for all operations to complete
+     *
+     * @return Generator<string, mixed>
+     */
     public waitAll(): Generator
 }
+/** Complex business entity with advanced features */
 #[ProxyTarget(['calculatePrice', 'processOrder'], 'OrderServiceProxy')]
 class OrderService {
+    /** @var AsyncOperationManager Async manager */
     private AsyncOperationManager $asyncManager;
+    /**
+     * Calculate order price with memoization
+     *
+     * @param list<array{id: int, quantity: int, price: float}> $items Order items
+     * @param string $currency Currency code
+     * @return float
+     */
     #[Memoize(ttl: 1800, keyGenerator: 'generatePriceKey')]
     #[Intercept(before: 'logPriceCalculation', after: 'validatePriceResult')]
     public calculatePrice(list<array{id: int, quantity: int, price: float}> $items, string $currency = 'USD'): float
+    /**
+     * Process order asynchronously
+     *
+     * @param array{customer_id: int, items: list<array{id: int, quantity: int}>, payment_method: string} $orderData Order data
+     * @return string Order ID
+     */
     #[Intercept(before: 'validateOrder', after: 'notifyOrderProcessed')]
     public processOrder(array{customer_id: int, items: list<array{id: int, quantity: int}>, payment_method: string} $orderData): string Order ID
+    /**
+     * Generate cache key for price calculation
+     *
+     * @param string $methodName Method name
+     * @param array $arguments Method arguments
+     * @return string Cache key
+     */
     public generatePriceKey(string $methodName, array $arguments): string Cache key
+    /**
+     * Log price calculation
+     *
+     * @param array $items Order items
+     * @param string $currency Currency
+     */
     protected logPriceCalculation(array $items, string $currency): void
+    /**
+     * Validate price result
+     *
+     * @param float $result Calculated price
+     */
     protected validatePriceResult(float $result): void
+    /**
+     * Validate order before processing
+     *
+     * @param array $orderData Order data
+     */
     protected validateOrder(array $orderData): void
+    /**
+     * Notify that order was processed
+     *
+     * @param string $orderId Order ID
+     */
     protected notifyOrderProcessed(string $orderId): void
+    /**
+     * Get currency multiplier
+     *
+     * @param string $currency Currency code
+     * @return float Multiplier
+     */
     private getCurrencyMultiplier(string $currency): float
+    /**
+     * Process payment (simulated)
+     *
+     * @param array $paymentData Payment data
+     */
     private processPayment(array $paymentData): void
+    /**
+     * Update inventory (simulated)
+     *
+     * @param array $items Order items
+     */
     private updateInventory(array $items): void
+    /**
+     * Send confirmation (simulated)
+     *
+     * @param array $customerData Customer data
+     */
     private sendConfirmation(array $customerData): void
+    /**
+     * Get async operation status
+     *
+     * @param string $orderId Order ID
+     * @return array Status information
+     */
     public getOrderStatus(string $orderId): array Status information
 }
+/** Advanced metaprogramming demonstration */
 class MetaProgrammingDemo {
+    /**
+     * Create dynamic class at runtime
+     *
+     * @param string $className Class name
+     * @param array $properties Class properties
+     * @param array $methods Class methods
+     * @return string Generated class name
+     */
     public createDynamicClass(string $className, array $properties, array $methods): string Generated class name
+    /**
+     * Create method dynamically using Closure
+     *
+     * @param object $object Target object
+     * @param string $methodName Method name
+     * @param Closure $implementation Method implementation
+     */
     public addMethod(object $object, string $methodName, Closure $implementation): void
+    /**
+     * Analyze object structure using advanced reflection
+     *
+     * @param object $object Object to analyze
+     * @return array Analysis result
+     */
     public analyzeObject(object $object): array Analysis result
+    /**
+     * Analyze class properties
+     *
+     * @param ReflectionClass $reflection Class reflection
+     * @return array Properties analysis
+     */
     private analyzeProperties(ReflectionClass $reflection): array Properties analysis
+    /**
+     * Analyze class methods
+     *
+     * @param ReflectionClass $reflection Class reflection
+     * @return array Methods analysis
+     */
     private analyzeMethods(ReflectionClass $reflection): array Methods analysis
+    /**
+     * Analyze class attributes
+     *
+     * @param ReflectionClass $reflection Class reflection
+     * @return array Attributes analysis
+     */
     private analyzeAttributes(ReflectionClass $reflection): array Attributes analysis
+    /**
+     * Get visibility string
+     *
+     * @param ReflectionProperty|ReflectionMethod $member Class member
+     * @return string Visibility
+     */
     private getVisibility(ReflectionProperty|ReflectionMethod $member): string Visibility
 }
 </file>

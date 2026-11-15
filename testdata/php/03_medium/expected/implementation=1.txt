@@ -3,18 +3,40 @@ namespace App\Medium;
 use Generator;
 use Closure;
 use ReflectionClass;
+use ReflectionException;
 use InvalidArgumentException;
 /** Interface for dependency injection container */
 interface ContainerInterface {
+    /**
+     * Register a service in the container
+     *
+     * @param string $id Service identifier
+     * @param callable|object $service Service factory or instance
+     */
     public register(string $id, callable|object $service): void
+    /**
+     * Resolve a service from the container
+     *
+     * @param string $id Service identifier
+     * @return mixed
+     */
     public resolve(string $id): mixed
+    /**
+     * Check if service is registered
+     *
+     * @param string $id Service identifier
+     * @return bool
+     */
     public has(string $id): bool
 }
+/** Simple dependency injection container */
 class Container implements ContainerInterface {
+    /** @inheritDoc */
     public register(string $id, callable|object $service): void {
         $this->services[$id] = $service;
         unset($this->instances[$id]); // Clear cached instance
     }
+    /** @inheritDoc */
     public resolve(string $id): mixed {
         if (isset($this->instances[$id])) {
             return $this->instances[$id];
@@ -31,9 +53,17 @@ class Container implements ContainerInterface {
 
         return $instance;
     }
+    /** @inheritDoc */
     public has(string $id): bool {
         return isset($this->services[$id]);
     }
+    /**
+     * Auto-wire a class using reflection
+     *
+     * @param string $className Class name
+     * @return object
+     * @throws ReflectionException
+     */
     public autowire(string $className): object {
         $reflection = new ReflectionClass($className);
 
@@ -65,18 +95,49 @@ class Container implements ContainerInterface {
  * @template T
  */
 interface RepositoryInterface {
+    /**
+     * Find entity by ID
+     *
+     * @param int $id Entity ID
+     * @return T|null
+     */
     public find(int $id): ?object
+    /**
+     * Find all entities
+     *
+     * @return list<T>
+     */
     public findAll(): T[]
+    /**
+     * Save entity
+     *
+     * @param T $entity Entity to save
+     * @return T
+     */
     public save(T $entity): T
+    /**
+     * Delete entity
+     *
+     * @param T $entity Entity to delete
+     */
     public delete(T $entity): void
 }
+/**
+ * Abstract base repository
+ *
+ * @template T
+ * @implements RepositoryInterface<T>
+ */
 abstract class AbstractRepository implements RepositoryInterface {
+    /** @inheritDoc */
     public find(int $id): ?object {
         return $this->entities[$id] ?? null;
     }
+    /** @inheritDoc */
     public findAll(): array {
         return array_values($this->entities);
     }
+    /** @inheritDoc */
     public save(object $entity): object {
         $reflection = new ReflectionClass($entity);
 
@@ -91,6 +152,7 @@ abstract class AbstractRepository implements RepositoryInterface {
 
         return $entity;
     }
+    /** @inheritDoc */
     public delete(object $entity): void {
         $reflection = new ReflectionClass($entity);
 
@@ -101,6 +163,12 @@ abstract class AbstractRepository implements RepositoryInterface {
             }
         }
     }
+    /**
+     * Find entities by criteria using closures
+     *
+     * @param Closure $criteria Criteria closure
+     * @return Generator<T>
+     */
     public findBy(Closure $criteria): Generator {
         foreach ($this->entities as $entity) {
             if ($criteria($entity)) {
@@ -111,17 +179,44 @@ abstract class AbstractRepository implements RepositoryInterface {
 }
 /** Event interface */
 interface EventInterface {
+    /**
+     * Get event name
+     *
+     * @return string
+     */
     public getName(): string
+    /**
+     * Get event data
+     *
+     * @return array
+     */
     public getData(): array
 }
 /** Event listener interface */
 interface EventListenerInterface {
+    /**
+     * Handle the event
+     *
+     * @param EventInterface $event Event to handle
+     */
     public handle(EventInterface $event): void
 }
+/** Simple event dispatcher */
 class EventDispatcher {
+    /**
+     * Subscribe to an event
+     *
+     * @param string $eventName Event name
+     * @param EventListenerInterface $listener Event listener
+     */
     public subscribe(string $eventName, EventListenerInterface $listener): void {
         $this->listeners[$eventName][] = $listener;
     }
+    /**
+     * Dispatch an event
+     *
+     * @param EventInterface $event Event to dispatch
+     */
     public dispatch(EventInterface $event): void {
         $eventName = $event->getName();
 
@@ -133,6 +228,12 @@ class EventDispatcher {
             $listener->handle($event);
         }
     }
+    /**
+     * Create anonymous event listener
+     *
+     * @param string $eventName Event name
+     * @param Closure $handler Event handler
+     */
     public listen(string $eventName, Closure $handler): void {
         $this->subscribe($eventName, new class($handler) implements EventListenerInterface {
             public function __construct(private Closure $handler) {}
@@ -144,26 +245,59 @@ class EventDispatcher {
         });
     }
 }
+/** Simple event implementation */
 class Event implements EventInterface {
+    /**
+     * Create new event
+     *
+     * @param string $name Event name
+     * @param array<string, mixed> $data Event data
+     */
     public __construct(string $name, array<string, mixed> $data = [])
+    /** @inheritDoc */
     public getName(): string {
         return $this->name;
     }
+    /** @inheritDoc */
     public getData(): array {
         return $this->data;
     }
 }
+/** User entity with advanced features */
 class User {
+    /**
+     * Create new user
+     *
+     * @param int|null $id User ID
+     * @param string $name User name
+     * @param string $email User email
+     */
     public __construct(?int $id, string $name, string $email)
     public getId(): ?int { return $this->id; }
     public setId(int $id): void { $this->id = $id; }
     public getName(): string { return $this->name; }
     public getEmail(): string { return $this->email; }
 }
+/**
+ * User repository
+ *
+ * @extends AbstractRepository<User>
+ */
 class UserRepository extends AbstractRepository {
+    /**
+     * Find users by email domain
+     *
+     * @param string $domain Email domain
+     * @return Generator<User>
+     */
     public findByEmailDomain(string $domain): Generator {
         return $this->findBy(fn(User $user) => str_ends_with($user->getEmail(), "@{$domain}"));
     }
+    /**
+     * Get user statistics
+     *
+     * @return array
+     */
     public getStatistics(): array {
         $total = count($this->entities);
         $domains = [];
@@ -179,8 +313,22 @@ class UserRepository extends AbstractRepository {
         ];
     }
 }
+/** Service with dependency injection */
 class UserService {
+    /**
+     * Create user service
+     *
+     * @param UserRepository $repository User repository
+     * @param EventDispatcher $dispatcher Event dispatcher
+     */
     public __construct(UserRepository $repository, EventDispatcher $dispatcher)
+    /**
+     * Create new user
+     *
+     * @param string $name User name
+     * @param string $email User email
+     * @return User
+     */
     public createUser(string $name, string $email): User {
         $user = new User(null, $name, $email);
         $savedUser = $this->repository->save($user);
@@ -193,6 +341,11 @@ class UserService {
 
         return $savedUser;
     }
+    /**
+     * Get user statistics using generator
+     *
+     * @return Generator<string, mixed>
+     */
     public getUserStatistics(): Generator {
         yield 'total' => count($this->repository->findAll());
         yield 'by_domain' => $this->repository->getStatistics()['domains'];

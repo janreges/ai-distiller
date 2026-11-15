@@ -2,30 +2,69 @@
 namespace App\Basic;
 use DateTime;
 use InvalidArgumentException;
+/** Basic user model demonstrating fundamental PHP features */
 class User {
+    /** @var int User ID */
     public int $id;
+    /** @var string User name */
     public string $name;
+    /**
+     * Create a new user instance
+     *
+     * @param int $id User ID
+     * @param string $name User name
+     * @param string $email Email address
+     */
     public __construct(int $id, string $name, string $email) {
         $this->id = $id;
         $this->name = $name;
         $this->setEmail($email);
         $this->createdAt = new DateTime();
     }
+    /**
+     * Get user email
+     *
+     * @return string
+     */
     public getEmail(): string {
         return $this->email;
     }
+    /**
+     * Set user email with validation
+     *
+     * @param string $email Email address
+     * @throws InvalidArgumentException
+     */
     public setEmail(string $email): void {
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             throw new InvalidArgumentException("Invalid email format");
         }
         $this->email = $email;
     }
+    /**
+     * Get user preference
+     *
+     * @param string $key Preference key
+     * @param mixed $default Default value
+     * @return mixed
+     */
     public getPreference(string $key, mixed $default = null): mixed {
         return $this->preferences[$key] ?? $default;
     }
+    /**
+     * Set user preference
+     *
+     * @param string $key Preference key
+     * @param mixed $value Preference value
+     */
     public setPreference(string $key, mixed $value): void {
         $this->preferences[$key] = $value;
     }
+    /**
+     * Check if user is active (created within last 30 days)
+     *
+     * @return bool
+     */
     public isActive(): bool {
         if ($this->createdAt === null) {
             return false;
@@ -34,6 +73,11 @@ class User {
         $thirtyDaysAgo = new DateTime('-30 days');
         return $this->createdAt > $thirtyDaysAgo;
     }
+    /**
+     * Convert to array representation
+     *
+     * @return array{id: int, name: string, email: string, created_at: string|null, is_active: bool}
+     */
     public toArray(): array{id: int, name: string, email: string, created_at: string|null, is_active: bool} {
         return [
             'id' => $this->id,
@@ -44,16 +88,38 @@ class User {
         ];
     }
 }
+/** Simple user manager */
 class UserManager {
+    /**
+     * Add user to manager
+     *
+     * @param User $user User instance
+     */
     public addUser(User $user): void {
         $this->users[$user->id] = $user;
     }
+    /**
+     * Find user by ID
+     *
+     * @param int $id User ID
+     * @return User|null
+     */
     public findUser(int $id): ?User {
         return $this->users[$id] ?? null;
     }
+    /**
+     * Get all active users
+     *
+     * @return list<User>
+     */
     public getActiveUsers(): User[] {
         return array_filter($this->users, fn(User $user) => $user->isActive());
     }
+    /**
+     * Get user count
+     *
+     * @return int
+     */
     public getUserCount(): int {
         return count($this->users);
     }

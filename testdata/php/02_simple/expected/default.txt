@@ -2,23 +2,73 @@
 namespace App\Simple;
 /** Interface for entities that can be persisted */
 interface PersistableInterface {
+    /**
+     * Get entity ID
+     *
+     * @return int|null
+     */
     public getId(): ?int
+    /**
+     * Set entity ID
+     *
+     * @param int $id Entity ID
+     */
     public setId(int $id): void
+    /**
+     * Get creation timestamp
+     *
+     * @return DateTimeInterface|null
+     */
     public getCreatedAt(): ?DateTimeInterface
 }
 /** Interface for cacheable entities */
 interface CacheableInterface {
+    /**
+     * Get cache key
+     *
+     * @return string
+     */
     public getCacheKey(): string
+    /**
+     * Get cache TTL in seconds
+     *
+     * @return int
+     */
     public getCacheTtl(): int
 }
+/** Abstract base entity class */
 abstract class BaseEntity implements PersistableInterface, JsonSerializable {
+    /** @inheritDoc */
     public getId(): ?int
+    /** @inheritDoc */
     public setId(int $id): void
+    /** @inheritDoc */
     public getCreatedAt(): ?DateTimeInterface
+    /**
+     * Set creation timestamp
+     *
+     * @param DateTimeInterface $createdAt Creation timestamp
+     */
     public setCreatedAt(DateTimeInterface $createdAt): void
+    /**
+     * Get update timestamp
+     *
+     * @return DateTimeInterface|null
+     */
     public getUpdatedAt(): ?DateTimeInterface
+    /**
+     * Set update timestamp
+     *
+     * @param DateTimeInterface $updatedAt Update timestamp
+     */
     public setUpdatedAt(DateTimeInterface $updatedAt): void
+    /**
+     * Abstract method to get entity name
+     *
+     * @return string
+     */
     public abstract getEntityName(): string
+    /** @inheritDoc */
     public jsonSerialize(): array
 }
 /** Trait for timestampable entities */
@@ -26,28 +76,103 @@ trait TimestampableTrait {
 }
 /** Trait for validation functionality */
 trait ValidatableTrait {
+    /**
+     * Get validation errors
+     *
+     * @return array<string, string>
+     */
     public getValidationErrors(): array<string, string>
+    /**
+     * Check if entity has validation errors
+     *
+     * @return bool
+     */
     public hasValidationErrors(): bool
 }
+/** Product entity */
 class Product extends BaseEntity implements CacheableInterface {
+    /** Static constant for cache TTL */
     public const CACHE_TTL = 3600;
+    /**
+     * Create new product
+     *
+     * @param string $name Product name
+     * @param float $price Product price
+     * @param string $description Product description
+     */
     public __construct(string $name, float $price, string $description = '')
+    /**
+     * Get product name
+     *
+     * @return string
+     */
     public getName(): string
+    /**
+     * Set product name
+     *
+     * @param string $name Product name
+     */
     public setName(string $name): void
+    /**
+     * Get product price
+     *
+     * @return float
+     */
     public getPrice(): float
+    /**
+     * Set product price
+     *
+     * @param float $price Product price
+     */
     public setPrice(float $price): void
+    /** @inheritDoc */
     public getEntityName(): string
+    /** @inheritDoc */
     public getCacheKey(): string
+    /** @inheritDoc */
     public getCacheTtl(): int
+    /**
+     * Add category to product
+     *
+     * @param string $category Category name
+     */
     public addCategory(string $category): void
+    /**
+     * Static factory method for creating sale products
+     *
+     * @param string $name Product name
+     * @param float $originalPrice Original price
+     * @param float $discountPercent Discount percentage
+     * @return self
+     */
     public static createSaleProduct(string $name, float $originalPrice, float $discountPercent): self
 }
+/** Category entity */
 class Category extends BaseEntity {
+    /** @var string Category name */
     public readonly string $name;
+    /** @var string Category slug */
     public readonly string $slug;
+    /**
+     * Create new category
+     *
+     * @param string $name Category name
+     * @param string $slug Category slug
+     */
     public __construct(string $name, string $slug)
+    /** @inheritDoc */
     public getEntityName(): string
+    /**
+     * Set parent category
+     *
+     * @param Category|null $parent Parent category
+     */
     public setParent(?Category $parent): void
+    /**
+     * Get parent category
+     *
+     * @return Category|null
+     */
     public getParent(): ?Category
 }
 </file>

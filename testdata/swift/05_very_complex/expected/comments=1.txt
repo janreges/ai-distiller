@@ -1,4 +1,12 @@
 <file path="source.swift">
+//
+// 05_very_complex.swift
+// DistillerSample
+//
+// Demonstrates: actors, advanced generics with type erasure, custom operators,
+// metaprogramming with Mirror, advanced memory management, concurrent programming,
+// protocol compositions, custom collection types.
+//
 import Foundation
 //  - Core Protocols with Associated Types
 // A protocol defining a generic event with a specific payload.
@@ -19,6 +27,7 @@ public class EventBus {
 }
 //  - Custom Operators and Precedence
 // Custom operator for subscribing an EventHandler to an EventBus.
+// Custom operator for event composition
 //  - Metaprogramming with Mirror
 // Uses Mirror to generate a debug description of any event payload.
 // Advanced reflection utility
@@ -44,6 +53,7 @@ public final class ThreadSafeQueue {
     public func dequeue() -> T?
     public func makeIterator() -> IndexingIterator<[T]>
 }
+// Advanced collection with custom indexing
 
 public struct CircularBuffer {
     public var startIndex: Int { 0 }
@@ -55,7 +65,10 @@ public struct CircularBuffer {
 // A service that demonstrates complex memory management patterns.
 
 public final class ConcurrentEventLogger {
+    // Strong reference to monitor
     public let monitor: ActivityMonitor
+    // Weak reference to prevent cycles
+    // Unowned reference (careful usage required)
 }
 // Protocol for event logger delegation
 

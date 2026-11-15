@@ -1,21 +1,87 @@
 <file path="source.php">
 namespace App\Basic;
 use InvalidArgumentException;
+/** Basic user model demonstrating fundamental PHP features */
 class User {
+    /** @var int User ID */
     public int $id;
+    /** @var string User name */
     public string $name;
+    /**
+     * Create a new user instance
+     *
+     * @param int $id User ID
+     * @param string $name User name
+     * @param string $email Email address
+     */
     public __construct(int $id, string $name, string $email)
+    /**
+     * Get user email
+     *
+     * @return string
+     */
     public getEmail(): string
+    /**
+     * Set user email with validation
+     *
+     * @param string $email Email address
+     * @throws InvalidArgumentException
+     */
     public setEmail(string $email): void
+    /**
+     * Get user preference
+     *
+     * @param string $key Preference key
+     * @param mixed $default Default value
+     * @return mixed
+     */
     public getPreference(string $key, mixed $default = null): mixed
+    /**
+     * Set user preference
+     *
+     * @param string $key Preference key
+     * @param mixed $value Preference value
+     */
     public setPreference(string $key, mixed $value): void
+    /**
+     * Check if user is active (created within last 30 days)
+     *
+     * @return bool
+     */
     public isActive(): bool
+    /**
+     * Convert to array representation
+     *
+     * @return array{id: int, name: string, email: string, created_at: string|null, is_active: bool}
+     */
     public toArray(): array{id: int, name: string, email: string, created_at: string|null, is_active: bool}
 }
+/** Simple user manager */
 class UserManager {
+    /**
+     * Add user to manager
+     *
+     * @param User $user User instance
+     */
     public addUser(User $user): void
+    /**
+     * Find user by ID
+     *
+     * @param int $id User ID
+     * @return User|null
+     */
     public findUser(int $id): ?User
+    /**
+     * Get all active users
+     *
+     * @return list<User>
+     */
     public getActiveUsers(): User[]
+    /**
+     * Get user count
+     *
+     * @return int
+     */
     public getUserCount(): int
 }
 /** Utility functions for user operations */

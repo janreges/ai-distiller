@@ -42,14 +42,24 @@
   `static` `final` field with `Extensions.PHP.IsEnumCase` and the value as
   `DefaultValue`.
 - Class constants are `static` `final` fields.
-- The class docblock is not a comment node. It is parsed into the class
+- The class docblock is parsed into the class
   (`internal/language/php/tree_sitter_processor.go#TreeSitterProcessor.parseClassDocblock`):
   its text becomes `Description`; `@property`, `@property-read` and
   `@property-write` create virtual `public` fields with `Extensions.PHP`
   `Origin` `docblock`, `AccessMode` and `SourceAnnotation`; `@method` creates a
   virtual method (`static` when the tag says so); `@deprecated` fills
   `Deprecated`. When it holds such API tags, the whole docblock is also kept in
-  `APIDocblock`, which the formatters print above the class.
+  `APIDocblock`, which the formatters print above the class. Without such
+  tags it is also emitted as a `doc` comment node ahead of the class
+  (`processClass`), so it prints under `--docstrings` like the docblocks of
+  members. Docblocks of methods, properties and constants are comment nodes among
+  the class children; `PHPFormatter.formatClass` prints them through
+  `formatCommentedNodes`, so a docblock is dropped with a member it skips.
+  `processPromotedProperties` puts the promoted fields ahead of the constructor's
+  docblock.
+  Interface methods and enum cases get their docblocks the same way
+  (`commentPrints` keeps a docblock only when the next declaration is one the
+  formatter prints). Enum methods are not processed or printed at all.
 
 ## IR specifics
 

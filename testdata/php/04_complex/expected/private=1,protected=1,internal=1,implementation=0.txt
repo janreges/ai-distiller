@@ -1,79 +1,237 @@
 <file path="source.php">
 namespace App\Complex;
+use Attribute;
 use ReflectionClass;
+use ReflectionMethod;
+use ReflectionAttribute;
 use Generator;
 use Closure;
 use WeakMap;
 use SplObjectStorage;
+/** Custom attribute for route definition */
 #[Attribute(Attribute::TARGET_METHOD)]
 class Route {
     public readonly string $path;
     public readonly string $method;
     public readonly array $middleware;
+    /**
+     * Create route attribute
+     *
+     * @param string $path Route path
+     * @param string $method HTTP method
+     * @param list<string> $middleware Route middleware
+     */
     public __construct(string $path, string $method = 'GET', string[] $middleware = [])
 }
+/** Custom attribute for validation */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::IS_REPEATABLE)]
 class Validate {
     public readonly string $rule;
     public readonly string $message;
+    /**
+     * Create validation attribute
+     *
+     * @param string $rule Validation rule
+     * @param string $message Error message
+     */
     public __construct(string $rule, string $message = '')
 }
+/** Custom attribute for dependency injection */
 #[Attribute(Attribute::TARGET_PARAMETER)]
 class Inject {
     public readonly ?string $service;
+    /**
+     * Create injection attribute
+     *
+     * @param string|null $service Service identifier
+     */
     public __construct(?string $service = null)
 }
+/** Advanced reflection-based attribute processor */
 class AttributeProcessor {
+    /** @var WeakMap Cache for processed classes */
     private WeakMap $classCache;
+    /**
+     * Process attributes for a class
+     *
+     * @param object $instance Object instance
+     * @return array{class: list<array{name: string, arguments: array<mixed>, instance: object}>, methods: array<string, list<array{name: string, arguments: array<mixed>, instance: object}>>, properties: array<string, list<array{name: string, arguments: array<mixed>, instance: object}>>} Processed attributes
+     */
     public processAttributes(object $instance): array{class: list<array{name: string, arguments: array<mixed>, instance: object}>, methods: array<string, list<array{name: string, arguments: array<mixed>, instance: object}>>, properties: array<string, list<array{name: string, arguments: array<mixed>, instance: object}>>} Processed attributes
+    /**
+     * Process class-level attributes
+     *
+     * @param ReflectionClass $reflection Class reflection
+     * @return array
+     */
     private processClassAttributes(ReflectionClass $reflection): array
+    /**
+     * Process method attributes
+     *
+     * @param ReflectionClass $reflection Class reflection
+     * @return array
+     */
     private processMethodAttributes(ReflectionClass $reflection): array
+    /**
+     * Process property attributes
+     *
+     * @param ReflectionClass $reflection Class reflection
+     * @return array
+     */
     private processPropertyAttributes(ReflectionClass $reflection): array
+    /**
+     * Find methods with specific attribute
+     *
+     * @param ReflectionClass $reflection Class reflection
+     * @param string $attributeClass Attribute class name
+     * @return Generator<ReflectionMethod, ReflectionAttribute>
+     */
     public findMethodsWithAttribute(ReflectionClass $reflection, string $attributeClass): Generator
 }
+/** Advanced route controller with attributes */
 class ApiController {
+    /** @var AttributeProcessor Attribute processor */
     private AttributeProcessor $attributeProcessor;
+    /** Get user profile */
     #[Route('/api/users/{id}', 'GET', ['auth', 'throttle'])]
     public getUserProfile(int $id): array
+    /**
+     * Update user profile
+     *
+     * @param int $id User ID
+     * @param array<string, mixed> $data User data
+     * @return array{id: int, updated: bool, data: array<string, mixed>}
+     */
     #[Route('/api/users/{id}', 'PUT', ['auth', 'validate'])]
     public updateUserProfile(int $id, array<string, mixed> $data): array{id: int, updated: bool, data: array<string, mixed>}
+    /** Delete user */
     #[Route('/api/users/{id}', 'DELETE', ['auth', 'admin'])]
     public deleteUser(int $id): array
+    /**
+     * Get all routes defined in this controller
+     *
+     * @return array
+     */
     public getRoutes(): array
 }
+/** Data Transfer Object with validation attributes */
 class UserCreateDto {
+    /** @var string User name */
     #[Validate('required', 'Name is required')]
     #[Validate('min:2', 'Name must be at least 2 characters')]
     public string $name;
+    /** @var string User email */
     #[Validate('required', 'Email is required')]
     #[Validate('email', 'Invalid email format')]
     public string $email;
+    /** @var int User age */
     #[Validate('required', 'Age is required')]
     #[Validate('min:18', 'Must be at least 18 years old')]
     #[Validate('max:120', 'Age cannot exceed 120')]
     public int $age;
+    /** @var array<string, mixed> User preferences */
     public array<string, mixed> User preferences $preferences;
+    /**
+     * Create DTO from array
+     *
+     * @param array{name?: string, email?: string, age?: int, preferences?: array<string, mixed>} $data Input data
+     * @return self
+     */
     public static fromArray(array{name?: string, email?: string, age?: int, preferences?: array<string, mixed>} $data): self
+    /**
+     * Validate the DTO using reflection and attributes
+     *
+     * @return array Validation errors
+     */
     public validate(): array Validation errors
+    /**
+     * Validate a single rule
+     *
+     * @param mixed $value Value to validate
+     * @param string $rule Validation rule
+     * @param string $message Error message
+     * @return string|null Error message or null if valid
+     */
     private validateRule(mixed $value, string $rule, string $message): ?string
 }
+/** Advanced service locator with lazy loading */
 class ServiceLocator {
+    /** @var array<string, callable> Service factories */
     private array<string, callable> Service factories $factories;
+    /** @var SplObjectStorage Singleton instances */
     private SplObjectStorage $singletons;
+    /** @var array<string, array{singleton: bool}> Service metadata */
     private array<string, array{singleton: bool}> Service metadata $metadata;
+    /**
+     * Register a service factory
+     *
+     * @param string $id Service identifier
+     * @param Closure $factory Service factory
+     * @param bool $singleton Whether to create as singleton
+     * @param array<string, mixed> $metadata Service metadata
+     */
     public register(string $id, Closure $factory, bool $singleton = false, array<string, mixed> $metadata = []): void
+    /**
+     * Resolve a service
+     *
+     * @param string $id Service identifier
+     * @return mixed
+     */
     public resolve(string $id): mixed
+    /**
+     * Create service with dependency injection using attributes
+     *
+     * @param string $className Class name
+     * @return object
+     */
     public createWithDependencies(string $className): object
+    /**
+     * Check if service is registered
+     *
+     * @param string $id Service identifier
+     * @return bool
+     */
     public has(string $id): bool
+    /**
+     * Get service metadata
+     *
+     * @param string $id Service identifier
+     * @return array
+     */
     public getMetadata(string $id): array
+    /**
+     * Get all registered service IDs
+     *
+     * @return array
+     */
     public getServiceIds(): array
 }
+/** Complex service with multiple dependencies */
 class ComplexUserService {
     private UserRepository $repository;
     private EventDispatcher $dispatcher;
     private AttributeProcessor $processor;
+    /**
+     * Create service with dependency injection
+     *
+     * @param UserRepository $repository User repository
+     * @param EventDispatcher $dispatcher Event dispatcher
+     * @param AttributeProcessor $processor Attribute processor
+     */
     public __construct(UserRepository $repository, EventDispatcher $dispatcher, AttributeProcessor $processor)
+    /**
+     * Create user with validation
+     *
+     * @param UserCreateDto $dto User data
+     * @return array
+     */
     public createUser(UserCreateDto $dto): array
+    /**
+     * Process user data with generators
+     *
+     * @param array $users User data
+     * @return Generator<array>
+     */
     public processUsers(array $users): Generator
 }
 </file>

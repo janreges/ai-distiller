@@ -5,7 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/janreges/ai-distiller/internal/formatter"
 	"github.com/janreges/ai-distiller/internal/ir"
+	"github.com/janreges/ai-distiller/internal/processor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -350,4 +352,79 @@ class Model implements Serializable
 
 	// Check that Serializable extends other interfaces
 	assert.Equal(t, 2, len(serializable.Extends), "Serializable should extend 2 interfaces")
+}
+
+// distillPHP runs src through the processor and the text formatter with the
+// CLI defaults (public members, no bodies, no comments, docstrings), changed
+// by set when it is not nil.
+func distillPHP(t *testing.T, src string, set func(*processor.ProcessOptions)) string {
+	t.Helper()
+	opts := processor.DefaultProcessOptions()
+	opts.IncludePrivate = false
+	opts.IncludeImplementation = false
+	opts.IncludeComments = false
+	if set != nil {
+		set(&opts)
+	}
+	file, err := NewProcessor().ProcessWithOptions(context.Background(), strings.NewReader(src), "test.php", opts)
+	require.NoError(t, err)
+	var b strings.Builder
+	require.NoError(t, formatter.NewLanguageAwareTextFormatter(formatter.Options{}).Format(&b, file))
+	return b.String()
+}
+
+func TestPHP_MemberDocblocksPrintByDefault(t *testing.T) {
+	src := `<?php
+/** CLASS_DOC */
+class Widget {
+    /** PROP_DOC */
+    public int $size = 1;
+
+    /**
+     * METHOD_DOC
+     * second line
+     */
+    public function run(): void {}
+}
+`
+	out := distillPHP(t, src, nil)
+	for _, want := range []string{"CLASS_DOC", "PROP_DOC", "METHOD_DOC", "second line"} {
+		assert.Contains(t, out, want)
+	}
+	assert.Less(t, strings.Index(out, "CLASS_DOC"), strings.Index(out, "class Widget"), "the class docblock precedes the class")
+	assert.Less(t, strings.Index(out, "METHOD_DOC"), strings.Index(out, "run()"), "the method docblock precedes the method")
+
+	off := distillPHP(t, src, func(o *processor.ProcessOptions) { o.IncludeDocstrings = false })
+	for _, gone := range []string{"CLASS_DOC", "PROP_DOC", "METHOD_DOC"} {
+		assert.NotContains(t, off, gone)
+	}
+}
+
+func TestPHP_InterfaceAndEnumMemberDocblocksPrintByDefault(t *testing.T) {
+	src := `<?php
+/** IFACE_DOC */
+interface Shape {
+    /** IFACE_METHOD_DOC */
+    public function area(): float;
+}
+
+/** ENUM_DOC */
+enum Suit: string {
+    /** ENUM_CASE_DOC */
+    case Hearts = 'H';
+
+    /** ENUM_METHOD_DOC */
+    public function label(): string { return 'x'; }
+}
+`
+	out := distillPHP(t, src, nil)
+	for _, want := range []string{"IFACE_DOC", "IFACE_METHOD_DOC", "ENUM_DOC", "ENUM_CASE_DOC"} {
+		assert.Contains(t, out, want)
+	}
+	assert.Less(t, strings.Index(out, "IFACE_METHOD_DOC"), strings.Index(out, "area()"))
+	assert.Less(t, strings.Index(out, "ENUM_CASE_DOC"), strings.Index(out, "case Hearts"))
+	assert.NotContains(t, out, "ENUM_METHOD_DOC", "the doc of a member that is not printed must not move to the next one")
+
+	off := distillPHP(t, src, func(o *processor.ProcessOptions) { o.IncludeDocstrings = false })
+	assert.NotContains(t, off, "_DOC")
 }

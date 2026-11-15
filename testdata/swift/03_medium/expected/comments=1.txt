@@ -1,4 +1,11 @@
 <file path="source.swift">
+//
+// 03_medium.swift
+// DistillerSample
+//
+// Demonstrates: generics, extensions, protocol with associatedtype,
+// constrained extensions, custom error types, higher-order functions.
+//
 import Foundation
 //  - Generic Stack
 // A simple LIFO stack.
@@ -11,6 +18,7 @@ public struct Stack {
     // Removes and returns the top element.
     public func pop() -> Element?
 }
+// Constrained extension adding `average()` only when `Element` is numeric.
 
 public extension Stack {
 }

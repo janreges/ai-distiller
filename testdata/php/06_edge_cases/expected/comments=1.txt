@@ -17,27 +17,108 @@ use Iterator;
  */
 class MagicModel {
 }
+/** Service demonstrating class-string and template parameters */
 class ContainerService {
+    /**
+     * Create instance of a class
+     *
+     * @template T of object
+     * @param class-string<T> $className Fully qualified class name
+     * @param array<string, mixed> $parameters Constructor parameters
+     * @return T
+     */
     public make(class-string<T> $className, array<string, mixed> $parameters = []): T
+    /**
+     * Register a factory
+     *
+     * @param literal-string $id Service identifier (must be literal)
+     * @param callable(): object $factory Factory function
+     */
     public register(literal-string $id, callable(): object $factory): void
 }
+/** Data transfer object with complex array shapes */
 class ComplexDto {
+    /**
+     * Process complex payload
+     *
+     * @param array{
+     * id: int,
+     * name?: non-empty-string,
+     * tags: non-empty-list<string>,
+     * status: key-of<self::STATUS_MAP>,
+     * meta: array{
+     * created_at: string,
+     * updated_at?: string,
+     * extra?: array<string, mixed>
+     * },
+     * 0?: string,
+     * 1?: int
+     * } $payload Complex nested structure with optional keys
+     * @return array{success: bool, data?: array<string, mixed>, errors?: list<string>}
+     */
     public process(array $payload): array{success: bool, data?: array<string, mixed>, errors?: list<string>}
+    /** @var array<string, int> */
     public const STATUS_MAP = [
         'draft' => 0,
         'published' => 1,
         'archived' => 2
     ];
+    /**
+     * Get random status
+     *
+     * @return key-of<self::STATUS_MAP>
+     */
     public getRandomStatus(): key-of<self::STATUS_MAP>
+    /**
+     * Get status value
+     *
+     * @param key-of<self::STATUS_MAP> $status
+     * @return value-of<self::STATUS_MAP>
+     */
     public getStatusValue(key-of<self::STATUS_MAP> $status): value-of<self::STATUS_MAP>
 }
+/** Collection class with method-level templates */
 class TypedCollection {
+    /**
+     * Get first item matching predicate
+     *
+     * @template T
+     * @param callable(mixed): bool $predicate
+     * @param callable(mixed): T $mapper Transform function
+     * @return T|null
+     */
     public firstWhere(callable(mixed): bool $predicate, callable(mixed): T $mapper): T|null
+    /**
+     * Map items to new type
+     *
+     * @template TKey of array-key
+     * @template TValue
+     * @param callable(mixed): array{0: TKey, 1: TValue} $mapper
+     * @return array<TKey, TValue>
+     */
     public mapToAssoc(callable(mixed): array{0: TKey, 1: TValue} $mapper): array<TKey, TValue>
 }
+/** Callable type demonstrations */
 class CallableTypes {
+    /**
+     * Set validator
+     *
+     * @param callable(int, string=): bool $validator Validator function
+     */
     public setValidator(callable(int, string=): bool $validator): void
+    /**
+     * Execute with callback
+     *
+     * @param callable-string $callback Callback function name
+     * @param array<int, mixed> $args Arguments
+     * @return mixed
+     */
     public execute(callable-string $callback, array<int, mixed> $args = []): mixed
+    /**
+     * Create processor
+     *
+     * @return Closure(non-empty-list<int>): array{min: int, max: int, avg: float}
+     */
     public createProcessor(): Closure
 }
 /** Intersection and union type demonstrations */
@@ -47,8 +128,21 @@ interface Timestampable {
 interface Identifiable {
     public getId(): int
 }
+/** @template T of (Timestampable&Identifiable) */
 class IntersectionHandler {
+    /**
+     * Process items with intersection types
+     *
+     * @param array<int, (Timestampable&Identifiable)> $items
+     * @return list<array{id: int, timestamp: int}>
+     */
     public process(array<int, (Timestampable&Identifiable)> $items): list<array{id: int, timestamp: int}>
+    /**
+     * Filter by type
+     *
+     * @param array<int, (Countable|Iterator)> $items Mixed types
+     * @return array{countables: list<Countable>, iterators: list<Iterator>}
+     */
     public categorize(array<int, (Countable|Iterator)> $items): array{countables: list<Countable>, iterators: list<Iterator>}
 }
 /** Enum and int-mask demonstrations */
@@ -59,24 +153,111 @@ enum Permission: int {
     case ADMIN = 8;
 }
 class PermissionChecker {
+    /**
+     * Check permissions
+     *
+     * @param int-mask-of<Permission::*> $userPermissions
+     * @param int-mask<1, 2, 4, 8> $requiredPermissions
+     * @return bool
+     */
     public hasPermission(int-mask-of<Permission::*> $userPermissions, int-mask<1, 2, 4, 8> $requiredPermissions): bool
+    /**
+     * Get all permissions
+     *
+     * @return list<value-of<Permission>>
+     */
     public getAllPermissionValues(): value-of<Permission>[]
 }
+/** Conditional return types and assertions */
 class ValidationService {
+    /**
+     * Validate non-empty string
+     *
+     * @psalm-assert-if-true non-empty-string $value
+     * @psalm-assert-if-false null|'' $value
+     */
     public isNonEmpty(?string $value): bool
+    /**
+     * Parse or default
+     *
+     * @template T
+     * @param string $json
+     * @param T $default
+     * @psalm-return (T is null ? array<string, mixed>|null : array<string, mixed>|T)
+     * @return mixed
+     */
     public parseJsonOrDefault(string $json, T $default = null): mixed
+    /**
+     * Ensure array
+     *
+     * @template T
+     * @param T $value
+     * @psalm-return (T is array ? T : array{0: T})
+     * @return array
+     */
     public ensureArray(T $value): array
 }
+/** Advanced Generator types */
 class GeneratorTypes {
+    /**
+     * Generate pairs
+     *
+     * @template TKey
+     * @template TValue
+     * @param array<TKey, TValue> $data
+     * @return Generator<int, array{key: TKey, value: TValue}, mixed, void>
+     */
     public generatePairs(array<TKey, TValue> $data): Generator
+    /**
+     * Bidirectional generator
+     *
+     * @return Generator<int, string, bool, int>
+     */
     public bidirectionalGenerator(): Generator
 }
+/**
+ * Type aliases for reusability
+ *
+ * @psalm-type UserId = positive-int
+ * @psalm-type UserData = array{
+ * id: UserId,
+ * email: non-empty-string,
+ * roles: non-empty-list<non-empty-string>,
+ * metadata?: array<string, scalar>
+ * }
+ * @phpstan-type ErrorResponse array{error: true, message: string, code?: int}
+ */
 class TypeAliasDemo {
+    /**
+     * Get user
+     *
+     * @param UserId $id
+     * @return UserData|ErrorResponse
+     */
     public getUser(UserId $id): UserData|ErrorResponse
+    /**
+     * Batch operation
+     *
+     * @param list<UserId> $ids
+     * @return array<UserId, UserData|ErrorResponse>
+     */
     public batchGet(UserId[] $ids): array<UserId, UserData|ErrorResponse>
 }
+/** Numeric literal keys and special array constructs */
 class NumericKeyArrays {
+    /**
+     * Process tuple
+     *
+     * @param array{0: string, 1: int, 2?: bool} $tuple
+     * @return array{name: string, age: int, active: bool}
+     */
     public processTuple(array{0: string, 1: int, 2?: bool} $tuple): array{name: string, age: int, active: bool}
+    /**
+     * Matrix operations
+     *
+     * @param non-empty-array<int<0, 10>, non-empty-array<int<0, 10>, float>> $matrix
+     * @return array{rows: int<1, 11>, cols: int<1, 11>, sum: float}
+     */
     public analyzeMatrix(non-empty-array<int<0, 10>, non-empty-array<int<0, 10>, float>> $matrix): array{rows: int<1, 11>, cols: int<1, 11>, sum: float}
 }
 /**

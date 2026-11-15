@@ -801,7 +801,7 @@ aid ./internal --summary-type=ci-friendly --no-emoji
 - **Dynamic Features**: Runtime-determined types/interfaces in dynamic languages are not resolved
 - **Macro Expansion**: Complex macros (Rust, C++) show pre-expansion source
 - **Generated Code**: Consider using `.aidignore` to skip generated files
-- **Known gaps**: a few language behaviours still differ from the others (for example PHP docblocks and Swift comments); the current list is in [`internal/conformance/known_gaps_test.go`](internal/conformance/known_gaps_test.go)
+- **Known gaps**: none today (every conformance check passes); a language behaviour that differs from the others is listed in [`internal/conformance/known_gaps_test.go`](internal/conformance/known_gaps_test.go)
 
 ## 🔒 Security Considerations
 

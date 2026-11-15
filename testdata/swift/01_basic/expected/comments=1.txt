@@ -1,3 +1,9 @@
 <file path="source.swift">
+//
+// 01_basic.swift
+// DistillerSample
+//
+// Demonstrates: constants, variables, optionals, enums, simple functions.
+//
 import Foundation
 </file>

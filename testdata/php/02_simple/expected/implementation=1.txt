@@ -2,35 +2,85 @@
 namespace App\Simple;
 /** Interface for entities that can be persisted */
 interface PersistableInterface {
+    /**
+     * Get entity ID
+     *
+     * @return int|null
+     */
     public getId(): ?int
+    /**
+     * Set entity ID
+     *
+     * @param int $id Entity ID
+     */
     public setId(int $id): void
+    /**
+     * Get creation timestamp
+     *
+     * @return DateTimeInterface|null
+     */
     public getCreatedAt(): ?DateTimeInterface
 }
 /** Interface for cacheable entities */
 interface CacheableInterface {
+    /**
+     * Get cache key
+     *
+     * @return string
+     */
     public getCacheKey(): string
+    /**
+     * Get cache TTL in seconds
+     *
+     * @return int
+     */
     public getCacheTtl(): int
 }
+/** Abstract base entity class */
 abstract class BaseEntity implements PersistableInterface, JsonSerializable {
+    /** @inheritDoc */
     public getId(): ?int {
         return $this->id;
     }
+    /** @inheritDoc */
     public setId(int $id): void {
         $this->id = $id;
     }
+    /** @inheritDoc */
     public getCreatedAt(): ?DateTimeInterface {
         return $this->createdAt;
     }
+    /**
+     * Set creation timestamp
+     *
+     * @param DateTimeInterface $createdAt Creation timestamp
+     */
     public setCreatedAt(DateTimeInterface $createdAt): void {
         $this->createdAt = $createdAt;
     }
+    /**
+     * Get update timestamp
+     *
+     * @return DateTimeInterface|null
+     */
     public getUpdatedAt(): ?DateTimeInterface {
         return $this->updatedAt;
     }
+    /**
+     * Set update timestamp
+     *
+     * @param DateTimeInterface $updatedAt Update timestamp
+     */
     public setUpdatedAt(DateTimeInterface $updatedAt): void {
         $this->updatedAt = $updatedAt;
     }
+    /**
+     * Abstract method to get entity name
+     *
+     * @return string
+     */
     public abstract getEntityName(): string
+    /** @inheritDoc */
     public jsonSerialize(): array {
         return [
             'id' => $this->id,
@@ -45,49 +95,104 @@ trait TimestampableTrait {
 }
 /** Trait for validation functionality */
 trait ValidatableTrait {
+    /**
+     * Get validation errors
+     *
+     * @return array<string, string>
+     */
     public getValidationErrors(): array<string, string> {
         return $this->validationErrors;
     }
+    /**
+     * Check if entity has validation errors
+     *
+     * @return bool
+     */
     public hasValidationErrors(): bool {
         return !empty($this->validationErrors);
     }
 }
+/** Product entity */
 class Product extends BaseEntity implements CacheableInterface {
+    /** Static constant for cache TTL */
     public const CACHE_TTL = 3600;
+    /**
+     * Create new product
+     *
+     * @param string $name Product name
+     * @param float $price Product price
+     * @param string $description Product description
+     */
     public __construct(string $name, float $price, string $description = '') {
         $this->name = $name;
         $this->price = $price;
         $this->description = $description;
         $this->updateTimestamps();
     }
+    /**
+     * Get product name
+     *
+     * @return string
+     */
     public getName(): string {
         return $this->name;
     }
+    /**
+     * Set product name
+     *
+     * @param string $name Product name
+     */
     public setName(string $name): void {
         $this->name = $name;
         $this->updateTimestamps();
     }
+    /**
+     * Get product price
+     *
+     * @return float
+     */
     public getPrice(): float {
         return $this->price;
     }
+    /**
+     * Set product price
+     *
+     * @param float $price Product price
+     */
     public setPrice(float $price): void {
         $this->price = $price;
         $this->updateTimestamps();
     }
+    /** @inheritDoc */
     public getEntityName(): string {
         return 'product';
     }
+    /** @inheritDoc */
     public getCacheKey(): string {
         return sprintf('product:%d', $this->id ?? 0);
     }
+    /** @inheritDoc */
     public getCacheTtl(): int {
         return self::CACHE_TTL;
     }
+    /**
+     * Add category to product
+     *
+     * @param string $category Category name
+     */
     public addCategory(string $category): void {
         if (!in_array($category, $this->categories)) {
             $this->categories[] = $category;
         }
     }
+    /**
+     * Static factory method for creating sale products
+     *
+     * @param string $name Product name
+     * @param float $originalPrice Original price
+     * @param float $discountPercent Discount percentage
+     * @return self
+     */
     public static createSaleProduct(string $name, float $originalPrice, float $discountPercent): self {
         $salePrice = $originalPrice * (1 - $discountPercent / 100);
         $description = sprintf("Sale item - %d%% off!", $discountPercent);
@@ -95,19 +200,39 @@ class Product extends BaseEntity implements CacheableInterface {
         return new self($name, $salePrice, $description);
     }
 }
+/** Category entity */
 class Category extends BaseEntity {
+    /** @var string Category name */
     public readonly string $name;
+    /** @var string Category slug */
     public readonly string $slug;
+    /**
+     * Create new category
+     *
+     * @param string $name Category name
+     * @param string $slug Category slug
+     */
     public __construct(string $name, string $slug) {
         $this->name = $name;
         $this->slug = $slug;
     }
+    /** @inheritDoc */
     public getEntityName(): string {
         return 'category';
     }
+    /**
+     * Set parent category
+     *
+     * @param Category|null $parent Parent category
+     */
     public setParent(?Category $parent): void {
         $this->parent = $parent;
     }
+    /**
+     * Get parent category
+     *
+     * @return Category|null
+     */
     public getParent(): ?Category {
         return $this->parent;
     }

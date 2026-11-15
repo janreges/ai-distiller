@@ -1,4 +1,12 @@
 <file path="source.swift">
+//
+// 04_complex.swift
+// DistillerSample
+//
+// Demonstrates: property wrappers, result builders, opaque return types,
+// advanced generics, Combine framework, KeyPaths, dynamic member lookup,
+// advanced protocol extensions.
+//
 import Foundation
 import Combine
 //  - Property Wrapper & Combine Integration

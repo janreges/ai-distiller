@@ -44,6 +44,22 @@ type parserState struct {
 
 	braceLevel   int
 	lastNodeLine int
+
+	// scopeLevels holds, for every type scope that is open, the brace level
+	// at which its direct members sit.
+	scopeLevels []int
+}
+
+// atMemberLevel reports whether the current line sits directly in the file or
+// in an open type scope, not inside a function body or a nested block.
+func (s *parserState) atMemberLevel() bool {
+	for len(s.scopeLevels) > 0 && s.braceLevel < s.scopeLevels[len(s.scopeLevels)-1] {
+		s.scopeLevels = s.scopeLevels[:len(s.scopeLevels)-1]
+	}
+	if len(s.scopeLevels) == 0 {
+		return s.braceLevel == 0
+	}
+	return s.braceLevel == s.scopeLevels[len(s.scopeLevels)-1]
 }
 
 // NewLineParser creates a new line-based parser
@@ -118,12 +134,56 @@ func (p *LineParser) Parse() *ir.DistilledFile {
 					Format: ir.CommentLine,
 				}
 				p.addToParent(file, state, comment)
+			} else if state.atMemberLevel() {
+				comment := &ir.DistilledComment{
+					BaseNode: ir.BaseNode{
+						Location: ir.Location{StartLine: lineNum, EndLine: lineNum},
+					},
+					Text:   strings.TrimSpace(strings.TrimPrefix(trimmedLine, "//")),
+					Format: ir.CommentLine,
+				}
+				p.addToParent(file, state, comment)
+			}
+			continue
+		}
+
+		// A block comment starts a line with "/*" and may span lines. "/** */"
+		// is documentation; "/* */" is an ordinary comment.
+		if strings.HasPrefix(trimmedLine, "/*") {
+			end := i
+			for end < len(p.lines) && !strings.Contains(p.lines[end], "*/") {
+				end++
+			}
+			if end >= len(p.lines) {
+				end = len(p.lines) - 1
+			}
+			format := ir.CommentBlock
+			if strings.HasPrefix(trimmedLine, "/**") && !strings.HasPrefix(trimmedLine, "/**/") {
+				format = ir.CommentDoc
+			}
+			// An empty comment ("/**/", "/* */") makes no node.
+			if text := blockCommentText(p.lines[i : end+1]); text != "" && (format == ir.CommentDoc || state.atMemberLevel()) {
+				p.addToParent(file, state, &ir.DistilledComment{
+					BaseNode: ir.BaseNode{
+						Location: ir.Location{StartLine: lineNum, EndLine: end + 1},
+					},
+					Text:   text,
+					Format: format,
+				})
+			}
+			i = end
+			// Code after the closing "*/" on the same line is still code.
+			if _, rest, found := strings.Cut(p.lines[end], "*/"); found && strings.TrimSpace(rest) != "" {
+				p.lines[end] = rest
+				i = end - 1
 			}
 			continue
 		}
 
 		// Track brace levels
 		state.braceLevel += braceDelta(line)
+
+		scope := [3]any{state.currentClass, state.currentInterface, state.currentEnum}
 
 		// Parse different constructs
 		if matches := p.importRe.FindStringSubmatch(line); matches != nil {
@@ -159,8 +219,13 @@ func (p *LineParser) Parse() *ir.DistilledFile {
 			p.parseTypeAlias(matches, lineNum, file, state)
 		}
 
+		if scope != [3]any{state.currentClass, state.currentInterface, state.currentEnum} {
+			state.scopeLevels = append(state.scopeLevels, state.braceLevel)
+		}
+
 		// Check if we're exiting a scope
 		if state.braceLevel == 0 {
+			state.scopeLevels = nil
 			state.insideClass = false
 			state.insideStruct = false
 			state.insideProtocol = false
@@ -691,4 +756,24 @@ func (p *LineParser) addToParent(file *ir.DistilledFile, state *parserState, nod
 	}
 
 	file.Children = append(file.Children, node)
+}
+
+// blockCommentText returns the text of a "/* */" or "/** */" comment given as
+// the source lines it spans: the markers and the leading asterisks of the
+// continuation lines are removed, and blank lines at either end are dropped.
+func blockCommentText(lines []string) string {
+	text := strings.Join(lines, "\n")
+	text = strings.TrimSpace(text)
+	text = strings.TrimPrefix(text, "/*")
+	// Cut at the closing marker before removing the second "*" of "/**", so
+	// that the "*" of an empty "/**/" is not taken from its "*/".
+	if idx := strings.Index(text, "*/"); idx >= 0 {
+		text = text[:idx]
+	}
+	text = strings.TrimPrefix(text, "*")
+	out := strings.Split(text, "\n")
+	for i, line := range out {
+		out[i] = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "*"))
+	}
+	return strings.TrimSpace(strings.Join(out, "\n"))
 }

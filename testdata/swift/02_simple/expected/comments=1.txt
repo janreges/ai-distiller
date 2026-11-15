@@ -1,4 +1,11 @@
 <file path="source.swift">
+//
+// 02_simple.swift
+// DistillerSample
+//
+// Demonstrates: value vs. reference semantics, protocol conformance,
+// property observers, access control.
+//
 import Foundation
 //  - Protocols
 // Something that can provide a textual description of itself.
@@ -18,6 +25,7 @@ public struct Point: Describable, Equatable, Hashable {
 // Models an axis-aligned rectangle.
 
 public class Rectangle: Describable {
+    // Stored properties
     public var size: (width: Int, height: Int) {
     // Designated initializer.
     // Area is recomputed only when cache invalidated.

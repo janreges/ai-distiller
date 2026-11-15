@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -625,9 +626,12 @@ func (p *TreeSitterProcessor) processClass(node *sitter.Node, file *ir.Distilled
 
 	// Try multiple ways to find the docblock
 	docblockFound := false
+	// classDoc is the raw docblock the program level held back for this class.
+	classDoc := ""
 
 	// Method 1: Check for stored docblock comment from program level
 	if p.currentClassDocblock != "" {
+		classDoc = p.currentClassDocblock
 		// Parse PSR-19 tags from docblock
 		p.parseClassDocblock(p.currentClassDocblock, class)
 		p.currentClassDocblock = "" // Clear after use
@@ -745,10 +749,31 @@ func (p *TreeSitterProcessor) processClass(node *sitter.Node, file *ir.Distilled
 		class.Visibility = ir.VisibilityPublic
 	}
 
+	// The docblock was held back from the comment path so that its tags could
+	// feed the class. A class without API tags prints it as a doc comment ahead
+	// of the declaration, like every other language.
+	if classDoc != "" && class.APIDocblock == "" {
+		p.addNode(file, parent, docblockComment(classDoc, p.nodeLocation(node)))
+	}
 	p.addNode(file, parent, class)
 
 	// Restore previous class context
 	p.currentClass = prevClass
+}
+
+// docblockComment turns the raw text of a /** */ comment into a doc comment
+// node with the comment markers and leading asterisks removed.
+func docblockComment(raw string, loc ir.BaseNode) *ir.DistilledComment {
+	text := strings.TrimSuffix(strings.TrimPrefix(raw, "/**"), "*/")
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "*"))
+	}
+	return &ir.DistilledComment{
+		BaseNode: loc,
+		Text:     strings.TrimSpace(strings.Join(lines, "\n")),
+		Format:   ir.CommentDoc,
+	}
 }
 
 // processClassBody processes the body of a class
@@ -1178,8 +1203,16 @@ func (p *TreeSitterProcessor) processPromotedProperties(parametersNode *sitter.N
 				}
 			}
 
-			// Add the field to the class
-			class.Children = append(class.Children, field)
+			// Add the field to the class, ahead of the comments that precede the
+			// constructor: they document the constructor, not its fields.
+			at := len(class.Children)
+			for at > 0 {
+				if _, ok := class.Children[at-1].(*ir.DistilledComment); !ok {
+					break
+				}
+				at--
+			}
+			class.Children = slices.Insert(class.Children, at, ir.DistilledNode(field))
 		}
 	}
 }
@@ -1221,8 +1254,13 @@ func (p *TreeSitterProcessor) processInterface(node *sitter.Node, file *ir.Disti
 			// Interface body - process methods
 			for j := 0; j < int(child.ChildCount()); j++ {
 				methodNode := child.Child(j)
-				if methodNode.Type() == "method_declaration" {
+				switch methodNode.Type() {
+				case "method_declaration":
 					p.processMethod(methodNode, file, intf)
+				case "comment":
+					if p.commentPrints(child, j, "method_declaration") {
+						p.processComment(methodNode, file, intf)
+					}
 				}
 			}
 		}
@@ -1314,11 +1352,33 @@ func (p *TreeSitterProcessor) processEnum(node *sitter.Node, file *ir.DistilledF
 func (p *TreeSitterProcessor) processEnumBody(node *sitter.Node, file *ir.DistilledFile, class *ir.DistilledClass) {
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
-		if child.Type() == "enum_case" {
+		switch child.Type() {
+		case "enum_case":
 			// Process enum case as a constant
 			p.processEnumCase(child, file, class)
+		case "comment":
+			if p.commentPrints(node, i, "enum_case") {
+				p.processComment(child, file, class)
+			}
 		}
 	}
+}
+
+// commentPrints reports whether the comment at index i of body is kept as a
+// node. A doc comment documents the next declaration, so it is kept only when
+// that declaration is one the formatter prints (kind); otherwise it would end
+// up above an unrelated member. Other comments keep their place.
+func (p *TreeSitterProcessor) commentPrints(body *sitter.Node, i int, kind string) bool {
+	if !strings.HasPrefix(p.getNodeText(body.Child(i)), "/**") {
+		return true
+	}
+	for j := i + 1; j < int(body.ChildCount()); j++ {
+		next := body.Child(j)
+		if next.IsNamed() && next.Type() != "comment" {
+			return next.Type() == kind
+		}
+	}
+	return false
 }
 
 // processEnumCase processes individual enum cases

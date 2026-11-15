@@ -57,10 +57,14 @@ Protocol requirements are `public`. Swift produces no `protected`.
 - No namespace node.
 - `Implementation` is the function body with its braces, each line's trailing
   whitespace trimmed.
-- Comments: only two kinds are kept. `///` lines are `doc`, `// MARK:` lines
-  are `line` with the text after `MARK:`. Other `//` comments and `/* */` blocks
-  produce nothing.
-- A property's `DefaultValue` keeps the `=` (`= 0`).
+- Comments: `///` lines and `/** */` blocks are `doc`; `// MARK:` lines are
+  `line` with the text after `MARK:`; other `//` lines are `line` and `/* */`
+  blocks (several lines make one node) are `block`. Ordinary comments are kept
+  only at member level (in the file or directly in a type), not inside function
+  bodies (`parserState.atMemberLevel`). The Swift formatter prints every kind as
+  `//` lines.
+- A property's `DefaultValue` holds the value without the `=` (`0`); the
+  formatter adds ` = `.
 - `Extensions` is not used.
 
 ## Unused files
