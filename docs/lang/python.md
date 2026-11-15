@@ -1,6 +1,6 @@
 # Python Language Support
 
-AI Distiller supports Python 3.x code through the official [tree-sitter-python](https://github.com/tree-sitter/tree-sitter-python) grammar (v0.23.6), compiled into the `aid` binary.
+AI Distiller supports Python 3.x code through the official [tree-sitter-python](https://github.com/tree-sitter/tree-sitter-python) grammar (v0.25.0), compiled into the `aid` binary.
 
 ## Overview
 

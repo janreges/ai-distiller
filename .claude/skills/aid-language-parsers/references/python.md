@@ -5,7 +5,7 @@
 - Wired: `internal/language/python/processor.go#Processor.ProcessWithOptions`
   creates a parser per call with `NewNativeTreeSitterProcessor()` and runs
   `internal/language/python/native_tree_sitter_processor.go#NativeTreeSitterProcessor.ProcessSource`.
-- Grammar: `github.com/tree-sitter/tree-sitter-python/bindings/go` (official, v0.23.6). Tree: `go run ./cmd/ast-dump --lang python`.
+- Grammar: `github.com/tree-sitter/tree-sitter-python/bindings/go` (official, v0.25.0, ABI 15). Tree: `go run ./cmd/ast-dump --lang python`.
 - Extensions: `.py`, `.pyw`, `.pyi`.
 - Dispatch: `internal/language/python/native_tree_sitter_processor.go#NativeTreeSitterProcessor.processNode`
   recurses into node types it does not list.
