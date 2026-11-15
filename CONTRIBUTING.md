@@ -7,14 +7,14 @@
 - The grammar sources: `git submodule update --init --recursive`
 
 cgo is always on. Every build and test command needs
-`CGO_ENABLED=1 CGO_CFLAGS=-w`; the project does not compile with `CGO_ENABLED=0`.
+`CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"`; the project does not compile with `CGO_ENABLED=0`.
 
 ## Build and test
 
 Run from the repository root.
 
 ```bash
-export CGO_ENABLED=1 CGO_CFLAGS=-w
+export CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"
 make build                                   # build/aid
 go test -count=1 $(go list -e ./... | grep -vE '/tools/|/test_project/|/cmd/aid-validate')   # full suite
 go test -count=1 -run 'TestIntegration/^python$/' ./internal/testrunner                     # one language's snapshots

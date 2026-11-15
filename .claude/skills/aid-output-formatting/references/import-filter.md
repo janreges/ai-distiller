@@ -29,7 +29,7 @@ text formatter printed, not on what the source uses.
 Turn it off to see what the formatter printed:
 
 ```bash
-export CGO_ENABLED=1 CGO_CFLAGS=-w
+export CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"
 go run ./cmd/aid internal/conformance/testdata/python/sample.py --stdout --summary-type=off </dev/null | head -3
 go run ./cmd/aid internal/conformance/testdata/python/sample.py --stdout --summary-type=off --filter-imports=false </dev/null | head -3
 go run ./cmd/aid internal/conformance/testdata/python/sample.py --stdout --summary-type=off --private=1 --implementation=1 </dev/null | head -3

@@ -14,7 +14,7 @@ description: >-
 # Testing and debugging AI Distiller
 
 Run every command from the repository root. Every Go build and test needs
-`CGO_ENABLED=1 CGO_CFLAGS=-w`: the tree-sitter parsers are C code linked through
+`CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"`: the tree-sitter parsers are C code linked through
 cgo, and with `CGO_ENABLED=0` the project does not compile (`go build ./cmd/aid`
 stops with "build constraints exclude all Go files" in the tree-sitter grammar
 packages). `-w` only silences C compiler warnings.
@@ -50,7 +50,7 @@ sets it; locally it means a source edit is not tested until that binary is rebui
 ## 2. Commands
 
 ```bash
-export CGO_ENABLED=1 CGO_CFLAGS=-w
+export CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"
 
 # full suite, the command CI runs
 go test -count=1 $(go list -e ./... | grep -vE '/tools/|/test_project/|/cmd/aid-validate')

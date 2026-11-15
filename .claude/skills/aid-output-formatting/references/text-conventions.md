@@ -14,7 +14,7 @@ Each row comes from the language's conformance fixture in
 with everything included, and without the import filter:
 
 ```bash
-export CGO_ENABLED=1 CGO_CFLAGS=-w
+export CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"
 tmp=$(mktemp -d) && go build -o "$tmp/aid" ./cmd/aid
 for f in internal/conformance/testdata/*/*; do
   echo "== $f"

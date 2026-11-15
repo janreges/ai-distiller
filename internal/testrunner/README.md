@@ -41,7 +41,7 @@ kept: they are identical to the default.)
 Run commands from the repository root with cgo enabled:
 
 ```bash
-export CGO_ENABLED=1 CGO_CFLAGS=-w
+export CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"
 go test -count=1 ./internal/testrunner                                   # everything
 go test -count=1 -run 'TestIntegration/python/' ./internal/testrunner    # one language
 go test -count=1 -run 'TestIntegration/python/01_basic/' ./internal/testrunner  # one scenario

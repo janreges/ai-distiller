@@ -103,7 +103,9 @@ is the only registry and carries `//go:build cgo`.
 `scripts/check-cgo.sh` fails when the `Makefile`, the `Dockerfile`, the scripts
 or the workflows set `CGO_ENABLED=0`.
 
-Use `CGO_ENABLED=1 CGO_CFLAGS=-w` for every build and test; `CGO_CFLAGS=-w`
-only silences the C compiler warnings of the generated grammars. Cross builds
+Use `CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"` for every build and test. `-w` silences the C
+compiler warnings of the generated grammars; `-O2` is needed because setting
+`CGO_CFLAGS` replaces cgo's default `-g -O2`, and without it the tree-sitter C code
+is built at `-O0` and parses about twice as slowly. Cross builds
 need a C cross-compiler for the target (the release workflow uses
 `aarch64-linux-gnu-gcc` and `x86_64-w64-mingw32-gcc`).

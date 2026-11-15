@@ -36,7 +36,7 @@ Every line below is real output for
 bytes) with `NO_COLOR=1`; the duration varies from run to run:
 
 ```bash
-export CGO_ENABLED=1 CGO_CFLAGS=-w
+export CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"
 for t in visual-progress-bar stock-ticker speedometer-dashboard minimalist-sparkline ci-friendly json; do
   NO_COLOR=1 go run ./cmd/aid internal/conformance/testdata/python/sample.py --stdout --summary-type=$t </dev/null 2>&1 >/dev/null
 done

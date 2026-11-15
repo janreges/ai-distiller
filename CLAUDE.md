@@ -12,7 +12,7 @@ code by design: it is optimised for density, not for compiling.
 
 - No mocks, stubs or simulated data in code or tests. Tests run the real parser,
   formatter and binary. If something cannot be done properly, leave a TODO.
-- cgo is always on: `CGO_ENABLED=1 CGO_CFLAGS=-w` for every build and test. The
+- cgo is always on: `CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"` for every build and test. The
   tree-sitter grammars are C code and the project does not compile with
   `CGO_ENABLED=0` (CI runs `scripts/check-cgo.sh`, which rejects a
   tracked `CGO_ENABLED=0` in `Makefile`, `Dockerfile`, `scripts/`, `mcp-npm/scripts/`
@@ -29,7 +29,7 @@ code by design: it is optimised for density, not for compiling.
 Run from the repository root.
 
 ```bash
-export CGO_ENABLED=1 CGO_CFLAGS=-w
+export CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"
 make build                                   # build/aid
 go test -count=1 $(go list -e ./... | grep -vE '/tools/|/test_project/|/cmd/aid-validate')   # full suite
 go test -count=1 -run 'TestIntegration/^python$/' ./internal/testrunner                     # one language's snapshots

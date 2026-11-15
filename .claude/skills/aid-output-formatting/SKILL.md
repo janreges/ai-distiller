@@ -18,7 +18,7 @@ prints. How the IR is built is in `.claude/skills/aid-language-parsers/SKILL.md`
 (node fields: its `references/ir-conventions.md`); flags, modes and the stripper
 are in `.claude/skills/aid-architecture/SKILL.md`; running and updating tests is in
 `.claude/skills/aid-testing-debugging/SKILL.md`. Run commands from the repository
-root with `CGO_ENABLED=1 CGO_CFLAGS=-w` exported.
+root with `CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"` exported.
 
 References, loaded when needed:
 

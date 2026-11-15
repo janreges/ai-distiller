@@ -8,14 +8,14 @@ parallel:
 |---|---|---|
 | `test` | ubuntu-latest | builds `aid` into the runner's temp directory, then the full suite with `AID_TEST_BINARY` pointing at that binary, so the snapshot and conformance suites test it instead of building their own |
 | `build` | ubuntu-latest and macos-14 | builds `aid`, runs `aid --version` and checks that `aid testdata/python/01_basic/source.py --stdout` prints `is_valid_email`; no tests |
-| `checks` | ubuntu-latest | `gofmt -s -l` over the tracked `cmd/` and `internal/` Go files except `testdata` and `internal/parser/grammars` (any output fails); `go vet` on the same package list as the suite; `golangci-lint` v2.12.2 via `golangci-lint-action` with `only-new-issues: true` (config in `.golangci.yml`, runs with `CGO_ENABLED=1 CGO_CFLAGS=-w`); `go mod tidy` must leave `go.mod` and `go.sum` unchanged; `scripts/version-drift.sh`; `scripts/tests/install_sh_test.sh`; `scripts/check-cgo.sh`; `scripts/tests/check_skill_anchors_test.sh` and `scripts/check-skill-anchors.sh`; `scripts/tests/readme_links_test.sh` |
+| `checks` | ubuntu-latest | `gofmt -s -l` over the tracked `cmd/` and `internal/` Go files except `testdata` and `internal/parser/grammars` (any output fails); `go vet` on the same package list as the suite; `golangci-lint` v2.12.2 via `golangci-lint-action` with `only-new-issues: true` (config in `.golangci.yml`, runs with `CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"`); `go mod tidy` must leave `go.mod` and `go.sum` unchanged; `scripts/version-drift.sh`; `scripts/tests/install_sh_test.sh`; `scripts/check-cgo.sh`; `scripts/tests/check_skill_anchors_test.sh` and `scripts/check-skill-anchors.sh`; `scripts/tests/readme_links_test.sh` |
 | `mcp` | ubuntu-latest, Node 24 | `npm ci` and `npm test` in `mcp-npm/` |
 
 All jobs check out with `submodules: recursive` except `mcp`; the Go jobs use the
 Go version set in the workflow's `env`.
 
 Before opening a pull request, the local equivalents (from the repository root,
-with `CGO_ENABLED=1 CGO_CFLAGS=-w` exported):
+with `CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"` exported):
 
 ```bash
 make fmt-check

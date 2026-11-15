@@ -17,7 +17,7 @@ ARG VERSION=dev
 ARG COMMIT=unknown
 
 # Build the binary (cgo is mandatory: the tree-sitter parsers are C libraries)
-RUN CGO_ENABLED=1 CGO_CFLAGS=-w go build \
+RUN CGO_ENABLED=1 CGO_CFLAGS="-O2 -w" go build \
     -ldflags="-s -w -X github.com/janreges/ai-distiller/internal/version.Version=${VERSION} -X github.com/janreges/ai-distiller/internal/version.Commit=${COMMIT}" \
     -o aid ./cmd/aid/
 

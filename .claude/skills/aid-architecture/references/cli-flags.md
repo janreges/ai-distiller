@@ -183,7 +183,7 @@ and 7 are done; the last two below check the examples written in the same
 texts:
 
 ```bash
-CGO_ENABLED=1 CGO_CFLAGS=-w go test -count=1 -run 'TestExtendedHelp|TestHelpTexts|TestCommandLineOptionsDoc|TestIncludeOnlyRecipes|TestRedirectExamples' ./internal/cli
+CGO_ENABLED=1 CGO_CFLAGS="-O2 -w" go test -count=1 -run 'TestExtendedHelp|TestHelpTexts|TestCommandLineOptionsDoc|TestIncludeOnlyRecipes|TestRedirectExamples' ./internal/cli
 ```
 
 - `TestExtendedHelpCoversEveryFlag`: every flag that is neither deprecated nor

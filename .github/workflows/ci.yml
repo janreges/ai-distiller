@@ -20,11 +20,11 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
       - name: Build aid
-        run: CGO_ENABLED=1 CGO_CFLAGS=-w go build -o "$RUNNER_TEMP/aid" ./cmd/aid
+        run: CGO_ENABLED=1 CGO_CFLAGS="-O2 -w" go build -o "$RUNNER_TEMP/aid" ./cmd/aid
       - name: Test
         env:
           AID_TEST_BINARY: ${{ runner.temp }}/aid
-        run: CGO_ENABLED=1 CGO_CFLAGS=-w go test -count=1 $(go list -e ./... | grep -vE '/tools/|/test_project/|/cmd/aid-validate')
+        run: CGO_ENABLED=1 CGO_CFLAGS="-O2 -w" go test -count=1 $(go list -e ./... | grep -vE '/tools/|/test_project/|/cmd/aid-validate')
 
   build:
     runs-on: ${{ matrix.os }}
@@ -41,7 +41,7 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - name: Build and smoke test
         run: |
-          CGO_ENABLED=1 CGO_CFLAGS=-w go build -o aid ./cmd/aid
+          CGO_ENABLED=1 CGO_CFLAGS="-O2 -w" go build -o aid ./cmd/aid
           ./aid --version < /dev/null
           ./aid testdata/python/01_basic/source.py --stdout --summary-type=off < /dev/null | grep -q 'is_valid_email'
 
@@ -60,12 +60,12 @@ jobs:
           out=$(gofmt -s -l $files)
           test -z "$out" || { echo "$out"; exit 1; }
       - name: go vet
-        run: CGO_ENABLED=1 CGO_CFLAGS=-w go vet $(go list -e ./... | grep -vE '/tools/|/test_project/|/cmd/aid-validate')
+        run: CGO_ENABLED=1 CGO_CFLAGS="-O2 -w" go vet $(go list -e ./... | grep -vE '/tools/|/test_project/|/cmd/aid-validate')
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         env:
           CGO_ENABLED: '1'
-          CGO_CFLAGS: -w
+          CGO_CFLAGS: "-O2 -w"
         with:
           version: v2.12.2
           only-new-issues: true

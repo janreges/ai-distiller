@@ -51,7 +51,7 @@ func BuildBinary(projectRoot string) (binPath string, cleanup func(), err error)
 
 	cmd := exec.Command("go", "build", "-o", binPath, "./cmd/aid")
 	cmd.Dir = projectRoot
-	cmd.Env = append(os.Environ(), "CGO_ENABLED=1", "CGO_CFLAGS=-w")
+	cmd.Env = append(os.Environ(), "CGO_ENABLED=1", "CGO_CFLAGS=-O2 -w")
 	if out, buildErr := cmd.CombinedOutput(); buildErr != nil {
 		cleanup()
 		return "", nil, fmt.Errorf("building aid: %w\n%s", buildErr, out)

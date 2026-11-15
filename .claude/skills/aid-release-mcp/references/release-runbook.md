@@ -134,7 +134,7 @@ binaries are not stripped (`scripts/build-releases.sh` does not pass `-s -w`).
 2. Build:
 
    ```bash
-   CGO_CFLAGS=-w bash scripts/build-releases.sh
+   CGO_CFLAGS="-O2 -w" bash scripts/build-releases.sh
    ```
 
    It writes the archives under the correct names, plus a `checksums.txt`

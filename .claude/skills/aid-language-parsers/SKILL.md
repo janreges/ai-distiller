@@ -14,7 +14,7 @@ description: >-
 
 # Language parsers
 
-Run every command from the repository root with `CGO_ENABLED=1 CGO_CFLAGS=-w`
+Run every command from the repository root with `CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"`
 exported: the tree-sitter grammars are C code, and aid does not compile without
 cgo (`references/tree-sitter-cgo.md`).
 

@@ -4,7 +4,7 @@ Which packages the `aid` binary is built from, and what else lives under
 `internal/` and `cmd/`. Generated at this commit with:
 
 ```bash
-export CGO_ENABLED=1 CGO_CFLAGS=-w
+export CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"
 go list -deps ./cmd/aid | grep ai-distiller        # packages aid is built from
 go list -e ./... | grep -E '/(internal|cmd)/'      # every package in the checkout
 ```

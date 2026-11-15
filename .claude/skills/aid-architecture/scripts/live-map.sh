@@ -26,7 +26,7 @@ root=$(cd "$(dirname "$0")/../../../.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-(cd "$root" && CGO_ENABLED=1 CGO_CFLAGS=-w go build -o "$tmp/aid" ./cmd/aid)
+(cd "$root" && CGO_ENABLED=1 CGO_CFLAGS="-O2 -w" go build -o "$tmp/aid" ./cmd/aid)
 
 # The path argument wins over stdin; </dev/null is the project's rule for
 # scripted runs on a path.

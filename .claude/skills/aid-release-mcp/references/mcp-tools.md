@@ -115,7 +115,7 @@ The package tests never run a tool against the real binary, so check a
 changed tool like this, from the repository root:
 
 ```bash
-export CGO_ENABLED=1 CGO_CFLAGS=-w
+export CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"
 mkdir -p mcp-npm/bin && go build -o mcp-npm/bin/aid ./cmd/aid
 (cd mcp-npm && npm ci && npm run build)
 (printf '%s\n' \

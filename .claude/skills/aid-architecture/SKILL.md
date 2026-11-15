@@ -18,7 +18,7 @@ The language-agnostic core: what happens between the command line and the
 printed output. How one language is parsed is in the `aid-language-parsers`
 skill (`.claude/skills/aid-language-parsers/SKILL.md`); running and writing
 tests is in `.claude/skills/aid-testing-debugging/SKILL.md`. Run commands from
-the repository root with `CGO_ENABLED=1 CGO_CFLAGS=-w`.
+the repository root with `CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"`.
 
 References, loaded when needed:
 

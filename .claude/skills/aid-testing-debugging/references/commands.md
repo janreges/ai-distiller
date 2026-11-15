@@ -1,6 +1,6 @@
 # Test commands
 
-Run from the repository root after `export CGO_ENABLED=1 CGO_CFLAGS=-w`. Why every
+Run from the repository root after `export CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"`. Why every
 command has `-count=1` and why the `-run` patterns are anchored with `^...$`:
 SKILL.md section 2.
 

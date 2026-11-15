@@ -37,7 +37,7 @@ all: build
 build: clean
 	@echo "==> Building $(BINARY_NAME) $(VERSION) with full language support and embedded templates"
 	@mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=1 CGO_CFLAGS="-w" $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/aid
+	CGO_ENABLED=1 CGO_CFLAGS="-O2 -w" $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/aid
 	@echo "✅ Successfully built $(BINARY_NAME) at: $(BUILD_DIR)/$(BINARY_NAME) ($$(du -h $(BUILD_DIR)/$(BINARY_NAME) | cut -f1))"
 
 # Build with verbose output (shows all warnings)
@@ -52,7 +52,7 @@ build-verbose: clean
 test:
 	@echo "==> Running tests"
 	@export PATH="$$PATH:$$(go env GOPATH)/bin"; \
-	export CGO_CFLAGS="-w"; \
+	export CGO_CFLAGS="-O2 -w"; \
 	if command -v gotestsum >/dev/null 2>&1; then \
 		gotestsum --format testname --junitfile test-results.xml -- -race -coverprofile=coverage.txt -covermode=atomic $$(go list ./... | grep -v '/tools/' | grep -v '/test_project/' | grep -v 'cmd/aid-validate'); \
 	else \
@@ -64,7 +64,7 @@ test:
 test-pretty:
 	@echo "==> Running tests with pretty output"
 	@export PATH="$$PATH:$$(go env GOPATH)/bin"; \
-	export CGO_CFLAGS="-w"; \
+	export CGO_CFLAGS="-O2 -w"; \
 	if command -v gotestsum >/dev/null 2>&1; then \
 		gotestsum --format pkgname-and-test-fails --junitfile test-results.xml -- -race -coverprofile=coverage.txt -covermode=atomic $$(go list ./... | grep -v '/tools/' | grep -v '/test_project/'); \
 	else \
@@ -77,7 +77,7 @@ test-pretty:
 test-dots:
 	@echo "==> Running tests with dots progress"
 	@export PATH="$$PATH:$$(go env GOPATH)/bin"; \
-	export CGO_CFLAGS="-w"; \
+	export CGO_CFLAGS="-O2 -w"; \
 	if command -v gotestsum >/dev/null 2>&1; then \
 		gotestsum --format dots-v2 -- -race -coverprofile=coverage.txt -covermode=atomic $$(go list ./... | grep -v '/tools/' | grep -v '/test_project/'); \
 	else \
@@ -90,7 +90,7 @@ test-dots:
 test-short:
 	@echo "==> Running tests with short output"
 	@export PATH="$$PATH:$$(go env GOPATH)/bin"; \
-	export CGO_CFLAGS="-w"; \
+	export CGO_CFLAGS="-O2 -w"; \
 	if command -v gotestsum >/dev/null 2>&1; then \
 		gotestsum --format short-verbose -- -race -coverprofile=coverage.txt -covermode=atomic $$(go list ./... | grep -v '/tools/' | grep -v '/test_project/'); \
 	else \
@@ -103,7 +103,7 @@ test-short:
 test-standard:
 	@echo "==> Running tests with standard format"
 	@export PATH="$$PATH:$$(go env GOPATH)/bin"; \
-	export CGO_CFLAGS="-w"; \
+	export CGO_CFLAGS="-O2 -w"; \
 	if command -v gotestsum >/dev/null 2>&1; then \
 		gotestsum --format standard-verbose -- -race -coverprofile=coverage.txt -covermode=atomic $$(go list ./... | grep -v '/tools/' | grep -v '/test_project/'); \
 	else \
@@ -116,7 +116,7 @@ test-standard:
 test-github:
 	@echo "==> Running tests with GitHub Actions format"
 	@export PATH="$$PATH:$$(go env GOPATH)/bin"; \
-	export CGO_CFLAGS="-w"; \
+	export CGO_CFLAGS="-O2 -w"; \
 	if command -v gotestsum >/dev/null 2>&1; then \
 		gotestsum --format github-actions -- -race -coverprofile=coverage.txt -covermode=atomic $$(go list ./... | grep -v '/tools/' | grep -v '/test_project/'); \
 	else \
@@ -129,7 +129,7 @@ test-github:
 test-watch:
 	@echo "==> Running tests in watch mode"
 	@export PATH="$$PATH:$$(go env GOPATH)/bin"; \
-	export CGO_CFLAGS="-w"; \
+	export CGO_CFLAGS="-O2 -w"; \
 	if command -v gotestsum >/dev/null 2>&1; then \
 		gotestsum --watch --format testname -- -race $$(go list ./... | grep -v '/tools/' | grep -v '/test_project/'); \
 	else \
@@ -142,7 +142,7 @@ test-watch:
 test-bdd:
 	@echo "==> Running tests with BDD-style output"
 	@export PATH="$$PATH:$$(go env GOPATH)/bin"; \
-	export CGO_CFLAGS="-w"; \
+	export CGO_CFLAGS="-O2 -w"; \
 	if command -v gotestsum >/dev/null 2>&1; then \
 		gotestsum --format testdox -- -race -coverprofile=coverage.txt -covermode=atomic $$(go list ./... | grep -v '/tools/' | grep -v '/test_project/'); \
 	else \
@@ -154,7 +154,7 @@ test-bdd:
 # Original test command for compatibility
 test-basic:
 	@echo "==> Running tests (basic output)"
-	@export CGO_CFLAGS="-w"; \
+	@export CGO_CFLAGS="-O2 -w"; \
 	$(GOTEST) -v -race -coverprofile=coverage.txt -covermode=atomic $$(go list ./... | grep -v '/tools/' | grep -v '/test_project/')
 
 # Run integration tests with new test runner
@@ -180,7 +180,7 @@ bench:
 # Run linter
 lint:
 	@echo "==> Running linter"
-	CGO_ENABLED=1 CGO_CFLAGS=-w $(GOLINT) run ./cmd/... ./internal/...
+	CGO_ENABLED=1 CGO_CFLAGS="-O2 -w" $(GOLINT) run ./cmd/... ./internal/...
 
 # Format code
 fmt:
