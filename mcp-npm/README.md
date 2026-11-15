@@ -548,7 +548,7 @@ User: "Apply aid refactoring analysis to src/services/ for complexity"
 
 ## 📚 Supported Languages
 
-Python, TypeScript, JavaScript, Go, Java, C#, Rust, Ruby, Swift, Kotlin, PHP, C++, C
+Python, TypeScript, JavaScript, Go, Java, C#, Rust, Ruby, Swift, Kotlin, PHP, C++
 
 ## 🔧 Troubleshooting
 

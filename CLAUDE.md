@@ -19,8 +19,9 @@ code by design: it is optimised for density, not for compiling.
   and `.github/workflows/`).
 - Code, comments, commit messages and docs are English. Talk to the owner in Czech
   when they write Czech.
-- Releases run only through `.github/workflows/release.yml`, triggered by pushing a tag
-  `vX.Y.Z` (or manually via `workflow_dispatch` with that tag), never by a hand-run script.
+- Releases run through `.github/workflows/release.yml`, triggered by pushing a tag
+  `vX.Y.Z` (or manually via `workflow_dispatch` with that tag). Releasing by hand is a
+  last resort with its own procedure in the `aid-release-mcp` skill.
 - Never commit binaries (`aid`, `build/`) or `.aid/` output.
 
 ## 3. Commands that work
@@ -80,6 +81,7 @@ Every package, and which of them run: `.claude/skills/aid-architecture/reference
 | A language's output is wrong, parser or visibility change, adding a language | `.claude/skills/aid-language-parsers/SKILL.md` |
 | Where something is implemented, adding a CLI flag or mode, file selection, the stripper, git mode, AI actions | `.claude/skills/aid-architecture/SKILL.md` |
 | The IR is right but the printed output is wrong, changing how something prints, a new IR field in the output, a new output format, imports missing from the text, the summary line | `.claude/skills/aid-output-formatting/SKILL.md` |
+| Cutting or checking a release, versions, the release workflow, cgo cross-builds, `install.sh`/`install.ps1`, the npm package and MCP server, an install or MCP problem, exposing a flag through MCP | `.claude/skills/aid-release-mcp/SKILL.md` |
 
 The index of skills is `.claude/skills/README.md`.
 
@@ -90,15 +92,7 @@ the same commit. SKILL CHECK (`sh scripts/check-skill-anchors.sh`) runs in CI an
 verifies every path and symbol named in prose and enforces the 150-line limit of
 this file.
 
-## 8. Release (moves into a skill later)
-
-- Trigger: push a tag (`git tag vX.Y.Z && git push origin vX.Y.Z`) or run the workflow manually with `workflow_dispatch` and that tag.
-- `.github/workflows/release.yml` tests, cross-builds with cgo, publishes the GitHub Release.
-- It generates and checks `checksums.txt`; the npm postinstall verifies the download against it.
-- npm publishes only after the Release exists (Trusted Publishing), because postinstall downloads from it.
-- No prebuilt `windows/arm64` binary exists.
-
-## 9. Pre-commit checklist
+## 8. Pre-commit checklist
 
 1. `git status`: nothing unexpected is modified or untracked.
 2. `git diff`: read your own change.
