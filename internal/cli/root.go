@@ -420,18 +420,20 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 	// Log startup info
 	dbg.Logf(debug.LevelBasic, "AI Distiller %s starting", Version)
 	
-	// Check if stdin is available (not a TTY) or explicitly requested with "-"
+	// Stdin is read in exactly two cases: the argument is "-", or there is no
+	// argument and stdin is not a character device. With any other argument
+	// stdin is never inspected, so an open but unwritten pipe cannot hijack or
+	// block a run that names a path.
 	stdinAvailable := false
-	if len(args) > 0 && args[0] == "-" {
-		stdinAvailable = true
-	} else {
-		// Check if stdin is piped
-		stat, _ := os.Stdin.Stat()
-		if (stat.Mode() & os.ModeCharDevice) == 0 {
+	switch {
+	case len(args) > 0:
+		stdinAvailable = args[0] == "-"
+	default:
+		if stat, err := os.Stdin.Stat(); err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
 			stdinAvailable = true
 		}
 	}
-	
+
 	// Handle stdin input
 	if stdinAvailable {
 		return processStdinWithContext(ctx)
