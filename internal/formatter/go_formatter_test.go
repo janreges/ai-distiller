@@ -20,7 +20,7 @@ func TestGoFormatter_FunctionBody(t *testing.T) {
 
 	fn := &ir.DistilledFunction{Name: "Get", Returns: ret, Implementation: body,
 		Parameters: []ir.Parameter{{Name: "id", Type: ir.TypeRef{Name: "int"}}}}
-	assert.Equal(t, "\nfunc Get(id int) *int {\n    if id == 0 {\n    \treturn nil\n    }\n    return &id\n}\n", format(fn))
+	assert.Equal(t, "\nfunc Get(id int) *int {\n    if id == 0 {\n        return nil\n    }\n    return &id\n}\n", format(fn))
 
 	method := &ir.DistilledFunction{Name: "One", Modifiers: []ir.Modifier{ir.ModifierAbstract},
 		Returns:        &ir.TypeRef{Name: "int"},
@@ -54,4 +54,14 @@ func TestGoFormatter_CommentInsidePrintedBody(t *testing.T) {
 	assert.Equal(t, "\nfunc Get() {\n    // inner\n    return\n}\n// after\n", format("{\n\t// inner\n\treturn\n}"))
 	// Without the body the comment node is the only place the text appears.
 	assert.Equal(t, "\nfunc Get()\n// inner\n// after\n", format(""))
+}
+
+func TestGoFormatter_NestedBodyIndentation(t *testing.T) {
+	body := "{\n\tfor i := 0; i < 3; i++ {\n\t\tif i == 1 {\n\t\t\tcontinue\n\t\t}\n\t}\n}"
+	fn := &ir.DistilledFunction{Name: "Loop", Implementation: body}
+	var b strings.Builder
+	require.NoError(t, NewGoFormatter().FormatNode(&b, fn, 0))
+	out := b.String()
+	assert.NotContains(t, out, "\t")
+	assert.Contains(t, out, "\n            continue\n")
 }

@@ -25,3 +25,5 @@ public class ConfWidget {
         return b;
     }
 }
+
+public enum ConfColor { ConfRed, ConfGreen = 2 }

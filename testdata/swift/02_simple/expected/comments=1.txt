@@ -8,7 +8,7 @@ public protocol Describable {
 }
 // Two-dimensional, integer-backed positioning.
 
-public class Point: Describable, Equatable, Hashable {
+public struct Point: Describable, Equatable, Hashable {
     public var x: Int
     public var y: Int
     // Euclidean distance from origin (0,0).

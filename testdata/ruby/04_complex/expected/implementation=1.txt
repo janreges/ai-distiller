@@ -22,7 +22,7 @@ module DSLBuilder
               self
             end
         # Create chainable setter methods
-        def chainable_attr(*names*)
+        def chainable_attr(*names)
             names.each do |name|
               define_method(name) do |value = nil|
                 if value.nil?
@@ -39,7 +39,7 @@ module DSLBuilder
         def initialize(target)
             @target = target
         # Forward missing methods to target
-        def method_missing(method_name, *args*, &block)
+        def method_missing(method_name, *args, &block)
             if @target.respond_to?(method_name, true)
               @target.send(method_name, *args, &block)
             else
@@ -55,7 +55,7 @@ module FluentInterface
 
     module ClassMethods
         # Create a fluent builder pattern
-        def fluent_builder(*method_names*)
+        def fluent_builder(*method_names)
             method_names.each do |method_name|
               define_method(method_name) do |value = nil, &block|
                 if block_given?
@@ -126,7 +126,7 @@ class ConfigurationBuilder
         @settings = {}
         @nested_configs = {}
     # Method chaining for array operations
-    def add_middleware(middleware_class, *options*)
+    def add_middleware(middleware_class, *options)
         @middleware ||= []
         @middleware << { class: middleware_class, options: options }
         self
@@ -143,7 +143,7 @@ class ConfigurationBuilder
 
         self
     # Dynamic method creation based on patterns
-    def method_missing(method_name, *args*, &block)
+    def method_missing(method_name, *args, &block)
         method_str = method_name.to_s
 
         case method_str
@@ -200,7 +200,7 @@ class PluginConfiguration
         option(:timeout, seconds)
     def retries(count)
         option(:retries, count)
-    def method_missing(method_name, *args*)
+    def method_missing(method_name, *args)
         if args.length == 1
           option(method_name, args.first)
         else

@@ -21,3 +21,7 @@ public class ConfWidget {
         return b
     }
 }
+
+public struct ConfPoint {
+    public var confX: Int = 0
+}

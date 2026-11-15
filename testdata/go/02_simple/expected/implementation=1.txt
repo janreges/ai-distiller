@@ -31,7 +31,7 @@ func (ms MemoryStorer) Get(key string) ([]byte, error) {
 // Set saves a value to memory.
 func (ms MemoryStorer) Set(key string, value []byte) error {
     if ms.data == nil {
-    	ms.data = make(map[string][]byte)
+        ms.data = make(map[string][]byte)
     }
     ms.data[key] = value
     return nil

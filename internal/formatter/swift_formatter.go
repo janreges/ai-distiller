@@ -3,6 +3,7 @@ package formatter
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/janreges/ai-distiller/internal/ir"
@@ -89,7 +90,14 @@ func (f *SwiftFormatter) formatClass(w io.Writer, class *ir.DistilledClass, inde
 	}
 
 	// Format class declaration
-	fmt.Fprintf(w, "%s%sclass %s", indentStr, modifiers, class.Name)
+	keyword := "class "
+	switch {
+	case strings.HasPrefix(class.Name, "extension "):
+		keyword = ""
+	case slices.Contains(class.Modifiers, ir.ModifierStruct):
+		keyword = "struct "
+	}
+	fmt.Fprintf(w, "%s%s%s%s", indentStr, modifiers, keyword, class.Name)
 
 	// Add generic type parameters
 	if len(class.TypeParams) > 0 {

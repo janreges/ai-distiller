@@ -4,7 +4,7 @@ import Combine
 // A property wrapper that clamps a numeric value within a given range
 // and publishes changes via a Combine publisher.
 
-public class Clamped {
+public struct Clamped {
     public var wrappedValue: Value {
     // The projected value is a Combine publisher that emits new values.
     public var projectedValue: AnyPublisher<Value, Never> {
@@ -17,7 +17,7 @@ public enum ValidationResult {
 }
 // A result builder for creating an array of `ValidationResult` declaratively.
 
-public class ConfigurationBuilder {
+public struct ConfigurationBuilder {
     public static func buildBlock(components: ValidationResult...) -> [ValidationResult]
     public static func buildExpression(expression: String) -> ValidationResult
     public static func buildEither(component: [ValidationResult]) -> [ValidationResult]
@@ -33,11 +33,11 @@ public protocol Describable {
 }
 // A read-only proxy for accessing UserSettings.
 
-public class SettingsProxy {
+public struct SettingsProxy {
 }
 // Main settings structure for a user.
 
-public class UserSettings {
+public struct UserSettings {
     // Creates a read-only proxy for these settings.
     public func asProxy() -> SettingsProxy
 }

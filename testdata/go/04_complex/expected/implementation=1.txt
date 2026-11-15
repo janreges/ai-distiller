@@ -18,16 +18,16 @@ type Dispatcher struct {
 
 func NewDispatcher(maxWorkers int) *Dispatcher {
     return &Dispatcher{
-    	JobChannel: make(chan Job, 100),
-    	maxWorkers: maxWorkers,
+        JobChannel: make(chan Job, 100),
+        maxWorkers: maxWorkers,
     }
 }
 func (d *Dispatcher) Run(ctx context.Context) {
     var wg sync.WaitGroup
     for i := 1; i <= d.maxWorkers; i++ {
-    	wg.Add(1)
-    	worker := Worker{id: i, jobChannel: d.JobChannel, wg: &wg}
-    	go worker.start(ctx) // The key goroutine spawn
+        wg.Add(1)
+        worker := Worker{id: i, jobChannel: d.JobChannel, wg: &wg}
+        go worker.start(ctx) // The key goroutine spawn
     }
     wg.Wait()
 }

@@ -13,7 +13,7 @@ module Loggable
 
 # Module for JSON serialization mixin
 module Serializable
-    def to_json(*args*)
+    def to_json(*args)
     def from_json(json_string)
     # private
     # Abstract method to be implemented by including classes
@@ -47,7 +47,7 @@ class Document
     # Method with different block patterns
     def find_sections(pattern = ...)
     # Basic method_missing metaprogramming
-    def method_missing(method_name, *args*, &block)
+    def method_missing(method_name, *args, &block)
     def respond_to_missing?(method_name, include_private = ...)
     # private
     def serializable_hash

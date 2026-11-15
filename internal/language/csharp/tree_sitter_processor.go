@@ -1472,6 +1472,11 @@ func (p *TreeSitterProcessor) processEnumMember(node *sitter.Node, source []byte
 					break
 				}
 			}
+		case "=":
+			// The grammar puts the value directly after the "=" token
+			if next := child.NextNamedSibling(); next != nil && field.DefaultValue == "" {
+				field.DefaultValue = string(source[next.StartByte():next.EndByte()])
+			}
 		}
 	}
 

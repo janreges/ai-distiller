@@ -125,7 +125,8 @@ them, while a private copy in one formatter would drift away.
   carries its own braces: the first line goes on the signature line after a
   space, a last line starting with `}` goes back to the signature's
   indentation, and the lines between are re-indented one level (four spaces)
-  deeper. Used by C++, Go, JavaScript, Kotlin, Rust, Swift and TypeScript.
+  deeper. Used by C++, Go, JavaScript, Kotlin, Rust, Swift and TypeScript. Go
+  first expands body tabs (`internal/formatter/body.go#expandLeadingTabs`).
 - `internal/formatter/body.go#dedentBody` returns the body's lines re-indented
   under a prefix and leaves the delimiters to the caller: Java and PHP wrap
   them in braces, Python and Ruby print them as they are. Both helpers go

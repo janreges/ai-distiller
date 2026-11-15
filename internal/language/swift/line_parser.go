@@ -229,6 +229,7 @@ func (p *LineParser) parseStruct(matches []string, lineNum int, file *ir.Distill
 		},
 		Name:       matches[2],
 		Visibility: p.parseVisibility(matches[1]),
+		Modifiers:  []ir.Modifier{ir.ModifierStruct},
 		Children:   []ir.DistilledNode{},
 	}
 
@@ -517,7 +518,7 @@ func (p *LineParser) parseProperty(matches []string, lineNum int, file *ir.Disti
 
 	// Extract default value
 	if matches[7] != "" {
-		field.DefaultValue = strings.TrimSpace(strings.TrimPrefix(matches[7], "="))
+		field.DefaultValue = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(matches[7]), "="))
 	}
 
 	p.addToParent(file, state, field)

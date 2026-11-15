@@ -267,3 +267,8 @@ func TestRuby_ShebangIsNotADocLine(t *testing.T) {
 	file = parseRuby(t, "#!/usr/bin/env ruby\nclass K; end\n")
 	assert.Equal(t, []string{"line:!/usr/bin/env ruby", "K"}, rubyOutline(file.Children))
 }
+
+func TestRuby_ScopedClassName(t *testing.T) {
+	file := parseRuby(t, "class Foo::Bar < Base\n  def m; end\nend\n")
+	assert.Equal(t, "Foo::Bar", findRubyClass(t, file, "Foo::Bar").Name)
+}

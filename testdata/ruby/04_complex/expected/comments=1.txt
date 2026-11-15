@@ -9,13 +9,13 @@ module DSLBuilder
         # Create a DSL method that accepts a block
         def dsl_method(name, &default_block)
         # Create chainable setter methods
-        def chainable_attr(*names*)
+        def chainable_attr(*names)
 
     # Internal DSL context class
     class DSLContext
         def initialize(target)
         # Forward missing methods to target
-        def method_missing(method_name, *args*, &block)
+        def method_missing(method_name, *args, &block)
         def respond_to_missing?(method_name, include_private = ...)
 
 # Module for creating fluent interfaces
@@ -24,7 +24,7 @@ module FluentInterface
 
     module ClassMethods
         # Create a fluent builder pattern
-        def fluent_builder(*method_names*)
+        def fluent_builder(*method_names)
 
 # Advanced reflection and dynamic class creation
 module ReflectionUtils
@@ -40,10 +40,10 @@ class ConfigurationBuilder
     def initialize
     # DSL method for defining settings
     # Method chaining for array operations
-    def add_middleware(middleware_class, *options*)
+    def add_middleware(middleware_class, *options)
     def add_plugin(plugin_name, &configuration_block)
     # Dynamic method creation based on patterns
-    def method_missing(method_name, *args*, &block)
+    def method_missing(method_name, *args, &block)
     def respond_to_missing?(method_name, include_private = ...)
     # Convert configuration to hash
     def to_hash
@@ -54,7 +54,7 @@ class PluginConfiguration
     def option(key, value)
     def timeout(seconds)
     def retries(count)
-    def method_missing(method_name, *args*)
+    def method_missing(method_name, *args)
     def respond_to_missing?(method_name, include_private = ...)
     def to_hash
 

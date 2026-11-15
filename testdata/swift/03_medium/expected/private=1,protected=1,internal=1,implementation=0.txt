@@ -2,8 +2,8 @@
 import Foundation
 // A simple LIFO stack.
 
-public class Stack {
-    private var storage: [Element] = = []
+public struct Stack {
+    private var storage: [Element] = []
     // Pushes a new element.
     public func push(element: Element)
     // Returns the top element without removing it.
@@ -16,7 +16,7 @@ public class Stack {
     internal var count: Int {
 }
 
-public class extension Stack {
+public extension Stack {
     // Computes the arithmetic mean of all integers in the stack.
     // - Throws: `MathError.emptyStack` if there are no elements.
     internal func average() -> Double
@@ -38,19 +38,19 @@ public protocol Cacheable {
 }
 // Dictionary already satisfies `Cacheable` when paired properly.
 
-internal class extension Dictionary: Cacheable : Cacheable {
+internal extension Dictionary: Cacheable : Cacheable {
     public func insert(value: Value, key: Key)
     public func contains(key: Key) -> Bool
 }
 // Generic cache with expiration
 
-public class ExpiringCache {
+public struct ExpiringCache {
 }
 
-private class CacheEntry {
+private struct CacheEntry {
     internal let value: Value
     internal let expiration: Date
-    private var storage: [Key: CacheEntry] = = [:]
+    private var storage: [Key: CacheEntry] = [:]
     private let timeToLive: TimeInterval
     public func insert(value: Value, key: Key)
     public func value(key: Key) -> Value?

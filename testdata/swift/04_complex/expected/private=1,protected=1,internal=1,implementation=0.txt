@@ -4,7 +4,7 @@ import Combine
 // A property wrapper that clamps a numeric value within a given range
 // and publishes changes via a Combine publisher.
 
-public class Clamped {
+public struct Clamped {
     private var value: Value
     private let range: ClosedRange<Value>
     public var wrappedValue: Value {
@@ -21,7 +21,7 @@ public enum ValidationResult {
 }
 // A result builder for creating an array of `ValidationResult` declaratively.
 
-public class ConfigurationBuilder {
+public struct ConfigurationBuilder {
     public static func buildBlock(components: ValidationResult...) -> [ValidationResult]
     public static func buildExpression(expression: String) -> ValidationResult
     public static func buildEither(component: [ValidationResult]) -> [ValidationResult]
@@ -38,14 +38,14 @@ public protocol Describable {
     public func reset()
 }
 
-internal class extension Describable {
+internal extension Describable {
     public var description: String {
     // Private helper for description validation
     private func validateDescription() -> Bool
 }
 
-private class AudioSettings: Describable, Equatable {
-    internal var isMuted: Bool = = false
+private struct AudioSettings: Describable, Equatable {
+    internal var isMuted: Bool = false
     internal var description: String { "Audio: Volume \(volume), Muted: \(isMuted)" }
     internal func reset()
     // Private validation method
@@ -53,14 +53,14 @@ private class AudioSettings: Describable, Equatable {
 }
 // A read-only proxy for accessing UserSettings.
 
-public class SettingsProxy {
+public struct SettingsProxy {
     private let settings: UserSettings
     // Private helper for proxy validation
     private func isValidProxy() -> Bool
 }
 // Main settings structure for a user.
 
-public class UserSettings {
+public struct UserSettings {
     internal var username: String
     // Creates a read-only proxy for these settings.
     public func asProxy() -> SettingsProxy

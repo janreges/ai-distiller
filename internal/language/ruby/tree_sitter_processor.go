@@ -103,7 +103,7 @@ func (p *TreeSitterProcessor) processClass(node *sitter.Node, source []byte, fil
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
 		switch child.Type() {
-		case "constant":
+		case "constant", "scope_resolution":
 			class.Name = string(source[child.StartByte():child.EndByte()])
 		case "superclass":
 			// Find the constant within superclass

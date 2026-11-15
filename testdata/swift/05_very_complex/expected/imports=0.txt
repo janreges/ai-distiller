@@ -17,16 +17,16 @@ public class EventBus {
 // Uses Mirror to generate a debug description of any event payload.
 // Advanced reflection utility
 
-public class ReflectionAnalyzer {
+public struct ReflectionAnalyzer {
 }
 
-public class StructureInfo {
+public struct StructureInfo {
     public let typeName: String
     public let properties: [PropertyInfo]
     public let childCount: Int
 }
 
-public class PropertyInfo {
+public struct PropertyInfo {
     public let name: String
     public let type: String
 }
@@ -38,7 +38,7 @@ public final class ThreadSafeQueue {
     public func makeIterator() -> IndexingIterator<[T]>
 }
 
-public class CircularBuffer {
+public struct CircularBuffer {
     public var startIndex: Int { 0 }
     public var endIndex: Int { count }
     public func index(i: Int) -> Int

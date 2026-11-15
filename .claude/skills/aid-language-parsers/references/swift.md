@@ -39,7 +39,8 @@ Protocol requirements are `public`. Swift produces no `protected`.
   declared inside another type becomes a top-level node, and the members that
   follow it in the outer type are attached to the inner one.
 - `class` is a `DistilledClass` (`final` adds the modifier `final`); `struct` a
-  `DistilledClass` without a modifier; `actor` a `DistilledClass` with the
+  `DistilledClass` with the modifier `struct` (the formatter prints `struct`;
+  an extension, whose name starts with `extension `, prints with no keyword); `actor` a `DistilledClass` with the
   modifier `async`; `protocol` a `DistilledInterface` whose requirements carry
   the modifier `abstract`; `enum` a `DistilledEnum` whose cases are
   `DistilledField`s; `typealias` a `DistilledTypeAlias`.

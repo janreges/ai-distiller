@@ -44,7 +44,7 @@ they read `testdata/`, the conformance fixtures or a built binary.
 | Package | Files | What it asserts |
 |---|---|---|
 | `internal/stripper` | `stripper_test.go` | removal by visibility and of bodies; `--expand` on functions, classes, structs and qualified names; `--public=0`; a doc comment leaves with the declaration it documents and other comments stay; no node field is lost |
-| `internal/formatter` | `<lang>_formatter_test.go` (all languages but Swift) | the text rendering of bodies, comments, shebangs, enums, namespaces and visibility markers |
+| `internal/formatter` | `<lang>_formatter_test.go` (all twelve languages) | the text rendering of bodies, comments, shebangs, enums, namespaces, visibility markers and type headers (Swift `struct` and `extension`) |
 | | `body_test.go`, `comment_test.go`, `visibility_test.go` | shared body dedent and rendering, C-style comment writing, visibility prefixes |
 | | `markdown_test.go`, `jsonl_test.go`, `json_structured_test.go`, `xml_test.go`, `registry_test.go` | each non-text format on hand-built IR; the format registry |
 | `internal/cli` | `root_test.go` | output file names; flag parsing and its mapping to processing options (include and exclude lists, fields and methods, `--public=0`); the `-v` count |

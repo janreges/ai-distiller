@@ -12,7 +12,7 @@ module AdvancedMetaprogramming
 
     module ClassMethods
         # Method chain interception
-        def intercept_method_chain(*method_names*, &interceptor)
+        def intercept_method_chain(*method_names, &interceptor)
             method_names.each do |method_name|
               @intercepted_methods[method_name] = interceptor
 

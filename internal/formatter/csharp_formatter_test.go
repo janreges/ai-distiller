@@ -1,10 +1,12 @@
 package formatter
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/janreges/ai-distiller/internal/ir"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCSharpFormatter_Comments(t *testing.T) {
@@ -61,7 +63,16 @@ public record R(
     int Q);
 public enum E {
     /// a doc
-    public E A;
+    A
 }
 `, got)
+}
+
+func TestCSharpFormatter_EnumMembers(t *testing.T) {
+	var b strings.Builder
+	e := &ir.DistilledEnum{Name: "Color", Visibility: ir.VisibilityPublic, Children: []ir.DistilledNode{
+		&ir.DistilledField{Name: "Red"}, &ir.DistilledField{Name: "Green", DefaultValue: "2"},
+	}}
+	require.NoError(t, NewCSharpFormatter().FormatNode(&b, e, 0))
+	assert.Equal(t, "public enum Color {\n    Red,\n    Green = 2\n}\n", b.String())
 }

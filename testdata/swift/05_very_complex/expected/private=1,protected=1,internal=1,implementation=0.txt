@@ -6,7 +6,7 @@ public protocol Event {
     public var payload: Payload
 }
 
-internal class extension Event {
+internal extension Event {
     public static var name: String { String(describing: Self.self) }
     // Private helper for event validation
     private func isValidEvent() -> Bool
@@ -18,14 +18,14 @@ public protocol EventHandler: AnyObject {
 }
 // A weak reference wrapper to prevent retain cycles in the subscriber list.
 
-private class Weak {
+private struct Weak {
     // Private validation helper
     private var isAlive: Bool {
 }
 // A type-erased wrapper for any `EventHandler`.
 // This allows storing handlers for different event types in the same collection.
 
-private class AnyEventHandler {
+private struct AnyEventHandler {
     private let _handle: (any Event) async -> Void
     private let canHandle: (any Event.Type) -> Bool
     internal let objectId: ObjectIdentifier
@@ -34,9 +34,9 @@ private class AnyEventHandler {
 // An actor that manages event subscriptions and dispatches events concurrently.
 
 public class EventBus {
-    private var handlers: [String: [Weak<AnyObject>]] = = [:]
-    private var handlerMap: [ObjectIdentifier: AnyEventHandler] = = [:]
-    private var eventHistory: [String] = = []
+    private var handlers: [String: [Weak<AnyObject>]] = [:]
+    private var handlerMap: [ObjectIdentifier: AnyEventHandler] = [:]
+    private var eventHistory: [String] = []
     // Private method for handler cleanup
     private func cleanupExpiredHandlers()
     // Internal method for bus statistics
@@ -46,10 +46,10 @@ public class EventBus {
 // Uses Mirror to generate a debug description of any event payload.
 // Advanced reflection utility
 
-public class ReflectionAnalyzer {
+public struct ReflectionAnalyzer {
 }
 
-public class StructureInfo {
+public struct StructureInfo {
     public let typeName: String
     public let properties: [PropertyInfo]
     public let childCount: Int
@@ -57,7 +57,7 @@ public class StructureInfo {
     private func isValid() -> Bool
 }
 
-public class PropertyInfo {
+public struct PropertyInfo {
     public let name: String
     public let type: String
     // Private helper for property validation
@@ -66,7 +66,7 @@ public class PropertyInfo {
 // A basic thread-safe queue implementing Sequence.
 
 public final class ThreadSafeQueue {
-    private var elements: [T] = = []
+    private var elements: [T] = []
     public func enqueue(element: T)
     public func dequeue() -> T?
     public func makeIterator() -> IndexingIterator<[T]>
@@ -76,7 +76,7 @@ public final class ThreadSafeQueue {
     internal var count: Int {
 }
 
-public class CircularBuffer {
+public struct CircularBuffer {
     private var storage: [Element?]
     private let capacity: Int
     public var startIndex: Int { 0 }
@@ -102,7 +102,7 @@ public protocol EventLoggerDelegate: AnyObject {
 }
 
 public class ActivityMonitor {
-    private var analysisCache: [String: StructureInfo] = = [:]
+    private var analysisCache: [String: StructureInfo] = [:]
     public func record(entry: String)
     // Private method for cache management
     private func clearCache()
@@ -110,17 +110,17 @@ public class ActivityMonitor {
     internal var totalLogs: Int {
 }
 
-internal class UserLoggedInEvent: Event {
+internal struct UserLoggedInEvent: Event {
 }
 
-internal class Payload {
+internal struct Payload {
     internal let userId: UUID
     internal let name: String
     internal let timestamp: Date
     internal let payload: Payload
 }
 
-internal class DataDownloadedEvent: Event {
+internal struct DataDownloadedEvent: Event {
     internal let payload: Data
 }
 

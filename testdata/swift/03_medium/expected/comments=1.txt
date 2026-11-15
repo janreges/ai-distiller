@@ -3,7 +3,7 @@ import Foundation
 //  - Generic Stack
 // A simple LIFO stack.
 
-public class Stack {
+public struct Stack {
     // Pushes a new element.
     public func push(element: Element)
     // Returns the top element without removing it.
@@ -12,7 +12,7 @@ public class Stack {
     public func pop() -> Element?
 }
 
-public class extension Stack {
+public extension Stack {
 }
 // Errors for math-centric operations.
 
@@ -30,7 +30,7 @@ public protocol Cacheable {
 }
 // Generic cache with expiration
 
-public class ExpiringCache {
+public struct ExpiringCache {
 }
 //  - Demo
 </file>

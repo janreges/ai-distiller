@@ -50,3 +50,11 @@ func TestBraceDelta(t *testing.T) {
 	assert.Equal(t, -1, braceDelta("}"))
 	assert.Equal(t, 0, braceDelta("func a() { return 1 }"))
 }
+
+func TestLineParser_PropertyDefault(t *testing.T) {
+	f := parse("public struct P {\n    public var x: Int = 0\n    public var f: (Int) -> Bool = { $0 == 1 }\n}\n")
+	p := f.Children[0].(*ir.DistilledClass)
+	assert.Contains(t, p.Modifiers, ir.ModifierStruct)
+	assert.Equal(t, "0", p.Children[0].(*ir.DistilledField).DefaultValue)
+	assert.Equal(t, "{ $0 == 1 }", p.Children[1].(*ir.DistilledField).DefaultValue)
+}

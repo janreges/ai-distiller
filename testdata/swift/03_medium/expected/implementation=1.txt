@@ -2,7 +2,7 @@
 import Foundation
 // A simple LIFO stack.
 
-public class Stack {
+public struct Stack {
     // Pushes a new element.
     public func push(element: Element) {
         storage.append(element)
@@ -13,7 +13,7 @@ public class Stack {
     public func pop() -> Element? { storage.popLast() }
 }
 
-public class extension Stack {
+public extension Stack {
 }
 // Errors for math-centric operations.
 
@@ -30,6 +30,6 @@ public protocol Cacheable {
 }
 // Generic cache with expiration
 
-public class ExpiringCache {
+public struct ExpiringCache {
 }
 </file>

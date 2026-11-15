@@ -126,9 +126,30 @@ func (f *CSharpFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent 
 		if err != nil {
 			return err
 		}
-		// Format enum members
-		if err := f.FormatNodes(w, n.Children, indent+1); err != nil {
-			return err
+		// Format enum members: a field is a member name with an optional value
+		memberIndent := strings.Repeat("    ", indent+1)
+		lastField := -1
+		for i, child := range n.Children {
+			if _, ok := child.(*ir.DistilledField); ok {
+				lastField = i
+			}
+		}
+		for i, child := range n.Children {
+			field, ok := child.(*ir.DistilledField)
+			if !ok {
+				if err := f.FormatNode(w, child, indent+1); err != nil {
+					return err
+				}
+				continue
+			}
+			line := memberIndent + field.Name
+			if field.DefaultValue != "" {
+				line += " = " + field.DefaultValue
+			}
+			if i < lastField {
+				line += ","
+			}
+			fmt.Fprintln(w, line)
 		}
 		// Closing brace
 		indentStr := strings.Repeat("    ", indent)

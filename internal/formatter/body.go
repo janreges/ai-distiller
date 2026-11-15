@@ -116,6 +116,20 @@ func trimBlankEdges(lines []string) []string {
 	return lines[start:end]
 }
 
+// expandLeadingTabs expands the tabs that indent each line of a body to
+// 4-column stops, so a rendered body is indented with spaces only. Only the
+// leading whitespace changes.
+func expandLeadingTabs(impl string) string {
+	lines := strings.Split(impl, "\n")
+	for i, l := range lines {
+		ws := leadingSpace(l)
+		if strings.Contains(ws, "\t") {
+			lines[i] = expandTabs(ws) + l[len(ws):]
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
 // renderBody renders a body that carries its own braces ("{ ... }") as the
 // text that follows a signature. indent is the signature line's indentation.
 // The result always ends with "\n".

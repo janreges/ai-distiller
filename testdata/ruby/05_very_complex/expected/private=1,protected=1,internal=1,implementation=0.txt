@@ -7,7 +7,7 @@ module AdvancedMetaprogramming
 
     module ClassMethods
         # Method chain interception
-        def intercept_method_chain(*method_names*, &interceptor)
+        def intercept_method_chain(*method_names, &interceptor)
         # Create method chains that can be dynamically extended
         def method_chain(name, &definition)
 

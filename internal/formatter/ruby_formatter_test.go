@@ -1,10 +1,12 @@
 package formatter
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/janreges/ai-distiller/internal/ir"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRubyFormatter_Comments(t *testing.T) {
@@ -78,4 +80,13 @@ class A
     # r doc
     def r
 `, formatFileAs(t, "ruby", class))
+}
+
+func TestRubyFormatter_VariadicParameter(t *testing.T) {
+	for _, name := range []string{"args", "*args"} {
+		var b strings.Builder
+		fn := &ir.DistilledFunction{Name: "pub", Visibility: ir.VisibilityPublic, Parameters: []ir.Parameter{{Name: name, IsVariadic: true}}}
+		require.NoError(t, NewRubyFormatter().FormatNode(&b, fn, 0))
+		assert.Equal(t, "def pub(*args)\n", b.String(), name)
+	}
 }

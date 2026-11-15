@@ -28,5 +28,5 @@ private func demo()
 // Private helper for validation
 private func validateTemperature(value: Double, scale: TemperatureScale) -> Bool
 // Internal constant for configuration
-internal let defaultScale: TemperatureScale = = .celsius
+internal let defaultScale: TemperatureScale = .celsius
 </file>

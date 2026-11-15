@@ -21,7 +21,7 @@ module Loggable
 
 # Module for JSON serialization mixin
 module Serializable
-    def to_json(*args*)
+    def to_json(*args)
         JSON.generate(serializable_hash, *args)
     def from_json(json_string)
         data = JSON.parse(json_string)
@@ -83,7 +83,7 @@ class Document
           sections
         end
     # Basic method_missing metaprogramming
-    def method_missing(method_name, *args*, &block)
+    def method_missing(method_name, *args, &block)
         if method_name.to_s.start_with?('find_by_')
           attribute = method_name.to_s.sub('find_by_', '')
           search_value = args.first

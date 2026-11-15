@@ -270,8 +270,12 @@ func (f *RubyFormatter) formatParameters(w io.Writer, params []ir.Parameter) {
 			fmt.Fprintf(w, ", ")
 		}
 
-		// Parameter name
-		fmt.Fprintf(w, "%s", param.Name)
+		// Splat operator
+		if param.IsVariadic {
+			fmt.Fprintf(w, "*%s", strings.TrimPrefix(param.Name, "*"))
+		} else {
+			fmt.Fprintf(w, "%s", param.Name)
+		}
 
 		// Default value
 		if param.DefaultValue != "" {
@@ -282,11 +286,6 @@ func (f *RubyFormatter) formatParameters(w io.Writer, params []ir.Parameter) {
 		// if param.IsKeywordOnly {
 		//	fmt.Fprintf(w, ":")
 		// }
-
-		// Splat operator
-		if param.IsVariadic {
-			fmt.Fprintf(w, "*")
-		}
 	}
 }
 

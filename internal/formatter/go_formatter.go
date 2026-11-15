@@ -345,7 +345,7 @@ func (f *GoFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, inde
 
 	// Implementation: the verbatim body, braces included
 	if fn.Implementation != "" {
-		fmt.Fprint(w, renderBody(fn.Implementation, indent))
+		fmt.Fprint(w, renderBody(expandLeadingTabs(fn.Implementation), indent))
 		f.printedBody = fn.Location
 	} else {
 		fmt.Fprintln(w)
@@ -396,7 +396,7 @@ func (f *GoFormatter) formatMethod(w io.Writer, fn *ir.DistilledFunction, receiv
 
 	// Implementation: the verbatim body, braces included
 	if fn.Implementation != "" {
-		fmt.Fprint(w, renderBody(fn.Implementation, indent))
+		fmt.Fprint(w, renderBody(expandLeadingTabs(fn.Implementation), indent))
 		f.printedBody = fn.Location
 	} else {
 		fmt.Fprintln(w)

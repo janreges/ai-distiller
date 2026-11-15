@@ -9,7 +9,7 @@ module MetaProgrammingUtils
         # Dynamically define getter methods
         def add_dynamic_accessor(name, default_value = ...)
         # Create methods that delegate to another object
-        def delegate_to(target, *methods*)
+        def delegate_to(target, *methods)
         # Class method to track dynamic methods
         def dynamic_methods
 
@@ -17,7 +17,7 @@ module MetaProgrammingUtils
 module EigenclassDemo
     def self.extended(base)
     # This becomes a class method when extended
-    def custom_new(*args*, &block)
+    def custom_new(*args, &block)
 
 # Advanced module with hooks and callbacks
 module Trackable
@@ -47,7 +47,7 @@ class ConfigurableModel
     def self.method_added(method_name)
     # private
     # Private method using send and respond_to?
-    def invoke_if_exists(method_name, *args*)
+    def invoke_if_exists(method_name, *args)
     # private
     # Method using instance_eval
     def configure(&block)

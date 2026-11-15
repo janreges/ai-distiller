@@ -12,7 +12,7 @@ type Cache[K comparable, V any] struct {}
 
 func New[K comparable, V any]() *Cache[K, V] {
     return &Cache[K, V]{
-    	data: make(map[K]V),
+        data: make(map[K]V),
     }
 }
 // Set adds or updates a value in the cache.

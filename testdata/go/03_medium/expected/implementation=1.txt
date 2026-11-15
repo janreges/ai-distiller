@@ -14,7 +14,7 @@ type Config struct {
 // Validate checks the configuration.
 func (c *Config) Validate() error {
     if c.Port <= 0 {
-    	return &ConfigError{Field: "Port", Reason: "must be positive"}
+        return &ConfigError{Field: "Port", Reason: "must be positive"}
     }
     return nil
 }
@@ -37,7 +37,7 @@ type Server struct {
 func (s *Server) Start() error {
     // The AI should understand that s.Validate() is a promoted method from Config.
     if err := s.Validate(); err != nil {
-    	return err // This could be a *ConfigError
+        return err // This could be a *ConfigError
     }
     // ... start listening on s.Host and s.Port
     fmt.Printf("Starting server on %s:%d\n", s.Host, s.Port)

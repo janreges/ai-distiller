@@ -12,6 +12,10 @@ class ConfWidget
     a
   end
 
+  def conf_splat(*conf_args)
+    1
+  end
+
   private
 
   # CONF_PRIVATE_DOC

@@ -104,7 +104,8 @@ var fixtures = []fixture{
 		Private:   []string{"confPrivate"},
 		ExpandSym: "confPublic",
 	}), check{Cap: "body-indent", Flags: []string{"--implementation=1"},
-		Contains: []string{"        let a = \"CONF_BODY_A\"\n        return a\n    }\n"}})},
+		Contains: []string{"        let a = \"CONF_BODY_A\"\n        return a\n    }\n"}},
+		check{Cap: "struct-and-default", Contains: []string{"public struct ConfPoint", "confX: Int = 0"}, NotContains: []string{"= = 0"}})},
 	{Lang: "ruby", File: "ruby/sample.rb", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "conf_public", "conf_other"},
 		Private:   []string{"conf_private"},
@@ -113,6 +114,7 @@ var fixtures = []fixture{
 		Contains: []string{"        a = \"CONF_BODY_A\"\n        a\n"}},
 		check{Cap: "require-kept", Flags: []string{"--filter-imports=false"}, Contains: []string{"json"}},
 		check{Cap: "attr-reader", Contains: []string{"conf_name"}},
+		check{Cap: "splat-param", Contains: []string{"conf_splat(*conf_args)"}},
 		check{Cap: "include-kept", Contains: []string{"Comparable"}})},
 	{Lang: "java", File: "java/ConfWidget.java", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
@@ -128,7 +130,8 @@ var fixtures = []fixture{
 		Private:   []string{"ConfPrivate"},
 		ExpandSym: "ConfPublic",
 	}), check{Cap: "compound-hidden-by-default", NotContains: []string{"ConfProtInt"}},
-		check{Cap: "compound-with-protected", Flags: []string{"--protected=1"}, Contains: []string{"protected internal string ConfProtInt"}})},
+		check{Cap: "compound-with-protected", Flags: []string{"--protected=1"}, Contains: []string{"protected internal string ConfProtInt"}},
+		check{Cap: "enum-members", Contains: []string{"ConfRed,", "ConfGreen = 2"}, NotContains: []string{"static const"}})},
 	{Lang: "kotlin", File: "kotlin/ConfWidget.kt", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
 		Private:   []string{"confPrivate"},

@@ -34,7 +34,7 @@ module MetaProgrammingUtils
               !!instance_variable_get("@#{name}")
             end
         # Create methods that delegate to another object
-        def delegate_to(target, *methods*)
+        def delegate_to(target, *methods)
             methods.each do |method|
               define_method(method) do |*args, &block|
                 target_obj = instance_variable_get("@#{target}")
@@ -55,7 +55,7 @@ module EigenclassDemo
           end
         end
     # This becomes a class method when extended
-    def custom_new(*args*, &block)
+    def custom_new(*args, &block)
         instance = allocate
         instance.send(:initialize, *args, &block) if instance.respond_to?(:initialize, true)
 
