@@ -38,14 +38,14 @@ public class PropertyInfo {
 
 public final class ThreadSafeQueue {
     public func enqueue(element: T)
-    public func dequeue() -> T? {
-    public func makeIterator() -> IndexingIterator<[T]> {
+    public func dequeue() -> T?
+    public func makeIterator() -> IndexingIterator<[T]>
 }
 
 public class CircularBuffer {
     public var startIndex: Int { 0 }
     public var endIndex: Int { count }
-    public func index(i: Int) -> Int {
+    public func index(i: Int) -> Int
     public var count: Int {
 }
 // A service that demonstrates complex memory management patterns.

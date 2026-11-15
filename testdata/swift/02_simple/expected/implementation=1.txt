@@ -27,8 +27,12 @@ public class Rectangle: Describable {
 public class UIRectangle: Rectangle {
     // Override with additional behavior
     // Public method specific to UI rectangles
-    public func show()
+    public func show() {
+        isVisible = true
+    }
     // Public method to hide rectangle
-    public func hide()
+    public func hide() {
+        isVisible = false
+    }
 }
 </file>

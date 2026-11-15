@@ -1,8 +1,6 @@
 package swift
 
 import (
-	"bufio"
-	"bytes"
 	"regexp"
 	"strings"
 
@@ -53,7 +51,7 @@ func NewLineParser(source []byte, filename string) *LineParser {
 	return &LineParser{
 		source:   source,
 		filename: filename,
-		lines:    strings.Split(string(source), "\n"),
+		lines:    strings.Split(strings.ReplaceAll(string(source), "\r\n", "\n"), "\n"),
 
 		// Compile regular expressions
 		importRe:           regexp.MustCompile(`^\s*import\s+(\S+)`),
@@ -83,12 +81,10 @@ func (p *LineParser) Parse() *ir.DistilledFile {
 	}
 
 	state := &parserState{}
-	scanner := bufio.NewScanner(bytes.NewReader(p.source))
-	lineNum := 0
 
-	for scanner.Scan() {
-		lineNum++
-		line := scanner.Text()
+	for i := 0; i < len(p.lines); i++ {
+		lineNum := i + 1
+		line := p.lines[i]
 		trimmedLine := strings.TrimSpace(line)
 
 		// DEBUG
@@ -127,7 +123,7 @@ func (p *LineParser) Parse() *ir.DistilledFile {
 		}
 
 		// Track brace levels
-		state.braceLevel += strings.Count(line, "{") - strings.Count(line, "}")
+		state.braceLevel += braceDelta(line)
 
 		// Parse different constructs
 		if matches := p.importRe.FindStringSubmatch(line); matches != nil {
@@ -156,7 +152,7 @@ func (p *LineParser) Parse() *ir.DistilledFile {
 				p.parseProtocolProperty(matches, lineNum, state)
 			}
 		} else if matches := p.functionRe.FindStringSubmatch(line); matches != nil {
-			p.parseFunction(matches, lineNum, file, state)
+			i = p.parseFunction(matches, i, file, state)
 		} else if matches := p.propertyRe.FindStringSubmatch(line); matches != nil {
 			p.parseProperty(matches, lineNum, file, state)
 		} else if matches := p.typeAliasRe.FindStringSubmatch(line); matches != nil {
@@ -346,8 +342,12 @@ func (p *LineParser) parseActor(matches []string, lineNum int, file *ir.Distille
 	file.Children = append(file.Children, class)
 }
 
-// parseFunction parses function declarations
-func (p *LineParser) parseFunction(matches []string, lineNum int, file *ir.DistilledFile, state *parserState) {
+// parseFunction parses the function declared on line index i. A body that
+// opens on that line is stored, braces included, in Implementation, and its
+// lines are consumed so that they are never parsed as members. It returns the
+// index of the last line it consumed.
+func (p *LineParser) parseFunction(matches []string, i int, file *ir.DistilledFile, state *parserState) int {
+	lineNum := i + 1
 	fn := &ir.DistilledFunction{
 		BaseNode: ir.BaseNode{
 			Location: ir.Location{StartLine: lineNum, EndLine: lineNum},
@@ -366,12 +366,126 @@ func (p *LineParser) parseFunction(matches []string, lineNum int, file *ir.Disti
 		fn.Modifiers = append(fn.Modifiers, ir.ModifierAsync)
 	}
 
-	// Parse return type
+	// Parse return type; the capture runs to the end of the line, so cut the
+	// body that may follow it.
 	if matches[5] != "" && matches[8] != "" { // Changed from 6,9 to 5,8
-		fn.Returns = &ir.TypeRef{Name: strings.TrimSpace(matches[8])}
+		ret, _, _ := strings.Cut(matches[8], "{")
+		if ret = strings.TrimSpace(ret); ret != "" {
+			fn.Returns = &ir.TypeRef{Name: ret}
+		}
+	}
+
+	last := i
+	if body, end, ok := p.functionBody(i); ok {
+		fn.Implementation = body
+		fn.Location.EndLine = end + 1
+		// Line i is already counted by the caller.
+		for _, l := range p.lines[i+1 : end+1] {
+			state.braceLevel += braceDelta(l)
+		}
+		last = end
 	}
 
 	p.addToParent(file, state, fn)
+	return last
+}
+
+// functionBody returns the body that opens on line index start: the text from
+// the first '{' outside parentheses, string literals and comments up to its
+// matching '}', with trailing whitespace trimmed from every line, and the index
+// of the line holding that '}'. ok is false when no body opens on the line or
+// the body never closes.
+func (p *LineParser) functionBody(start int) (body string, end int, ok bool) {
+	open, parens := -1, 0
+	scanCode(p.lines[start], func(i int, c byte) bool {
+		switch c {
+		case '(':
+			parens++
+		case ')':
+			parens--
+		case '{':
+			if parens == 0 {
+				open = i
+				return false
+			}
+		}
+		return true
+	})
+	if open < 0 {
+		return "", 0, false
+	}
+
+	var lines []string
+	depth := 0
+	for n := start; n < len(p.lines); n++ {
+		line := p.lines[n]
+		if n == start {
+			line = line[open:]
+		}
+		closeAt := -1
+		scanCode(line, func(i int, c byte) bool {
+			switch c {
+			case '{':
+				depth++
+			case '}':
+				depth--
+				if depth == 0 {
+					closeAt = i
+					return false
+				}
+			}
+			return true
+		})
+		if closeAt >= 0 {
+			lines = append(lines, strings.TrimRight(line[:closeAt+1], " \t"))
+			return strings.Join(lines, "\n"), n, true
+		}
+		lines = append(lines, strings.TrimRight(line, " \t"))
+	}
+	return "", 0, false
+}
+
+// braceDelta returns the number of '{' minus the number of '}' on line,
+// ignoring braces inside double-quoted string literals and after a //
+// comment.
+func braceDelta(line string) int {
+	delta := 0
+	scanCode(line, func(_ int, c byte) bool {
+		switch c {
+		case '{':
+			delta++
+		case '}':
+			delta--
+		}
+		return true
+	})
+	return delta
+}
+
+// scanCode calls visit with the offset of every byte of line that is code:
+// outside double-quoted string literals (whose quotes are not visited either)
+// and before a // comment. Scanning stops early when visit returns false.
+func scanCode(line string, visit func(i int, c byte) bool) {
+	inString := false
+	for i := 0; i < len(line); i++ {
+		c := line[i]
+		switch {
+		case inString:
+			if c == '\\' {
+				i++ // skip the escaped character
+			} else if c == '"' {
+				inString = false
+			}
+		case c == '"':
+			inString = true
+		case c == '/' && i+1 < len(line) && line[i+1] == '/':
+			return
+		default:
+			if !visit(i, c) {
+				return
+			}
+		}
+	}
 }
 
 // parseProperty parses property declarations

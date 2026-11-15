@@ -9,7 +9,7 @@ public protocol Event {
 internal class extension Event {
     public static var name: String { String(describing: Self.self) }
     // Private helper for event validation
-    private func isValidEvent() -> Bool {
+    private func isValidEvent() -> Bool
 }
 // A protocol for a type that can handle a specific kind of event.
 
@@ -54,24 +54,24 @@ public class StructureInfo {
     public let properties: [PropertyInfo]
     public let childCount: Int
     // Private validation method
-    private func isValid() -> Bool {
+    private func isValid() -> Bool
 }
 
 public class PropertyInfo {
     public let name: String
     public let type: String
     // Private helper for property validation
-    private func validateProperty() -> Bool {
+    private func validateProperty() -> Bool
 }
 // A basic thread-safe queue implementing Sequence.
 
 public final class ThreadSafeQueue {
     private var elements: [T] = = []
     public func enqueue(element: T)
-    public func dequeue() -> T? {
-    public func makeIterator() -> IndexingIterator<[T]> {
+    public func dequeue() -> T?
+    public func makeIterator() -> IndexingIterator<[T]>
     // Private helper for queue validation
-    private func validateQueue() -> Bool {
+    private func validateQueue() -> Bool
     // Internal method for queue statistics
     internal var count: Int {
 }
@@ -81,10 +81,10 @@ public class CircularBuffer {
     private let capacity: Int
     public var startIndex: Int { 0 }
     public var endIndex: Int { count }
-    public func index(i: Int) -> Int {
+    public func index(i: Int) -> Int
     public var count: Int {
     // Private helper for buffer validation
-    private func isValidBuffer() -> Bool {
+    private func isValidBuffer() -> Bool
     // Internal method for buffer manipulation
     internal func append(element: Element)
 }
@@ -129,7 +129,7 @@ internal class UserActivityLogger: EventHandler {
     internal typealias HandledEvent = UserLoggedInEvent
     internal func handle(event: UserLoggedInEvent)
     // Private helper for activity validation
-    private func validateActivity() -> Bool {
+    private func validateActivity() -> Bool
 }
 private func veryComplexDemo()
 </file>

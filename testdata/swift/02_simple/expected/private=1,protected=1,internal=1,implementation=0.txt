@@ -14,7 +14,7 @@ public class Point: Describable, Equatable, Hashable {
     public var magnitude: Double {
     public var description: String {
     // Private helper for coordinate validation
-    private func isValid() -> Bool {
+    private func isValid() -> Bool
     // Internal method for coordinate transformation
     internal func transform(offset: Point)
 }
@@ -27,7 +27,7 @@ public class Rectangle: Describable {
     // Area is recomputed only when cache invalidated.
     public var area: Int {
     // Private method for bounds checking
-    private func contains(point: Point) -> Bool {
+    private func contains(point: Point) -> Bool
     // Protected method for subclasses
     internal func updateOrigin(newOrigin: Point)
 }
@@ -41,8 +41,7 @@ public class UIRectangle: Rectangle {
     // Public method to hide rectangle
     public func hide()
     // Private UI-specific validation
-    private func validateForDisplay() -> Bool {
+    private func validateForDisplay() -> Bool
 }
 internal func descriptorDemo()
-internal let describables: [Describable] = = [p, r]
 </file>

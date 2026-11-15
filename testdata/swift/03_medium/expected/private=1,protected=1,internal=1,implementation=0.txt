@@ -7,11 +7,11 @@ public class Stack {
     // Pushes a new element.
     public func push(element: Element)
     // Returns the top element without removing it.
-    public func peek() -> Element? { storage.last }
+    public func peek() -> Element?
     // Removes and returns the top element.
-    public func pop() -> Element? { storage.popLast() }
+    public func pop() -> Element?
     // Private helper for validation
-    private func isValid() -> Bool {
+    private func isValid() -> Bool
     // Internal method for debugging
     internal var count: Int {
 }
@@ -19,9 +19,9 @@ public class Stack {
 public class extension Stack {
     // Computes the arithmetic mean of all integers in the stack.
     // - Throws: `MathError.emptyStack` if there are no elements.
-    internal func average() -> Double {
+    internal func average() -> Double
     // Private helper for numeric validation
-    private func validateNumericElements() -> Bool {
+    private func validateNumericElements() -> Bool
 }
 // Errors for math-centric operations.
 
@@ -41,7 +41,7 @@ public protocol Cacheable {
 
 internal class extension Dictionary: Cacheable : Cacheable {
     public func insert(value: Value, key: Key)
-    public func contains(key: Key) -> Bool {
+    public func contains(key: Key) -> Bool
 }
 // Generic cache with expiration
 
@@ -54,13 +54,12 @@ private class CacheEntry {
     private var storage: [Key: CacheEntry] = = [:]
     private let timeToLive: TimeInterval
     public func insert(value: Value, key: Key)
-    public func value(key: Key) -> Value? {
-    public func contains(key: Key) -> Bool {
+    public func value(key: Key) -> Value?
+    public func contains(key: Key) -> Bool
     // Private cleanup method
     private func removeExpiredEntries()
     // Internal method for cache statistics
     internal var cacheSize: Int {
 }
 private func mediumDemo()
-internal var cache: [String: URL] = = [:]
 </file>

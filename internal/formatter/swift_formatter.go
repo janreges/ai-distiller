@@ -248,11 +248,7 @@ func (f *SwiftFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, i
 
 	// Implementation
 	if fn.Implementation != "" {
-		fmt.Fprintln(w, " {")
-		impl := strings.TrimSpace(fn.Implementation)
-		for _, line := range strings.Split(impl, "\n") {
-			fmt.Fprintf(w, "%s    %s\n", indent, line)
-		}
+		fmt.Fprint(w, renderBody(fn.Implementation, indent))
 	} else {
 		fmt.Fprintln(w)
 	}

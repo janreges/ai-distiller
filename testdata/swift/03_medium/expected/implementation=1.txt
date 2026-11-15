@@ -4,7 +4,9 @@ import Foundation
 
 public class Stack {
     // Pushes a new element.
-    public func push(element: Element)
+    public func push(element: Element) {
+        storage.append(element)
+    }
     // Returns the top element without removing it.
     public func peek() -> Element? { storage.last }
     // Removes and returns the top element.

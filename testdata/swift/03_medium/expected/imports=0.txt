@@ -5,9 +5,9 @@ public class Stack {
     // Pushes a new element.
     public func push(element: Element)
     // Returns the top element without removing it.
-    public func peek() -> Element? { storage.last }
+    public func peek() -> Element?
     // Removes and returns the top element.
-    public func pop() -> Element? { storage.popLast() }
+    public func pop() -> Element?
 }
 
 public class extension Stack {

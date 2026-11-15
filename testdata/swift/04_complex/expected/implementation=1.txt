@@ -20,9 +20,17 @@ public enum ValidationResult {
 
 public class ConfigurationBuilder {
     public static func buildBlock(components: ValidationResult...) -> [ValidationResult] {
+        components
+    }
     public static func buildExpression(expression: String) -> ValidationResult {
+        .success(expression)
+    }
     public static func buildEither(component: [ValidationResult]) -> [ValidationResult] {
+        component
+    }
     public static func buildEither(component: [ValidationResult]) -> [ValidationResult] {
+        component
+    }
 }
 // A protocol for items that can be described.
 
@@ -41,5 +49,7 @@ public class SettingsProxy {
 public class UserSettings {
     // Creates a read-only proxy for these settings.
     public func asProxy() -> SettingsProxy {
+        SettingsProxy(self)
+    }
 }
 </file>

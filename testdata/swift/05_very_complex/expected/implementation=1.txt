@@ -37,15 +37,31 @@ public class PropertyInfo {
 // A basic thread-safe queue implementing Sequence.
 
 public final class ThreadSafeQueue {
-    public func enqueue(element: T)
+    public func enqueue(element: T) {
+        lock.withLock {
+            elements.append(element)
+        }
+    }
     public func dequeue() -> T? {
+        lock.withLock {
+            guard !elements.isEmpty else { return nil }
+            return elements.removeFirst()
+        }
+    }
     public func makeIterator() -> IndexingIterator<[T]> {
+        // Returns an iterator over a snapshot of the current state
+        lock.withLock {
+            return self.elements.makeIterator()
+        }
+    }
 }
 
 public class CircularBuffer {
     public var startIndex: Int { 0 }
     public var endIndex: Int { count }
     public func index(i: Int) -> Int {
+        return i + 1
+    }
     public var count: Int {
 }
 // A service that demonstrates complex memory management patterns.
@@ -60,6 +76,8 @@ public protocol EventLoggerDelegate: AnyObject {
 }
 
 public class ActivityMonitor {
-    public func record(entry: String)
+    public func record(entry: String) {
+        logs.enqueue(entry)
+    }
 }
 </file>

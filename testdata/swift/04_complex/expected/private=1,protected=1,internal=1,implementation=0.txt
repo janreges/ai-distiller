@@ -11,7 +11,7 @@ public class Clamped {
     // The projected value is a Combine publisher that emits new values.
     public var projectedValue: AnyPublisher<Value, Never> {
     // Private helper for validation
-    private func isInRange(value: Value) -> Bool {
+    private func isInRange(value: Value) -> Bool
 }
 // A simple validation result type.
 
@@ -23,12 +23,12 @@ public enum ValidationResult {
 // A result builder for creating an array of `ValidationResult` declaratively.
 
 public class ConfigurationBuilder {
-    public static func buildBlock(components: ValidationResult...) -> [ValidationResult] {
-    public static func buildExpression(expression: String) -> ValidationResult {
-    public static func buildEither(component: [ValidationResult]) -> [ValidationResult] {
-    public static func buildEither(component: [ValidationResult]) -> [ValidationResult] {
+    public static func buildBlock(components: ValidationResult...) -> [ValidationResult]
+    public static func buildExpression(expression: String) -> ValidationResult
+    public static func buildEither(component: [ValidationResult]) -> [ValidationResult]
+    public static func buildEither(component: [ValidationResult]) -> [ValidationResult]
     // Private helper for building optional components
-    private static func buildOptional(component: [ValidationResult]?) -> [ValidationResult] {
+    private static func buildOptional(component: [ValidationResult]?) -> [ValidationResult]
 }
 // A protocol for items that can be described.
 
@@ -42,7 +42,7 @@ public protocol Describable {
 internal class extension Describable {
     public var description: String {
     // Private helper for description validation
-    private func validateDescription() -> Bool {
+    private func validateDescription() -> Bool
 }
 
 private class AudioSettings: Describable, Equatable {
@@ -50,31 +50,31 @@ private class AudioSettings: Describable, Equatable {
     internal var description: String { "Audio: Volume \(volume), Muted: \(isMuted)" }
     internal func reset()
     // Private validation method
-    private func validateAudioSettings() -> Bool {
+    private func validateAudioSettings() -> Bool
 }
 // A read-only proxy for accessing UserSettings.
 
 public class SettingsProxy {
     private let settings: UserSettings
     // Private helper for proxy validation
-    private func isValidProxy() -> Bool {
+    private func isValidProxy() -> Bool
 }
 // Main settings structure for a user.
 
 public class UserSettings {
     internal var username: String
     // Creates a read-only proxy for these settings.
-    public func asProxy() -> SettingsProxy {
+    public func asProxy() -> SettingsProxy
     // Private validation method
-    private func validateSettings() -> Bool {
+    private func validateSettings() -> Bool
     // Internal method for settings synchronization
     internal func syncWithRemote()
 }
 
 internal class SettingsViewModel {
     private var settings: UserSettings
-    internal func getAudioConfiguration() -> some Equatable {
-    internal func validate(isPremiumUser: Bool) -> [ValidationResult] {
+    internal func getAudioConfiguration() -> some Equatable
+    internal func validate(isPremiumUser: Bool) -> [ValidationResult]
     // Serializes items that are both Identifiable and Codable.
     // Private method for configuration cleanup
     private func cleanupConfiguration()

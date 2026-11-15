@@ -70,11 +70,12 @@ var fixtures = []fixture{
 		Private:   []string{"conf_private"},
 		ExpandSym: "conf_public",
 	})},
-	{Lang: "swift", File: "swift/sample.swift", Checks: standard(markers{
+	{Lang: "swift", File: "swift/sample.swift", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
 		Private:   []string{"confPrivate"},
 		ExpandSym: "confPublic",
-	})},
+	}), check{Cap: "body-indent", Flags: []string{"--implementation=1"},
+		Contains: []string{"        let a = \"CONF_BODY_A\"\n        return a\n    }\n"}})},
 	{Lang: "ruby", File: "ruby/sample.rb", Checks: standard(markers{
 		Public:    []string{"ConfWidget", "conf_public", "conf_other"},
 		Private:   []string{"conf_private"},
