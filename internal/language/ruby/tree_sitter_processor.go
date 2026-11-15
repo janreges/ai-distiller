@@ -182,7 +182,7 @@ func (p *TreeSitterProcessor) processMethod(node *sitter.Node, source []byte, fi
 	if node.Type() == "singleton_method" {
 		fn.Modifiers = append(fn.Modifiers, ir.ModifierStatic)
 		// `def self.x` stays public inside a private section; only
-		// `private_class_method` hides it.
+		// `private_class_method :x` hides it (processPrivateClassMethod).
 		fn.Visibility = ir.VisibilityPublic
 	}
 
@@ -291,6 +291,8 @@ func (p *TreeSitterProcessor) processCall(node *sitter.Node, source []byte, file
 		// extend/prepend are skipped on purpose: Implements cannot carry the
 		// keyword, and printing them as `include` would change the meaning.
 		p.processModuleInclusion(methodName, arguments, node, file, parent)
+	case "private_class_method":
+		p.processPrivateClassMethod(node, file, parent, source)
 	case "private", "protected", "public":
 		p.processVisibilityCall(ir.Visibility(methodName), node, file, parent, source)
 	case "alias_method":
@@ -377,6 +379,20 @@ func (p *TreeSitterProcessor) processVisibilityCall(vis ir.Visibility, node *sit
 		switch arg.Type() {
 		case "simple_symbol", "string":
 			names = append(names, strings.Trim(string(source[arg.StartByte():arg.EndByte()]), "\":' "))
+		case "call":
+			// `private attr_reader :x`: the accessors it declares get the visibility
+			var before int
+			if children := childrenOf(parent); children != nil {
+				before = len(*children)
+			}
+			p.processCall(arg, source, file, parent)
+			if children := childrenOf(parent); children != nil {
+				for _, c := range (*children)[before:] {
+					if fn, ok := c.(*ir.DistilledFunction); ok {
+						fn.Visibility = vis
+					}
+				}
+			}
 		case "method", "singleton_method":
 			p.processMethod(arg, source, file, parent)
 			if children := childrenOf(parent); children != nil && len(*children) > 0 {
@@ -397,6 +413,28 @@ func (p *TreeSitterProcessor) processVisibilityCall(vis ir.Visibility, node *sit
 						fn.Visibility = vis
 					}
 				}
+			}
+		}
+	}
+}
+
+// processPrivateClassMethod handles `private_class_method :a, :b`: the
+// singleton methods (`def self.a`) of that name seen so far become private.
+func (p *TreeSitterProcessor) processPrivateClassMethod(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode, source []byte) {
+	args := node.ChildByFieldName("arguments")
+	children := childrenOf(parent)
+	if args == nil || children == nil {
+		return
+	}
+	for i := 0; i < int(args.ChildCount()); i++ {
+		arg := args.Child(i)
+		if arg.Type() != "simple_symbol" && arg.Type() != "string" {
+			continue
+		}
+		name := strings.Trim(string(source[arg.StartByte():arg.EndByte()]), "\":' ")
+		for _, c := range *children {
+			if fn, ok := c.(*ir.DistilledFunction); ok && isSingletonMethod(fn) && fn.Name == name {
+				fn.Visibility = ir.VisibilityPrivate
 			}
 		}
 	}

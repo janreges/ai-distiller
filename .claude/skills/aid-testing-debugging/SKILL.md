@@ -266,9 +266,12 @@ Read from `references/test-inventory.md`; when a change lands here, add a test.
 - Directory runs. Snapshots run one file each; walking, `.aidignore`,
   `--include`/`--exclude` and output order have unit tests in `internal/processor`
   and `internal/ignore` only.
-- Swift below the CLI. There are no Swift processor or formatter unit tests, only
-  the line parser's body extraction (`internal/language/swift/line_parser_test.go`),
-  the snapshots and the conformance checks.
+- Swift below the CLI is thin. Unit tests cover the line parser's body
+  extraction, property defaults, the `struct` modifier, comments, code after a
+  block comment and the extension header
+  (`internal/language/swift/line_parser_test.go`), and the formatter's `struct`
+  and `extension` headers (`internal/formatter/swift_formatter_test.go`);
+  everything else is covered only by the snapshots and the conformance checks.
 - Git mode (`aid .git`) and the text of AI action prompts. Tests cover the AI
   actions' source collection, `-o` being rejected with `--ai-action`, and that the
   docs list every action; nothing runs git mode.

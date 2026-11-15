@@ -44,6 +44,8 @@ Each flag takes `0` or `1`. Setting a flag to `0` removes members of that level,
 | `--include-only CATEGORIES` | none | Include ONLY these categories (comma-separated) |
 | `--exclude-items CATEGORIES` | none | Exclude these categories (comma-separated), for example `--exclude-items=public` |
 
+C# combined access modifiers show when the flag of either of their words is on: `protected internal` with `--protected=1` or `--internal=1`, `private protected` with `--private=1` or `--protected=1`.
+
 Valid categories for `--include-only` and `--exclude-items`: `public`, `protected`, `internal`, `private`, `comments`, `docstrings`, `implementation`, `imports`, `annotations`, `fields`, `methods`.
 
 ## Content

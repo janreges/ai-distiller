@@ -32,7 +32,7 @@ Python produces no `protected` or `internal`, so `--protected=1` and
 
 ## Methods and types
 
-- Methods are nested: they are `Children` of their `DistilledClass`. Base
+- Methods and nested classes are `Children` of their `DistilledClass`. Base
   classes go to `Extends`; decorators, as written but without the `@`, go to
   `Decorators` of the function or class.
 - Inside a method body, an assignment to an attribute (`self.x = ...`, in fact
@@ -54,7 +54,9 @@ Python produces no `protected` or `internal`, so `--protected=1` and
 - No namespace node: a module is the file.
 - `Implementation` is the function body after the docstring: from the first
   statement to the end of the block, without the `def` line, every line after
-  the first keeping its source indentation.
+  the first keeping its source indentation. A body that holds only the docstring
+  has an empty `Implementation` and `DocOnlyBody` set, so it prints with the
+  `def name():` notation of a function with a body.
 - Comments: `#` comments are `line`. A docstring is a `doc` comment: module and
   class docstrings are `Inner` (they document their container); a function's
   docstring is placed directly before the function and is not part of its

@@ -123,3 +123,9 @@ func TestLineParser_CodeAfterBlockComment(t *testing.T) {
 	}
 	assert.Equal(t, []string{"c", "g"}, names)
 }
+
+func TestSwift_ExtensionConformanceOnce(t *testing.T) {
+	out := distillSwift(t, "public extension Dictionary: Cacheable { }\n", nil)
+	assert.Contains(t, out, "public extension Dictionary: Cacheable")
+	assert.Equal(t, 1, strings.Count(out, "Cacheable"), out)
+}

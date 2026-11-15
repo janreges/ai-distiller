@@ -45,10 +45,10 @@ The stripper maps the values to the flags
 | Value | Shown with |
 |---|---|
 | `public`, `open` | `--public=1` (default) |
-| `protected`, `protected internal` | `--protected=1` |
+| `protected` | `--protected=1` |
 | `internal`, `package` | `--internal=1` |
 | `private`, `fileprivate` | `--private=1` |
-| `private protected` | `--private=1` and `--protected=1` (removed when either is off) |
+| `protected internal`, `private protected` (C#) | by the rule in `docs/user/COMMAND-LINE-OPTIONS.md` (visibility section) |
 | empty | always, unless the name starts with `_` and private members are removed |
 
 A member of a non-public type is removed with its type. With `--public=0`, a

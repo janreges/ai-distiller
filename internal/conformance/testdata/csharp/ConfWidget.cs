@@ -20,6 +20,8 @@ public class ConfWidget {
 
     protected internal string ConfProtInt() { return "x"; }
 
+    private protected string ConfPrivProt() { return "y"; }
+
     public string ConfOther() {
         string b = "CONF_BODY_B";
         return b;

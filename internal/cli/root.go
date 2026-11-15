@@ -1023,8 +1023,7 @@ func processExcludeList(list string) processor.ProcessOptions {
 		case "protected":
 			opts.RemoveProtectedOnly = true
 		case "internal":
-			// Internal is often grouped with private in many languages
-			opts.RemovePrivateOnly = true
+			opts.RemoveInternalOnly = true
 		case "comments":
 			opts.IncludeComments = false
 		case "docstrings":

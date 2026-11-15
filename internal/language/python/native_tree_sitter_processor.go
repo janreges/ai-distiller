@@ -310,6 +310,9 @@ func (p *NativeTreeSitterProcessor) processClassBody(node *sitter.Node, file *ir
 		case "decorated_definition":
 			p.processDecoratedDefinition(child, file, class)
 
+		case "class_definition":
+			p.processClass(child, file, class)
+
 		case "expression_statement":
 			// Check for bare strings or assignments
 			if child.ChildCount() > 0 {
@@ -368,9 +371,11 @@ func (p *NativeTreeSitterProcessor) processFunction(node *sitter.Node, file *ir.
 			if i := docstringIndex(child); i >= 0 {
 				doc = p.docstringComment(child.Child(i).NamedChild(0), false)
 				startByte = endByte
+				fn.DocOnlyBody = true
 				for j := i + 1; j < int(child.ChildCount()); j++ {
 					if next := child.Child(j); next.IsNamed() {
 						startByte = next.StartByte()
+						fn.DocOnlyBody = false
 						break
 					}
 				}

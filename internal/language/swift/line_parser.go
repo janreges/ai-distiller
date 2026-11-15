@@ -348,19 +348,15 @@ func (p *LineParser) parseExtension(matches []string, lineNum int, file *ir.Dist
 		Children:   []ir.DistilledNode{},
 	}
 
-	// Name the extension
-	typeName := matches[2]
+	// The conformances live in Implements; the formatter prints them after the
+	// type name, so the name must not repeat them.
+	ext.Name = "extension " + matches[2]
 	if matches[4] != "" {
-		ext.Name = "extension " + typeName + ": " + matches[4]
-		// Parse protocol conformances
-		protocols := strings.Split(matches[4], ",")
-		for _, proto := range protocols {
+		for _, proto := range strings.Split(matches[4], ",") {
 			ext.Implements = append(ext.Implements, ir.TypeRef{
 				Name: strings.TrimSpace(proto),
 			})
 		}
-	} else {
-		ext.Name = "extension " + typeName
 	}
 
 	state.insideExtension = true

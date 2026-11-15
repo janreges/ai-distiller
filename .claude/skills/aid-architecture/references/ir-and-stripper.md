@@ -39,9 +39,10 @@ takes all its members with it.
 | Stripper option | Set by (individual flags) | Removes |
 |---|---|---|
 | `RemovePrivate` | public-only visibility (`IncludePrivate` false) | used only when no `Remove*Only` option is set: every declaration that is `private`, `protected`, `internal`, `package`, `fileprivate`, `protected internal` or `private protected`, and one without visibility whose name starts with `_` |
-| `RemovePrivateOnly` | `--private=0` with any other visibility combination | `private`, `fileprivate`, `private protected`; a declaration without visibility whose name starts with `_` |
-| `RemoveProtectedOnly` | `--protected=0`, same branch | `protected`, `protected internal`, `private protected` |
+| `RemovePrivateOnly` | `--private=0` with any other visibility combination | `private`, `fileprivate`; a declaration without visibility whose name starts with `_` |
+| `RemoveProtectedOnly` | `--protected=0`, same branch | `protected` |
 | `RemoveInternalOnly` | `--internal=0`, same branch | `internal`, `package` |
+| (C# combined) | `protected internal`, `private protected` | removed only when the `Remove*Only` options of both words are set (`protected internal`: `RemoveProtectedOnly` and `RemoveInternalOnly`; `private protected`: `RemovePrivateOnly` and `RemoveProtectedOnly`); the legacy `RemovePrivate` option above removes both on its own. CLI rule: `docs/user/COMMAND-LINE-OPTIONS.md` (visibility section), implemented in `shouldRemoveByVisibility` |
 | `RemovePublic` | `--public=0` | public and open functions, fields and type aliases, except inside a class, interface, struct or enum whose visibility is set and is neither public nor open; then every public container left without members (below) |
 | `RemoveImplementations` | `--implementation=0` | a function's `Implementation`, unless `--expand` keeps it |
 | `RemoveComments` | `--comments=0` | comments whose format is not doc (`internal/ir/comment.go#DistilledComment.IsDoc`) |

@@ -5,7 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/janreges/ai-distiller/internal/formatter"
 	"github.com/janreges/ai-distiller/internal/ir"
+	"github.com/janreges/ai-distiller/internal/processor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -271,4 +273,36 @@ func TestRuby_ShebangIsNotADocLine(t *testing.T) {
 func TestRuby_ScopedClassName(t *testing.T) {
 	file := parseRuby(t, "class Foo::Bar < Base\n  def m; end\nend\n")
 	assert.Equal(t, "Foo::Bar", findRubyClass(t, file, "Foo::Bar").Name)
+}
+
+// distillRuby runs src through the processor and the text formatter with the
+// CLI defaults (public members only), changed by set when it is not nil.
+func distillRuby(t *testing.T, src string, set func(*processor.ProcessOptions)) string {
+	t.Helper()
+	opts := processor.DefaultProcessOptions()
+	opts.IncludePrivate = false
+	opts.IncludeImplementation = false
+	opts.IncludeComments = false
+	if set != nil {
+		set(&opts)
+	}
+	file, err := NewProcessor().ProcessWithOptions(context.Background(), strings.NewReader(src), "test.rb", opts)
+	require.NoError(t, err)
+	var b strings.Builder
+	require.NoError(t, formatter.NewLanguageAwareTextFormatter(formatter.Options{}).Format(&b, file))
+	return b.String()
+}
+
+func TestRuby_PrivateClassMethodAndPrivateAttr(t *testing.T) {
+	src := "class A\n  def self.s; end\n  def self.t; end\n  private_class_method :s\n  private attr_reader :x\n  attr_reader :y\nend\n"
+	def := distillRuby(t, src, nil)
+	assert.NotContains(t, def, "def self.s")
+	assert.NotContains(t, def, "def x")
+	assert.Contains(t, def, "def self.t")
+	assert.Contains(t, def, "def y")
+
+	all := distillRuby(t, src, func(o *processor.ProcessOptions) { o.IncludePrivate = true })
+	assert.Contains(t, all, "def self.s")
+	assert.Contains(t, all, "def x")
+	assert.Contains(t, all, "def self.t")
 }

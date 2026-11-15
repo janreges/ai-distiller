@@ -195,18 +195,23 @@ func (n *DistilledTypeAlias) Accept(visitor Visitor) DistilledNode {
 // DistilledFunction represents a function/method declaration
 type DistilledFunction struct {
 	BaseNode
-	Name           string           `json:"name"`
-	Visibility     Visibility       `json:"visibility"`
-	Modifiers      []Modifier       `json:"modifiers,omitempty"`
-	Decorators     []string         `json:"decorators,omitempty"`
-	TypeParams     []TypeParam      `json:"type_params,omitempty"`
-	Parameters     []Parameter      `json:"parameters"`
-	Returns        *TypeRef         `json:"returns,omitempty"`
-	Throws         []TypeRef        `json:"throws,omitempty"`
-	Implementation string           `json:"implementation,omitempty"`
-	ThrowsInfo     []ThrowsInfo     `json:"throws_info,omitempty"`
-	Deprecated     *DeprecationInfo `json:"deprecated,omitempty"`
-	Description    string           `json:"description,omitempty"`
+	Name           string      `json:"name"`
+	Visibility     Visibility  `json:"visibility"`
+	Modifiers      []Modifier  `json:"modifiers,omitempty"`
+	Decorators     []string    `json:"decorators,omitempty"`
+	TypeParams     []TypeParam `json:"type_params,omitempty"`
+	Parameters     []Parameter `json:"parameters"`
+	Returns        *TypeRef    `json:"returns,omitempty"`
+	Throws         []TypeRef   `json:"throws,omitempty"`
+	Implementation string      `json:"implementation,omitempty"`
+	// DocOnlyBody marks a Python function whose body is only its docstring:
+	// there is no Implementation text, but the text formatter still prints the
+	// `def name():` notation of a function that has a body. The stripper
+	// clears it together with the implementation.
+	DocOnlyBody bool             `json:"-"`
+	ThrowsInfo  []ThrowsInfo     `json:"throws_info,omitempty"`
+	Deprecated  *DeprecationInfo `json:"deprecated,omitempty"`
+	Description string           `json:"description,omitempty"`
 }
 
 // GetNodeKind implements DistilledNode

@@ -48,7 +48,7 @@ Protocol requirements are `public`. Swift produces no `protected`.
   superclass included
   (`internal/language/swift/line_parser.go#LineParser.parseInheritance`).
 - `extension X` and `extension X: P` are separate `DistilledClass` nodes named
-  after the declaration line (`extension X`, `extension X: P `), with the
+  `extension X` (the conformances are not in the name), with the
   conformances in `Implements` and the extension's members as children. They
   are not merged into `X`.
 

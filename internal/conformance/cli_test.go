@@ -321,3 +321,19 @@ func TestEmptyFileWithQuoteInNameIsDropped(t *testing.T) {
 	assert.NotContains(t, out, "<file path=\"q")
 	assert.NotContains(t, out, "q&quot;x.py")
 }
+
+// --exclude-items=internal removes internal members and nothing else; the
+// group flag ignores the individual --private flag.
+func TestExcludeItemsInternalRemovesInternalOnly(t *testing.T) {
+	dir := t.TempDir()
+	src := "public class Box\n{\n    internal int InternalCount;\n    private int privateCount;\n    public int Visible;\n}\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "box.cs"), []byte(src), 0o644))
+	for _, extra := range [][]string{nil, {"--private=1"}} {
+		args := append([]string{"box.cs", "--stdout", "--summary-type=off", "--exclude-items=internal"}, extra...)
+		out, stderr, code := aidRun(t, dir, nil, args...)
+		require.Equal(t, 0, code, stderr)
+		assert.Contains(t, out, "Visible", "%v", args)
+		assert.Contains(t, out, "privateCount", "%v", args)
+		assert.NotContains(t, out, "InternalCount", "%v", args)
+	}
+}

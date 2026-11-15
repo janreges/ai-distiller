@@ -25,6 +25,8 @@ Derived from all modifier tokens of a declaration
   protected` the visibility `private protected`; both are distinct values
   (`internal/ir/types.go#VisibilityProtectedInternal`,
   `internal/ir/types.go#VisibilityPrivateProtected`);
+- which flags show them is stated once in `docs/user/COMMAND-LINE-OPTIONS.md` (visibility
+  section), and implemented in `internal/stripper/stripper.go#shouldRemoveByVisibility`;
 - otherwise `public`, `private`, `protected` and `internal` map to themselves.
 
 Without a modifier:

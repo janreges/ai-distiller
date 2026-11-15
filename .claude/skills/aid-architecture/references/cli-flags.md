@@ -100,10 +100,11 @@ The group lists, one category at a time:
   (`internal/cli/flags_doc_test.go#TestIncludeOnlyRecipesKeepMembers` keeps
   such recipes out of the docs).
 - `--exclude-items` starts with everything on, implementation, comments and
-  every visibility included. `public` sets `RemovePublic`, `private` and
-  `internal` both set `RemovePrivateOnly` (so `--exclude-items=internal` hides
-  private members and keeps internal ones), `protected` sets
-  `RemoveProtectedOnly`, `comments` and `docstrings` both turn
+  every visibility included. `public` sets `RemovePublic`, `private` sets
+  `RemovePrivateOnly`, `protected` sets `RemoveProtectedOnly`, `internal` sets
+  `RemoveInternalOnly` (each removes only its own level; the C# combined
+  modifiers follow the rule in `docs/user/COMMAND-LINE-OPTIONS.md`),
+  `comments` and `docstrings` both turn
   `IncludeComments` off (doc comments stay), and `implementation`, `imports`,
   `annotations`, `fields`, `methods` turn their option off.
 

@@ -212,6 +212,7 @@ func (s *Stripper) visitFunction(n *ir.DistilledFunction) ir.DistilledNode {
 	// name matched).
 	if s.options.RemoveImplementations && !s.options.shouldExpand(n.Name) && !s.inExpandedScope {
 		result.Implementation = ""
+		result.DocOnlyBody = false
 	}
 
 	// Strip decorators/annotations if requested
@@ -408,12 +409,15 @@ func (s *Stripper) shouldRemoveByVisibility(name string, visibility ir.Visibilit
 		case ir.VisibilityInternal, ir.VisibilityPackage:
 			// Remove if internal-only flag is set
 			return s.options.RemoveInternalOnly
-		case ir.VisibilityProtected, ir.VisibilityProtectedInternal:
+		case ir.VisibilityProtected:
 			// Remove if protected-only flag is set
 			return s.options.RemoveProtectedOnly
+		case ir.VisibilityProtectedInternal:
+			// C# combined modifier: shown when either word's flag shows it
+			// (docs/user/COMMAND-LINE-OPTIONS.md, visibility section).
+			return s.options.RemoveProtectedOnly && s.options.RemoveInternalOnly
 		case ir.VisibilityPrivateProtected:
-			// C# private protected - remove if either private or protected is being removed
-			return s.options.RemovePrivateOnly || s.options.RemoveProtectedOnly
+			return s.options.RemovePrivateOnly && s.options.RemoveProtectedOnly
 		case ir.VisibilityPublic, ir.VisibilityOpen:
 			return false
 		default:

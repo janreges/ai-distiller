@@ -187,7 +187,8 @@ func (f *PythonFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, 
 	}
 
 	// Format function signature
-	if fn.Implementation != "" {
+	hasBody := fn.Implementation != "" || fn.DocOnlyBody
+	if hasBody {
 		// Full function with implementation
 		fmt.Fprintf(w, "%s%s%sdef %s(", indentStr, visPrefix, modifiers, fn.Name)
 	} else {
@@ -218,7 +219,7 @@ func (f *PythonFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, 
 	}
 
 	// End the signature line; only a function with a body gets the colon
-	if fn.Implementation != "" {
+	if hasBody {
 		fmt.Fprintln(w, ":")
 	} else {
 		fmt.Fprintln(w)

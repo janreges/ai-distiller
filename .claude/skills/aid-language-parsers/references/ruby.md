@@ -30,6 +30,9 @@
   `a` and `b` (singleton methods excepted); `private def x ... end` sets it for
   that one method only, without changing the section
   (`internal/language/ruby/tree_sitter_processor.go#TreeSitterProcessor.processVisibilityCall`).
+- `private attr_reader :x` gives the accessors it declares that visibility;
+  `private_class_method :x` makes the singleton method `x` private
+  (`...#TreeSitterProcessor.processPrivateClassMethod`).
 - `def self.x` is a singleton method: it gets the modifier `static` and stays
   `public` whatever the section.
 - An assignment to a constant, class variable or instance variable outside a

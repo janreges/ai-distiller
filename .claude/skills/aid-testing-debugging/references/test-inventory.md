@@ -16,7 +16,7 @@ they read `testdata/`, the conformance fixtures or a built binary.
 | | `build_test.go` | `BuildBinary` builds outside the repo and honours `AID_TEST_BINARY`; a mismatch message carries the command and a diff |
 | `internal/conformance` | `conformance_test.go`, `fixtures_test.go`, `known_gaps_test.go` | `TestConformance`: every capability check of every language on `internal/conformance/testdata/`, with `knownGaps`; `TestKnownGapsAreLive`: every gap key names a check |
 | | `unhandled_test.go` | `TestNoUnhandledNodesInTestdata`: no text formatter drops a node kind of any `testdata/*/*/source.*` unless it is in `knownUnhandled`, and every listed pair is still dropped |
-| | `cli_test.go` | CLI contract on the built binary: a path argument wins over piped stdin and an open pipe does not hang it; `-` and no argument read stdin; `--lang` aliases, unknown and undetected languages; TSX on stdin matches a `.tsx` file; `--stdout` and `-o` combinations and the default `.aid/` file; summary sizes and wording; structured formats leak no metadata; `-o` with `--ai-action` fails |
+| | `cli_test.go` | CLI contract on the built binary: a path argument wins over piped stdin and an open pipe does not hang it; `-` and no argument read stdin; `--lang` aliases, unknown and undetected languages; TSX on stdin matches a `.tsx` file; `--stdout` and `-o` combinations and the default `.aid/` file; summary sizes and wording; structured formats leak no metadata; `-o` with `--ai-action` fails; `--exclude-items=internal` removes internal members and keeps private ones |
 
 ## Parsers (`internal/language`)
 
@@ -36,7 +36,7 @@ they read `testdata/`, the conformance fixtures or a built binary.
 | | `processor_bench_test.go` | benchmarks; they run only with `-bench` |
 | `internal/language/ruby` | `processor_test.go` | `require`, `attr_*`, `include`, keyword calls, visibility sections, singleton methods, comment and doc-comment rules, shebang |
 | `internal/language/rust` | `processor_test.go` | items and visibility; body boundaries (braces on their own line, in literals, one-line bodies); trait impl methods are public; enums with discriminants and payloads; inner docs; docs of hidden items |
-| `internal/language/swift` | `line_parser_test.go` | the line parser's body extraction: multi-line and one-line bodies, braces inside string literals |
+| `internal/language/swift` | `line_parser_test.go` | the line parser: body extraction (multi-line and one-line bodies, braces inside string literals), property defaults without the `=`, the `struct` modifier, code after a block comment on the same line; through the processor and the text formatter: ordinary comments print only with `--comments` and doc comments by default, an empty block comment prints nothing, an extension header names its conformance once |
 | `internal/language/typescript` | `ast_parser_test.go` | namespaces, ambient modules, return types and type guards, const types, `#private` fields and methods, arrow bodies, enum initialisers, comment and doc placement |
 
 ## Stripper, formatters, CLI

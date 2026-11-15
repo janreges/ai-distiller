@@ -451,3 +451,33 @@ func TestPython_CommentDirectlyAboveRemovedFunctionLeavesWithIt(t *testing.T) {
 		assert.Contains(t, all, line, "with --private=1 everything stays")
 	}
 }
+
+func TestPython_NestedClassInIR(t *testing.T) {
+	src := "class Outer:\n    def a(self): pass\n    class Inner:\n        def b(self): pass\n"
+	outer := findPyClass(t, parsePy(t, src), "Outer")
+	var inner *ir.DistilledClass
+	for _, c := range outer.Children {
+		if cls, ok := c.(*ir.DistilledClass); ok && cls.Name == "Inner" {
+			inner = cls
+		}
+	}
+	require.NotNil(t, inner, "Inner is not in the IR of Outer")
+	require.Len(t, inner.Children, 1)
+	assert.Equal(t, "b", inner.Children[0].(*ir.DistilledFunction).Name)
+
+	out := distillPy(t, src, nil)
+	assert.Contains(t, out, "class Inner:")
+	assert.Contains(t, out, "b(self)")
+}
+
+func TestPython_DocstringOnlyBodyNotation(t *testing.T) {
+	src := "def f():\n    return 1\n\ndef g():\n    \"\"\"Only a doc.\"\"\"\n"
+	out := distillPy(t, src, func(o *processor.ProcessOptions) { o.IncludeImplementation = true })
+	assert.Contains(t, out, "def f():\n    return 1")
+	assert.Contains(t, out, "def g():\n")
+	assert.NotContains(t, out, "\ng()")
+	// Without implementations every function is a bare signature.
+	out = distillPy(t, src, nil)
+	assert.Contains(t, out, "g()")
+	assert.NotContains(t, out, "def g")
+}

@@ -38,7 +38,7 @@ public protocol Cacheable {
 }
 // Dictionary already satisfies `Cacheable` when paired properly.
 
-internal extension Dictionary: Cacheable : Cacheable {
+internal extension Dictionary: Cacheable {
     public func insert(value: Value, key: Key)
     public func contains(key: Key) -> Bool
 }
