@@ -35,11 +35,37 @@ func (f *TypeScriptFormatter) FormatNode(w io.Writer, node ir.DistilledNode, ind
 		return f.formatTypeAlias(w, n)
 	case *ir.DistilledEnum:
 		return f.formatEnum(w, n, indent)
+	case *ir.DistilledPackage:
+		return f.formatNamespace(w, n, indent)
 	default:
 		// Fallback for unknown nodes
 		reportUnhandled("typescript", node)
 		return nil
 	}
+}
+
+// formatNamespace prints `namespace X {` or `declare module "x" {` and the
+// members indented one level deeper than the namespace itself.
+func (f *TypeScriptFormatter) formatNamespace(w io.Writer, pkg *ir.DistilledPackage, indent int) error {
+	pad := strings.Repeat("    ", indent)
+	keyword := "namespace"
+	if strings.HasPrefix(pkg.Name, `"`) || strings.HasPrefix(pkg.Name, "'") {
+		keyword = "declare module"
+	}
+	fmt.Fprintf(w, "%s%s %s {\n", pad, keyword, pkg.Name)
+	var buf strings.Builder
+	for _, child := range pkg.Children {
+		if err := f.FormatNode(&buf, child, 0); err != nil {
+			return err
+		}
+	}
+	for _, line := range strings.Split(buf.String(), "\n") {
+		if line != "" {
+			fmt.Fprintf(w, "%s    %s\n", pad, line)
+		}
+	}
+	fmt.Fprintf(w, "%s}\n", pad)
+	return nil
 }
 
 func (f *TypeScriptFormatter) formatImport(w io.Writer, imp *ir.DistilledImport) error {

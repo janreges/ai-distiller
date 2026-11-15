@@ -43,3 +43,11 @@ func TestTypeScriptFormatter_Enum(t *testing.T) {
 	}}
 	assert.Equal(t, "export enum Color {\n    Red\n    Green = \"green\"\n}\n", tsFormat(t, e, 0))
 }
+
+func TestTypeScriptFormatter_Namespace(t *testing.T) {
+	fn := &ir.DistilledFunction{Name: "f", Modifiers: []ir.Modifier{ir.ModifierExport}, Returns: &ir.TypeRef{Name: "void"}}
+	assert.Equal(t, "namespace NS {\n    export function f(): void\n}\n",
+		tsFormat(t, &ir.DistilledPackage{Name: "NS", Children: []ir.DistilledNode{fn}}, 0))
+	assert.Equal(t, "declare module \"x\" {\n    export function f(): void\n}\n",
+		tsFormat(t, &ir.DistilledPackage{Name: `"x"`, Children: []ir.DistilledNode{fn}}, 0))
+}

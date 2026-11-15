@@ -25,3 +25,10 @@ export class ConfWidget {
 export type ConfId = string;
 
 export enum ConfColor { ConfRed, ConfGreen = "green" }
+
+export namespace ConfSpace {
+    export function confInSpace(): number { return 1; }
+}
+declare module "conf-ambient" {
+    export function confAmbient(): void;
+}

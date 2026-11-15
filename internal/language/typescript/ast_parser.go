@@ -92,42 +92,80 @@ func (p *ASTParser) parseProgram(node *sitter.Node, file *ir.DistilledFile) {
 		if child == nil {
 			continue
 		}
+		file.Children = append(file.Children, p.parseStatement(child, false)...)
+	}
+}
 
-		switch child.Type() {
-		case "import_statement":
-			if imp := p.parseImport(child); imp != nil {
-				file.Children = append(file.Children, imp)
-			}
-		case "export_statement":
-			if nodes := p.parseExport(child); nodes != nil {
-				file.Children = append(file.Children, nodes...)
-			}
-		case "class_declaration", "abstract_class_declaration":
-			if class := p.parseClass(child, false); class != nil {
-				file.Children = append(file.Children, class)
-			}
-		case "interface_declaration":
-			if intf := p.parseInterface(child, false); intf != nil {
-				file.Children = append(file.Children, intf)
-			}
-		case "type_alias_declaration":
-			if alias := p.parseTypeAlias(child, false); alias != nil {
-				file.Children = append(file.Children, alias)
-			}
-		case "enum_declaration":
-			if enum := p.parseEnum(child, false); enum != nil {
-				file.Children = append(file.Children, enum)
-			}
-		case "function_declaration":
-			if fn := p.parseFunction(child, false); fn != nil {
-				file.Children = append(file.Children, fn)
-			}
-		case "lexical_declaration", "variable_declaration":
-			if vars := p.parseVariableDeclaration(child, false); vars != nil {
-				file.Children = append(file.Children, vars...)
+// parseStatement parses one declaration-level node. It is shared by the
+// program root, export statements and namespace bodies.
+func (p *ASTParser) parseStatement(node *sitter.Node, isExported bool) []ir.DistilledNode {
+	var nodes []ir.DistilledNode
+	switch node.Type() {
+	case "import_statement":
+		if imp := p.parseImport(node); imp != nil {
+			nodes = append(nodes, imp)
+		}
+	case "export_statement":
+		nodes = append(nodes, p.parseExport(node)...)
+	case "class_declaration", "abstract_class_declaration":
+		if class := p.parseClass(node, isExported); class != nil {
+			nodes = append(nodes, class)
+		}
+	case "interface_declaration":
+		if intf := p.parseInterface(node, isExported); intf != nil {
+			nodes = append(nodes, intf)
+		}
+	case "type_alias_declaration":
+		if alias := p.parseTypeAlias(node, isExported); alias != nil {
+			nodes = append(nodes, alias)
+		}
+	case "enum_declaration":
+		if enum := p.parseEnum(node, isExported); enum != nil {
+			nodes = append(nodes, enum)
+		}
+	case "function_declaration", "function_signature":
+		if fn := p.parseFunction(node, isExported); fn != nil {
+			nodes = append(nodes, fn)
+		}
+	case "lexical_declaration", "variable_declaration":
+		nodes = append(nodes, p.parseVariableDeclaration(node, isExported)...)
+	case "expression_statement":
+		// `namespace A { ... }` is wrapped in an expression statement.
+		if first := node.NamedChild(0); first != nil && first.Type() == "internal_module" {
+			if ns := p.parseNamespace(first); ns != nil {
+				nodes = append(nodes, ns)
 			}
 		}
+	case "internal_module", "module":
+		if ns := p.parseNamespace(node); ns != nil {
+			nodes = append(nodes, ns)
+		}
+	case "ambient_declaration":
+		// `declare ...` wraps the real declaration.
+		for i := 0; i < int(node.NamedChildCount()); i++ {
+			nodes = append(nodes, p.parseStatement(node.NamedChild(i), isExported)...)
+		}
 	}
+	return nodes
+}
+
+// parseNamespace parses `namespace X {}` and `declare module "x" {}` into a
+// DistilledPackage whose children are the declarations of the body.
+func (p *ASTParser) parseNamespace(node *sitter.Node) *ir.DistilledPackage {
+	nameNode := node.ChildByFieldName("name")
+	if nameNode == nil {
+		return nil
+	}
+	pkg := &ir.DistilledPackage{
+		BaseNode: ir.BaseNode{Location: p.nodeToLocation(node)},
+		Name:     p.nodeText(nameNode),
+	}
+	if body := node.ChildByFieldName("body"); body != nil {
+		for i := 0; i < int(body.NamedChildCount()); i++ {
+			pkg.Children = append(pkg.Children, p.parseStatement(body.NamedChild(i), false)...)
+		}
+	}
+	return pkg
 }
 
 // parseImport parses import statements
@@ -232,51 +270,9 @@ func (p *ASTParser) parseNamedImports(node *sitter.Node, imp *ir.DistilledImport
 // parseExport parses export statements
 func (p *ASTParser) parseExport(node *sitter.Node) []ir.DistilledNode {
 	var nodes []ir.DistilledNode
-
-	// Debug: print export node structure
-	// fmt.Printf("Export node has %d children\n", node.ChildCount())
-	// for i := 0; i < int(node.ChildCount()); i++ {
-	// 	child := node.Child(i)
-	// 	if child != nil {
-	// 		fmt.Printf("  Child %d: type=%s, text=%q\n", i, child.Type(), p.nodeText(child))
-	// 	}
-	// }
-
-	// Find the exported declaration
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child == nil {
-			continue
-		}
-
-		switch child.Type() {
-		case "class_declaration", "abstract_class_declaration":
-			if class := p.parseClass(child, true); class != nil {
-				nodes = append(nodes, class)
-			}
-		case "interface_declaration":
-			if intf := p.parseInterface(child, true); intf != nil {
-				nodes = append(nodes, intf)
-			}
-		case "type_alias_declaration":
-			if alias := p.parseTypeAlias(child, true); alias != nil {
-				nodes = append(nodes, alias)
-			}
-		case "enum_declaration":
-			if enum := p.parseEnum(child, true); enum != nil {
-				nodes = append(nodes, enum)
-			}
-		case "function_declaration":
-			if fn := p.parseFunction(child, true); fn != nil {
-				nodes = append(nodes, fn)
-			}
-		case "lexical_declaration", "variable_declaration":
-			if vars := p.parseVariableDeclaration(child, true); vars != nil {
-				nodes = append(nodes, vars...)
-			}
-		}
+	for i := 0; i < int(node.NamedChildCount()); i++ {
+		nodes = append(nodes, p.parseStatement(node.NamedChild(i), true)...)
 	}
-
 	return nodes
 }
 
@@ -1011,8 +1007,13 @@ func (p *ASTParser) parseFunction(node *sitter.Node, isExported bool) *ir.Distil
 		case "formal_parameters":
 			fn.Parameters = p.parseParameters(child)
 		case "type_annotation":
-			if typeNode := p.findChild(child, "type"); typeNode != nil {
-				fn.Returns = &ir.TypeRef{Name: p.nodeText(typeNode)}
+			// Extract the actual type from the type annotation (skip the colon)
+			for j := 0; j < int(child.ChildCount()); j++ {
+				typeChild := child.Child(j)
+				if typeChild != nil && typeChild.Type() != ":" {
+					fn.Returns = &ir.TypeRef{Name: p.nodeText(typeChild)}
+					break
+				}
 			}
 		case "statement_block":
 			fn.Implementation = p.nodeText(child)

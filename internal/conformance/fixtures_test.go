@@ -53,6 +53,8 @@ var fixtures = []fixture{
 		ExpandSym: "confPublic",
 	}), check{Cap: "export-type-alias", Contains: []string{"export type ConfId = string"}},
 		check{Cap: "decl-enum", Contains: []string{"export enum ConfColor {", "ConfRed", `ConfGreen = "green"`}},
+		check{Cap: "decl-namespace", Contains: []string{"namespace ConfSpace {", "confInSpace(): number"}},
+		check{Cap: "decl-ambient-module", Contains: []string{`declare module "conf-ambient" {`, "confAmbient(): void"}},
 		check{Cap: "body-indent", Flags: []string{"--implementation=1"},
 			Contains: []string{"        const a = \"CONF_BODY_A\";\n        return a;\n    }\n"}})},
 	{Lang: "javascript", File: "javascript/sample.js", Checks: append(standard(markers{
