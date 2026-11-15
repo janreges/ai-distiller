@@ -17,7 +17,7 @@ cgo, not even `internal/language` on its own.
 | python, javascript, java, csharp, cpp, ruby, php | `github.com/tree-sitter/tree-sitter-<name>/bindings/go` | the grammar's own Go module (version in `go.mod`); the processor wraps its pointer with `sitter.NewLanguage(...)`, PHP with `LanguagePHP()` |
 | kotlin | `github.com/fwcd/tree-sitter-kotlin/bindings/go` | the grammar's own Go module (fwcd, pinned to commit `d6af96d2` in `go.mod`, ABI 14); its `parser.c` is about 35 MB; measured once when it replaced smacker's copy, a cold `go build -a` went from 27.3 s to 31.3 s and the binary grew by 2.0 MB; wrapped with `sitter.NewLanguage(...)` |
 | typescript, tsx | `tree-sitter-typescript` | a local wrapper module, see below |
-| swift | `tree-sitter-swift` | vendored in `internal/parser/grammars/tree-sitter-swift`; only the unused tree-sitter processor imports it (`references/swift.md`) |
+| swift | none | line parser (`references/swift.md`) |
 | go | none | standard library `go/parser` |
 | rust | none | line parser; no Rust grammar is in `go.mod` |
 

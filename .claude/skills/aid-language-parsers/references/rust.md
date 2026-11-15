@@ -5,9 +5,9 @@
 - Wired: `internal/language/rust/processor.go#Processor.ProcessWithOptions`
   creates `NewLineParser(source, filename)` per call and runs
   `internal/language/rust/line_parser.go#LineParser.Parse`.
-- Parser: line-based, with regular expressions, no tree-sitter. There is no Rust
-  grammar in the repository (`go.mod` holds only a commented-out replace line
-  for one), and `ast-dump` does not cover Rust. To see what the parser made of a
+- Parser: line-based, with regular expressions, no tree-sitter. Rust is distilled
+  by this line parser only, there is no Rust grammar in the repository, and
+  `ast-dump` does not cover Rust. To see what the parser made of a
   file, use the IR: `--format jsonl`, or `-vvv` (`aid-testing-debugging`,
   section 7).
 - Each construct is matched by a regular expression against one line
@@ -65,13 +65,7 @@ Methods inside `impl Trait for Type` have no modifier in the source but are
 
 ## Unused files
 
-- `ast_parser.go` (kept on purpose for the tree-sitter migration, roadmap
-  decision D3, and marked with a comment at the top): a tree-sitter parser without a grammar. `NewProcessor`
-  stores a `NewASTParser()` whose `parser` field is nil, and nothing calls its
-  `ProcessSource`. The `deadcode` tool does not flag it, because its methods are
-  exported.
-
-Also off the live path, inside `line_parser.go`: `LineParser.getIndent`.
+Off the live path, inside `line_parser.go`: `LineParser.getIndent`.
 
 ## Known gaps
 

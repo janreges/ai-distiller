@@ -117,7 +117,7 @@ Swift emphasizes protocol-oriented programming. AI Distiller recognizes:
 
 ### Parser Implementation
 
-Due to stability issues with the tree-sitter Swift parser, AI Distiller uses a line-based parser that covers the common Swift constructs. The tree-sitter grammar is still compiled in for a later migration but is not used.
+Due to stability issues with the tree-sitter Swift parser, AI Distiller uses a line-based parser that covers the common Swift constructs.
 
 ## Examples
 

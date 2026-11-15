@@ -20,11 +20,8 @@ require (
 	github.com/tree-sitter/tree-sitter-python v0.23.6
 	github.com/tree-sitter/tree-sitter-ruby v0.23.1
 	golang.org/x/term v0.45.0
-	tree-sitter-swift v0.0.0
 	tree-sitter-typescript v0.0.0
 )
-
-replace tree-sitter-swift => ./internal/parser/grammars/tree-sitter-swift
 
 replace tree-sitter-typescript => ./internal/parser/grammars/tree-sitter-typescript
 

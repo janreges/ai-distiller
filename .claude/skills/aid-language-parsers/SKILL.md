@@ -95,10 +95,10 @@ the grammars from `github.com/tree-sitter/...` and `github.com/fwcd/...` are wra
 `sitter.NewLanguage(...)`. The Go package is `internal/language/golang/`, and its
 processor registers as `go`.
 
-Rust and Swift hold a second parser that is never called (a tree-sitter parser,
-kept for the tree-sitter migration). A failed tree-sitter parse returns an
-error; no language falls back to another parser. Each reference lists the
-unused files under `## Unused files`; fixing a bug there changes nothing.
+Rust and Swift are distilled by their line parsers only; they have no
+tree-sitter parser. A failed tree-sitter parse returns an
+error; no language falls back to another parser. A reference may list unused
+code under `## Unused files`; fixing a bug there changes nothing.
 
 ## 3. Which layer is wrong
 

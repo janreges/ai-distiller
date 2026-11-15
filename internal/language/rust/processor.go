@@ -13,7 +13,6 @@ import (
 // Processor handles Rust source code processing
 type Processor struct {
 	processor.BaseProcessor
-	treeparser *ASTParser
 }
 
 // NewProcessor creates a new Rust processor
@@ -24,7 +23,6 @@ func NewProcessor() *Processor {
 			"1.0.0",
 			[]string{".rs"},
 		),
-		treeparser: NewASTParser(),
 	}
 }
 
@@ -36,7 +34,7 @@ func (p *Processor) Process(ctx context.Context, reader io.Reader, filename stri
 		return nil, fmt.Errorf("failed to read source: %w", err)
 	}
 
-	// Temporarily always use line parser until tree-sitter issue is resolved
+	// Always use line parser (Rust has no tree-sitter parser)
 	parser := NewLineParser(source, filename)
 	return parser.Parse(), nil
 }
@@ -49,7 +47,7 @@ func (p *Processor) ProcessWithOptions(ctx context.Context, reader io.Reader, fi
 		return nil, fmt.Errorf("failed to read source: %w", err)
 	}
 
-	// Temporarily always use line parser until tree-sitter issue is resolved
+	// Always use line parser (Rust has no tree-sitter parser)
 	parser := NewLineParser(source, filename)
 	file := parser.Parse()
 

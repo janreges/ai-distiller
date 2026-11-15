@@ -66,9 +66,8 @@ Reached, but running only in a corner:
   only with `--dependency-aware`. Its queries are embedded from
   `internal/semantic/queries`.
 - `internal/parser/grammars`: not a package of this module but separate Go
-  modules: `tree-sitter-typescript` (live) and `tree-sitter-swift` (imported
-  only by Swift's unused tree-sitter processor), which `go.mod` replaces with
-  these paths (`aid-language-parsers`, `references/tree-sitter-cgo.md`).
+  module: `tree-sitter-typescript`, which `go.mod` replaces with
+  this path (`aid-language-parsers`, `references/tree-sitter-cgo.md`).
 
 ## Not reached by `cmd/aid`
 
@@ -86,7 +85,7 @@ by the release workflow.
 
 - `internal/aiactions/templates`, `internal/semantic/queries`: files embedded
   with `//go:embed`.
-- `internal/parser/grammars`: separate Go modules (above).
+- `internal/parser/grammars`: a separate Go module (above).
 - `internal/conformance/testdata`: the conformance fixtures.
 - `test-data/` at the top level (outside `internal/`): import-filter samples
   and Go samples; the snapshot fixtures are in `testdata/`.

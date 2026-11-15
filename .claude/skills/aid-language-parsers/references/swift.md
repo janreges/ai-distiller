@@ -5,9 +5,8 @@
 - Wired: `internal/language/swift/processor.go#Processor.ProcessWithOptions`
   creates `NewLineParser(source, filename)` per call and runs
   `internal/language/swift/line_parser.go#LineParser.Parse`.
-- Parser: line-based, with regular expressions, no tree-sitter. The tree-sitter
-  path is commented out in `ProcessWithOptions`, and `ast-dump` does not cover
-  Swift. To see what the parser made of a file, use the IR: `--format jsonl`, or
+- Parser: line-based, with regular expressions, no tree-sitter. Swift is distilled
+  by this line parser only, and `ast-dump` does not cover Swift. To see what the parser made of a file, use the IR: `--format jsonl`, or
   `-vvv` (`aid-testing-debugging`, section 7).
 - Each line is tried against the regular expressions built in
   `internal/language/swift/line_parser.go#NewLineParser`, in this order:
@@ -66,13 +65,6 @@ Protocol requirements are `public`. Swift produces no `protected`.
 - A property's `DefaultValue` holds the value without the `=` (`0`); the
   formatter adds ` = `.
 - `Extensions` is not used.
-
-## Unused files
-
-- `tree_sitter_processor.go` (kept on purpose for the tree-sitter migration,
-  roadmap decision D3, and marked with a comment at the top): its only caller in `processor.go` is commented
-  out. It is still compiled, and with it the vendored grammar in
-  `internal/parser/grammars/tree-sitter-swift`, which nothing else imports.
 
 ## Known gaps
 

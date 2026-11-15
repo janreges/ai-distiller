@@ -61,7 +61,7 @@ More commands and the update workflow: `.claude/skills/aid-testing-debugging/SKI
 - `cmd/aid`: the CLI entry point; other `cmd/*` are developer tools.
 - `internal/cli`: flags, the run pipeline, stdin handling.
 - `internal/language`: one processor per language plus the registry and stdin detector.
-- `internal/parser/grammars`: the TypeScript and Swift grammar modules that `go.mod` replaces; there is no Go package here.
+- `internal/parser/grammars`: the TypeScript grammar module that `go.mod` replaces; there is no Go package here.
 - `internal/ir`: the intermediate representation every processor produces.
 - `internal/stripper`: removes what the flags exclude (visibility, bodies, comments).
 - `internal/formatter`: text, markdown, json, jsonl and xml output.
