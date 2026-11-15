@@ -209,3 +209,43 @@ func slicesEqual(a, b []string) bool {
 	}
 	return true
 }
+
+func TestArrowFunctionBody(t *testing.T) {
+	cases := map[string]struct {
+		src        string
+		wantImpl   string
+		wantParams []string
+	}{
+		"expression body":             {"const f = (a, b) => a + b;", "a + b", []string{"a", "b"}},
+		"bare parameter":              {"const f = x => x * 2;", "x * 2", []string{"x"}},
+		"identifier body is no param": {"const f = x => y;", "y", []string{"x"}},
+		"block body":                  {"const f = async (a) => { return a; };", "{ return a; }", []string{"a"}},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			file, err := NewProcessor().Process(context.Background(), strings.NewReader(c.src), "test.js")
+			if err != nil {
+				t.Fatalf("Failed to process: %v", err)
+			}
+			var fn *ir.DistilledFunction
+			for _, child := range file.Children {
+				if f, ok := child.(*ir.DistilledFunction); ok && f.Name == "f" {
+					fn = f
+				}
+			}
+			if fn == nil {
+				t.Fatalf("function f not found in %#v", file.Children)
+			}
+			if fn.Implementation != c.wantImpl {
+				t.Errorf("Implementation = %q, want %q", fn.Implementation, c.wantImpl)
+			}
+			var params []string
+			for _, p := range fn.Parameters {
+				params = append(params, p.Name)
+			}
+			if !slicesEqual(params, c.wantParams) {
+				t.Errorf("Parameters = %v, want %v", params, c.wantParams)
+			}
+		})
+	}
+}

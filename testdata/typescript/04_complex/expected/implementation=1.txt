@@ -9,12 +9,23 @@ export interface IPlugin {
 }
 
 export class PluginManager {
-    public constructor(settings: PluginSettings)
-        // implementation
+    public constructor(settings: PluginSettings) {}
     @LogExecution
-    public registerPlugin(plugin: IPlugin): void
-        // implementation
-    public runAll(data: any): void
-        // implementation
+    public registerPlugin(plugin: IPlugin): void {
+        if (this.plugins.has(plugin.name)) {
+          throw new Error(`Plugin "${plugin.name}" is already registered.`);
+        }
+        console.log(`Registering plugin: ${plugin.name} with settings`, this.settings);
+        this.plugins.set(plugin.name, plugin);
+    }
+    public runAll(data: any): void {
+        this.plugins.forEach(plugin => {
+          try {
+            plugin.execute(data);
+          } catch (error) {
+            console.error(`Plugin ${plugin.name} failed`, error);
+          }
+        });
+    }
 }
 </file>

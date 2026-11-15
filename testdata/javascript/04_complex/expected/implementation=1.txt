@@ -5,24 +5,57 @@ const mutationLog: Array<{type: = []
 const observableProxyHandler: ProxyHandler<object> = { get(target, key, receiver) -> any, set(target, key, value, receiver) -> boolean }
 
 class ObservableFactory:
-    static create(initialData: object) -> object
-        // implementation
-    static subscribe(observable: object, callback: Function)
-        // implementation
-    static unsubscribe(observable: object, callback: Function)
-        // implementation
-    static * getMutationHistory() -> Generator<string,
-        // implementation
+    static create(initialData: object) -> object {
+        if (typeof initialData !== 'object' || initialData === null) {
+            throw new Error('Initial data must be an object.');
+        }
+        // Associate a new Set of listeners for this object in our WeakMap.
+        objectListeners.set(initialData, new Set());
+        return new Proxy(initialData, observableProxyHandler);
+    }
+    static subscribe(observable: object, callback: Function) {
+        const target = observable[RAW_OBJECT_SYMBOL]; // Get the original object via Symbol
+        if (!target || !objectListeners.has(target)) {
+            throw new Error('Can only subscribe to observables created by this factory.');
+        }
+        objectListeners.get(target).add(callback);
+    }
+    static unsubscribe(observable: object, callback: Function) {
+        const target = observable[RAW_OBJECT_SYMBOL];
+        if (target && objectListeners.has(target)) {
+            objectListeners.get(target).delete(callback);
+        }
+    }
+    static * getMutationHistory() -> Generator<string, {
+        for (const log of mutationLog) {
+            yield `[${new Date(log.timestamp).toISOString()}] ${log.type}: ${log.key} => ${JSON.stringify(log.value)}`;
+        }
+    }
 
 class ConfigManager:
-    constructor(config: object = {})
-        // implementation
-    get(key: string) -> any
-        // implementation
-    set(key: string, value: any)
-        // implementation
-    getChangeHistory() -> Array
-        // implementation
+    constructor(config: object = {}) {
+        this._observable = ObservableFactory.create(config);
+        this._changeHistory = [];
+
+        // Private change listener
+        this._internalListener = (change) => {
+            this._changeHistory.push({
+                ...change,
+                timestamp: Date.now()
+            });
+        };
+
+        ObservableFactory.subscribe(this._observable, this._internalListener);
+    }
+    get(key: string) -> any {
+        return this._observable[key];
+    }
+    set(key: string, value: any) {
+        this._observable[key] = value;
+    }
+    getChangeHistory() -> Array {
+        return [...this._changeHistory];
+    }
 const appConfig = ObservableFactory.create({
     apiEndpoint: 'https://api.example.com/v1',
     timeout: 5000,
@@ -31,6 +64,7 @@ const appConfig = ObservableFactory.create({
         betaAccess: true
     }
 })
-const loggerCallback = (change)
-    // implementation
+const loggerCallback = (change) => {
+    console.log(`Logger Callback Notified: Key '${String(change.key)}' changed to`, change.value);
+}
 </file>

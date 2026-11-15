@@ -3,16 +3,12 @@ package conformance
 // knownGaps lists the checks that fail today, keyed "<lang>/<cap>", with the
 // reason. A fix deletes its entry: a listed check that passes fails the suite.
 var knownGaps = map[string]string{
-	"typescript/body-with-implementation": `C1: formatter prints "// implementation"`,
-	"typescript/expand-by-name":           `C1: formatter prints "// implementation"`,
-	"javascript/body-with-implementation": `C1: formatter prints "// implementation"`,
-	"javascript/expand-by-name":           `C1: formatter prints "// implementation"`,
-	"cpp/body-with-implementation":        "C1: formatter never prints bodies",
-	"cpp/expand-by-name":                  "C1: formatter never prints bodies",
-	"swift/body-with-implementation":      "C1: line parser does not capture bodies",
-	"swift/expand-by-name":                "C1: line parser does not capture bodies",
-	"kotlin/body-with-implementation":     "C1: block bodies are not captured",
-	"kotlin/expand-by-name":               "C1: block bodies are not captured",
+	"cpp/body-with-implementation":    "C1: formatter never prints bodies",
+	"cpp/expand-by-name":              "C1: formatter never prints bodies",
+	"swift/body-with-implementation":  "C1: line parser does not capture bodies",
+	"swift/expand-by-name":            "C1: line parser does not capture bodies",
+	"kotlin/body-with-implementation": "C1: block bodies are not captured",
+	"kotlin/expand-by-name":           "C1: block bodies are not captured",
 
 	"typescript/comment-with-comments": "H5: parser emits no comments",
 	"typescript/doc-by-default":        "H5: parser emits no comments",

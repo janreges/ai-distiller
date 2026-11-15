@@ -3,35 +3,166 @@ const TASK_METADATA: symbol = Symbol('taskMetadata')
 const TaskPrototype: object = { init(id, generatorFunc, props), getMetadata(key) -> any, _updateMetadata(key, value) }
 
 class CooperativeScheduler:
-    constructor()
-        // implementation
-    registerTask(generatorFunc: GeneratorFunction, options = {}) -> number
-        // implementation
-    start()
-        // implementation
-    async shutdown(timeout = 5000) -> Promise<void>
-        // implementation
-    getMetrics() -> object
-        // implementation
-    inspectTask(taskId: number) -> object
-        // implementation
+    constructor() {
+        /** @private */
+        this.taskQueue = [];
+        /** @private @type {Map<number, object>} */
+        this.tasks = new Map();
+        /** @private */
+        this.nextTaskId = 1;
+        /** @private */
+        this.isRunning = false;
+        /** @private */
+        this._metrics = {
+            tasksExecuted: 0,
+            totalRuntime: 0,
+            averageTaskTime: 0
+        };
+    }
+    registerTask(generatorFunc: GeneratorFunction, options = {}) -> number {
+        const id = this.nextTaskId++;
+        // Create a new task object using prototype-based "inheritance".
+        const task = Object.create(TaskPrototype).init(id, generatorFunc, options);
+        this.tasks.set(id, task);
+        this.taskQueue.push(id);
+        console.log(`Task ${id} registered.`);
+        return id;
+    }
+    start() {
+        if (this.isRunning) return;
+        this.isRunning = true;
+        console.log('Scheduler started.');
+        this.run();
+    }
+    async shutdown(timeout = 5000) -> Promise<void> {
+        console.log('Scheduler shutting down gracefully...');
+        this.isRunning = false; // Prevent new iterations from starting with new tasks
+
+        const completionPromises = Array.from(this.tasks.values()).map(task => {
+            return new Promise(resolve => {
+                // This is a simplified shutdown signal. A real implementation might
+                // use `task.iterator.return()` to force completion.
+                // Here, we just wait for it to be removed from the map.
+                const interval = setInterval(() => {
+                    if (!this.tasks.has(task.id)) {
+                        clearInterval(interval);
+                        resolve({ status: 'fulfilled', value: task.id });
+                    }
+                }, 100);
+            });
+        });
+
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Shutdown timeout exceeded')), timeout));
+
+        const results = await Promise.allSettled([Promise.race([Promise.all(completionPromises), timeoutPromise])]);
+        console.log('Shutdown complete.', results);
+    }
+    getMetrics() -> object {
+        return { ...this._metrics };
+    }
+    inspectTask(taskId: number) -> object {
+        const task = this.tasks.get(taskId);
+        if (!task) return null;
+
+        const properties = Reflect.ownKeys(task);
+        const inspection = {
+            id: task.id,
+            properties: properties.map(prop => ({
+                key: prop,
+                type: typeof task[prop],
+                enumerable: Reflect.getOwnPropertyDescriptor(task, prop)?.enumerable,
+                value: prop === TASK_METADATA ? '[PRIVATE METADATA]' : task[prop]
+            })),
+            metadata: task[TASK_METADATA],
+            prototype: Object.getPrototypeOf(task) === TaskPrototype ? 'TaskPrototype' : 'Unknown'
+        };
+
+        return inspection;
+    }
 
 class MemoryPool:
-    constructor(factory: Function, maxSize: number = 10)
-        // implementation
-    acquire() -> object
-        // implementation
-    release(obj: object)
-        // implementation
-    getStats() -> object
-        // implementation
-const delay = (ms)
-* function counterTask()
-    // implementation
-* function dataFetcherTask(task)
-    // implementation
-* function complexIteratorTask()
-    // implementation
+    constructor(factory: Function, maxSize: number = 10) {
+        this._factory = factory;
+        this._maxSize = maxSize;
+        this._pool = [];
+        this._created = 0;
+        this._reused = 0;
+    }
+    acquire() -> object {
+        if (this._pool.length > 0) {
+            this._reused++;
+            return this._pool.pop();
+        }
+
+        this._created++;
+        return this._factory();
+    }
+    release(obj: object) {
+        if (this._pool.length < this._maxSize) {
+            // Reset object state if it has a reset method
+            if (typeof obj.reset === 'function') {
+                obj.reset();
+            }
+            this._pool.push(obj);
+        }
+    }
+    getStats() -> object {
+        return {
+            poolSize: this._pool.length,
+            created: this._created,
+            reused: this._reused,
+            efficiency: this._reused / (this._created + this._reused) || 0
+        };
+    }
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+* function counterTask() {
+    console.log('Counter task started.');
+    for (let i = 1; i <= 5; i++) {
+        console.log(`Counter: ${i}`);
+        yield delay(300); // Yield control and pause for 300ms
+    }
+    console.log('Counter task finished.');
+}
+* function dataFetcherTask(task) {
+    console.log('Data fetcher task started.');
+    console.log(`Fetching data for task ID ${task.id} with metadata:`, Reflect.get(task, TASK_METADATA));
+    yield delay(500); // Simulate network request
+    console.log('Data fetched.');
+    yield delay(200);
+    console.log('Processing data...');
+    yield; // Yield control for one tick
+    console.log('Data fetcher finished.');
+}
+* function complexIteratorTask() {
+    console.log('Complex iterator task started.');
+
+    // Custom iterator that yields prime numbers
+    const primeIterator = {
+        current: 2,
+        [Symbol.iterator]() { return this; },
+        next() {
+            while (!this._isPrime(this.current)) {
+                this.current++;
+            }
+            const value = this.current++;
+            return { value, done: value > 20 };
+        },
+        _isPrime(num) {
+            if (num < 2) return false;
+            for (let i = 2; i <= Math.sqrt(num); i++) {
+                if (num % i === 0) return false;
+            }
+            return true;
+        }
+    };
+
+    for (const prime of primeIterator) {
+        console.log(`Prime: ${prime}`);
+        yield delay(100);
+    }
+
+    console.log('Complex iterator task finished.');
+}
 const scheduler = new CooperativeScheduler()
 const objectPool = new MemoryPool(() => ({ data: null, reset() { this.data = null; } }))
 </file>

@@ -19,3 +19,5 @@ export class ConfWidget {
         return b;
     }
 }
+
+const confArrow = (a) => a + 1;

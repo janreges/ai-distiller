@@ -1,22 +1,50 @@
 <file path="source.js">
 
 class UserModel:
-    constructor(id: number, email: string, name: string)
-        // implementation
-    get id() -> number
-        // implementation
-    get email() -> string
-        // implementation
-    set email(email: string)
-        // implementation
-    get createdAt() -> Date
-        // implementation
-    toString() -> string
-        // implementation
-    toJSON() -> Object
-        // implementation
-    static fromJSON(data: Object) -> UserModel
-        // implementation
-    static isValidUserData(data: Object) -> boolean
-        // implementation
+    constructor(id: number, email: string, name: string) {
+        this.#id = id;
+        this.#email = email;
+        this.name = name;
+        this.#createdAt = new Date();
+        this._validateEmail();
+    }
+    get id() -> number {
+        return this.#id;
+    }
+    get email() -> string {
+        return this.#email;
+    }
+    set email(email: string) {
+        this.#email = email;
+        this._validateEmail();
+    }
+    get createdAt() -> Date {
+        return new Date(this.#createdAt);
+    }
+    toString() -> string {
+        const age = this._getAccountAge();
+        return `User #${this.#id}: ${this.name} (${this.#email}) - ${age} days old`;
+    }
+    toJSON() -> Object {
+        return {
+            id: this.#id,
+            email: this.#email,
+            name: this.name,
+            createdAt: this.#createdAt.toISOString()
+        };
+    }
+    static fromJSON(data: Object) -> UserModel {
+        const user = new UserModel(data.id, data.email, data.name);
+        if (data.createdAt) {
+            user.#createdAt = new Date(data.createdAt);
+        }
+        return user;
+    }
+    static isValidUserData(data: Object) -> boolean {
+        return data && 
+               typeof data.id === 'number' && 
+               typeof data.email === 'string' && 
+               typeof data.name === 'string' &&
+               data.email.includes('@');
+    }
 </file>

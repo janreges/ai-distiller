@@ -50,12 +50,16 @@ var fixtures = []fixture{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
 		Private:   []string{"confPrivate"},
 		ExpandSym: "confPublic",
-	}), check{Cap: "export-type-alias", Contains: []string{"export type ConfId = string"}})},
-	{Lang: "javascript", File: "javascript/sample.js", Checks: standard(markers{
+	}), check{Cap: "export-type-alias", Contains: []string{"export type ConfId = string"}},
+		check{Cap: "body-indent", Flags: []string{"--implementation=1"},
+			Contains: []string{"        const a = \"CONF_BODY_A\";\n        return a;\n    }\n"}})},
+	{Lang: "javascript", File: "javascript/sample.js", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "confPublic", "confOther"},
 		Private:   []string{"#confPrivate"},
 		ExpandSym: "confPublic",
-	})},
+	}), check{Cap: "body-indent", Flags: []string{"--implementation=1"},
+		Contains: []string{"        const a = \"CONF_BODY_A\";\n        return a;\n    }\n"}},
+		check{Cap: "arrow-expression-body", Flags: []string{"--implementation=1"}, Contains: []string{"=> a + 1"}})},
 	{Lang: "go", File: "go/sample.go", Checks: standard(markers{
 		Public:    []string{"ConfWidget", "ConfField", "ConfPublic", "ConfOther"},
 		Private:   []string{"confPrivate"},

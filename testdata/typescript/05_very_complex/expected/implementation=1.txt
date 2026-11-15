@@ -5,9 +5,15 @@ export type ListenerMap<TEventMap extends object> = {
 }
 
 export class TypedEventEmitter<TEventMap extends object> {
-    public on<TEventName extends keyof ListenerMap<TEventMap>>(eventName: TEventName, listener: ListenerMap<TEventMap>[TEventName]): void
-        // implementation
-    public emit<TEventName extends keyof ListenerMap<TEventMap>>(eventName: TEventName, payload: Payload<ListenerMap<TEventMap>[TEventName]>): void
-        // implementation
+    public on<TEventName extends keyof ListenerMap<TEventMap>>(eventName: TEventName, listener: ListenerMap<TEventMap>[TEventName]): void {
+        this.listeners[eventName] = listener;
+    }
+    public emit<TEventName extends keyof ListenerMap<TEventMap>>(eventName: TEventName, payload: Payload<ListenerMap<TEventMap>[TEventName]>): void {
+        const listener = this.listeners[eventName];
+        if (listener) {
+          // We need a type assertion here due to TS limitations with complex indexed access.
+          (listener as (p: typeof payload) => void)(payload);
+        }
+    }
 }
 </file>

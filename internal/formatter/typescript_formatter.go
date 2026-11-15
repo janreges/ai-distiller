@@ -295,11 +295,17 @@ func (f *TypeScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 		fmt.Fprintf(w, ": %s", fn.Returns.Name)
 	}
 
-	fmt.Fprintln(w)
-
-	// Implementation
-	if fn.Implementation != "" {
-		fmt.Fprintf(w, "%s    // implementation\n", indentStr)
+	impl := strings.TrimSpace(fn.Implementation)
+	switch {
+	case impl == "":
+		fmt.Fprintln(w)
+	case strings.HasPrefix(impl, "{"):
+		if indent == 0 && isConst {
+			fmt.Fprint(w, " =>")
+		}
+		fmt.Fprint(w, renderBody(fn.Implementation, indentStr))
+	default:
+		fmt.Fprintf(w, " => %s\n", impl)
 	}
 
 	return nil

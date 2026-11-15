@@ -10,9 +10,15 @@ export type NotificationPayload<T> = {
 }
 
 export class EmailNotificationService extends BaseNotificationService {
-    public constructor()
-        // implementation
-    public async send<T extends { id: string | number; email: string }>(payload: NotificationPayload<T>): Promise<boolean>
-        // implementation
+    public constructor() {
+        super("EMAIL");
+    }
+    public async send<T extends { id: string | number; email: string }>(payload: NotificationPayload<T>): Promise<boolean> {
+        this.log(`Preparing to send email to user ${payload.recipient.id}.`);
+        // Fake sending logic
+        await new Promise(resolve => setTimeout(resolve, 100));
+        this.log(`Email sent to ${payload.recipient.email}.`);
+        return true;
+    }
 }
 </file>

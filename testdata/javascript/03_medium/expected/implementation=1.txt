@@ -3,32 +3,122 @@ const EventEmitter = require('events')
 const NotificationMixin = { async send(payload) -> Promise<boolean>, _validatePayload(payload) -> boolean }
 
 class BaseNotificationService extends EventEmitter:
-    constructor(serviceName: string)
-        // implementation
-    get stats() -> Object
-        // implementation
-    get isActive() -> boolean
-        // implementation
-    async send(payload: Object) -> Promise<boolean>
-        // implementation
-    async processNotification(payload: Object) -> Promise<boolean>
-        // implementation
-    deactivate()
-        // implementation
-    activate()
-        // implementation
+    constructor(serviceName: string) {
+        super();
+        this.serviceName = serviceName;
+        this._stats = {
+            sent: 0,
+            failed: 0,
+            lastSent: null
+        };
+        this._isActive = true;
+    }
+    get stats() -> Object {
+        return { ...this._stats };
+    }
+    get isActive() -> boolean {
+        return this._isActive;
+    }
+    async send(payload: Object) -> Promise<boolean> {
+        throw new Error('send() must be implemented by subclass');
+    }
+    async processNotification(payload: Object) -> Promise<boolean> {
+        if (!this._isActive) {
+            throw new Error('Service is not active');
+        }
+
+        try {
+            this.emit('beforeSend', payload);
+
+            if (!this._validatePayload(payload)) {
+                throw new Error('Invalid payload');
+            }
+
+            const result = await this.send(payload);
+
+            if (result) {
+                this._stats.sent++;
+                this._stats.lastSent = new Date();
+                this.emit('sent', payload);
+            } else {
+                this._stats.failed++;
+                this.emit('failed', payload);
+            }
+
+            return result;
+        } catch (error) {
+            this._stats.failed++;
+            this.emit('error', error, payload);
+            throw error;
+        }
+    }
+    deactivate() {
+        this._isActive = false;
+        this.emit('deactivated');
+    }
+    activate() {
+        this._isActive = true;
+        this.emit('activated');
+    }
 
 class EmailNotificationService extends BaseNotificationService:
-    constructor(config: Object = {})
-        // implementation
-    async send(payload: Object) -> Promise<boolean>
-        // implementation
-    getActiveConnections() -> number
-        // implementation
+    constructor(config: Object = {}) {
+        super('email');
+        this._config = {
+            smtp: config.smtp || 'localhost',
+            port: config.port || 587,
+            timeout: config.timeout || 5000,
+            ...config
+        };
+        this._connectionPool = new Map();
+    }
+    async send(payload: Object) -> Promise<boolean> {
+        const { recipient, message, subject = 'Notification' } = payload;
+
+        // Simulate async email sending
+        const connection = await this._getConnection();
+
+        try {
+            await this._sendEmail(connection, {
+                to: recipient,
+                subject,
+                body: message
+            });
+
+            this._logEmailSent(recipient);
+            return true;
+        } catch (error) {
+            this._logEmailError(recipient, error);
+            return false;
+        } finally {
+            this._releaseConnection(connection);
+        }
+    }
+    getActiveConnections() -> number {
+        return this._connectionPool.size;
+    }
 
 class SMSNotificationService extends BaseNotificationService:
-    constructor(provider: string = 'default')
-        // implementation
-    async send(payload: Object) -> Promise<boolean>
-        // implementation
+    constructor(provider: string = 'default') {
+        super('sms');
+        this._provider = provider;
+        this._rateLimitQueue = [];
+    }
+    async send(payload: Object) -> Promise<boolean> {
+        const { recipient, message } = payload;
+
+        // Check rate limiting
+        if (!this._checkRateLimit()) {
+            throw new Error('Rate limit exceeded');
+        }
+
+        // Simulate SMS API call
+        try {
+            await this._sendSMS(recipient, message);
+            return true;
+        } catch (error) {
+            console.error(`SMS failed: ${error.message}`);
+            return false;
+        }
+    }
 </file>

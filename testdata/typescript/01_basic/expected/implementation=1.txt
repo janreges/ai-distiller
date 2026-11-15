@@ -1,7 +1,12 @@
 <file path="source.ts">
 export type UserID = string | number
-export const isValidEmail(email: string): boolean
-    // implementation
-export const formatUserID(id: UserID): string
-    // implementation
+export const isValidEmail(email: string): boolean => {
+    if (!email) return false;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+}
+export const formatUserID(id: UserID): string => {
+    const normalizedId = _normalizeString(String(id));
+    return `user_${normalizedId}`;
+}
 </file>

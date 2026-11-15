@@ -917,23 +917,22 @@ func (p *TreeSitterProcessor) processArrowFunction(node *sitter.Node, fn *ir.Dis
 		case "async":
 			fn.Modifiers = append(fn.Modifiers, ir.ModifierAsync)
 
-		case "identifier":
-			// Single parameter without parentheses
-			fn.Parameters = append(fn.Parameters, ir.Parameter{
-				Name: p.getNodeText(child),
-			})
-
 		case "formal_parameters":
 			p.processParameters(child, fn)
-
-		case "statement_block", "expression":
-			// Function body
-			startByte := child.StartByte()
-			endByte := child.EndByte()
-			if int(startByte) < len(p.source) && int(endByte) <= len(p.source) {
-				fn.Implementation = string(p.source[startByte:endByte])
-			}
 		}
+	}
+
+	// Single parameter without parentheses: x => ...
+	if param := node.ChildByFieldName("parameter"); param != nil {
+		fn.Parameters = append(fn.Parameters, ir.Parameter{
+			Name: p.getNodeText(param),
+		})
+	}
+
+	// The body is a statement_block (stored with its braces) or any
+	// expression (stored bare; the formatter prints it as "=> expr").
+	if body := node.ChildByFieldName("body"); body != nil {
+		fn.Implementation = p.getNodeText(body)
 	}
 }
 

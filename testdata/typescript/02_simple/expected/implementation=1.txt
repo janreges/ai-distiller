@@ -3,11 +3,18 @@
 export class UserModel {
     public readonly id: number
     public username: string
-    public constructor(id: number, username: string, email: string)
-        // implementation
-    public getProfileInfo()
-        // implementation
-    public recordLogin(): void
-        // implementation
+    public constructor(id: number, username: string, email: string) {
+        this.id = id;
+        this._validateEmail(email);
+    }
+    public getProfileInfo() {
+        return {
+          username: this.username,
+          profileUrl: this._generateProfileUrl(),
+        };
+    }
+    public recordLogin(): void {
+        this.lastLogin = new Date();
+    }
 }
 </file>

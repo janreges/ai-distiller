@@ -125,6 +125,7 @@ func (f *JavaScriptFormatter) formatClass(w io.Writer, class *ir.DistilledClass,
 
 func (f *JavaScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, indent int) error {
 	indentStr := strings.Repeat("    ", indent)
+	isArrow := false // top-level const function, printed in its "const f = (...)" form
 
 	// JavaScript methods don't have visibility keywords (except # for private)
 	// The # prefix is part of the method name itself
@@ -176,6 +177,7 @@ func (f *JavaScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 		// Format based on context
 		if indent == 0 && isConst {
 			// Top-level const arrow function
+			isArrow = true
 			fmt.Fprintf(w, "%sconst %s = (%s)", indentStr, functionName, f.formatParameters(fn.Parameters))
 		} else if indent == 0 {
 			// Top-level function declaration
@@ -216,11 +218,17 @@ func (f *JavaScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 		fmt.Fprintf(w, " -> %s", fn.Returns.Name)
 	}
 
-	fmt.Fprintln(w)
-
-	// Implementation
-	if fn.Implementation != "" {
-		fmt.Fprintf(w, "%s    // implementation\n", indentStr)
+	impl := strings.TrimSpace(fn.Implementation)
+	switch {
+	case impl == "":
+		fmt.Fprintln(w)
+	case strings.HasPrefix(impl, "{"):
+		if isArrow {
+			fmt.Fprint(w, " =>")
+		}
+		fmt.Fprint(w, renderBody(fn.Implementation, indentStr))
+	default:
+		fmt.Fprintf(w, " => %s\n", impl)
 	}
 
 	return nil
