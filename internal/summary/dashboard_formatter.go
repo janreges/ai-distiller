@@ -3,7 +3,7 @@ package summary
 import (
 	"fmt"
 	"io"
-	
+
 	"github.com/dustin/go-humanize"
 )
 
@@ -20,7 +20,7 @@ func NewDashboardFormatter() *DashboardFormatter {
 // Format outputs a speedometer dashboard style summary
 func (f *DashboardFormatter) Format(w io.Writer, stats Stats) error {
 	ratio := getCompressionRatio(stats.OriginalBytes, stats.DistilledBytes)
-	
+
 	// Calculate speed percentage (base: 1000ms = 0%, 0ms = 100%)
 	speedPct := 100.0
 	if stats.Duration.Milliseconds() > 0 {
@@ -32,15 +32,15 @@ func (f *DashboardFormatter) Format(w io.Writer, stats Stats) error {
 			speedPct = 100
 		}
 	}
-	
+
 	// Build progress bars
 	speedBar := buildProgressBar(speedPct, 10)
 	savedBar := buildProgressBar(ratio, 10)
-	
+
 	// Format the dashboard
 	fmt.Fprintln(w, "╔═══ AI Distiller ═══╗")
-	fmt.Fprintf(w, "║ Speed: %s %3.0f%% ║ %s\n", 
-		speedBar, 
+	fmt.Fprintf(w, "║ Speed: %s %3.0f%% ║ %s\n",
+		speedBar,
 		speedPct,
 		formatDuration(stats.Duration),
 	)
@@ -50,15 +50,15 @@ func (f *DashboardFormatter) Format(w io.Writer, stats Stats) error {
 		humanize.Bytes(uint64(stats.OriginalBytes)),
 		humanize.Bytes(uint64(stats.DistilledBytes)),
 	)
-	
+
 	// Add token savings if available
 	if stats.OriginalTokens > 0 && stats.DistilledTokens > 0 {
 		tokensSaved := stats.OriginalTokens - stats.DistilledTokens
 		fmt.Fprintf(w, "║ Tokens saved: ~%-8s ║\n", formatTokenCount(tokensSaved))
 	}
-	
+
 	fmt.Fprintln(w, "╚═════════════════════╝")
-	
+
 	// Add output path if not stdout below the box
 	if !stats.IsStdout && stats.OutputPath != "" {
 		fileEmoji := "💾"
@@ -66,7 +66,7 @@ func (f *DashboardFormatter) Format(w io.Writer, stats Stats) error {
 			fileEmoji = "→"
 		}
 		fmt.Fprintf(w, "%s Distilled output saved to: %s\n", fileEmoji, stats.OutputPath)
-		
+
 		// Add AI agent recommendation, unless the same output was printed
 		if !stats.Printed {
 			aiEmoji := "🤖"
@@ -76,6 +76,6 @@ func (f *DashboardFormatter) Format(w io.Writer, stats Stats) error {
 			fmt.Fprintf(w, "%s If you're an AI agent, load this ENTIRE file into your context (don't use grep/tail/head) for a comprehensive code overview.\n", aiEmoji)
 		}
 	}
-	
+
 	return nil
 }

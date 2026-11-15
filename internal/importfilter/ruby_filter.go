@@ -21,20 +21,20 @@ func NewRubyFilter() ImportFilter {
 func (f *RubyFilter) FilterUnusedImports(code string, debugLevel int) (string, []string, error) {
 	f.LogDebug(debugLevel, 1, "Starting Ruby import filtering")
 	f.LogDebug(debugLevel, 2, "Code length: %d bytes", len(code))
-	
+
 	// Parse imports
 	imports, err := f.parseImports(code, debugLevel)
 	if err != nil {
 		return code, nil, err
 	}
-	
+
 	if len(imports) == 0 {
 		f.LogDebug(debugLevel, 1, "No imports found")
 		return code, nil, nil
 	}
-	
+
 	f.LogDebug(debugLevel, 1, "Found %d import statements", len(imports))
-	
+
 	// Find the last import line to know where to start searching for usage
 	lastImportLine := 0
 	for _, imp := range imports {
@@ -42,25 +42,25 @@ func (f *RubyFilter) FilterUnusedImports(code string, debugLevel int) (string, [
 			lastImportLine = imp.EndLine
 		}
 	}
-	
+
 	// Check usage and collect unused imports
 	var removedImports []string
 	var linesToRemove []struct{ start, end int }
-	
+
 	for _, imp := range imports {
 		// For Ruby, we need to be careful with require/require_relative
 		// as they have side effects and might be needed even if not directly used
-		
+
 		// Always keep require statements that might have side effects
 		if strings.Contains(imp.Module, "/") || strings.Contains(imp.Module, "-") {
 			// Likely a gem or file path, keep it
 			f.LogDebug(debugLevel, 3, "Keeping require with potential side effects: %s", imp.FullLine)
 			continue
 		}
-		
+
 		// For simple module names, check if they're used
 		searchName := f.extractModuleName(imp.Module)
-		
+
 		if searchName != "" && f.SearchForUsage(code, searchName, lastImportLine) {
 			f.LogDebug(debugLevel, 3, "Found usage of module '%s'", searchName)
 		} else {
@@ -75,15 +75,15 @@ func (f *RubyFilter) FilterUnusedImports(code string, debugLevel int) (string, [
 			}
 		}
 	}
-	
+
 	// Remove unused imports (in reverse order to maintain line numbers)
 	result := code
 	for i := len(linesToRemove) - 1; i >= 0; i-- {
 		result = f.RemoveLines(result, linesToRemove[i].start, linesToRemove[i].end)
 	}
-	
+
 	f.LogDebug(debugLevel, 1, "Removed %d unused imports", len(removedImports))
-	
+
 	return result, removedImports, nil
 }
 
@@ -91,13 +91,13 @@ func (f *RubyFilter) FilterUnusedImports(code string, debugLevel int) (string, [
 func (f *RubyFilter) parseImports(code string, debugLevel int) ([]ImportStatement, error) {
 	var imports []ImportStatement
 	lines := strings.Split(code, "\n")
-	
+
 	// Regex patterns for Ruby require statements
 	requireRe := regexp.MustCompile(`^\s*require\s+['"]([^'"]+)['"]`)
 	requireRelativeRe := regexp.MustCompile(`^\s*require_relative\s+['"]([^'"]+)['"]`)
 	loadRe := regexp.MustCompile(`^\s*load\s+['"]([^'"]+)['"]`)
 	autoloadRe := regexp.MustCompile(`^\s*autoload\s+:(\w+),\s*['"]([^'"]+)['"]`)
-	
+
 	// Check if this is formatted output with file tags
 	inFileBlock := false
 	for _, line := range lines {
@@ -106,39 +106,39 @@ func (f *RubyFilter) parseImports(code string, debugLevel int) ([]ImportStatemen
 			break
 		}
 	}
-	
+
 	i := 0
 	for i < len(lines) {
 		line := lines[i]
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Skip file tags
 		if strings.HasPrefix(trimmed, "<file") || strings.HasPrefix(trimmed, "</file>") {
 			i++
 			continue
 		}
-		
+
 		// Skip empty lines and comments
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			i++
 			continue
 		}
-		
+
 		// Skip shebang
 		if strings.HasPrefix(trimmed, "#!/") {
 			i++
 			continue
 		}
-		
+
 		// Stop parsing imports when we hit class/module definitions
 		if strings.HasPrefix(trimmed, "class ") || strings.HasPrefix(trimmed, "module ") ||
-		   strings.HasPrefix(trimmed, "def ") {
+			strings.HasPrefix(trimmed, "def ") {
 			// We've likely hit actual code, stop parsing imports
 			if !inFileBlock {
 				break
 			}
 		}
-		
+
 		// Try to match require
 		if matches := requireRe.FindStringSubmatch(line); matches != nil {
 			imp := ImportStatement{
@@ -152,7 +152,7 @@ func (f *RubyFilter) parseImports(code string, debugLevel int) ([]ImportStatemen
 			i++
 			continue
 		}
-		
+
 		// Try to match require_relative
 		if matches := requireRelativeRe.FindStringSubmatch(line); matches != nil {
 			imp := ImportStatement{
@@ -166,7 +166,7 @@ func (f *RubyFilter) parseImports(code string, debugLevel int) ([]ImportStatemen
 			i++
 			continue
 		}
-		
+
 		// Try to match load
 		if matches := loadRe.FindStringSubmatch(line); matches != nil {
 			imp := ImportStatement{
@@ -181,7 +181,7 @@ func (f *RubyFilter) parseImports(code string, debugLevel int) ([]ImportStatemen
 			i++
 			continue
 		}
-		
+
 		// Try to match autoload
 		if matches := autoloadRe.FindStringSubmatch(line); matches != nil {
 			imp := ImportStatement{
@@ -196,10 +196,10 @@ func (f *RubyFilter) parseImports(code string, debugLevel int) ([]ImportStatemen
 			i++
 			continue
 		}
-		
+
 		i++
 	}
-	
+
 	return imports, nil
 }
 
@@ -207,7 +207,7 @@ func (f *RubyFilter) parseImports(code string, debugLevel int) ([]ImportStatemen
 func (f *RubyFilter) extractModuleName(requirePath string) string {
 	// Remove file extension
 	requirePath = strings.TrimSuffix(requirePath, ".rb")
-	
+
 	// Handle common Ruby conventions
 	// Convert snake_case to CamelCase for module names
 	parts := strings.Split(requirePath, "/")
@@ -223,7 +223,7 @@ func (f *RubyFilter) extractModuleName(requirePath string) string {
 		}
 		return camelCase
 	}
-	
+
 	return requirePath
 }
 
@@ -231,34 +231,34 @@ func (f *RubyFilter) extractModuleName(requirePath string) string {
 func (f *RubyFilter) isLikelyUnused(module string, code string, afterLine int) bool {
 	// Very conservative approach for Ruby
 	// Only consider it unused if it's a simple module name that we can track
-	
+
 	// If it contains path separators, it might be loading files with side effects
 	if strings.Contains(module, "/") {
 		return false
 	}
-	
+
 	// If it's a gem name (contains hyphen), be conservative
 	if strings.Contains(module, "-") {
 		return false
 	}
-	
+
 	// Check for the module name in various forms
 	moduleName := f.extractModuleName(module)
 	if moduleName == "" {
 		return false
 	}
-	
+
 	// Check if module is referenced
 	if f.SearchForUsage(code, moduleName, afterLine) {
 		return false
 	}
-	
+
 	// Check for common Ruby patterns where the module might be used indirectly
 	lowerModule := strings.ToLower(moduleName)
 	if f.SearchForUsage(code, lowerModule, afterLine) {
 		return false
 	}
-	
+
 	// If we get here, it's likely unused
 	return true
 }

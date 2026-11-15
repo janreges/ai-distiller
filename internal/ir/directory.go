@@ -5,8 +5,8 @@ import "encoding/json"
 // DistilledDirectory represents a directory containing distilled files
 type DistilledDirectory struct {
 	BaseNode
-	Path     string           `json:"path"`
-	Children []DistilledNode  `json:"children"`
+	Path     string          `json:"path"`
+	Children []DistilledNode `json:"children"`
 }
 
 // GetNodeKind implements DistilledNode for DistilledDirectory

@@ -17,10 +17,10 @@ var queryFiles embed.FS
 
 // Analyzer performs semantic analysis on source code
 type Analyzer struct {
-	language     *sitter.Language
-	parser       *sitter.Parser
-	projectRoot  string
-	queries      map[string]*sitter.Query
+	language    *sitter.Language
+	parser      *sitter.Parser
+	projectRoot string
+	queries     map[string]*sitter.Query
 }
 
 // NewAnalyzer creates a new semantic analyzer for Python
@@ -727,7 +727,7 @@ func (a *Analyzer) processImportStatement(node *sitter.Node, content []byte, ana
 	return nil
 }
 
-// processFromImportStatement processes from-import statements  
+// processFromImportStatement processes from-import statements
 func (a *Analyzer) processFromImportStatement(node *sitter.Node, content []byte, analysis *FileAnalysis) error {
 
 	location := FileLocation{
@@ -977,7 +977,7 @@ func (a *Analyzer) processConstructorCall(captureName string, node *sitter.Node,
 
 	callSite := CallSite{
 		CallerID:   callerID,
-		CalleeID:   "", // Will be resolved in Pass 2
+		CalleeID:   "",        // Will be resolved in Pass 2
 		CalleeName: className, // Constructor call to class
 		Location:   location,
 		IsResolved: false,
@@ -1033,7 +1033,7 @@ func (a *Analyzer) findCallerContext(node *sitter.Node, content []byte, filePath
 		if current.Type() == "function_definition" {
 			if nameNode := current.ChildByFieldName("name"); nameNode != nil {
 				funcName := nodeText(nameNode, content)
-				
+
 				// Check if this function is inside a class
 				className := a.findContainingClass(current, content)
 				return GenerateSymbolID(filePath, funcName, className)
@@ -1041,7 +1041,7 @@ func (a *Analyzer) findCallerContext(node *sitter.Node, content []byte, filePath
 		}
 		current = current.Parent()
 	}
-	
+
 	// If not in a function, it's module-level
 	return GenerateSymbolID(filePath, "<module>", "")
 }

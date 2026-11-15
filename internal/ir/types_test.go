@@ -219,10 +219,10 @@ func TestLanguageExtensions(t *testing.T) {
 
 	t.Run("PythonExtensions", func(t *testing.T) {
 		ext := &PythonExtensions{
-			IsGenerator:    true,
-			IsCoroutine:    true,
-			IsDataclass:    true,
-			Metaclass:      "ABCMeta",
+			IsGenerator: true,
+			IsCoroutine: true,
+			IsDataclass: true,
+			Metaclass:   "ABCMeta",
 		}
 		assert.True(t, ext.IsGenerator)
 		assert.True(t, ext.IsCoroutine)

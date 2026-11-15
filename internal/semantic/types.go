@@ -12,20 +12,20 @@ type SymbolID string
 type SymbolKind string
 
 const (
-	SymbolKindFunction   SymbolKind = "function"
-	SymbolKindMethod     SymbolKind = "method"
-	SymbolKindClass      SymbolKind = "class"
-	SymbolKindInterface  SymbolKind = "interface"
-	SymbolKindVariable   SymbolKind = "variable"
-	SymbolKindParameter  SymbolKind = "parameter"
-	SymbolKindField      SymbolKind = "field"
-	SymbolKindProperty   SymbolKind = "property"
-	SymbolKindEnum       SymbolKind = "enum"
-	SymbolKindEnumValue  SymbolKind = "enum_value"
-	SymbolKindModule     SymbolKind = "module"
-	SymbolKindNamespace  SymbolKind = "namespace"
-	SymbolKindConstant   SymbolKind = "constant"
-	SymbolKindType       SymbolKind = "type"
+	SymbolKindFunction  SymbolKind = "function"
+	SymbolKindMethod    SymbolKind = "method"
+	SymbolKindClass     SymbolKind = "class"
+	SymbolKindInterface SymbolKind = "interface"
+	SymbolKindVariable  SymbolKind = "variable"
+	SymbolKindParameter SymbolKind = "parameter"
+	SymbolKindField     SymbolKind = "field"
+	SymbolKindProperty  SymbolKind = "property"
+	SymbolKindEnum      SymbolKind = "enum"
+	SymbolKindEnumValue SymbolKind = "enum_value"
+	SymbolKindModule    SymbolKind = "module"
+	SymbolKindNamespace SymbolKind = "namespace"
+	SymbolKindConstant  SymbolKind = "constant"
+	SymbolKindType      SymbolKind = "type"
 )
 
 // FileLocation represents a location within a source file
@@ -39,18 +39,18 @@ type FileLocation struct {
 
 // Symbol represents a single declared symbol (function, class, variable, etc.)
 type Symbol struct {
-	ID          SymbolID     `json:"id"`
-	Name        string       `json:"name"`
-	Kind        SymbolKind   `json:"kind"`
-	Location    FileLocation `json:"location"`
-	Scope       string       `json:"scope"`        // Parent scope (e.g., class name for methods)
-	Signature   string       `json:"signature"`    // Function signature, type information
-	Visibility  string       `json:"visibility"`   // public, private, protected
-	IsExported  bool         `json:"is_exported"`  // For modules/packages
-	IsStatic    bool         `json:"is_static"`    // For methods and fields
-	IsAbstract  bool         `json:"is_abstract"`  // For methods and classes
-	Language    string       `json:"language"`     // Source language
-	Metadata    SymbolMeta   `json:"metadata"`     // Additional language-specific data
+	ID         SymbolID     `json:"id"`
+	Name       string       `json:"name"`
+	Kind       SymbolKind   `json:"kind"`
+	Location   FileLocation `json:"location"`
+	Scope      string       `json:"scope"`       // Parent scope (e.g., class name for methods)
+	Signature  string       `json:"signature"`   // Function signature, type information
+	Visibility string       `json:"visibility"`  // public, private, protected
+	IsExported bool         `json:"is_exported"` // For modules/packages
+	IsStatic   bool         `json:"is_static"`   // For methods and fields
+	IsAbstract bool         `json:"is_abstract"` // For methods and classes
+	Language   string       `json:"language"`    // Source language
+	Metadata   SymbolMeta   `json:"metadata"`    // Additional language-specific data
 }
 
 // CallInfo represents one direct call the symbol performs
@@ -63,14 +63,14 @@ type CallInfo struct {
 type SymbolMeta struct {
 	ReturnType   string            `json:"return_type,omitempty"`
 	Parameters   []ParameterInfo   `json:"parameters,omitempty"`
-	Decorators   []string          `json:"decorators,omitempty"`   // Python decorators, Java annotations
-	Extends      []string          `json:"extends,omitempty"`      // Base classes/interfaces
-	Implements   []string          `json:"implements,omitempty"`   // Implemented interfaces
-	DocString    string            `json:"doc_string,omitempty"`   // Documentation string
-	LineCount    int               `json:"line_count,omitempty"`   // Size metric
-	Complexity   int               `json:"complexity,omitempty"`   // Cyclomatic complexity
+	Decorators   []string          `json:"decorators,omitempty"`    // Python decorators, Java annotations
+	Extends      []string          `json:"extends,omitempty"`       // Base classes/interfaces
+	Implements   []string          `json:"implements,omitempty"`    // Implemented interfaces
+	DocString    string            `json:"doc_string,omitempty"`    // Documentation string
+	LineCount    int               `json:"line_count,omitempty"`    // Size metric
+	Complexity   int               `json:"complexity,omitempty"`    // Cyclomatic complexity
 	CustomFields map[string]string `json:"custom_fields,omitempty"` // Language-specific fields
-	Calls        []CallInfo        `json:"calls,omitempty"`        // Functions/methods called by this symbol
+	Calls        []CallInfo        `json:"calls,omitempty"`         // Functions/methods called by this symbol
 }
 
 // ParameterInfo represents function/method parameter information
@@ -120,7 +120,7 @@ func NewSymbolTable(filePath, language string) *SymbolTable {
 // AddSymbol adds a symbol to the table
 func (st *SymbolTable) AddSymbol(symbol *Symbol) {
 	st.Symbols[symbol.Name] = symbol
-	
+
 	// Track nested scopes (classes, modules, etc.)
 	if symbol.Kind == SymbolKindClass || symbol.Kind == SymbolKindModule || symbol.Kind == SymbolKindNamespace {
 		st.NestedScopes[symbol.Name] = symbol
@@ -146,13 +146,13 @@ func (st *SymbolTable) GetSymbolsOfKind(kind SymbolKind) []*Symbol {
 
 // DependencyInfo represents an import/dependency relationship
 type DependencyInfo struct {
-	SourceFile   string   `json:"source_file"`
-	TargetModule string   `json:"target_module"`
-	ImportedSymbols []string `json:"imported_symbols"` // empty if importing entire module
-	ImportAlias  string   `json:"import_alias,omitempty"`
-	ImportType   string   `json:"import_type"` // "import", "from_import", "require", etc.
-	IsRelative   bool     `json:"is_relative"`
-	Location     FileLocation `json:"location"`
+	SourceFile      string       `json:"source_file"`
+	TargetModule    string       `json:"target_module"`
+	ImportedSymbols []string     `json:"imported_symbols"` // empty if importing entire module
+	ImportAlias     string       `json:"import_alias,omitempty"`
+	ImportType      string       `json:"import_type"` // "import", "from_import", "require", etc.
+	IsRelative      bool         `json:"is_relative"`
+	Location        FileLocation `json:"location"`
 }
 
 // CallSite represents a function/method call location
@@ -167,26 +167,26 @@ type CallSite struct {
 
 // SemanticGraph contains all semantic information for a project
 type SemanticGraph struct {
-	FileSymbolTables map[string]*SymbolTable   `json:"file_symbol_tables"` // map[filePath]SymbolTable
-	CallSites        []CallSite                `json:"call_sites"`
-	Dependencies     []DependencyInfo          `json:"dependencies"`
-	CallGraph        map[SymbolID][]SymbolID   `json:"call_graph"`         // Adjacency list: caller -> [callees]
-	DependencyGraph  map[string][]string       `json:"dependency_graph"`   // map[filePath][]dependencyPath
-	ProjectRoot      string                    `json:"project_root"`
-	Timestamp        time.Time                 `json:"timestamp"`
-	Statistics       SemanticStats             `json:"statistics"`
+	FileSymbolTables map[string]*SymbolTable `json:"file_symbol_tables"` // map[filePath]SymbolTable
+	CallSites        []CallSite              `json:"call_sites"`
+	Dependencies     []DependencyInfo        `json:"dependencies"`
+	CallGraph        map[SymbolID][]SymbolID `json:"call_graph"`       // Adjacency list: caller -> [callees]
+	DependencyGraph  map[string][]string     `json:"dependency_graph"` // map[filePath][]dependencyPath
+	ProjectRoot      string                  `json:"project_root"`
+	Timestamp        time.Time               `json:"timestamp"`
+	Statistics       SemanticStats           `json:"statistics"`
 }
 
 // SemanticStats provides statistics about the semantic analysis
 type SemanticStats struct {
-	TotalFiles       int            `json:"total_files"`
-	TotalSymbols     int            `json:"total_symbols"`
-	SymbolsByKind    map[SymbolKind]int `json:"symbols_by_kind"`
-	TotalCallSites   int            `json:"total_call_sites"`
-	ResolvedCalls    int            `json:"resolved_calls"`
-	UnresolvedCalls  int            `json:"unresolved_calls"`
-	TotalDependencies int           `json:"total_dependencies"`
-	AnalysisTime     time.Duration  `json:"analysis_time"`
+	TotalFiles        int                `json:"total_files"`
+	TotalSymbols      int                `json:"total_symbols"`
+	SymbolsByKind     map[SymbolKind]int `json:"symbols_by_kind"`
+	TotalCallSites    int                `json:"total_call_sites"`
+	ResolvedCalls     int                `json:"resolved_calls"`
+	UnresolvedCalls   int                `json:"unresolved_calls"`
+	TotalDependencies int                `json:"total_dependencies"`
+	AnalysisTime      time.Duration      `json:"analysis_time"`
 }
 
 // NewSemanticGraph creates a new semantic graph
@@ -199,7 +199,7 @@ func NewSemanticGraph(projectRoot string) *SemanticGraph {
 		DependencyGraph:  make(map[string][]string),
 		ProjectRoot:      projectRoot,
 		Timestamp:        time.Now(),
-		Statistics:       SemanticStats{
+		Statistics: SemanticStats{
 			SymbolsByKind: make(map[SymbolKind]int),
 		},
 	}
@@ -220,7 +220,7 @@ func (sg *SemanticGraph) GetSymbolTable(filePath string) (*SymbolTable, bool) {
 // AddCallSite adds a call site to the graph
 func (sg *SemanticGraph) AddCallSite(callSite CallSite) {
 	sg.CallSites = append(sg.CallSites, callSite)
-	
+
 	// Update call graph if call is resolved
 	if callSite.IsResolved {
 		if callees, exists := sg.CallGraph[callSite.CallerID]; exists {
@@ -234,7 +234,7 @@ func (sg *SemanticGraph) AddCallSite(callSite CallSite) {
 // AddDependency adds a dependency relationship
 func (sg *SemanticGraph) AddDependency(dep DependencyInfo) {
 	sg.Dependencies = append(sg.Dependencies, dep)
-	
+
 	// Update dependency graph
 	if deps, exists := sg.DependencyGraph[dep.SourceFile]; exists {
 		sg.DependencyGraph[dep.SourceFile] = append(deps, dep.TargetModule)
@@ -249,18 +249,18 @@ func (sg *SemanticGraph) updateStatistics() {
 	stats.TotalFiles = len(sg.FileSymbolTables)
 	stats.TotalSymbols = 0
 	stats.SymbolsByKind = make(map[SymbolKind]int)
-	
+
 	for _, table := range sg.FileSymbolTables {
 		stats.TotalSymbols += len(table.Symbols)
 		for _, symbol := range table.Symbols {
 			stats.SymbolsByKind[symbol.Kind]++
 		}
 	}
-	
+
 	stats.TotalCallSites = len(sg.CallSites)
 	stats.ResolvedCalls = 0
 	stats.UnresolvedCalls = 0
-	
+
 	for _, callSite := range sg.CallSites {
 		if callSite.IsResolved {
 			stats.ResolvedCalls++
@@ -268,7 +268,7 @@ func (sg *SemanticGraph) updateStatistics() {
 			stats.UnresolvedCalls++
 		}
 	}
-	
+
 	stats.TotalDependencies = len(sg.Dependencies)
 }
 

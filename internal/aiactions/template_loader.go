@@ -9,7 +9,7 @@ import (
 	"strings"
 	"text/template"
 	"time"
-	
+
 	"github.com/janreges/ai-distiller/internal/version"
 )
 
@@ -26,7 +26,7 @@ type TemplateData struct {
 func LoadTemplate(templateName string, data TemplateData) (string, error) {
 	var content []byte
 	var err error
-	
+
 	// Strategy 1: Try embedded templates first
 	embeddedPath := fmt.Sprintf("templates/%s.md", templateName)
 	content, err = embeddedTemplates.ReadFile(embeddedPath)
@@ -37,7 +37,7 @@ func LoadTemplate(templateName string, data TemplateData) (string, error) {
 			cwd, _ := os.Getwd()
 			return "", fmt.Errorf("template file not found: %s (searched embedded and filesystem from %s)", templateName+".md", cwd)
 		}
-		
+
 		content, err = os.ReadFile(templatePath)
 		if err != nil {
 			return "", fmt.Errorf("failed to read template file %s: %w", templatePath, err)
@@ -46,7 +46,7 @@ func LoadTemplate(templateName string, data TemplateData) (string, error) {
 
 	// Create FuncMap with template functions
 	funcMap := template.FuncMap{
-		"VERSION": func() string { return version.Version },
+		"VERSION":     func() string { return version.Version },
 		"WEBSITE_URL": func() string { return version.WebsiteURL },
 	}
 
@@ -76,7 +76,7 @@ func findTemplatePath(templateName string) string {
 			return templatePath
 		}
 	}
-	
+
 	// Strategy 2: Get executable path to find templates directory
 	if execPath, err := os.Executable(); err == nil {
 		// Try relative to executable first (for production)
@@ -85,7 +85,7 @@ func findTemplatePath(templateName string) string {
 		if _, err := os.Stat(templatePath); err == nil {
 			return templatePath
 		}
-		
+
 		// Try going up from executable to find project root
 		execDir := filepath.Dir(execPath)
 		for i := 0; i < 5; i++ {
@@ -117,7 +117,7 @@ func findTemplatePath(templateName string) string {
 		}
 		currentDir = parent
 	}
-	
+
 	return ""
 }
 

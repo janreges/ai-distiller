@@ -200,23 +200,23 @@ func (tsa *TypeScriptAnalyzer) AnalyzeFile(ctx context.Context, reader io.Reader
 // extractSymbols extracts symbol declarations using tree-sitter queries
 func (tsa *TypeScriptAnalyzer) extractSymbols(tree *sitter.Tree, content []byte, analysis *FileAnalysis) error {
 	rootNode := tree.RootNode()
-	
+
 	// Query for declarations
 	qc := sitter.NewQueryCursor()
 	defer qc.Close()
-	
+
 	qc.Exec(tsa.queries.declarations, rootNode)
-	
+
 	for {
 		match, ok := qc.NextMatch()
 		if !ok {
 			break
 		}
-		
+
 		for _, capture := range match.Captures {
 			node := capture.Node
 			captureName := tsa.queries.declarations.CaptureNameForId(capture.Index)
-			
+
 			switch captureName {
 			case "function.name", "arrow_function.name":
 				tsa.extractFunction(node, content, analysis, SymbolKindFunction)
@@ -239,25 +239,25 @@ func (tsa *TypeScriptAnalyzer) extractSymbols(tree *sitter.Tree, content []byte,
 			}
 		}
 	}
-	
+
 	return nil
 }
 
 // extractFunction extracts function symbols
 func (tsa *TypeScriptAnalyzer) extractFunction(node *sitter.Node, content []byte, analysis *FileAnalysis, kind SymbolKind) {
 	name := string(content[node.StartByte():node.EndByte()])
-	
+
 	// Determine scope
 	scope := tsa.strategy.DetermineScope(node, nil, content)
-	
+
 	// Generate symbol ID
 	symbolID := GenerateSymbolID(analysis.FilePath, name, scope)
-	
+
 	// Extract parameters and return type from parent function node
 	funcNode := node.Parent()
 	params := tsa.extractParameters(funcNode, content)
 	returnType := tsa.extractReturnType(funcNode, content)
-	
+
 	symbol := &Symbol{
 		ID:         symbolID,
 		Name:       name,
@@ -270,7 +270,7 @@ func (tsa *TypeScriptAnalyzer) extractFunction(node *sitter.Node, content []byte
 			ReturnType: returnType,
 		},
 	}
-	
+
 	analysis.SymbolTable.AddSymbol(symbol)
 }
 
@@ -279,15 +279,15 @@ func (tsa *TypeScriptAnalyzer) extractClass(node *sitter.Node, content []byte, a
 	name := string(content[node.StartByte():node.EndByte()])
 	scope := tsa.strategy.DetermineScope(node, nil, content)
 	symbolID := GenerateSymbolID(analysis.FilePath, name, scope)
-	
+
 	classNode := node.Parent()
-	
+
 	// Extract inheritance information
 	var extends []string
 	if heritageClause := classNode.ChildByFieldName("heritage"); heritageClause != nil {
 		extends = tsa.extractTypeReferences(heritageClause, content)
 	}
-	
+
 	symbol := &Symbol{
 		ID:         symbolID,
 		Name:       name,
@@ -299,7 +299,7 @@ func (tsa *TypeScriptAnalyzer) extractClass(node *sitter.Node, content []byte, a
 			Extends: extends,
 		},
 	}
-	
+
 	analysis.SymbolTable.AddSymbol(symbol)
 }
 
@@ -308,9 +308,9 @@ func (tsa *TypeScriptAnalyzer) extractInterface(node *sitter.Node, content []byt
 	name := string(content[node.StartByte():node.EndByte()])
 	scope := tsa.strategy.DetermineScope(node, nil, content)
 	symbolID := GenerateSymbolID(analysis.FilePath, name, scope)
-	
+
 	_ = node.Parent() // interfaceNode not used yet
-	
+
 	symbol := &Symbol{
 		ID:         symbolID,
 		Name:       name,
@@ -318,9 +318,9 @@ func (tsa *TypeScriptAnalyzer) extractInterface(node *sitter.Node, content []byt
 		Scope:      scope,
 		Location:   nodeToLocation(node, analysis.FilePath),
 		Visibility: "public", // Interfaces are always public in TypeScript
-		Metadata: SymbolMeta{},
+		Metadata:   SymbolMeta{},
 	}
-	
+
 	analysis.SymbolTable.AddSymbol(symbol)
 }
 
@@ -329,7 +329,7 @@ func (tsa *TypeScriptAnalyzer) extractType(node *sitter.Node, content []byte, an
 	name := string(content[node.StartByte():node.EndByte()])
 	scope := tsa.strategy.DetermineScope(node, nil, content)
 	symbolID := GenerateSymbolID(analysis.FilePath, name, scope)
-	
+
 	symbol := &Symbol{
 		ID:         symbolID,
 		Name:       name,
@@ -338,7 +338,7 @@ func (tsa *TypeScriptAnalyzer) extractType(node *sitter.Node, content []byte, an
 		Location:   nodeToLocation(node, analysis.FilePath),
 		Visibility: "public",
 	}
-	
+
 	analysis.SymbolTable.AddSymbol(symbol)
 }
 
@@ -347,7 +347,7 @@ func (tsa *TypeScriptAnalyzer) extractEnum(node *sitter.Node, content []byte, an
 	name := string(content[node.StartByte():node.EndByte()])
 	scope := tsa.strategy.DetermineScope(node, nil, content)
 	symbolID := GenerateSymbolID(analysis.FilePath, name, scope)
-	
+
 	symbol := &Symbol{
 		ID:         symbolID,
 		Name:       name,
@@ -356,7 +356,7 @@ func (tsa *TypeScriptAnalyzer) extractEnum(node *sitter.Node, content []byte, an
 		Location:   nodeToLocation(node, analysis.FilePath),
 		Visibility: tsa.determineVisibility(node.Parent(), content),
 	}
-	
+
 	analysis.SymbolTable.AddSymbol(symbol)
 }
 
@@ -365,10 +365,10 @@ func (tsa *TypeScriptAnalyzer) extractVariable(node *sitter.Node, content []byte
 	name := string(content[node.StartByte():node.EndByte()])
 	scope := tsa.strategy.DetermineScope(node, nil, content)
 	symbolID := GenerateSymbolID(analysis.FilePath, name, scope)
-	
+
 	varNode := node.Parent()
 	_ = tsa.extractVariableType(varNode, content) // varType not used yet
-	
+
 	symbol := &Symbol{
 		ID:         symbolID,
 		Name:       name,
@@ -376,9 +376,9 @@ func (tsa *TypeScriptAnalyzer) extractVariable(node *sitter.Node, content []byte
 		Scope:      scope,
 		Location:   nodeToLocation(node, analysis.FilePath),
 		Visibility: tsa.determineVisibility(varNode, content),
-		Metadata: SymbolMeta{},
+		Metadata:   SymbolMeta{},
 	}
-	
+
 	analysis.SymbolTable.AddSymbol(symbol)
 }
 
@@ -387,11 +387,11 @@ func (tsa *TypeScriptAnalyzer) extractMethod(node *sitter.Node, content []byte, 
 	name := string(content[node.StartByte():node.EndByte()])
 	scope := tsa.strategy.DetermineScope(node, nil, content)
 	symbolID := GenerateSymbolID(analysis.FilePath, name, scope)
-	
+
 	methodNode := node.Parent()
 	params := tsa.extractParameters(methodNode, content)
 	returnType := tsa.extractReturnType(methodNode, content)
-	
+
 	symbol := &Symbol{
 		ID:         symbolID,
 		Name:       name,
@@ -404,7 +404,7 @@ func (tsa *TypeScriptAnalyzer) extractMethod(node *sitter.Node, content []byte, 
 			ReturnType: returnType,
 		},
 	}
-	
+
 	analysis.SymbolTable.AddSymbol(symbol)
 }
 
@@ -413,10 +413,10 @@ func (tsa *TypeScriptAnalyzer) extractProperty(node *sitter.Node, content []byte
 	name := string(content[node.StartByte():node.EndByte()])
 	scope := tsa.strategy.DetermineScope(node, nil, content)
 	symbolID := GenerateSymbolID(analysis.FilePath, name, scope)
-	
+
 	propNode := node.Parent()
 	_ = tsa.extractPropertyType(propNode, content) // propType not used yet
-	
+
 	symbol := &Symbol{
 		ID:         symbolID,
 		Name:       name,
@@ -426,7 +426,7 @@ func (tsa *TypeScriptAnalyzer) extractProperty(node *sitter.Node, content []byte
 		Visibility: tsa.determineVisibility(propNode, content),
 		Metadata:   SymbolMeta{},
 	}
-	
+
 	analysis.SymbolTable.AddSymbol(symbol)
 }
 
@@ -435,7 +435,7 @@ func (tsa *TypeScriptAnalyzer) extractNamespace(node *sitter.Node, content []byt
 	name := string(content[node.StartByte():node.EndByte()])
 	scope := tsa.strategy.DetermineScope(node, nil, content)
 	symbolID := GenerateSymbolID(analysis.FilePath, name, scope)
-	
+
 	symbol := &Symbol{
 		ID:         symbolID,
 		Name:       name,
@@ -444,31 +444,31 @@ func (tsa *TypeScriptAnalyzer) extractNamespace(node *sitter.Node, content []byt
 		Location:   nodeToLocation(node, analysis.FilePath),
 		Visibility: "public",
 	}
-	
+
 	analysis.SymbolTable.AddSymbol(symbol)
 }
 
 // extractCallSites extracts function call sites using tree-sitter queries
 func (tsa *TypeScriptAnalyzer) extractCallSites(tree *sitter.Tree, content []byte, analysis *FileAnalysis) error {
 	rootNode := tree.RootNode()
-	
+
 	qc := sitter.NewQueryCursor()
 	defer qc.Close()
-	
+
 	qc.Exec(tsa.queries.calls, rootNode)
-	
+
 	for {
 		match, ok := qc.NextMatch()
 		if !ok {
 			break
 		}
-		
+
 		for _, capture := range match.Captures {
 			node := capture.Node
 			captureName := tsa.queries.calls.CaptureNameForId(capture.Index)
-			
+
 			var calleeName string
-			
+
 			switch captureName {
 			case "call.function", "generic_call.function":
 				calleeName = string(content[node.StartByte():node.EndByte()])
@@ -479,46 +479,46 @@ func (tsa *TypeScriptAnalyzer) extractCallSites(tree *sitter.Tree, content []byt
 			default:
 				continue
 			}
-			
+
 			// Determine caller context
 			callerScope := tsa.strategy.DetermineScope(node, tree, content)
 			var callerID SymbolID
 			if callerScope != "" {
 				callerID = GenerateSymbolID(analysis.FilePath, "", callerScope)
 			}
-			
+
 			callSite := CallSite{
 				CalleeName: calleeName,
 				CallerID:   callerID,
 				Location:   nodeToLocation(node, analysis.FilePath),
 				IsResolved: false,
 			}
-			
+
 			analysis.CallSites = append(analysis.CallSites, callSite)
 		}
 	}
-	
+
 	return nil
 }
 
 // extractDependencies extracts import dependencies using tree-sitter queries
 func (tsa *TypeScriptAnalyzer) extractDependencies(tree *sitter.Tree, content []byte, analysis *FileAnalysis) error {
 	rootNode := tree.RootNode()
-	
+
 	qc := sitter.NewQueryCursor()
 	defer qc.Close()
-	
+
 	qc.Exec(tsa.queries.imports, rootNode)
-	
+
 	for {
 		match, ok := qc.NextMatch()
 		if !ok {
 			break
 		}
-		
+
 		for _, capture := range match.Captures {
 			node := capture.Node
-			
+
 			// Extract import path from different import types
 			if importPath := tsa.extractImportPath(node, content); importPath != "" {
 				dep := DependencyInfo{
@@ -532,7 +532,7 @@ func (tsa *TypeScriptAnalyzer) extractDependencies(tree *sitter.Tree, content []
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -587,7 +587,7 @@ func (tsa *TypeScriptAnalyzer) extractImportPath(node *sitter.Node, content []by
 
 func (tsa *TypeScriptAnalyzer) extractParameters(node *sitter.Node, content []byte) []ParameterInfo {
 	var params []ParameterInfo
-	
+
 	if paramsNode := node.ChildByFieldName("parameters"); paramsNode != nil {
 		for i := 0; i < int(paramsNode.ChildCount()); i++ {
 			child := paramsNode.Child(i)
@@ -595,11 +595,11 @@ func (tsa *TypeScriptAnalyzer) extractParameters(node *sitter.Node, content []by
 				if nameNode := child.ChildByFieldName("pattern"); nameNode != nil {
 					paramName := string(content[nameNode.StartByte():nameNode.EndByte()])
 					paramType := ""
-					
+
 					if typeNode := child.ChildByFieldName("type"); typeNode != nil {
 						paramType = string(content[typeNode.StartByte():typeNode.EndByte()])
 					}
-					
+
 					params = append(params, ParameterInfo{
 						Name: paramName,
 						Type: paramType,
@@ -608,7 +608,7 @@ func (tsa *TypeScriptAnalyzer) extractParameters(node *sitter.Node, content []by
 			}
 		}
 	}
-	
+
 	return params
 }
 
@@ -621,7 +621,7 @@ func (tsa *TypeScriptAnalyzer) extractReturnType(node *sitter.Node, content []by
 
 func (tsa *TypeScriptAnalyzer) extractTypeParameters(node *sitter.Node, content []byte) []string {
 	var typeParams []string
-	
+
 	if typeParamsNode := node.ChildByFieldName("type_parameters"); typeParamsNode != nil {
 		for i := 0; i < int(typeParamsNode.ChildCount()); i++ {
 			child := typeParamsNode.Child(i)
@@ -632,13 +632,13 @@ func (tsa *TypeScriptAnalyzer) extractTypeParameters(node *sitter.Node, content 
 			}
 		}
 	}
-	
+
 	return typeParams
 }
 
 func (tsa *TypeScriptAnalyzer) extractTypeReferences(node *sitter.Node, content []byte) []string {
 	var refs []string
-	
+
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
 		if child.Type() == "extends_clause" {
@@ -651,7 +651,7 @@ func (tsa *TypeScriptAnalyzer) extractTypeReferences(node *sitter.Node, content 
 			}
 		}
 	}
-	
+
 	return refs
 }
 
@@ -674,7 +674,7 @@ func (tsa *TypeScriptAnalyzer) determineVisibility(node *sitter.Node, content []
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
 		text := string(content[child.StartByte():child.EndByte()])
-		
+
 		switch text {
 		case "private":
 			return "private"
@@ -684,7 +684,7 @@ func (tsa *TypeScriptAnalyzer) determineVisibility(node *sitter.Node, content []
 			return "public"
 		}
 	}
-	
+
 	// Default visibility in TypeScript
 	return "public"
 }
@@ -693,7 +693,7 @@ func (tsa *TypeScriptAnalyzer) determineVisibility(node *sitter.Node, content []
 func nodeToLocation(node *sitter.Node, filePath string) FileLocation {
 	startPoint := node.StartPoint()
 	endPoint := node.EndPoint()
-	
+
 	return FileLocation{
 		FilePath:  filePath,
 		StartLine: int(startPoint.Row) + 1,

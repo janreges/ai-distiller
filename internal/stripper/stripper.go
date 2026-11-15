@@ -9,18 +9,18 @@ import (
 
 // Options configures what to strip from the IR
 type Options struct {
-	RemovePublic          bool  // Removes public/open members; public containers survive only with surviving children
-	RemovePrivate         bool  // Removes both private and protected (legacy)
-	RemovePrivateOnly     bool  // Removes only private members
-	RemoveProtectedOnly   bool  // Removes only protected members
-	RemoveInternalOnly    bool  // Removes only internal/package-private members
+	RemovePublic          bool // Removes public/open members; public containers survive only with surviving children
+	RemovePrivate         bool // Removes both private and protected (legacy)
+	RemovePrivateOnly     bool // Removes only private members
+	RemoveProtectedOnly   bool // Removes only protected members
+	RemoveInternalOnly    bool // Removes only internal/package-private members
 	RemoveImplementations bool
 	RemoveComments        bool
 	RemoveImports         bool
-	RemoveDocstrings      bool  // Remove documentation comments specifically
-	RemoveAnnotations     bool  // Remove decorators/annotations
-	RemoveFields          bool  // Remove class fields/properties
-	RemoveMethods         bool  // Remove methods/functions
+	RemoveDocstrings      bool // Remove documentation comments specifically
+	RemoveAnnotations     bool // Remove decorators/annotations
+	RemoveFields          bool // Remove class fields/properties
+	RemoveMethods         bool // Remove methods/functions
 
 	// ExpandSymbols holds glob patterns; functions/methods whose name matches
 	// keep their implementation even when RemoveImplementations is set.
@@ -55,7 +55,7 @@ func (o Options) shouldExpand(name string) bool {
 // HasAnyOption returns true if any stripping option is enabled
 func (o Options) HasAnyOption() bool {
 	return o.RemovePublic || o.RemovePrivate || o.RemovePrivateOnly || o.RemoveProtectedOnly || o.RemoveInternalOnly ||
-		o.RemoveImplementations || o.RemoveComments || o.RemoveImports || 
+		o.RemoveImplementations || o.RemoveComments || o.RemoveImports ||
 		o.RemoveDocstrings || o.RemoveAnnotations || o.RemoveFields || o.RemoveMethods
 }
 
@@ -101,7 +101,7 @@ func (s *Stripper) Visit(node ir.DistilledNode) ir.DistilledNode {
 		if n.Extensions != nil && n.Extensions.PHP != nil && n.Extensions.PHP.IsAPIDocblock {
 			return n
 		}
-		
+
 		// Documentation follows --docstrings, other comments --comments
 		if n.IsDoc() {
 			// For docstrings, only remove if RemoveDocstrings is true
@@ -114,40 +114,40 @@ func (s *Stripper) Visit(node ir.DistilledNode) ir.DistilledNode {
 				return nil
 			}
 		}
-		
+
 		return n
-		
+
 	case *ir.DistilledImport:
 		if s.options.RemoveImports {
 			return nil
 		}
 		return n
-		
+
 	case *ir.DistilledFunction:
 		return s.visitFunction(n)
-		
+
 	case *ir.DistilledClass:
 		return s.visitClass(n)
-		
+
 	case *ir.DistilledInterface:
 		return s.visitInterface(n)
-		
+
 	case *ir.DistilledStruct:
 		return s.visitStruct(n)
-		
+
 	case *ir.DistilledEnum:
 		return s.visitEnum(n)
-		
+
 	case *ir.DistilledField:
 		return s.visitField(n)
-		
+
 	case *ir.DistilledTypeAlias:
 		return s.visitTypeAlias(n)
-		
+
 	case *ir.DistilledRawContent:
 		// Raw content is always preserved
 		return n
-		
+
 	default:
 		// For other nodes, visit children
 		return s.visitChildren(node)
@@ -198,29 +198,29 @@ func (s *Stripper) visitFunction(n *ir.DistilledFunction) ir.DistilledNode {
 	if s.options.RemoveMethods || s.removedAsPublicMember(n.Visibility) {
 		return nil
 	}
-	
+
 	// Check if should remove by visibility
 	if s.shouldRemoveByVisibility(n.Name, n.Visibility) {
 		return nil
 	}
-	
+
 	// Copy every field, then change only what the options require
 	result := *n
-	
+
 	// Strip implementation if requested, unless this symbol is explicitly
 	// expanded via --expand (by its own name, or by being inside a type whose
 	// name matched).
 	if s.options.RemoveImplementations && !s.options.shouldExpand(n.Name) && !s.inExpandedScope {
 		result.Implementation = ""
 	}
-	
+
 	// Strip decorators/annotations if requested
 	if s.options.RemoveAnnotations {
 		result.Decorators = nil
 	}
-	
+
 	// Functions don't have children in our IR
-	
+
 	return &result
 }
 
@@ -229,7 +229,7 @@ func (s *Stripper) visitClass(n *ir.DistilledClass) ir.DistilledNode {
 	if s.shouldRemoveByVisibility(n.Name, n.Visibility) {
 		return nil
 	}
-	
+
 	// Copy every field, then change only what the options require
 	result := *n
 	defer s.enterContainer(n.Visibility)()
@@ -246,12 +246,12 @@ func (s *Stripper) visitClass(n *ir.DistilledClass) ir.DistilledNode {
 	if s.publicContainerEmptied(n.Visibility, result.Children) {
 		return nil
 	}
-	
+
 	// Strip decorators/annotations if requested
 	if s.options.RemoveAnnotations {
 		result.Decorators = nil
 	}
-	
+
 	return &result
 }
 
@@ -260,7 +260,7 @@ func (s *Stripper) visitInterface(n *ir.DistilledInterface) ir.DistilledNode {
 	if s.shouldRemoveByVisibility(n.Name, n.Visibility) {
 		return nil
 	}
-	
+
 	// Copy every field, then change only what the options require
 	result := *n
 	defer s.enterContainer(n.Visibility)()
@@ -278,7 +278,7 @@ func (s *Stripper) visitStruct(n *ir.DistilledStruct) ir.DistilledNode {
 	if s.shouldRemoveByVisibility(n.Name, n.Visibility) {
 		return nil
 	}
-	
+
 	// Copy every field, then change only what the options require
 	result := *n
 	defer s.enterContainer(n.Visibility)()
@@ -304,7 +304,7 @@ func (s *Stripper) visitEnum(n *ir.DistilledEnum) ir.DistilledNode {
 	if s.shouldRemoveByVisibility(n.Name, n.Visibility) {
 		return nil
 	}
-	
+
 	// Copy every field, then change only what the options require
 	result := *n
 	defer s.enterContainer(n.Visibility)()
@@ -322,12 +322,12 @@ func (s *Stripper) visitField(n *ir.DistilledField) ir.DistilledNode {
 	if s.options.RemoveFields || s.removedAsPublicMember(n.Visibility) {
 		return nil
 	}
-	
+
 	// Check if should remove by visibility
 	if s.shouldRemoveByVisibility(n.Name, n.Visibility) {
 		return nil
 	}
-	
+
 	// Copy every field, then change only what the options require.
 	// Enum case values are always kept: they are API, not implementation.
 	result := *n
@@ -345,7 +345,7 @@ func (s *Stripper) visitTypeAlias(n *ir.DistilledTypeAlias) ir.DistilledNode {
 	if s.shouldRemoveByVisibility(n.Name, n.Visibility) {
 		return nil
 	}
-	
+
 	// Copy every field
 	result := *n
 	return &result
@@ -430,24 +430,24 @@ func (s *Stripper) shouldRemoveByVisibility(name string, visibility ir.Visibilit
 			return false
 		}
 	}
-	
+
 	// Legacy behavior: RemovePrivate removes both private and protected
 	if s.options.RemovePrivate {
 		switch visibility {
-		case ir.VisibilityPrivate, ir.VisibilityProtected, ir.VisibilityInternal, 
-			 ir.VisibilityFilePrivate, ir.VisibilityPackage, ir.VisibilityProtectedInternal,
-			 ir.VisibilityPrivateProtected:
+		case ir.VisibilityPrivate, ir.VisibilityProtected, ir.VisibilityInternal,
+			ir.VisibilityFilePrivate, ir.VisibilityPackage, ir.VisibilityProtectedInternal,
+			ir.VisibilityPrivateProtected:
 			return true
 		case ir.VisibilityPublic, ir.VisibilityOpen:
 			return false
 		}
-		
+
 		// If no explicit visibility, use language conventions
 		if strings.HasPrefix(name, "_") {
 			return true
 		}
 	}
-	
+
 	// Default to not removing
 	return false
 }

@@ -69,7 +69,7 @@ logs/
 
 		{"obj", true, "obj directory itself should be ignored"},
 		{"obj/Debug", true, "obj/Debug directory should be ignored"},
-		{"obj/Release", true, "obj/Release directory should be ignored"},  
+		{"obj/Release", true, "obj/Release directory should be ignored"},
 		{"obj/Debug/MyProject.csproj.FileListAbsolute.txt", true, "build file in obj/Debug should be ignored"},
 		{"obj/Release/MyProject.dll", true, "dll in obj/Release should be ignored"},
 		{"obj/Debug/MyProject.pdb", true, "pdb in obj/Debug should be ignored"},
@@ -104,14 +104,14 @@ logs/
 func createDotNetProject(t *testing.T, root string) {
 	t.Helper()
 
-	// Create directories  
+	// Create directories
 	dirs := []string{
 		"src/Controllers",
-		"src/Models", 
+		"src/Models",
 		"tests/Unit",
 		"tests/Integration",
 		"bin/Debug",
-		"bin/Release", 
+		"bin/Release",
 		"obj/Debug",
 		"obj/Release",
 		"temp",
@@ -129,7 +129,7 @@ func createDotNetProject(t *testing.T, root string) {
 	// Create source files (should NOT be ignored)
 	sourceFiles := []string{
 		"Program.cs",
-		"src/Controllers/HomeController.cs", 
+		"src/Controllers/HomeController.cs",
 		"src/Models/User.cs",
 		"tests/Unit/UserTest.cs",
 		"MyProject.csproj",
@@ -143,11 +143,11 @@ func createDotNetProject(t *testing.T, root string) {
 	// Create binary/build files (should be ignored)
 	binaryFiles := []string{
 		"bin/Debug/MyProject.exe",
-		"bin/Release/MyProject.exe", 
+		"bin/Release/MyProject.exe",
 		"bin/Debug/MyProject.dll",
 		"bin/Release/MyProject.dll",
 		"bin/Debug/MyProject.pdb",
-		"bin/Release/MyProject.pdb", 
+		"bin/Release/MyProject.pdb",
 		"obj/Debug/MyProject.csproj.FileListAbsolute.txt",
 		"obj/Release/MyProject.dll",
 		"obj/Debug/MyProject.pdb",
@@ -155,7 +155,7 @@ func createDotNetProject(t *testing.T, root string) {
 		"logs/app.log",
 		".vs/MyProject/v16/.suo",
 		"some/path/library.dll",
-		"root.exe", 
+		"root.exe",
 		"debug.pdb",
 	}
 

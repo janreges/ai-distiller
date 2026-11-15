@@ -18,25 +18,25 @@ func TestFindRoot(t *testing.T) {
 
 	// Create test directory structure
 	tempDir := t.TempDir()
-	
+
 	// Create nested structure: tempDir/repo/service/subdir
 	repoDir := filepath.Join(tempDir, "repo")
 	serviceDir := filepath.Join(repoDir, "service")
 	subDir := filepath.Join(serviceDir, "subdir")
-	
+
 	os.MkdirAll(subDir, 0755)
-	
+
 	// Test 1: Environment variable override
 	t.Run("EnvVarOverride", func(t *testing.T) {
 		ResetCache()
 		os.Setenv(EnvProjectRoot, serviceDir)
 		os.Chdir(subDir)
-		
+
 		info, err := FindRoot()
 		if err != nil {
 			t.Fatalf("FindRoot failed: %v", err)
 		}
-		
+
 		if info.Path != serviceDir {
 			t.Errorf("Expected root %s, got %s", serviceDir, info.Path)
 		}
@@ -49,18 +49,18 @@ func TestFindRoot(t *testing.T) {
 	t.Run("AidrcMarker", func(t *testing.T) {
 		ResetCache()
 		os.Unsetenv(EnvProjectRoot)
-		
+
 		// Create both .aidrc and .git to test priority
 		os.WriteFile(filepath.Join(serviceDir, ".aidrc"), []byte{}, 0644)
 		os.Mkdir(filepath.Join(repoDir, ".git"), 0755)
-		
+
 		os.Chdir(subDir)
-		
+
 		info, err := FindRoot()
 		if err != nil {
 			t.Fatalf("FindRoot failed: %v", err)
 		}
-		
+
 		if info.Path != serviceDir {
 			t.Errorf("Expected root %s, got %s", serviceDir, info.Path)
 		}
@@ -74,14 +74,14 @@ func TestFindRoot(t *testing.T) {
 		ResetCache()
 		os.Remove(filepath.Join(serviceDir, ".aidrc"))
 		os.WriteFile(filepath.Join(serviceDir, "go.mod"), []byte("module test"), 0644)
-		
+
 		os.Chdir(subDir)
-		
+
 		info, err := FindRoot()
 		if err != nil {
 			t.Fatalf("FindRoot failed: %v", err)
 		}
-		
+
 		if info.Path != serviceDir {
 			t.Errorf("Expected root %s, got %s", serviceDir, info.Path)
 		}
@@ -96,14 +96,14 @@ func TestFindRoot(t *testing.T) {
 		// Clean up all markers
 		os.Remove(filepath.Join(serviceDir, "go.mod"))
 		os.RemoveAll(filepath.Join(repoDir, ".git"))
-		
+
 		os.Chdir(subDir)
-		
+
 		info, err := FindRoot()
 		if err != nil {
 			t.Fatalf("FindRoot failed: %v", err)
 		}
-		
+
 		if info.Path != subDir {
 			t.Errorf("Expected root %s, got %s", subDir, info.Path)
 		}
@@ -117,16 +117,16 @@ func TestFindRoot(t *testing.T) {
 		ResetCache()
 		os.WriteFile(filepath.Join(serviceDir, ".aidrc"), []byte{}, 0644)
 		os.Chdir(subDir)
-		
+
 		// First call
 		info1, _ := FindRoot()
-		
+
 		// Change directory and marker - should still return cached value
 		os.Chdir(tempDir)
 		os.Remove(filepath.Join(serviceDir, ".aidrc"))
-		
+
 		info2, _ := FindRoot()
-		
+
 		if info1.Path != info2.Path {
 			t.Error("Cache not working - paths differ")
 		}
@@ -145,15 +145,15 @@ func TestGetAidDir(t *testing.T) {
 
 	tempDir := t.TempDir()
 	os.Chdir(tempDir)
-	
+
 	// Create .aidrc to mark this as root
 	os.WriteFile(filepath.Join(tempDir, ".aidrc"), []byte{}, 0644)
-	
+
 	aidDir, err := GetAidDir()
 	if err != nil {
 		t.Fatalf("GetAidDir failed: %v", err)
 	}
-	
+
 	expected := filepath.Join(tempDir, AidDirName)
 	if aidDir != expected {
 		t.Errorf("Expected aid dir %s, got %s", expected, aidDir)
@@ -169,15 +169,15 @@ func TestEnsureAidDir(t *testing.T) {
 
 	tempDir := t.TempDir()
 	os.Chdir(tempDir)
-	
+
 	// Create .aidrc to mark this as root
 	os.WriteFile(filepath.Join(tempDir, ".aidrc"), []byte{}, 0644)
-	
+
 	aidDir, err := EnsureAidDir()
 	if err != nil {
 		t.Fatalf("EnsureAidDir failed: %v", err)
 	}
-	
+
 	// Check that directory was created
 	if _, err := os.Stat(aidDir); err != nil {
 		t.Errorf("Aid directory was not created: %v", err)

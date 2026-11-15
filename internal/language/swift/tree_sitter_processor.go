@@ -33,7 +33,7 @@ func NewTreeSitterProcessor() (*TreeSitterProcessor, error) {
 	if lang == nil {
 		return nil, fmt.Errorf("tree-sitter-swift is not available (CGO disabled)")
 	}
-	
+
 	parser := sitter.NewParser()
 	parser.SetLanguage(sitter.NewLanguage(lang))
 

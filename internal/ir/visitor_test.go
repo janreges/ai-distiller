@@ -29,7 +29,7 @@ func (n *mockNode) Accept(visitor Visitor) DistilledNode {
 func TestBaseVisitor(t *testing.T) {
 	visitor := &BaseVisitor{}
 	node := &mockNode{Name: "test", Kind: "mock"}
-	
+
 	result := visitor.Visit(node)
 	assert.Equal(t, node, result)
 }
@@ -38,10 +38,10 @@ func TestWalker(t *testing.T) {
 	t.Run("WalkSimpleNode", func(t *testing.T) {
 		visitor := &BaseVisitor{}
 		walker := NewWalker(visitor)
-		
+
 		node := &mockNode{Name: "root", Kind: "mock"}
 		result := walker.Walk(node)
-		
+
 		assert.NotNil(t, result)
 		assert.Equal(t, node, result)
 	})
@@ -197,7 +197,7 @@ func TestUpdateChildren(t *testing.T) {
 		assert.True(t, ok)
 		assert.Len(t, updatedFile.Children, 1)
 		assert.Equal(t, "newChild", updatedFile.Children[0].(*mockNode).Name)
-		
+
 		// Ensure original is unchanged (immutability)
 		assert.Len(t, file.Children, 2)
 	})
@@ -205,7 +205,7 @@ func TestUpdateChildren(t *testing.T) {
 	t.Run("UpdateUnknownNodeType", func(t *testing.T) {
 		node := &mockNode{Name: "test", Kind: "mock"}
 		walker := &Walker{visitor: &BaseVisitor{}}
-		
+
 		result := walker.updateChildren(node, []DistilledNode{})
 		assert.Equal(t, node, result) // Should return unchanged
 	})

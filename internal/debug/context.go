@@ -29,7 +29,7 @@ func WithTiming[T any](ctx context.Context, level int, operation string, fn func
 	if !dbg.IsEnabledFor(level) {
 		return fn()
 	}
-	
+
 	done := dbg.Timing(level, operation)
 	defer done()
 	return fn()

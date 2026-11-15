@@ -60,7 +60,7 @@ func buildProgressBar(ratio float64, width int) string {
 	if width <= 0 {
 		width = 40
 	}
-	
+
 	filled := int(float64(width) * ratio / 100)
 	if filled > width {
 		filled = width
@@ -68,7 +68,7 @@ func buildProgressBar(ratio float64, width int) string {
 	if filled < 0 {
 		filled = 0
 	}
-	
+
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
 	return bar
 }

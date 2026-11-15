@@ -14,19 +14,19 @@ import (
 	"strings"
 	"sync"
 	"time"
-	
-	"github.com/spf13/cobra"
+
 	"github.com/janreges/ai-distiller/internal/ai"
 	"github.com/janreges/ai-distiller/internal/aiactions"
 	"github.com/janreges/ai-distiller/internal/debug"
 	"github.com/janreges/ai-distiller/internal/formatter"
 	"github.com/janreges/ai-distiller/internal/ir"
+	"github.com/janreges/ai-distiller/internal/language"
+	_ "github.com/janreges/ai-distiller/internal/language" // Register language processors
 	"github.com/janreges/ai-distiller/internal/processor"
 	"github.com/janreges/ai-distiller/internal/project"
-	"github.com/janreges/ai-distiller/internal/language"
-	"github.com/janreges/ai-distiller/internal/version"
 	"github.com/janreges/ai-distiller/internal/summary"
-	_ "github.com/janreges/ai-distiller/internal/language" // Register language processors
+	"github.com/janreges/ai-distiller/internal/version"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -34,19 +34,19 @@ var (
 	Version string
 
 	// Flags
-	outputFile       string
-	outputToStdout   bool
-	outputFormat     string
-	stripOptions     []string // Deprecated, kept for backward compatibility
-	includeGlob      []string
-	excludeGlob      []string
-	expandGlob       []string
-	recursiveStr     string
-	filePathType     string
+	outputFile         string
+	outputToStdout     bool
+	outputFormat       string
+	stripOptions       []string // Deprecated, kept for backward compatibility
+	includeGlob        []string
+	excludeGlob        []string
+	expandGlob         []string
+	recursiveStr       string
+	filePathType       string
 	relativePathPrefix string
-	verbosity        int
-	langOverride     string
-	
+	verbosity          int
+	langOverride       string
+
 	// New filtering flags
 	includePublic         *bool
 	includeProtected      *bool
@@ -57,53 +57,53 @@ var (
 	includeImplementation *bool
 	includeImports        *bool
 	includeAnnotations    *bool
-	
+
 	// Group flags
-	includeList           string
-	excludeList           string
-	
+	includeList string
+	excludeList string
+
 	// Concurrency flags
-	workers               int
-	
+	workers int
+
 	// Raw mode flag
-	rawMode               bool
-	
+	rawMode bool
+
 	// Git mode flags
-	gitCommitLimit        int
-	withAnalysisPrompt    bool
-	
+	gitCommitLimit     int
+	withAnalysisPrompt bool
+
 	// AI analysis task list flag (deprecated)
-	aiAnalysisTaskList    bool
-	
+	aiAnalysisTaskList bool
+
 	// New AI action system
-	aiAction             string
-	aiOutput             string
-	
+	aiAction string
+	aiOutput string
+
 	// Summary output flags
-	summaryFormat        string
-	noEmoji              bool
-	
+	summaryFormat string
+	noEmoji       bool
+
 	// AI agent instructions flag
 	showAiAgentInstructions bool
-	
+
 	// Import filtering flag
-	filterImports        *bool
-	
+	filterImports *bool
+
 	// Fields and methods filtering flags
-	fieldsFlag           string
-	methodsFlag          string
-	
+	fieldsFlag  string
+	methodsFlag string
+
 	// Dependency-aware distillation flags
-	dependencyAware      bool
-	maxDepth            int
+	dependencyAware bool
+	maxDepth        int
 )
 
 // rootCmd represents the base command
 var rootCmd = &cobra.Command{
 	Use:   "aid [path]",
 	Short: "AI Distiller - Extract essential code structure for LLMs",
-	Args: cobra.MaximumNArgs(1),
-	RunE: runDistiller,
+	Args:  cobra.MaximumNArgs(1),
+	RunE:  runDistiller,
 }
 
 // Execute runs the root command
@@ -111,13 +111,13 @@ func Execute() error {
 	// Set custom error function for better error display
 	rootCmd.SilenceErrors = true
 	rootCmd.SilenceUsage = true
-	
+
 	if err := rootCmd.Execute(); err != nil {
 		// Print error in red color
 		red := "\033[31m"
 		bold := "\033[1m"
 		reset := "\033[0m"
-		
+
 		// Check if we should use colors
 		useColor := os.Getenv("NO_COLOR") == ""
 		if !useColor {
@@ -125,9 +125,9 @@ func Execute() error {
 			bold = ""
 			reset = ""
 		}
-		
+
 		fmt.Fprintf(os.Stderr, "%s%sError: %s%s\n", red, bold, err.Error(), reset)
-		
+
 		// Show helpful usage for common errors
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Usage:")
@@ -145,7 +145,7 @@ func Execute() error {
 		fmt.Fprintln(os.Stderr, "  --format md            # Output in Markdown format")
 		fmt.Fprintln(os.Stderr, "  --private=1            # Include private members")
 		fmt.Fprintln(os.Stderr, "  --implementation=1     # Include function bodies")
-		
+
 		return err
 	}
 	return nil
@@ -153,10 +153,10 @@ func Execute() error {
 
 func init() {
 	initFlags()
-	
+
 	// Initialize help system with custom templates and commands
 	initializeHelpSystem()
-	
+
 	// Register all built-in AI actions
 	// This is done here to avoid import cycles
 	registerAIActions()
@@ -171,7 +171,7 @@ func initFlags() {
 	// Legacy processing flags (deprecated)
 	rootCmd.Flags().StringSliceVar(&stripOptions, "strip", nil, "DEPRECATED: Use individual filtering flags instead")
 	rootCmd.Flags().MarkDeprecated("strip", "use individual filtering flags like --public=1, --private=0, etc.")
-	
+
 	// File pattern flags
 	rootCmd.Flags().StringSliceVar(&includeGlob, "include", nil, "Include file patterns (comma-separated: *.go,*.py or use flag multiple times)")
 	rootCmd.Flags().StringSliceVar(&excludeGlob, "exclude", nil, "Exclude file patterns (comma-separated: *.json,*test* or use flag multiple times)")
@@ -184,17 +184,16 @@ func initFlags() {
 	rootCmd.Flags().CountVarP(&verbosity, "verbose", "v", "Verbose output (use -vv or -vvv for more detail)")
 	rootCmd.Flags().Bool("version", false, "Show version information")
 	rootCmd.Flags().Bool("help", false, "Show help message")
-	
 
 	// Language override flag
 	rootCmd.Flags().StringVar(&langOverride, "lang", "auto", "Language of code read from stdin, ignored for files and directories: auto|python|typescript|javascript|go|ruby|swift|rust|java|csharp|kotlin|cpp|php (aliases such as py, ts, c++, c# are accepted)")
-	
+
 	// New filtering flags - visibility
 	rootCmd.Flags().String("public", "1", "Include public members (0/1, default: 1)")
 	rootCmd.Flags().String("protected", "0", "Include protected members (0/1, default: 0)")
 	rootCmd.Flags().String("internal", "0", "Include internal/package-private members (0/1, default: 0)")
 	rootCmd.Flags().String("private", "0", "Include private members (0/1, default: 0)")
-	
+
 	// New filtering flags - content
 	rootCmd.Flags().String("comments", "0", "Include comments (0/1, default: 0)")
 	rootCmd.Flags().String("docstrings", "1", "Include documentation comments (0/1, default: 1)")
@@ -203,41 +202,41 @@ func initFlags() {
 	rootCmd.Flags().String("annotations", "1", "Include decorators/annotations (0/1, default: 1)")
 	rootCmd.Flags().String("fields", "1", "Include fields/properties (0/1, default: 1)")
 	rootCmd.Flags().String("methods", "1", "Include methods/functions (0/1, default: 1)")
-	
+
 	// Group filtering flags
 	rootCmd.Flags().StringVar(&includeList, "include-only", "", "Include only these categories (comma-separated)")
 	rootCmd.Flags().StringVar(&excludeList, "exclude-items", "", "Exclude these categories (comma-separated)")
-	
+
 	// Concurrency flags
 	rootCmd.Flags().IntVarP(&workers, "workers", "w", 0, "Number of parallel workers (0=auto/80% CPU cores, 1=serial, default: 0)")
-	
+
 	// Raw mode flag
 	rootCmd.Flags().BoolVar(&rawMode, "raw", false, "Raw mode: process all text files without parsing (txt, md, json, yaml, etc.")
-	
+
 	// Git mode flags
 	rootCmd.Flags().IntVar(&gitCommitLimit, "git-limit", 200, "Limit number of commits in git mode (default: 200, 0=all)")
 	rootCmd.Flags().BoolVar(&withAnalysisPrompt, "with-analysis-prompt", false, "Prepend AI analysis prompt to git output")
-	
+
 	// AI analysis task list flag (deprecated)
 	rootCmd.Flags().BoolVar(&aiAnalysisTaskList, "ai-analysis-task-list", false, "DEPRECATED: Use --ai-action=flow-for-deep-file-to-file-analysis instead")
 	rootCmd.Flags().MarkDeprecated("ai-analysis-task-list", "use --ai-action=flow-for-deep-file-to-file-analysis instead")
-	
+
 	// New AI action system
 	rootCmd.Flags().StringVar(&aiAction, "ai-action", "", "AI action to perform on distilled output")
 	rootCmd.Flags().StringVar(&aiOutput, "ai-output", "", "Output path for AI action (default: action-specific)")
-	
+
 	// Summary output flags
 	rootCmd.Flags().StringVar(&summaryFormat, "summary-type", "visual-progress-bar", "Summary output format: visual-progress-bar|stock-ticker|speedometer-dashboard|minimalist-sparkline|ci-friendly|json|off (default: visual-progress-bar)")
 	rootCmd.Flags().BoolVar(&noEmoji, "no-emoji", false, "Disable emojis in summary output")
-	
+
 	// AI agent instructions flag
 	rootCmd.Flags().BoolVar(&showAiAgentInstructions, "show-ai-agent-instructions", false, "Show AI agent instructions at the beginning of text output")
-	
+
 	// Import filtering flag
 	filterImports = new(bool)
 	*filterImports = true // Default is true for text output
 	rootCmd.Flags().BoolVar(filterImports, "filter-imports", true, "Filter unused imports in text output")
-	
+
 	// Dependency-aware distillation flags
 	rootCmd.Flags().BoolVar(&dependencyAware, "dependency-aware", false, "EXPERIMENTAL: follow calls across files and keep only what the entry file uses (regex-based)")
 	rootCmd.Flags().IntVar(&maxDepth, "max-depth", 2, "EXPERIMENTAL: call depth for --dependency-aware (default: 2)")
@@ -255,7 +254,7 @@ func initFlags() {
 			fmt.Printf("%s\n", version.WebsiteURL)
 			os.Exit(0)
 		}
-		
+
 		// Parse boolean flags
 		parseBoolFlag(cmd, "public", &includePublic)
 		parseBoolFlag(cmd, "protected", &includeProtected)
@@ -266,11 +265,11 @@ func initFlags() {
 		parseBoolFlag(cmd, "implementation", &includeImplementation)
 		parseBoolFlag(cmd, "imports", &includeImports)
 		parseBoolFlag(cmd, "annotations", &includeAnnotations)
-		
+
 		// Parse fields and methods flags
 		fieldsFlag, _ = cmd.Flags().GetString("fields")
 		methodsFlag, _ = cmd.Flags().GetString("methods")
-		
+
 		// Validate mutually exclusive flags
 		if includeList != "" && excludeList != "" {
 			fmt.Fprintf(os.Stderr, "Error: --include-only and --exclude-items are mutually exclusive\n")
@@ -302,7 +301,7 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 
 	// Log startup info
 	dbg.Logf(debug.LevelBasic, "AI Distiller %s starting", Version)
-	
+
 	// Stdin is read in exactly two cases: the argument is "-", or there is no
 	// argument and stdin is not a character device. With any other argument
 	// stdin is never inspected, so an open but unwritten pipe cannot hijack or
@@ -321,12 +320,12 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 	if stdinAvailable {
 		return processStdinWithContext(ctx)
 	}
-	
+
 	// If no arguments provided, show help
 	if len(args) == 0 {
 		return cmd.Help()
 	}
-	
+
 	// Handle file/directory input
 	inputPath := args[0]
 
@@ -347,14 +346,14 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 		// This is different from regular mode where we auto-generate filenames
 		return handleGitMode(ctx, absPath)
 	}
-	
+
 	// Check if AI analysis task list flag is set (deprecated)
 	if aiAnalysisTaskList {
 		// Convert to new AI action system
 		aiAction = "flow-for-deep-file-to-file-analysis"
 		dbg.Logf(debug.LevelBasic, "Using deprecated --ai-analysis-task-list, converting to --ai-action=%s", aiAction)
 	}
-	
+
 	// Check if AI action is specified
 	if aiAction != "" {
 		if outputFile != "" {
@@ -378,11 +377,11 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 	dbg.Logf(debug.LevelBasic, "Input: %s", absPath)
 	dbg.Logf(debug.LevelBasic, "Output: %s", outputFile)
 	dbg.Logf(debug.LevelBasic, "Format: %s", outputFormat)
-	
+
 	if len(stripOptions) > 0 {
 		dbg.Logf(debug.LevelBasic, "Strip (deprecated): %s", strings.Join(stripOptions, ", "))
 	}
-	
+
 	// Log detailed configuration at level 2
 	dbg.Logf(debug.LevelDetailed, "Visibility: public=%v, protected=%v, internal=%v, private=%v",
 		getBoolFlag(includePublic, true),
@@ -403,7 +402,6 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 
 	// Create the processor with context
 	proc := processor.NewWithContext(ctx)
-	
 
 	// Log workers configuration
 	actualWorkers := workers
@@ -421,15 +419,15 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 	procOpts.BasePath = inputPath
 	procOpts.FilePathType = filePathType
 	procOpts.RelativePathPrefix = relativePathPrefix
-	
+
 	// If user provided absolute path and didn't specify file-path-type, default to absolute
 	if filepath.IsAbs(inputPath) && !cmd.Flags().Changed("file-path-type") {
 		procOpts.FilePathType = "absolute"
 	}
-	
+
 	// Track processing time
 	startTime := time.Now()
-	
+
 	// Process the input
 	result, err := proc.ProcessPath(absPath, procOpts)
 	if err != nil {
@@ -442,16 +440,16 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 	// Create formatter based on format
 	formatterOpts := formatter.Options{
 		ProcessingOptions: formatter.ProcessingInfo{
-			IncludePublic:        procOpts.IncludePublic,
-			IncludeProtected:     procOpts.IncludeProtected,
-			IncludeInternal:      procOpts.IncludeInternal,
-			IncludePrivate:       procOpts.IncludePrivate,
+			IncludePublic:         procOpts.IncludePublic,
+			IncludeProtected:      procOpts.IncludeProtected,
+			IncludeInternal:       procOpts.IncludeInternal,
+			IncludePrivate:        procOpts.IncludePrivate,
 			IncludeImplementation: procOpts.IncludeImplementation,
-			IncludeComments:      procOpts.IncludeComments,
-			IncludeImports:       procOpts.IncludeImports,
-			IncludeDocstrings:    procOpts.IncludeDocstrings,
-			IncludeAnnotations:   procOpts.IncludeAnnotations,
-			FilterImports:        *filterImports && outputFormat == "text",
+			IncludeComments:       procOpts.IncludeComments,
+			IncludeImports:        procOpts.IncludeImports,
+			IncludeDocstrings:     procOpts.IncludeDocstrings,
+			IncludeAnnotations:    procOpts.IncludeAnnotations,
+			FilterImports:         *filterImports && outputFormat == "text",
 		},
 		DebugLevel: verbosity,
 	}
@@ -462,22 +460,22 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 
 	// Write output
 	var output strings.Builder
-	
+
 	// Log formatting phase
 	dbg.Logf(debug.LevelDetailed, "Starting formatting phase with %s formatter", outputFormat)
 	defer dbg.Timing(debug.LevelDetailed, fmt.Sprintf("formatting to %s", outputFormat))()
-	
+
 	// Handle different result types and count files
 	var fileCount int
 	switch r := result.(type) {
 	case *ir.DistilledFile:
 		dbg.Logf(debug.LevelDetailed, "Formatting single file: %s", r.Path)
-		
+
 		// Dump IR being formatted at trace level
 		debug.Lazy(ctx, debug.LevelTrace, func(d debug.Debugger) {
 			d.Dump(debug.LevelTrace, "IR being formatted", r)
 		})
-		
+
 		if err := outputFormatter.Format(&output, r); err != nil {
 			return fmt.Errorf("failed to format output: %w", err)
 		}
@@ -490,34 +488,34 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 				files = append(files, file)
 			}
 		}
-		
+
 		fileCount = len(files)
 		dbg.Logf(debug.LevelDetailed, "Formatting %d files from directory", fileCount)
-		
+
 		if err := outputFormatter.FormatMultiple(&output, files); err != nil {
 			return fmt.Errorf("failed to format output: %w", err)
 		}
 	default:
 		return fmt.Errorf("unexpected result type: %T", result)
 	}
-	
+
 	dbg.Logf(debug.LevelDetailed, "Formatted output size: %d bytes", output.Len())
 
 	// Clean up empty file tags for text format
 	outputStr := output.String()
 	dbg.Logf(debug.LevelDetailed, "Output format: %s", outputFormat)
-	
+
 	// Add distillation instructions at the beginning of text output if enabled
 	if outputFormat == "text" && fileCount > 0 && showAiAgentInstructions {
 		instructions := generateDistillationInstructions(procOpts)
 		outputStr = instructions + "\n\n" + outputStr
 	}
-	
+
 	if outputFormat == "text" {
 		// Remove empty file tags with only whitespace between them
 		emptyFilePattern := regexp.MustCompile(`(?s)<file path="[^"]+">\s*</file>\s*`)
 		cleanedStr := emptyFilePattern.ReplaceAllString(outputStr, "")
-		dbg.Logf(debug.LevelDetailed, "Regex cleanup: before=%d bytes, after=%d bytes, pattern matches=%d", 
+		dbg.Logf(debug.LevelDetailed, "Regex cleanup: before=%d bytes, after=%d bytes, pattern matches=%d",
 			len(outputStr), len(cleanedStr), len(emptyFilePattern.FindAllString(outputStr, -1)))
 		outputStr = cleanedStr
 	}
@@ -540,11 +538,11 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 && args[0] != "-" && summaryFormat != "off" {
 		// Calculate processing duration
 		duration := time.Since(startTime)
-		
+
 		// Get original size
 		originalSize := getOriginalSize(result)
 		distilledSize := int64(len(outputStr)) // what was written or printed
-		
+
 		// Create summary stats
 		stats := summary.Stats{
 			OriginalBytes:   originalSize,
@@ -557,14 +555,14 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 			IsStdout:        outputFile == "",
 			Printed:         outputToStdout || outputFile == "",
 		}
-		
+
 		// Print summary
 		summaryOpts := summary.Options{
 			Format:  summaryFormat,
 			NoColor: os.Getenv("NO_COLOR") != "",
 			NoEmoji: noEmoji,
 		}
-		
+
 		summary.Print(os.Stderr, stats, summaryOpts)
 	}
 
@@ -579,7 +577,7 @@ func generateOutputFilename(path string, stripOptions []string, format string) s
 		aidDir = ".aid"
 		os.MkdirAll(aidDir, 0755)
 	}
-	
+
 	// Get directory name
 	dirName := filepath.Base(path)
 	if dirName == "." || dirName == "/" {
@@ -588,7 +586,7 @@ func generateOutputFilename(path string, stripOptions []string, format string) s
 
 	// Build options suffix based on what's excluded from defaults
 	var abbrev []string
-	
+
 	// Check if using new flag system
 	if len(stripOptions) == 0 {
 		// New flag system - check what differs from defaults
@@ -644,7 +642,7 @@ func generateOutputFilename(path string, stripOptions []string, format string) s
 			}
 		}
 	}
-	
+
 	optionsSuffix := ""
 	if len(abbrev) > 0 {
 		optionsSuffix = "." + strings.Join(abbrev, ".")
@@ -662,7 +660,7 @@ func generateOutputFilename(path string, stripOptions []string, format string) s
 	case "xml":
 		ext = ".xml"
 	}
-	
+
 	// Generate filename within .aid directory
 	filename := fmt.Sprintf("aid.%s%s%s", dirName, optionsSuffix, ext)
 	return filepath.Join(aidDir, filename)
@@ -680,10 +678,10 @@ func contains(slice []string, item string) bool {
 // processStdinWithContext handles input from stdin with debugging context
 func processStdinWithContext(ctx context.Context) error {
 	dbg := debug.FromContext(ctx).WithSubsystem("stdin")
-	
+
 	// Force stdout output when reading from stdin
 	outputToStdout = true
-	
+
 	dbg.Logf(debug.LevelBasic, "Processing input from stdin")
 
 	// Read all of stdin; detection looks at the first 64kB
@@ -737,16 +735,16 @@ func processStdinWithContext(ctx context.Context) error {
 	// Create formatter based on format
 	formatterOpts := formatter.Options{
 		ProcessingOptions: formatter.ProcessingInfo{
-			IncludePublic:        procOpts.IncludePublic,
-			IncludeProtected:     procOpts.IncludeProtected,
-			IncludeInternal:      procOpts.IncludeInternal,
-			IncludePrivate:       procOpts.IncludePrivate,
+			IncludePublic:         procOpts.IncludePublic,
+			IncludeProtected:      procOpts.IncludeProtected,
+			IncludeInternal:       procOpts.IncludeInternal,
+			IncludePrivate:        procOpts.IncludePrivate,
 			IncludeImplementation: procOpts.IncludeImplementation,
-			IncludeComments:      procOpts.IncludeComments,
-			IncludeImports:       procOpts.IncludeImports,
-			IncludeDocstrings:    procOpts.IncludeDocstrings,
-			IncludeAnnotations:   procOpts.IncludeAnnotations,
-			FilterImports:        *filterImports && outputFormat == "text",
+			IncludeComments:       procOpts.IncludeComments,
+			IncludeImports:        procOpts.IncludeImports,
+			IncludeDocstrings:     procOpts.IncludeDocstrings,
+			IncludeAnnotations:    procOpts.IncludeAnnotations,
+			FilterImports:         *filterImports && outputFormat == "text",
 		},
 		DebugLevel: verbosity,
 	}
@@ -754,13 +752,13 @@ func processStdinWithContext(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to get formatter: %w", err)
 	}
-	
+
 	// Format and output
 	var output strings.Builder
 	if err := outputFormatter.Format(&output, result); err != nil {
 		return fmt.Errorf("failed to format output: %w", err)
 	}
-	
+
 	// Stdin output is always printed; -o FILE also writes it to FILE
 	if outputFile != "" {
 		if err := os.WriteFile(outputFile, []byte(output.String()), 0644); err != nil {
@@ -801,24 +799,24 @@ func parseBoolStringFlag(value string, defaultValue bool) bool {
 	if value == "" {
 		return defaultValue
 	}
-	
+
 	if value == "0" {
 		return false
 	} else if value == "1" {
 		return true
 	}
-	
+
 	if b, err := strconv.ParseBool(value); err == nil {
 		return b
 	}
-	
+
 	return defaultValue
 }
 
 // createProcessOptionsFromFlags creates ProcessOptions from the new flag system
 func createProcessOptionsFromFlags() processor.ProcessOptions {
 	opts := processor.ProcessOptions{}
-	
+
 	// Handle legacy --strip flag if present
 	if len(stripOptions) > 0 {
 		if verbosity > 0 {
@@ -837,7 +835,7 @@ func createProcessOptionsFromFlags() processor.ProcessOptions {
 		opts.SymbolResolution = dependencyAware
 		return opts
 	}
-	
+
 	// Process include/exclude lists if provided
 	if includeList != "" {
 		opts = processIncludeList(includeList)
@@ -863,25 +861,25 @@ func createProcessOptionsFromFlags() processor.ProcessOptions {
 		opts.SymbolResolution = dependencyAware
 		return opts
 	}
-	
+
 	// Use individual flags with defaults
 	// fmt.Printf("DEBUG: includeComments=%v\n", includeComments)
 	opts.IncludeComments = getBoolFlag(includeComments, false)
 	opts.IncludeImports = getBoolFlag(includeImports, true)
 	opts.IncludeImplementation = getBoolFlag(includeImplementation, false)
-	
+
 	// Handle visibility flags
 	includePublicVal := getBoolFlag(includePublic, true)
 	includeProtectedVal := getBoolFlag(includeProtected, false)
 	includeInternalVal := getBoolFlag(includeInternal, false)
 	includePrivateVal := getBoolFlag(includePrivate, false)
-	
+
 	// Store visibility levels for formatter instructions
 	opts.IncludePublic = includePublicVal
 	opts.RemovePublic = !includePublicVal
 	opts.IncludeProtected = includeProtectedVal
 	opts.IncludeInternal = includeInternalVal
-	
+
 	// Convert to stripper options
 	// If only public is included, remove all non-public
 	if includePublicVal && !includeProtectedVal && !includeInternalVal && !includePrivateVal {
@@ -893,33 +891,33 @@ func createProcessOptionsFromFlags() processor.ProcessOptions {
 		opts.RemoveProtectedOnly = !includeProtectedVal
 		opts.RemoveInternalOnly = !includeInternalVal
 	}
-	
+
 	// Handle docstrings and annotations
 	opts.IncludeDocstrings = getBoolFlag(includeDocstrings, true)
 	opts.IncludeAnnotations = getBoolFlag(includeAnnotations, true)
-	
+
 	// Handle fields and methods flags
 	opts.IncludeFields = parseBoolStringFlag(fieldsFlag, true)
 	opts.IncludeMethods = parseBoolStringFlag(methodsFlag, true)
-	
+
 	// Set workers value
 	opts.Workers = workers
-	
+
 	// Set raw mode
 	opts.RawMode = rawMode
-	
+
 	// Set recursive - parse from global recursiveStr
 	opts.Recursive = recursiveStr != "0"
-	
+
 	// Set include/exclude patterns
 	opts.IncludePatterns = includeGlob
 	opts.ExcludePatterns = excludeGlob
 	opts.ExpandSymbols = expandGlob
-	
+
 	// Dependency-aware distillation options
 	opts.MaxDepth = maxDepth
 	opts.SymbolResolution = dependencyAware
-	
+
 	return opts
 }
 
@@ -935,22 +933,22 @@ func getBoolFlag(flag *bool, defaultVal bool) bool {
 func processIncludeList(list string) processor.ProcessOptions {
 	opts := processor.ProcessOptions{
 		// Start with everything excluded
-		IncludeComments: false,
-		IncludeImports: false,
+		IncludeComments:       false,
+		IncludeImports:        false,
 		IncludeImplementation: false,
-		IncludePrivate: false,
-		IncludeDocstrings: false,
-		IncludeAnnotations: false,
-		IncludeFields: false,
-		IncludeMethods: false,
+		IncludePrivate:        false,
+		IncludeDocstrings:     false,
+		IncludeAnnotations:    false,
+		IncludeFields:         false,
+		IncludeMethods:        false,
 	}
-	
+
 	// Track which visibility levels are included
 	includePublic := false
 	includeProtected := false
 	includeInternal := false
 	includePrivate := false
-	
+
 	items := strings.Split(list, ",")
 	for _, item := range items {
 		switch strings.TrimSpace(item) {
@@ -978,7 +976,7 @@ func processIncludeList(list string) processor.ProcessOptions {
 			opts.IncludeMethods = true
 		}
 	}
-	
+
 	// Listing visibility categories without "public" asks for non-public members only
 	opts.RemovePublic = (includeProtected || includeInternal || includePrivate) && !includePublic
 
@@ -997,7 +995,7 @@ func processIncludeList(list string) processor.ProcessOptions {
 			opts.IncludePrivate = false
 		}
 	}
-	
+
 	return opts
 }
 
@@ -1005,16 +1003,16 @@ func processIncludeList(list string) processor.ProcessOptions {
 func processExcludeList(list string) processor.ProcessOptions {
 	opts := processor.ProcessOptions{
 		// Start with everything included
-		IncludeComments: true,
-		IncludeImports: true,
+		IncludeComments:       true,
+		IncludeImports:        true,
 		IncludeImplementation: true,
-		IncludePrivate: true,
-		IncludeDocstrings: true,
-		IncludeAnnotations: true,
-		IncludeFields: true,
-		IncludeMethods: true,
+		IncludePrivate:        true,
+		IncludeDocstrings:     true,
+		IncludeAnnotations:    true,
+		IncludeFields:         true,
+		IncludeMethods:        true,
 	}
-	
+
 	items := strings.Split(list, ",")
 	for _, item := range items {
 		switch strings.TrimSpace(item) {
@@ -1044,7 +1042,7 @@ func processExcludeList(list string) processor.ProcessOptions {
 			opts.IncludeMethods = false
 		}
 	}
-	
+
 	return opts
 }
 
@@ -1052,26 +1050,26 @@ func processExcludeList(list string) processor.ProcessOptions {
 func handleGitMode(ctx context.Context, gitPath string) error {
 	dbg := debug.FromContext(ctx).WithSubsystem("git")
 	dbg.Logf(debug.LevelBasic, "Git mode activated for: %s", gitPath)
-	
+
 	// Get the repository directory (parent of .git)
 	repoPath := filepath.Dir(gitPath)
-	
+
 	// Build git log command with custom format
 	// Using a rare delimiter to avoid conflicts with commit messages
 	delimiter := "|||DELIMITER|||"
 	// Format: hash | date | author name <email> | subject + body
 	formatStr := fmt.Sprintf("--pretty=format:%%h%s%%ai%s%%an <%%ae>%s%%s%%n%%b", delimiter, delimiter, delimiter)
-	
+
 	// Build command args
 	args := []string{"-C", repoPath, "log", formatStr}
 	if gitCommitLimit > 0 {
 		args = append(args, fmt.Sprintf("-n%d", gitCommitLimit))
 	}
-	
+
 	cmd := exec.Command("git", args...)
-	
+
 	dbg.Logf(debug.LevelDetailed, "Running git command: %s", strings.Join(cmd.Args, " "))
-	
+
 	// Execute the command
 	cmdOutput, err := cmd.Output()
 	if err != nil {
@@ -1080,24 +1078,24 @@ func handleGitMode(ctx context.Context, gitPath string) error {
 		}
 		return fmt.Errorf("failed to run git log: %w", err)
 	}
-	
+
 	// Process the output to format it nicely
 	lines := strings.Split(string(cmdOutput), "\n")
 	var commits []GitCommit
 	var currentCommit *GitCommit
-	
+
 	for _, line := range lines {
 		if line == "" {
 			continue
 		}
-		
+
 		// Check if this is a new commit (contains the delimiter)
 		if strings.Contains(line, delimiter) {
 			// Save previous commit if exists
 			if currentCommit != nil {
 				commits = append(commits, *currentCommit)
 			}
-			
+
 			// Parse new commit
 			parts := strings.SplitN(line, delimiter, 4)
 			if len(parts) >= 4 {
@@ -1113,35 +1111,35 @@ func handleGitMode(ctx context.Context, gitPath string) error {
 			currentCommit.Message += "\n" + line
 		}
 	}
-	
+
 	// Don't forget the last commit
 	if currentCommit != nil {
 		commits = append(commits, *currentCommit)
 	}
-	
+
 	dbg.Logf(debug.LevelBasic, "Found %d commits", len(commits))
-	
+
 	// Format and output the commits
 	var output strings.Builder
-	
+
 	// Add analysis prompt if requested
 	if withAnalysisPrompt {
 		output.WriteString(getGitAnalysisPrompt())
 		output.WriteString("\n\n=== BEGIN GIT LOG ===\n")
 	}
-	
+
 	for i, commit := range commits {
 		if i > 0 {
 			output.WriteString("\n")
 		}
-		
+
 		// Extract just the date part (without timezone) for cleaner display
 		dateParts := strings.Fields(commit.Date)
 		cleanDate := commit.Date
 		if len(dateParts) >= 2 {
 			cleanDate = dateParts[0] + " " + dateParts[1]
 		}
-		
+
 		// Format the commit header in a clean, single-line format
 		// Format: [hash] YYYY-MM-DD HH:MM:SS | author | subject
 		message := strings.TrimSpace(commit.Message)
@@ -1150,7 +1148,7 @@ func handleGitMode(ctx context.Context, gitPath string) error {
 		if len(subject) > 80 {
 			subject = subject[:77] + "..."
 		}
-		
+
 		// Extract author name without email for cleaner display
 		author := commit.Author
 		if idx := strings.Index(author, " <"); idx > 0 {
@@ -1160,9 +1158,9 @@ func handleGitMode(ctx context.Context, gitPath string) error {
 		if len(author) > 20 {
 			author = author[:17] + "..."
 		}
-		
+
 		fmt.Fprintf(&output, "[%s] %s | %-20s | %s\n", commit.Hash, cleanDate, author, subject)
-		
+
 		// Format the rest of the message (body) with proper indentation
 		if len(lines) > 1 {
 			for i := 1; i < len(lines); i++ {
@@ -1173,12 +1171,12 @@ func handleGitMode(ctx context.Context, gitPath string) error {
 			}
 		}
 	}
-	
+
 	// Add closing tag if analysis prompt was used
 	if withAnalysisPrompt {
 		output.WriteString("\n=== END GIT LOG ===\n")
 	}
-	
+
 	// Write to file if specified
 	if outputFile != "" {
 		if err := os.WriteFile(outputFile, []byte(output.String()), 0644); err != nil {
@@ -1190,12 +1188,12 @@ func handleGitMode(ctx context.Context, gitPath string) error {
 			fmt.Fprintf(os.Stderr, "Git log written to: %s\n", absOutputFile)
 		}
 	}
-	
+
 	// Write to stdout only if explicitly requested or no output file specified
 	if outputToStdout || outputFile == "" {
 		fmt.Print(output.String())
 	}
-	
+
 	return nil
 }
 
@@ -1233,25 +1231,25 @@ development timeline visualization, complexity analysis, and actionable recommen
 func handleAIAction(ctx context.Context, projectPath string) error {
 	dbg := debug.FromContext(ctx).WithSubsystem("ai-action")
 	dbg.Logf(debug.LevelBasic, "AI Action mode: %s", aiAction)
-	
+
 	// Get the AI action from registry
 	registry := ai.GetRegistry()
 	action, err := registry.Get(aiAction)
 	if err != nil {
 		return fmt.Errorf("failed to get AI action: %w", err)
 	}
-	
+
 	// Validate the action
 	if err := action.Validate(); err != nil {
 		return fmt.Errorf("action validation failed: %w", err)
 	}
-	
+
 	// Create action context
 	baseName := filepath.Base(projectPath)
 	if baseName == "." || baseName == "/" {
 		baseName = "project"
 	}
-	
+
 	actionCtx := &ai.ActionContext{
 		ProjectPath:     projectPath,
 		BaseName:        baseName,
@@ -1262,7 +1260,7 @@ func handleAIAction(ctx context.Context, projectPath string) error {
 			OutputPath: aiOutput,
 		},
 	}
-	
+
 	// Handle different action types
 	switch action.Type() {
 	case ai.ActionTypeFlow:
@@ -1271,25 +1269,25 @@ func handleAIAction(ctx context.Context, projectPath string) error {
 		if !ok {
 			return fmt.Errorf("action %s claims to be flow type but doesn't implement FlowAction interface", aiAction)
 		}
-		
+
 		return executeFlowAction(ctx, flowAction, actionCtx)
-		
+
 	case ai.ActionTypePrompt:
 		// Prompt actions need distilled content
 		contentAction, ok := action.(ai.ContentAction)
 		if !ok {
 			return fmt.Errorf("action %s claims to be prompt type but doesn't implement ContentAction interface", aiAction)
 		}
-		
+
 		// First, distill the content
 		distilledContent, err := distillForAction(ctx, projectPath)
 		if err != nil {
 			return fmt.Errorf("failed to distill content: %w", err)
 		}
-		
+
 		actionCtx.DistilledContent = distilledContent
 		return executeContentAction(ctx, contentAction, actionCtx)
-		
+
 	default:
 		return fmt.Errorf("unknown action type: %s", action.Type())
 	}
@@ -1298,34 +1296,34 @@ func handleAIAction(ctx context.Context, projectPath string) error {
 // distillForAction runs the distiller to get content for AI actions
 func distillForAction(ctx context.Context, projectPath string) (string, error) {
 	dbg := debug.FromContext(ctx).WithSubsystem("distill-for-action")
-	
+
 	// Create processor options from flags
 	procOpts := createProcessOptionsFromFlags()
 	procOpts.BasePath = projectPath
 	procOpts.FilePathType = "relative"
-	
+
 	// Create the processor
 	proc := processor.NewWithContext(ctx)
-	
+
 	// Process the input
 	result, err := proc.ProcessPath(projectPath, procOpts)
 	if err != nil {
 		return "", fmt.Errorf("failed to process: %w", err)
 	}
-	
+
 	// Always use text format for AI actions
 	formatterOpts := formatter.Options{
 		ProcessingOptions: formatter.ProcessingInfo{
-			IncludePublic:        procOpts.IncludePublic,
-			IncludeProtected:     procOpts.IncludeProtected,
-			IncludeInternal:      procOpts.IncludeInternal,
-			IncludePrivate:       procOpts.IncludePrivate,
+			IncludePublic:         procOpts.IncludePublic,
+			IncludeProtected:      procOpts.IncludeProtected,
+			IncludeInternal:       procOpts.IncludeInternal,
+			IncludePrivate:        procOpts.IncludePrivate,
 			IncludeImplementation: procOpts.IncludeImplementation,
-			IncludeComments:      procOpts.IncludeComments,
-			IncludeImports:       procOpts.IncludeImports,
-			IncludeDocstrings:    procOpts.IncludeDocstrings,
-			IncludeAnnotations:   procOpts.IncludeAnnotations,
-			FilterImports:        true, // Always filter imports for AI actions
+			IncludeComments:       procOpts.IncludeComments,
+			IncludeImports:        procOpts.IncludeImports,
+			IncludeDocstrings:     procOpts.IncludeDocstrings,
+			IncludeAnnotations:    procOpts.IncludeAnnotations,
+			FilterImports:         true, // Always filter imports for AI actions
 		},
 		DebugLevel: verbosity,
 	}
@@ -1333,10 +1331,10 @@ func distillForAction(ctx context.Context, projectPath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get formatter: %w", err)
 	}
-	
+
 	// Format the output
 	var output strings.Builder
-	
+
 	switch r := result.(type) {
 	case *ir.DistilledFile:
 		if err := outputFormatter.Format(&output, r); err != nil {
@@ -1355,7 +1353,7 @@ func distillForAction(ctx context.Context, projectPath string) (string, error) {
 	default:
 		return "", fmt.Errorf("unexpected result type: %T", result)
 	}
-	
+
 	dbg.Logf(debug.LevelBasic, "Distilled %d bytes of content", output.Len())
 	return output.String(), nil
 }
@@ -1364,67 +1362,67 @@ func distillForAction(ctx context.Context, projectPath string) (string, error) {
 func executeFlowAction(ctx context.Context, action ai.FlowAction, actionCtx *ai.ActionContext) error {
 	startTime := time.Now()
 	dbg := debug.FromContext(ctx).WithSubsystem("flow-action")
-	
+
 	// Determine output path
 	outputPath := actionCtx.Config.OutputPath
 	if outputPath == "" {
 		outputPath = action.DefaultOutput()
 	}
 	outputPath = ai.ExpandTemplate(outputPath, actionCtx)
-	
+
 	// Ensure output path is within project
 	if err := ai.ValidateOutputPath(outputPath, actionCtx.ProjectPath); err != nil {
 		return fmt.Errorf("invalid output path: %w", err)
 	}
-	
+
 	// Execute the flow
 	result, err := action.ExecuteFlow(actionCtx)
 	if err != nil {
 		return fmt.Errorf("flow execution failed: %w", err)
 	}
-	
+
 	// Create output directory
 	if err := os.MkdirAll(outputPath, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
-	
+
 	// Write all files and track total size
 	var totalSize int64
 	fileCount := 0
 	for relPath, content := range result.Files {
 		fullPath := filepath.Join(outputPath, relPath)
-		
+
 		// Create parent directory
 		parentDir := filepath.Dir(fullPath)
 		if err := os.MkdirAll(parentDir, 0755); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", parentDir, err)
 		}
-		
+
 		// Write file
 		contentBytes := []byte(content)
 		if err := os.WriteFile(fullPath, contentBytes, 0644); err != nil {
 			return fmt.Errorf("failed to write file %s: %w", fullPath, err)
 		}
-		
+
 		totalSize += int64(len(contentBytes))
 		fileCount++
 		sizeKB := float64(len(contentBytes)) / 1024.0
 		dbg.Logf(debug.LevelDetailed, "Wrote file: %s (%.1f kB)", fullPath, sizeKB)
 	}
-	
+
 	// Calculate duration and total size
 	duration := time.Since(startTime)
 	totalSizeKB := float64(totalSize) / 1024.0
-	
+
 	// Print messages
 	for _, msg := range result.Messages {
 		fmt.Println(msg)
 	}
-	
+
 	// Print summary
 	fmt.Printf("✅ AI flow action '%s' completed successfully! (%.2fs)\n", action.Name(), duration.Seconds())
 	fmt.Printf("📄 Output saved to: %s (%d files, %.1f kB total)\n", outputPath, fileCount, totalSizeKB)
-	
+
 	return nil
 }
 
@@ -1432,37 +1430,37 @@ func executeFlowAction(ctx context.Context, action ai.FlowAction, actionCtx *ai.
 func executeContentAction(ctx context.Context, action ai.ContentAction, actionCtx *ai.ActionContext) error {
 	startTime := time.Now()
 	dbg := debug.FromContext(ctx).WithSubsystem("content-action")
-	
+
 	// Generate content
 	result, err := action.GenerateContent(actionCtx)
 	if err != nil {
 		return fmt.Errorf("content generation failed: %w", err)
 	}
-	
+
 	// Determine output path
 	outputPath := actionCtx.Config.OutputPath
 	if outputPath == "" {
 		outputPath = action.DefaultOutput()
 	}
 	outputPath = ai.ExpandTemplate(outputPath, actionCtx)
-	
+
 	// Ensure output path is within project
 	if err := ai.ValidateOutputPath(outputPath, actionCtx.ProjectPath); err != nil {
 		return fmt.Errorf("invalid output path: %w", err)
 	}
-	
+
 	// Build final content
 	var finalContent strings.Builder
 	finalContent.WriteString(result.ContentBefore)
 	finalContent.WriteString(actionCtx.DistilledContent)
 	finalContent.WriteString(result.ContentAfter)
-	
+
 	content := []byte(finalContent.String())
-	
+
 	// If outputToStdout is set, print to stdout
 	if outputToStdout {
 		fmt.Print(string(content))
-		
+
 		// Also save to file unless explicitly disabled
 		if outputPath != "" && outputPath != "-" {
 			// Create parent directory
@@ -1470,12 +1468,12 @@ func executeContentAction(ctx context.Context, action ai.ContentAction, actionCt
 			if err := os.MkdirAll(parentDir, 0755); err != nil {
 				return fmt.Errorf("failed to create directory %s: %w", parentDir, err)
 			}
-			
+
 			// Write output file
 			if err := os.WriteFile(outputPath, content, 0644); err != nil {
 				return fmt.Errorf("failed to write output file: %w", err)
 			}
-			
+
 			// Print info message to stderr so it doesn't mix with stdout content
 			fmt.Fprintf(os.Stderr, "\n\n")
 			fmt.Fprintf(os.Stderr, "════════════════════════════════════════════════════════════════════════\n")
@@ -1500,25 +1498,25 @@ func executeContentAction(ctx context.Context, action ai.ContentAction, actionCt
 		if err := os.MkdirAll(parentDir, 0755); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", parentDir, err)
 		}
-		
+
 		// Write output file
 		if err := os.WriteFile(outputPath, content, 0644); err != nil {
 			return fmt.Errorf("failed to write output file: %w", err)
 		}
-		
+
 		// Get file info for size
 		fileInfo, err := os.Stat(outputPath)
 		if err != nil {
 			return fmt.Errorf("failed to stat output file: %w", err)
 		}
-		
+
 		// Calculate size in kB
 		sizeKB := float64(fileInfo.Size()) / 1024.0
 		sizeMB := sizeKB / 1024.0
 		duration := time.Since(startTime)
-		
+
 		dbg.Logf(debug.LevelBasic, "Wrote AI action output to %s (%d bytes, %.1f kB) in %v", outputPath, fileInfo.Size(), sizeKB, duration)
-		
+
 		fmt.Printf("\n")
 		fmt.Printf("════════════════════════════════════════════════════════════════════════\n")
 		fmt.Printf("✅ AI action '%s' completed successfully! (%.2fs)\n", action.Name(), duration.Seconds())
@@ -1529,7 +1527,7 @@ func executeContentAction(ctx context.Context, action ai.ContentAction, actionCt
 		fmt.Printf("1. Let your AI agent read and execute this file\n")
 		fmt.Printf("2. Copy the file content to Gemini 2.5 Pro/Flash (supports 1M+ context)\n")
 		fmt.Printf("3. Use with any AI tool that supports large context windows\n")
-		
+
 		if sizeMB > 0.5 { // If larger than 500KB
 			fmt.Printf("\n")
 			fmt.Printf("⚠️  The generated file is quite large (%.1f MB).\n", sizeMB)
@@ -1538,7 +1536,7 @@ func executeContentAction(ctx context.Context, action ai.ContentAction, actionCt
 		}
 		fmt.Printf("════════════════════════════════════════════════════════════════════════\n")
 	}
-	
+
 	return nil
 }
 
@@ -1572,16 +1570,16 @@ func generateDistillationInstructions(opts processor.ProcessOptions) string {
 	// Build list of what's included
 	var included []string
 	var excluded []string
-	
+
 	// Visibility levels - handle case when not all flags are explicitly set
 	visibilityIncluded := []string{}
-	
+
 	// Default values if not explicitly set (only public is true by default)
 	includePublic := true
 	includeProtected := false
 	includeInternal := false
 	includePrivate := false
-	
+
 	// Use actual values if they were set
 	if opts.IncludePublic || opts.IncludeProtected || opts.IncludeInternal || opts.IncludePrivate {
 		includePublic = opts.IncludePublic
@@ -1589,7 +1587,7 @@ func generateDistillationInstructions(opts processor.ProcessOptions) string {
 		includeInternal = opts.IncludeInternal
 		includePrivate = opts.IncludePrivate
 	}
-	
+
 	if includePublic {
 		visibilityIncluded = append(visibilityIncluded, "public")
 	}
@@ -1602,7 +1600,7 @@ func generateDistillationInstructions(opts processor.ProcessOptions) string {
 	if includePrivate {
 		visibilityIncluded = append(visibilityIncluded, "private")
 	}
-	
+
 	if len(visibilityIncluded) > 0 {
 		if len(visibilityIncluded) == 4 {
 			included = append(included, "All visibility levels (public, protected, internal, private)")
@@ -1610,50 +1608,50 @@ func generateDistillationInstructions(opts processor.ProcessOptions) string {
 			included = append(included, strings.Join(visibilityIncluded, ", ")+" members")
 		}
 	}
-	
+
 	// Content types
 	if opts.IncludeImports {
 		included = append(included, "import statements")
 	} else {
 		excluded = append(excluded, "import statements")
 	}
-	
+
 	if opts.IncludeDocstrings {
 		included = append(included, "documentation/docstrings")
 	}
-	
+
 	if opts.IncludeAnnotations {
 		included = append(included, "decorators/annotations")
 	}
-	
+
 	if opts.IncludeImplementation {
 		included = append(included, "function/method implementations")
 	} else {
 		excluded = append(excluded, "function/method bodies")
 	}
-	
+
 	if opts.IncludeComments {
 		included = append(included, "code comments")
 	} else {
 		excluded = append(excluded, "code comments")
 	}
-	
+
 	// Build the instructions
 	instructions := "⚡ PROJECT ARCHITECTURE OVERVIEW: This distilled code shows "
-	
+
 	if len(included) > 0 {
 		instructions += strings.Join(included, ", ")
 		instructions += " providing a complete map of available classes, methods, functions, data types, interfaces, and their relationships."
 	} else {
 		instructions += "all public APIs, classes, methods, functions, data types, and interfaces available in this project."
 	}
-	
+
 	if len(excluded) > 0 {
 		instructions += " (Excludes: " + strings.Join(excluded, ", ") + ")"
 	}
-	
+
 	instructions += " 📋 USE THIS DISTILLATION TO: 1) Understand the project's architecture and available components, 2) See what classes/methods/types exist and how to use them correctly, 3) Find the right APIs and their exact signatures, 4) Understand relationships between components. ✅ TRUST THIS OVERVIEW: When implementing features or fixing bugs, reference the distilled signatures above to use the correct classes, methods, parameters, and types - no need to read source files for information already captured here."
-	
+
 	return instructions
 }
 

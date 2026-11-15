@@ -20,21 +20,21 @@ func NewPythonStrategy() *PythonStrategy {
 // ResolveImport resolves Python import paths to file paths
 func (ps *PythonStrategy) ResolveImport(importPath string, currentFilePath string, projectRoot string) (string, error) {
 	// Handle different types of Python imports
-	
+
 	// Remove any leading dots for relative imports
 	cleanImportPath := strings.TrimLeft(importPath, ".")
-	
+
 	// Convert module path to file path
 	// e.g., "utils.helper" -> "utils/helper.py"
 	pathParts := strings.Split(cleanImportPath, ".")
-	
+
 	var candidatePaths []string
-	
+
 	// If it's a relative import (starts with .)
 	if strings.HasPrefix(importPath, ".") {
 		// Relative to current file's directory
 		currentDir := filepath.Dir(currentFilePath)
-		
+
 		// Handle different levels of relative imports
 		dotCount := 0
 		for _, char := range importPath {
@@ -44,13 +44,13 @@ func (ps *PythonStrategy) ResolveImport(importPath string, currentFilePath strin
 				break
 			}
 		}
-		
+
 		// Move up directories based on dot count
 		relativeDir := currentDir
 		for i := 1; i < dotCount; i++ {
 			relativeDir = filepath.Dir(relativeDir)
 		}
-		
+
 		if len(pathParts) > 0 && pathParts[0] != "" {
 			modulePath := filepath.Join(relativeDir, filepath.Join(pathParts...))
 			candidatePaths = append(candidatePaths, modulePath+".py")
@@ -62,25 +62,25 @@ func (ps *PythonStrategy) ResolveImport(importPath string, currentFilePath strin
 	} else {
 		// Absolute import - try multiple locations
 		currentDir := filepath.Dir(currentFilePath)
-		
+
 		// 1. Relative to current file's directory
 		modulePath := filepath.Join(currentDir, filepath.Join(pathParts...))
 		candidatePaths = append(candidatePaths, modulePath+".py")
 		candidatePaths = append(candidatePaths, filepath.Join(modulePath, "__init__.py"))
-		
+
 		// 2. Relative to project root
 		if projectRoot != "" {
 			modulePath = filepath.Join(projectRoot, filepath.Join(pathParts...))
 			candidatePaths = append(candidatePaths, modulePath+".py")
 			candidatePaths = append(candidatePaths, filepath.Join(modulePath, "__init__.py"))
 		}
-		
+
 		// 3. Simple case: module name in same directory
 		if len(pathParts) == 1 {
 			candidatePaths = append(candidatePaths, filepath.Join(currentDir, pathParts[0]+".py"))
 		}
 	}
-	
+
 	// Check which candidate paths actually exist
 	for _, candidatePath := range candidatePaths {
 		if _, err := os.Stat(candidatePath); err == nil {
@@ -92,7 +92,7 @@ func (ps *PythonStrategy) ResolveImport(importPath string, currentFilePath strin
 			return absPath, nil
 		}
 	}
-	
+
 	// If no file found, return an error
 	return "", fmt.Errorf("module '%s' not found, tried paths: %v", importPath, candidatePaths)
 }
@@ -102,7 +102,7 @@ func (ps *PythonStrategy) ResolveMemberAccess(containerSymbol *Symbol, memberNam
 	if containerSymbol == nil {
 		return "", fmt.Errorf("container symbol is nil")
 	}
-	
+
 	// If container is a class, look for methods/properties in that class
 	if containerSymbol.Kind == SymbolKindClass {
 		// Look for methods with the class as scope
@@ -112,7 +112,7 @@ func (ps *PythonStrategy) ResolveMemberAccess(containerSymbol *Symbol, memberNam
 			}
 		}
 	}
-	
+
 	// If container is a module, look for top-level symbols
 	if containerSymbol.Kind == SymbolKindModule {
 		for _, symbol := range symbolTable.Symbols {
@@ -121,20 +121,20 @@ func (ps *PythonStrategy) ResolveMemberAccess(containerSymbol *Symbol, memberNam
 			}
 		}
 	}
-	
+
 	return "", fmt.Errorf("member '%s' not found in %s '%s'", memberName, containerSymbol.Kind, containerSymbol.Name)
 }
 
 // DetermineScope determines the scope of a given AST node in Python
 func (ps *PythonStrategy) DetermineScope(node *sitter.Node, fileAST *sitter.Tree, content []byte) string {
 	current := node.Parent()
-	
+
 	for current != nil {
 		switch current.Type() {
 		case "function_definition":
 			if nameNode := current.ChildByFieldName("name"); nameNode != nil {
 				funcName := string(content[nameNode.StartByte():nameNode.EndByte()])
-				
+
 				// Check if this function is inside a class
 				classScope := ps.findContainingClass(current, content)
 				if classScope != "" {
@@ -150,7 +150,7 @@ func (ps *PythonStrategy) DetermineScope(node *sitter.Node, fileAST *sitter.Tree
 		}
 		current = current.Parent()
 	}
-	
+
 	return "" // Module-level scope
 }
 
@@ -158,7 +158,7 @@ func (ps *PythonStrategy) DetermineScope(node *sitter.Node, fileAST *sitter.Tree
 func (ps *PythonStrategy) InferType(symbolName string, context *ResolutionContext) (string, error) {
 	// This is a simplified type inference for Python
 	// A full implementation would need to track assignments and function returns
-	
+
 	// Look for the symbol in local scope first
 	if symbol, exists := context.FileSymbols.GetSymbol(symbolName); exists {
 		switch symbol.Kind {
@@ -175,7 +175,7 @@ func (ps *PythonStrategy) InferType(symbolName string, context *ResolutionContex
 			return ps.inferVariableType(symbol, context)
 		}
 	}
-	
+
 	// Check imported symbols
 	for moduleName, symbolTable := range context.ImportedSymbols {
 		if symbol, exists := symbolTable.GetSymbol(symbolName); exists {
@@ -184,7 +184,7 @@ func (ps *PythonStrategy) InferType(symbolName string, context *ResolutionContex
 			}
 		}
 	}
-	
+
 	return "", fmt.Errorf("unable to infer type for symbol '%s'", symbolName)
 }
 
@@ -212,20 +212,20 @@ func (ps *PythonStrategy) findContainingClass(node *sitter.Node, content []byte)
 // GetBuiltinTypes returns a map of Python builtin types and functions
 func (ps *PythonStrategy) GetBuiltinTypes() map[string]string {
 	return map[string]string{
-		"int":    "int",
-		"str":    "str", 
-		"float":  "float",
-		"bool":   "bool",
-		"list":   "list",
-		"dict":   "dict",
-		"set":    "set",
-		"tuple":  "tuple",
-		"len":    "function",
-		"print":  "function",
-		"type":   "function",
-		"range":  "function",
-		"open":   "function",
-		"input":  "function",
+		"int":   "int",
+		"str":   "str",
+		"float": "float",
+		"bool":  "bool",
+		"list":  "list",
+		"dict":  "dict",
+		"set":   "set",
+		"tuple": "tuple",
+		"len":   "function",
+		"print": "function",
+		"type":  "function",
+		"range": "function",
+		"open":  "function",
+		"input": "function",
 	}
 }
 

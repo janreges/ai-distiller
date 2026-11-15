@@ -21,20 +21,20 @@ func NewJavaScriptFilter() ImportFilter {
 func (f *JavaScriptFilter) FilterUnusedImports(code string, debugLevel int) (string, []string, error) {
 	f.LogDebug(debugLevel, 1, "Starting JavaScript/TypeScript import filtering")
 	f.LogDebug(debugLevel, 2, "Code length: %d bytes", len(code))
-	
+
 	// Parse imports
 	imports, err := f.parseImports(code, debugLevel)
 	if err != nil {
 		return code, nil, err
 	}
-	
+
 	if len(imports) == 0 {
 		f.LogDebug(debugLevel, 1, "No imports found")
 		return code, nil, nil
 	}
-	
+
 	f.LogDebug(debugLevel, 1, "Found %d import statements", len(imports))
-	
+
 	// Find the last import line to know where to start searching for usage
 	lastImportLine := 0
 	for _, imp := range imports {
@@ -42,21 +42,21 @@ func (f *JavaScriptFilter) FilterUnusedImports(code string, debugLevel int) (str
 			lastImportLine = imp.EndLine
 		}
 	}
-	
+
 	// Check usage and collect unused imports
 	var removedImports []string
 	var linesToRemove []struct{ start, end int }
-	
+
 	for _, imp := range imports {
 		// Always keep side-effect imports (no imported names)
 		if imp.IsSideEffect {
 			f.LogDebug(debugLevel, 3, "Keeping side-effect import: %s", imp.FullLine)
 			continue
 		}
-		
+
 		// Check if any imported name is used
 		used := false
-		
+
 		// For namespace imports (import * as ns from 'module')
 		if imp.IsWildcard && len(imp.Aliases) > 0 {
 			for _, alias := range imp.Aliases {
@@ -74,7 +74,7 @@ func (f *JavaScriptFilter) FilterUnusedImports(code string, debugLevel int) (str
 				if alias, ok := imp.Aliases[name]; ok && alias != "" {
 					checkName = alias
 				}
-				
+
 				if f.SearchForUsage(code, checkName, lastImportLine) {
 					f.LogDebug(debugLevel, 3, "Found usage of '%s'", checkName)
 					used = true
@@ -82,7 +82,7 @@ func (f *JavaScriptFilter) FilterUnusedImports(code string, debugLevel int) (str
 				}
 			}
 		}
-		
+
 		// For default imports
 		if imp.Module != "" && len(imp.ImportedNames) == 0 && len(imp.Aliases) == 1 {
 			// This is likely a default import
@@ -94,22 +94,22 @@ func (f *JavaScriptFilter) FilterUnusedImports(code string, debugLevel int) (str
 				}
 			}
 		}
-		
+
 		if !used {
 			f.LogDebug(debugLevel, 2, "Removing unused import: %s", imp.FullLine)
 			removedImports = append(removedImports, imp.FullLine)
 			linesToRemove = append(linesToRemove, struct{ start, end int }{imp.StartLine, imp.EndLine})
 		}
 	}
-	
+
 	// Remove unused imports (in reverse order to maintain line numbers)
 	result := code
 	for i := len(linesToRemove) - 1; i >= 0; i-- {
 		result = f.RemoveLines(result, linesToRemove[i].start, linesToRemove[i].end)
 	}
-	
+
 	f.LogDebug(debugLevel, 3, "Removed %d unused imports", len(removedImports))
-	
+
 	return result, removedImports, nil
 }
 
@@ -117,7 +117,7 @@ func (f *JavaScriptFilter) FilterUnusedImports(code string, debugLevel int) (str
 func (f *JavaScriptFilter) parseImports(code string, debugLevel int) ([]ImportStatement, error) {
 	var imports []ImportStatement
 	lines := strings.Split(code, "\n")
-	
+
 	// Check if this is formatted output with file tags
 	inFileBlock := false
 	for _, line := range lines {
@@ -126,9 +126,9 @@ func (f *JavaScriptFilter) parseImports(code string, debugLevel int) ([]ImportSt
 			break
 		}
 	}
-	
+
 	f.LogDebug(debugLevel, 2, "InFileBlock: %v, Total lines: %d", inFileBlock, len(lines))
-	
+
 	// Regex patterns for JS/TS imports
 	// ES6 imports - make semicolon optional and handle quotes better
 	importRe := regexp.MustCompile(`^\s*import\s+(.+?)\s+from\s+['"` + "`" + `](.+?)['"` + "`" + `]\s*;?\s*$`)
@@ -140,24 +140,24 @@ func (f *JavaScriptFilter) parseImports(code string, debugLevel int) ([]ImportSt
 	requireRe := regexp.MustCompile(`^\s*(?:const|let|var)\s+(.+?)\s*=\s*require\s*\(\s*['"` + "`" + `](.+?)['"` + "`" + `]\s*\)\s*;?\s*$`)
 	// Type imports (TypeScript)
 	typeImportRe := regexp.MustCompile(`^\s*import\s+type\s+(.+?)\s+from\s+['"` + "`" + `](.+?)['"` + "`" + `]\s*;?\s*$`)
-	
+
 	i := 0
 	for i < len(lines) {
 		line := lines[i]
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Skip file tags
 		if strings.HasPrefix(trimmed, "<file") || strings.HasPrefix(trimmed, "</file>") {
 			i++
 			continue
 		}
-		
+
 		// Skip empty lines and comments
 		if trimmed == "" || strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "/*") {
 			i++
 			continue
 		}
-		
+
 		// Stop parsing imports when we hit non-import code
 		if !strings.HasPrefix(trimmed, "import") && !strings.Contains(line, "require(") {
 			// Check if this might be a multiline comment or after imports
@@ -168,13 +168,13 @@ func (f *JavaScriptFilter) parseImports(code string, debugLevel int) ([]ImportSt
 				}
 			}
 		}
-		
+
 		// Skip dynamic imports
 		if dynamicImportRe.MatchString(line) {
 			i++
 			continue
 		}
-		
+
 		// Try to match side-effect import first
 		if matches := sideEffectRe.FindStringSubmatch(line); matches != nil {
 			imp := ImportStatement{
@@ -189,7 +189,7 @@ func (f *JavaScriptFilter) parseImports(code string, debugLevel int) ([]ImportSt
 			i++
 			continue
 		}
-		
+
 		// Try to match type import (TypeScript)
 		if matches := typeImportRe.FindStringSubmatch(line); matches != nil {
 			imp := ImportStatement{
@@ -199,14 +199,14 @@ func (f *JavaScriptFilter) parseImports(code string, debugLevel int) ([]ImportSt
 				Module:    matches[2],
 				Aliases:   make(map[string]string),
 			}
-			
+
 			// Parse the import specifier
 			f.parseImportSpecifier(matches[1], &imp)
 			imports = append(imports, imp)
 			i++
 			continue
 		}
-		
+
 		// Try to match ES6 import
 		if matches := importRe.FindStringSubmatch(line); matches != nil {
 			imp := ImportStatement{
@@ -215,7 +215,7 @@ func (f *JavaScriptFilter) parseImports(code string, debugLevel int) ([]ImportSt
 				Module:    matches[2],
 				Aliases:   make(map[string]string),
 			}
-			
+
 			// Check for multiline import
 			importSpec := matches[1]
 			if strings.Contains(importSpec, "{") && !strings.Contains(importSpec, "}") {
@@ -223,32 +223,32 @@ func (f *JavaScriptFilter) parseImports(code string, debugLevel int) ([]ImportSt
 				fullImport := line
 				startLine := i + 1
 				i++
-				
+
 				for i < len(lines) && !strings.Contains(lines[i], "}") {
 					fullImport += "\n" + lines[i]
 					importSpec += " " + strings.TrimSpace(lines[i])
 					i++
 				}
-				
+
 				if i < len(lines) {
 					fullImport += "\n" + lines[i]
 					importSpec += " " + strings.TrimSpace(lines[i])
 				}
-				
+
 				imp.FullLine = fullImport
 				imp.EndLine = i + 1
 				imp.StartLine = startLine
 			} else {
 				imp.EndLine = i + 1
 			}
-			
+
 			// Parse the import specifier
 			f.parseImportSpecifier(importSpec, &imp)
 			imports = append(imports, imp)
 			i++
 			continue
 		}
-		
+
 		// Try to match CommonJS require
 		if matches := requireRe.FindStringSubmatch(line); matches != nil {
 			imp := ImportStatement{
@@ -258,7 +258,7 @@ func (f *JavaScriptFilter) parseImports(code string, debugLevel int) ([]ImportSt
 				Module:    matches[2],
 				Aliases:   make(map[string]string),
 			}
-			
+
 			// Parse the variable declaration
 			varDecl := matches[1]
 			if strings.Contains(varDecl, "{") {
@@ -269,22 +269,22 @@ func (f *JavaScriptFilter) parseImports(code string, debugLevel int) ([]ImportSt
 				varName := strings.TrimSpace(varDecl)
 				imp.Aliases["default"] = varName
 			}
-			
+
 			imports = append(imports, imp)
 			i++
 			continue
 		}
-		
+
 		i++
 	}
-	
+
 	return imports, nil
 }
 
 // parseImportSpecifier parses the import specifier part of an ES6 import
 func (f *JavaScriptFilter) parseImportSpecifier(spec string, imp *ImportStatement) {
 	spec = strings.TrimSpace(spec)
-	
+
 	// Handle namespace import: * as name
 	if strings.HasPrefix(spec, "*") {
 		if matches := regexp.MustCompile(`\*\s+as\s+(\w+)`).FindStringSubmatch(spec); matches != nil {
@@ -293,7 +293,7 @@ func (f *JavaScriptFilter) parseImportSpecifier(spec string, imp *ImportStatemen
 			return
 		}
 	}
-	
+
 	// Remove outer braces if present
 	hadBraces := false
 	if strings.HasPrefix(spec, "{") && strings.HasSuffix(spec, "}") {
@@ -301,23 +301,23 @@ func (f *JavaScriptFilter) parseImportSpecifier(spec string, imp *ImportStatemen
 		spec = strings.TrimSuffix(spec, "}")
 		hadBraces = true
 	}
-	
+
 	// Split by comma
 	parts := f.splitImportParts(spec)
-	
+
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
 		}
-		
+
 		// Check for default import (no braces originally)
 		if !hadBraces && !strings.Contains(part, " as ") && len(parts) == 1 {
 			// This is a default import
 			imp.Aliases["default"] = part
 			continue
 		}
-		
+
 		// Check for alias
 		if strings.Contains(part, " as ") {
 			asParts := strings.Split(part, " as ")
@@ -340,16 +340,16 @@ func (f *JavaScriptFilter) parseDestructuredRequire(varDecl string, imp *ImportS
 	// Remove braces
 	varDecl = strings.TrimPrefix(varDecl, "{")
 	varDecl = strings.TrimSuffix(varDecl, "}")
-	
+
 	// Split by comma
 	parts := strings.Split(varDecl, ",")
-	
+
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
 		}
-		
+
 		// Check for alias (property: alias)
 		if strings.Contains(part, ":") {
 			colonParts := strings.Split(part, ":")
@@ -372,14 +372,14 @@ func (f *JavaScriptFilter) splitImportParts(spec string) []string {
 	var parts []string
 	var current strings.Builder
 	braceLevel := 0
-	
+
 	for _, ch := range spec {
 		if ch == '{' {
 			braceLevel++
 		} else if ch == '}' {
 			braceLevel--
 		}
-		
+
 		if ch == ',' && braceLevel == 0 {
 			parts = append(parts, current.String())
 			current.Reset()
@@ -387,11 +387,11 @@ func (f *JavaScriptFilter) splitImportParts(spec string) []string {
 			current.WriteRune(ch)
 		}
 	}
-	
+
 	if current.Len() > 0 {
 		parts = append(parts, current.String())
 	}
-	
+
 	return parts
 }
 

@@ -45,37 +45,37 @@ type ProcessOptions struct {
 
 	// IncludePrivate includes private/internal declarations (legacy - removes both private and protected)
 	IncludePrivate bool
-	
+
 	// RemovePublic removes public members (set by --public=0)
 	RemovePublic bool
 
 	// RemovePrivateOnly removes only private members (not protected)
 	RemovePrivateOnly bool
-	
+
 	// RemoveProtectedOnly removes only protected members (not private)
 	RemoveProtectedOnly bool
-	
+
 	// RemoveInternalOnly removes only internal/package-private members
 	RemoveInternalOnly bool
-	
+
 	// IncludePublic includes public members (for formatter instructions)
 	IncludePublic bool
-	
+
 	// IncludeProtected includes protected members (for formatter instructions)
 	IncludeProtected bool
-	
+
 	// IncludeInternal includes internal/package-private members (for formatter instructions)
 	IncludeInternal bool
-	
+
 	// IncludeDocstrings includes documentation comments (when false, removes them)
 	IncludeDocstrings bool
-	
+
 	// IncludeAnnotations includes decorators/annotations (when false, removes them)
 	IncludeAnnotations bool
-	
+
 	// IncludeFields includes class fields/properties (when false, removes them)
 	IncludeFields bool
-	
+
 	// IncludeMethods includes methods/functions (when false, removes them)
 	IncludeMethods bool
 
@@ -91,32 +91,32 @@ type ProcessOptions struct {
 
 	// IncludeLineNumbers adds line number information
 	IncludeLineNumbers bool
-	
+
 	// Workers specifies the number of parallel workers for processing
 	// 0 = auto (80% of CPU cores), 1 = serial processing
 	Workers int
-	
+
 	// RawMode processes all text files without parsing
 	RawMode bool
-	
+
 	// Recursive controls whether to process directories recursively
 	Recursive bool
-	
+
 	// BasePath is the original path provided by the user (for relative path calculation)
 	BasePath string
-	
+
 	// FilePathType controls how paths appear in output: "relative" or "absolute"
 	FilePathType string
-	
+
 	// RelativePathPrefix is a custom prefix for relative paths (e.g., "src/")
 	RelativePathPrefix string
-	
+
 	// IncludePatterns are file patterns to include (e.g., "*.go", "*.py")
 	IncludePatterns []string
-	
+
 	// ExcludePatterns are file patterns to exclude (e.g., "*test*", "*.json")
 	ExcludePatterns []string
-	
+
 	// ExplicitInclude indicates this file was explicitly included via !pattern
 	ExplicitInclude bool
 }

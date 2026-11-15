@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/janreges/ai-distiller/internal/processor"
 	"github.com/janreges/ai-distiller/internal/project"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGenerateOutputFilename(t *testing.T) {
@@ -18,7 +18,7 @@ func TestGenerateOutputFilename(t *testing.T) {
 	rootInfo, err := project.FindRoot()
 	require.NoError(t, err)
 	aidDir := filepath.Join(rootInfo.Path, ".aid")
-	
+
 	tests := []struct {
 		name         string
 		path         string
@@ -76,7 +76,7 @@ func TestGenerateOutputFilename(t *testing.T) {
 				resetAllFlags()
 				includePrivate = boolPtr(true)
 			},
-			expected:     filepath.Join(aidDir, "aid.myproject.priv.txt"),
+			expected: filepath.Join(aidDir, "aid.myproject.priv.txt"),
 		},
 		{
 			name:         "NewFlagsWithProtectedAndImplementation",
@@ -87,7 +87,7 @@ func TestGenerateOutputFilename(t *testing.T) {
 				includeProtected = boolPtr(true)
 				includeImplementation = boolPtr(true)
 			},
-			expected:     filepath.Join(aidDir, "aid.myproject.prot.impl.txt"),
+			expected: filepath.Join(aidDir, "aid.myproject.prot.impl.txt"),
 		},
 		{
 			name:         "NewFlagsWithComments",
@@ -97,7 +97,7 @@ func TestGenerateOutputFilename(t *testing.T) {
 				resetAllFlags()
 				includeComments = boolPtr(true)
 			},
-			expected:     filepath.Join(aidDir, "aid.myproject.com.txt"),
+			expected: filepath.Join(aidDir, "aid.myproject.com.txt"),
 		},
 	}
 
@@ -339,7 +339,7 @@ func TestRunDistillerValidation(t *testing.T) {
 	t.Run("InvalidOutputFormat", func(t *testing.T) {
 		// Reset all flags before test
 		resetAllFlags()
-		
+
 		// Create temp directory for testing
 		tempDir := t.TempDir()
 
@@ -356,7 +356,7 @@ func TestRunDistillerValidation(t *testing.T) {
 	t.Run("NonExistentPath", func(t *testing.T) {
 		// Reset all flags before test
 		resetAllFlags()
-		
+
 		cmd := rootCmd
 		cmd.ResetFlags()
 		initFlags()
@@ -370,7 +370,7 @@ func TestRunDistillerValidation(t *testing.T) {
 	t.Run("ValidPath", func(t *testing.T) {
 		// Reset all flags before test
 		resetAllFlags()
-		
+
 		// Create temp directory
 		tempDir := t.TempDir()
 
@@ -393,7 +393,7 @@ func TestRunDistillerValidation(t *testing.T) {
 func TestCLIHelp(t *testing.T) {
 	// Reset all flags before test
 	resetAllFlags()
-	
+
 	buf := new(bytes.Buffer)
 	cmd := rootCmd
 	cmd.ResetFlags()
@@ -405,7 +405,7 @@ func TestCLIHelp(t *testing.T) {
 	require.NoError(t, err)
 
 	output := buf.String()
-	
+
 	// Check that help contains expected content
 	assert.Contains(t, output, "AI Distiller")
 	assert.Contains(t, output, "aid [path]")
@@ -462,16 +462,16 @@ func captureOutput(f func()) string {
 func TestVerboseOutput(t *testing.T) {
 	// This test would require mocking stderr output
 	// For now, we just verify the verbosity counter works
-	
+
 	cmd := rootCmd
 	cmd.ResetFlags()
 	initFlags()
-	
+
 	// Test single -v
 	cmd.ParseFlags([]string{"-v"})
 	v, _ := cmd.Flags().GetCount("verbose")
 	assert.Equal(t, 1, v)
-	
+
 	// Test -vvv
 	cmd.ResetFlags()
 	initFlags()
@@ -482,10 +482,10 @@ func TestVerboseOutput(t *testing.T) {
 
 func TestGetBoolFlag(t *testing.T) {
 	tests := []struct {
-		name        string
-		flag        *bool
-		defaultVal  bool
-		expected    bool
+		name       string
+		flag       *bool
+		defaultVal bool
+		expected   bool
 	}{
 		{
 			name:       "NilFlagReturnsDefault",

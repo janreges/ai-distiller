@@ -146,7 +146,7 @@ export { UserRole, Analytics };
 
 	reader := strings.NewReader(testCode)
 	analysis, err := analyzer.AnalyzeFile(context.Background(), reader, "test.ts")
-	
+
 	if err != nil {
 		t.Fatalf("Failed to analyze TypeScript file: %v", err)
 	}
@@ -158,12 +158,12 @@ export { UserRole, Analytics };
 
 	// Check symbol extraction
 	symbolTable := analysis.SymbolTable
-	
+
 	// Check for interface symbols
 	if _, exists := symbolTable.GetSymbol("User"); !exists {
 		t.Error("Expected to find User interface symbol")
 	}
-	
+
 	userSymbol, _ := symbolTable.GetSymbol("User")
 	if userSymbol.Kind != SymbolKindInterface {
 		t.Errorf("Expected User to be an interface, got %s", userSymbol.Kind)
@@ -183,7 +183,7 @@ export { UserRole, Analytics };
 	if _, exists := symbolTable.GetSymbol("UserService"); !exists {
 		t.Error("Expected to find UserService class")
 	}
-	
+
 	userServiceSymbol, _ := symbolTable.GetSymbol("UserService")
 	if userServiceSymbol.Kind != SymbolKindClass {
 		t.Errorf("Expected UserService to be a class, got %s", userServiceSymbol.Kind)
@@ -295,7 +295,7 @@ const arrayHelper = <T>(items: T[]): T[] => {
 
 	reader := strings.NewReader(testCode)
 	analysis, err := analyzer.AnalyzeFile(context.Background(), reader, "generics.ts")
-	
+
 	if err != nil {
 		t.Fatalf("Failed to analyze TypeScript file: %v", err)
 	}
@@ -418,7 +418,7 @@ export type { ComponentType };
 
 	reader := strings.NewReader(testCode)
 	analysis, err := analyzer.AnalyzeFile(context.Background(), reader, "modern.ts")
-	
+
 	if err != nil {
 		t.Fatalf("Failed to analyze modern TypeScript file: %v", err)
 	}
@@ -431,7 +431,7 @@ export type { ComponentType };
 			foundUtilityTypes++
 		}
 	}
-	
+
 	// Utility types are complex, so we don't require all of them to be found
 	t.Logf("Found %d out of %d utility types (complex types may not be fully captured)", foundUtilityTypes, len(expectedTypes))
 
@@ -496,7 +496,7 @@ func TestTypeScriptAnalyzer_ErrorHandling(t *testing.T) {
 
 	reader := strings.NewReader(invalidCode)
 	analysis, err := analyzer.AnalyzeFile(context.Background(), reader, "invalid.ts")
-	
+
 	// Should handle gracefully and still extract what it can
 	if err != nil {
 		t.Fatalf("Analyzer should handle invalid code gracefully: %v", err)
@@ -510,7 +510,7 @@ func TestTypeScriptAnalyzer_ErrorHandling(t *testing.T) {
 	if _, exists := analysis.SymbolTable.GetSymbol("Incomplete"); !exists {
 		t.Error("Expected to extract class name from valid part of code")
 	}
-	
+
 	if _, exists := analysis.SymbolTable.GetSymbol("workingFunction"); !exists {
 		t.Error("Expected to extract function name from valid part of code")
 	}

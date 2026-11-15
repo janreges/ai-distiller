@@ -215,8 +215,8 @@ class User
 				IncludeImplementation: true,
 				IncludeComments:       true,
 				IncludeImports:        true,
-				IncludeFields:         true,  // Fixed: default should include fields
-				IncludeMethods:        true,  // Fixed: default should include methods
+				IncludeFields:         true, // Fixed: default should include fields
+				IncludeMethods:        true, // Fixed: default should include methods
 			},
 			check: func(t *testing.T, file *ir.DistilledFile) {
 				// Find User class

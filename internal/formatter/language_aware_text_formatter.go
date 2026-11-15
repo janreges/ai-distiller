@@ -59,7 +59,7 @@ func (f *LanguageAwareTextFormatter) Format(w io.Writer, file *ir.DistilledFile)
 		// Use buffered approach for filtering
 		return f.formatWithFiltering(w, file)
 	}
-	
+
 	// Direct formatting without filtering
 	return f.formatDirect(w, file)
 }
@@ -111,12 +111,12 @@ func (f *LanguageAwareTextFormatter) formatDirect(w io.Writer, file *ir.Distille
 // formatWithFiltering buffers output and applies import filtering
 func (f *LanguageAwareTextFormatter) formatWithFiltering(w io.Writer, file *ir.DistilledFile) error {
 	var buf bytes.Buffer
-	
+
 	// Format to buffer
 	if err := f.formatDirect(&buf, file); err != nil {
 		return err
 	}
-	
+
 	// Apply import filtering
 	content := buf.String()
 	filteredContent, removedImports, err := importfilter.FilterImports(content, file.Language, f.options.DebugLevel)
@@ -125,14 +125,14 @@ func (f *LanguageAwareTextFormatter) formatWithFiltering(w io.Writer, file *ir.D
 		fmt.Fprint(w, content)
 		return nil
 	}
-	
+
 	// Log removed imports in debug mode
 	if len(removedImports) > 0 && f.options.DebugLevel >= 3 {
 		for _, imp := range removedImports {
 			fmt.Fprintf(os.Stderr, "[import filter] Removed unused import: %s\n", imp)
 		}
 	}
-	
+
 	// Write filtered content
 	fmt.Fprint(w, filteredContent)
 	return nil

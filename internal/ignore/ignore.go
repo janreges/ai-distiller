@@ -11,12 +11,12 @@ import (
 
 // IgnoreMatcher handles .aidignore file parsing and matching
 type IgnoreMatcher struct {
-	patterns       []pattern
-	baseDir        string
-	mu             sync.RWMutex
-	cache          map[string]bool
-	includeCache   map[string]bool
-	submatchers    map[string]*IgnoreMatcher // For nested .aidignore files
+	patterns     []pattern
+	baseDir      string
+	mu           sync.RWMutex
+	cache        map[string]bool
+	includeCache map[string]bool
+	submatchers  map[string]*IgnoreMatcher // For nested .aidignore files
 }
 
 // pattern represents a single ignore pattern
@@ -62,7 +62,7 @@ func (m *IgnoreMatcher) loadIgnoreFile(path string) error {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		
+
 		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -118,7 +118,7 @@ func (m *IgnoreMatcher) ShouldIgnore(path string) bool {
 	if err != nil {
 		return false
 	}
-	
+
 	// Debug: Print the relative path and patterns
 	// fmt.Fprintf(os.Stderr, "[DEBUG] Relative path: %s, Base: %s\n", relPath, m.baseDir)
 	// for _, p := range m.patterns {
@@ -175,7 +175,7 @@ func (m *IgnoreMatcher) ShouldIgnore(path string) bool {
 func (m *IgnoreMatcher) matchesWithInfo(relPath string) (hasMatch bool, ignored bool) {
 	// Normalize path separators
 	relPath = filepath.ToSlash(relPath)
-	
+
 	info, err := os.Stat(filepath.Join(m.baseDir, relPath))
 	isDir := err == nil && info.IsDir()
 
@@ -205,7 +205,7 @@ func (m *IgnoreMatcher) matches(relPath string) bool {
 func (m *IgnoreMatcher) matchPattern(relPath string, p pattern, isDir bool) bool {
 	matched := false
 	pattern := p.pattern
-	
+
 	// For directory patterns, check if the path is within that directory
 	if p.isDir {
 		// Handle leading slash in pattern - remove it for comparison with relPath
@@ -213,7 +213,7 @@ func (m *IgnoreMatcher) matchPattern(relPath string, p pattern, isDir bool) bool
 		if strings.HasPrefix(pattern, "/") {
 			patternToMatch = strings.TrimPrefix(pattern, "/")
 		}
-		
+
 		if isDir && relPath == patternToMatch {
 			// Directory itself matches
 			matched = true
@@ -240,7 +240,7 @@ func (m *IgnoreMatcher) matchPattern(relPath string, p pattern, isDir bool) bool
 		} else {
 			// Simple name pattern - matches anywhere
 			matched = matchName(relPath, pattern)
-			
+
 			// Also try to match as directory pattern (without trailing slash)
 			// This handles cases like "bin" matching "bin/file.txt"
 			if !matched {
@@ -407,7 +407,7 @@ func (m *IgnoreMatcher) IsExplicitlyIncluded(path string) bool {
 func (m *IgnoreMatcher) hasExplicitInclude(relPath string) bool {
 	// Normalize path separators
 	relPath = filepath.ToSlash(relPath)
-	
+
 	info, err := os.Stat(filepath.Join(m.baseDir, relPath))
 	isDir := err == nil && info.IsDir()
 
@@ -419,7 +419,7 @@ func (m *IgnoreMatcher) hasExplicitInclude(relPath string) bool {
 
 		matched := false
 		pattern := p.pattern
-		
+
 		// For directory patterns, check if the path is within that directory
 		if p.isDir {
 			if isDir && relPath == pattern {
@@ -472,7 +472,7 @@ func (m *IgnoreMatcher) MightContainExplicitIncludes(dirPath string) bool {
 	if err != nil {
 		return false
 	}
-	
+
 	// Normalize path separators
 	relPath = filepath.ToSlash(relPath)
 	if !strings.HasSuffix(relPath, "/") {
@@ -486,19 +486,19 @@ func (m *IgnoreMatcher) MightContainExplicitIncludes(dirPath string) bool {
 		}
 
 		pattern := p.pattern
-		
+
 		// Simple check: if pattern contains this directory in its path, we might need to look inside
 		if strings.Contains(pattern, "/") {
 			// Remove leading slash if present
 			if strings.HasPrefix(pattern, "/") {
 				pattern = strings.TrimPrefix(pattern, "/")
 			}
-			
+
 			// Check if pattern starts with or contains this directory
 			if strings.HasPrefix(pattern, relPath) {
 				return true // Pattern definitely refers to something in this directory
 			}
-			
+
 			// Also check if the directory name appears in the pattern
 			// This handles cases like "!node_modules/package/index.js" when we're checking "node_modules"
 			dirName := filepath.Base(strings.TrimSuffix(relPath, "/"))

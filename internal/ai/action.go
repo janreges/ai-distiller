@@ -16,16 +16,16 @@ const (
 type AIAction interface {
 	// Name returns the unique name used in CLI (e.g., 'prompt-for-refactoring-suggestion')
 	Name() string
-	
+
 	// Description returns help text for the --help command
 	Description() string
-	
+
 	// Type returns the action type (prompt or flow)
 	Type() ActionType
-	
+
 	// DefaultOutput returns the default output path template
 	DefaultOutput() string
-	
+
 	// Validate checks if the action can be executed
 	Validate() error
 }
@@ -33,7 +33,7 @@ type AIAction interface {
 // ContentAction is the interface for actions that generate content to wrap around distilled output
 type ContentAction interface {
 	AIAction
-	
+
 	// GenerateContent generates content to be placed before/after distilled output
 	GenerateContent(ctx *ActionContext) (*ContentResult, error)
 }
@@ -41,7 +41,7 @@ type ContentAction interface {
 // FlowAction is the interface for complex workflow actions that may create multiple files
 type FlowAction interface {
 	AIAction
-	
+
 	// ExecuteFlow executes complex workflow, can create multiple files
 	ExecuteFlow(ctx *ActionContext) (*FlowResult, error)
 }

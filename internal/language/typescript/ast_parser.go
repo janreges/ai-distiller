@@ -43,11 +43,11 @@ func (p *ASTParser) ProcessSource(ctx context.Context, source []byte, filename s
 	} else {
 		lang = typescript.Language()
 	}
-	
+
 	if lang == nil {
 		return nil, fmt.Errorf("tree-sitter-typescript is not available (CGO disabled)")
 	}
-	
+
 	p.parser.SetLanguage(sitter.NewLanguage(lang))
 
 	// Parse the source code
@@ -1559,67 +1559,67 @@ func (p *ASTParser) classImplementsInterface(class *ir.DistilledClass, intf *ir.
 	_ = intf
 	return false
 	/*
-		classMethods := make(map[string]*ir.DistilledFunction)
-		classProps := make(map[string]*ir.DistilledField)
+			classMethods := make(map[string]*ir.DistilledFunction)
+			classProps := make(map[string]*ir.DistilledField)
 
-		for _, child := range class.Children {
-			switch member := child.(type) {
-			case *ir.DistilledFunction:
-				classMethods[member.Name] = member
-			case *ir.DistilledField:
-				classProps[member.Name] = member
-			}
-		}
-
-		// Check if class satisfies all interface requirements
-		for _, child := range intf.Children {
-			switch requirement := child.(type) {
-			case *ir.DistilledFunction:
-				// Check if class has matching method
-				classMethod, exists := classMethods[requirement.Name]
-				if !exists {
-					return false
-				}
-
-				// Check method signature compatibility
-				if !p.methodsCompatible(classMethod, requirement) {
-					return false
-				}
-
-			case *ir.DistilledField:
-				// Check if class has matching property
-				classProp, exists := classProps[requirement.Name]
-				if !exists {
-					return false
-				}
-
-				// Check property type compatibility
-				if !p.typesCompatible(classProp.Type, requirement.Type) {
-					return false
+			for _, child := range class.Children {
+				switch member := child.(type) {
+				case *ir.DistilledFunction:
+					classMethods[member.Name] = member
+				case *ir.DistilledField:
+					classProps[member.Name] = member
 				}
 			}
+
+			// Check if class satisfies all interface requirements
+			for _, child := range intf.Children {
+				switch requirement := child.(type) {
+				case *ir.DistilledFunction:
+					// Check if class has matching method
+					classMethod, exists := classMethods[requirement.Name]
+					if !exists {
+						return false
+					}
+
+					// Check method signature compatibility
+					if !p.methodsCompatible(classMethod, requirement) {
+						return false
+					}
+
+				case *ir.DistilledField:
+					// Check if class has matching property
+					classProp, exists := classProps[requirement.Name]
+					if !exists {
+						return false
+					}
+
+					// Check property type compatibility
+					if !p.typesCompatible(classProp.Type, requirement.Type) {
+						return false
+					}
+				}
+			}
+
+			return true
 		}
 
-		return true
-	}
-
-	// methodsCompatible checks if two methods are compatible
-	func (p *ASTParser) methodsCompatible(classMethod, intfMethod *ir.DistilledFunction) bool {
-		// Check parameter count
-		if len(classMethod.Parameters) != len(intfMethod.Parameters) {
-			return false
-		}
-
-		// Check parameter types
-		for i, classParam := range classMethod.Parameters {
-			intfParam := intfMethod.Parameters[i]
-			if !p.typesCompatible(&classParam.Type, &intfParam.Type) {
+		// methodsCompatible checks if two methods are compatible
+		func (p *ASTParser) methodsCompatible(classMethod, intfMethod *ir.DistilledFunction) bool {
+			// Check parameter count
+			if len(classMethod.Parameters) != len(intfMethod.Parameters) {
 				return false
 			}
-		}
 
-		// Check return type
-		return p.typesCompatible(classMethod.Returns, intfMethod.Returns)
+			// Check parameter types
+			for i, classParam := range classMethod.Parameters {
+				intfParam := intfMethod.Parameters[i]
+				if !p.typesCompatible(&classParam.Type, &intfParam.Type) {
+					return false
+				}
+			}
+
+			// Check return type
+			return p.typesCompatible(classMethod.Returns, intfMethod.Returns)
 	*/
 }
 

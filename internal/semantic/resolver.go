@@ -176,11 +176,11 @@ func (r *Resolver) resolveCallSites(filePath string, strategy LanguageStrategy, 
 	// Resolve each call site
 	for _, index := range callSitesToResolve {
 		callSite := &semanticGraph.CallSites[index]
-		
+
 		resolvedCalleeID, err := r.resolveCallSite(callSite, strategy, resCtx)
 		if err != nil {
 			// Log warning but continue - some calls might be to external libraries
-			fmt.Printf("Warning: failed to resolve call to '%s' at %s:%d: %v\n", 
+			fmt.Printf("Warning: failed to resolve call to '%s' at %s:%d: %v\n",
 				callSite.CalleeName, callSite.Location.FilePath, callSite.Location.StartLine, err)
 			continue
 		}
@@ -201,12 +201,12 @@ func (r *Resolver) resolveCallSite(callSite *CallSite, strategy LanguageStrategy
 	calleeName := callSite.CalleeName
 
 	// Try different resolution strategies in order
-	
+
 	// 0. Check for builtin symbols first (language-specific)
 	if builtinID := r.resolveBuiltinSymbol(calleeName, strategy); builtinID != "" {
 		return builtinID, nil
 	}
-	
+
 	// 1. Local scope (function parameters, local variables)
 	if symbol := r.findInLocalScope(calleeName, resCtx); symbol != nil {
 		return symbol.ID, nil
@@ -248,7 +248,7 @@ func (r *Resolver) findInImportedSymbols(symbolName string, resCtx *ResolutionCo
 		if symbol, exists := symbolTable.GetSymbol(symbolName); exists {
 			return symbol.ID
 		}
-		
+
 		// Also check if the symbol name matches the module name (import alias)
 		if moduleName == symbolName {
 			// This represents importing the entire module
@@ -257,7 +257,6 @@ func (r *Resolver) findInImportedSymbols(symbolName string, resCtx *ResolutionCo
 	}
 	return ""
 }
-
 
 // ResolveFilePair is a simplified function for resolving two files (for testing)
 func (r *Resolver) ResolveFilePair(mainAnalysis, utilsAnalysis *FileAnalysis) (*SemanticGraph, error) {
@@ -312,17 +311,17 @@ func (r *Resolver) resolveMemberAccess(callSite *CallSite, strategy LanguageStra
 
 			// Find the container symbol
 			var containerSymbol *Symbol
-			
+
 			// Look in local scope first
 			containerSymbol = r.findInLocalScope(containerName, resCtx)
-			
+
 			// Look in file scope
 			if containerSymbol == nil {
 				if symbol, exists := resCtx.FileSymbols.GetSymbol(containerName); exists {
 					containerSymbol = symbol
 				}
 			}
-			
+
 			// Look in imported symbols
 			if containerSymbol == nil {
 				for _, symbolTable := range resCtx.ImportedSymbols {
@@ -338,7 +337,7 @@ func (r *Resolver) resolveMemberAccess(callSite *CallSite, strategy LanguageStra
 				if memberID, err := strategy.ResolveMemberAccess(containerSymbol, memberName, resCtx.FileSymbols); err == nil {
 					return memberID
 				}
-				
+
 				// Also try in imported symbol tables
 				for _, symbolTable := range resCtx.ImportedSymbols {
 					if memberID, err := strategy.ResolveMemberAccess(containerSymbol, memberName, symbolTable); err == nil {
@@ -352,10 +351,10 @@ func (r *Resolver) resolveMemberAccess(callSite *CallSite, strategy LanguageStra
 	// Check if the caller context suggests this is a method call
 	if callSite.CallerID != "" && strings.Contains(string(callSite.CallerID), "::") {
 		// Extract class name from caller ID
-		callerParts := strings.Split(string(callSite.CallerID), "::")  
+		callerParts := strings.Split(string(callSite.CallerID), "::")
 		if len(callerParts) >= 2 {
 			className := callerParts[len(callerParts)-2]
-			
+
 			// Look for the class symbol
 			if classSymbol, exists := resCtx.FileSymbols.GetSymbol(className); exists {
 				if memberID, err := strategy.ResolveMemberAccess(classSymbol, calleeName, resCtx.FileSymbols); err == nil {

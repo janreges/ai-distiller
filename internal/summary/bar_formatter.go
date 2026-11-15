@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 	"strings"
-	
+
 	"github.com/dustin/go-humanize"
 	"golang.org/x/term"
 )
@@ -27,7 +27,7 @@ func NewBarFormatter() *BarFormatter {
 // Format outputs a visually appealing summary with progress bar
 func (f *BarFormatter) Format(w io.Writer, stats Stats) error {
 	ratio := getCompressionRatio(stats.OriginalBytes, stats.DistilledBytes)
-	
+
 	// Get terminal width for responsive bar sizing
 	barWidth := 15
 	if fd, ok := w.(*os.File); ok {
@@ -36,15 +36,15 @@ func (f *BarFormatter) Format(w io.Writer, stats Stats) error {
 			barWidth = min(20, width-100)
 		}
 	}
-	
+
 	// Build the components
 	emoji := ""
 	if !f.NoEmoji {
 		emoji = getEmoji(ratio) + " "
 	}
-	
+
 	bar := f.buildColoredProgressBar(ratio, barWidth)
-	
+
 	// Determine what was processed
 	subject := "Distilled"
 	if stats.FileCount > 0 {
@@ -54,13 +54,13 @@ func (f *BarFormatter) Format(w io.Writer, stats Stats) error {
 			subject = fmt.Sprintf("Distilled %d files", stats.FileCount)
 		}
 	}
-	
+
 	// Format the line - no decimals for high compression ratios
 	ratioFormat := "%.1f%%"
 	if ratio >= 80 {
 		ratioFormat = "%.0f%%"
 	}
-	
+
 	fmt.Fprintf(w, "%s%s [%s] "+ratioFormat+" (%s → %s) in %s",
 		emoji,
 		subject,
@@ -70,7 +70,7 @@ func (f *BarFormatter) Format(w io.Writer, stats Stats) error {
 		humanize.Bytes(uint64(stats.DistilledBytes)),
 		formatDuration(stats.Duration),
 	)
-	
+
 	// Add token savings if significant
 	tokensSaved := stats.OriginalTokens - stats.DistilledTokens
 	if tokensSaved > 1000 {
@@ -79,9 +79,9 @@ func (f *BarFormatter) Format(w io.Writer, stats Stats) error {
 			formatTokenCount(stats.DistilledTokens),
 		)
 	}
-	
+
 	fmt.Fprintln(w)
-	
+
 	// Add output path if not stdout on a new line
 	if !stats.IsStdout && stats.OutputPath != "" {
 		fileEmoji := "💾"
@@ -89,7 +89,7 @@ func (f *BarFormatter) Format(w io.Writer, stats Stats) error {
 			fileEmoji = "→"
 		}
 		fmt.Fprintf(w, "%s Distilled output saved to: %s\n", fileEmoji, stats.OutputPath)
-		
+
 		// Add AI agent recommendation, unless the same output was printed
 		if !stats.Printed {
 			aiEmoji := "🤖"
@@ -114,7 +114,7 @@ func (f *BarFormatter) buildColoredProgressBar(ratio float64, width int) string 
 	if width <= 0 {
 		width = 15
 	}
-	
+
 	filled := int(float64(width) * ratio / 100)
 	if filled > width {
 		filled = width
@@ -122,17 +122,17 @@ func (f *BarFormatter) buildColoredProgressBar(ratio float64, width int) string 
 	if filled < 0 {
 		filled = 0
 	}
-	
+
 	// ANSI color codes
-	green := "\033[32m"  // Green for saved portion
-	red := "\033[31m"    // Red for remaining portion
-	reset := "\033[0m"   // Reset color
-	
+	green := "\033[32m" // Green for saved portion
+	red := "\033[31m"   // Red for remaining portion
+	reset := "\033[0m"  // Reset color
+
 	// If colors are disabled, use solid blocks for saved and dots for remaining
 	if f.NoColor {
 		return strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
 	}
-	
+
 	// Build colored bar: green dots for saved, red dots for remaining
 	bar := ""
 	if filled > 0 {
@@ -141,6 +141,6 @@ func (f *BarFormatter) buildColoredProgressBar(ratio float64, width int) string 
 	if width-filled > 0 {
 		bar += red + strings.Repeat("░", width-filled) + reset
 	}
-	
+
 	return bar
 }

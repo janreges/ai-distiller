@@ -53,8 +53,8 @@ func (a *MultiFileDocsFlowAction) ExecuteFlow(ctx *ai.ActionContext) (*ai.FlowRe
 
 	// Create the file map
 	files := map[string]string{
-		docsTaskListPath:                            a.generateDocsTaskList(basename, currentDate, sourceFiles, docsDir, ctx.ProjectPath),
-		docsIndexPath:                               a.generateDocsIndex(basename, currentDate, sourceFiles, ctx.ProjectPath),
+		docsTaskListPath: a.generateDocsTaskList(basename, currentDate, sourceFiles, docsDir, ctx.ProjectPath),
+		docsIndexPath:    a.generateDocsIndex(basename, currentDate, sourceFiles, ctx.ProjectPath),
 		filepath.Join(docsDir, "API-REFERENCE.md"): a.generateAPIReferenceTemplate(basename, currentDate),
 		filepath.Join(docsDir, "README.md"):        a.generateREADMETemplate(basename, currentDate),
 	}

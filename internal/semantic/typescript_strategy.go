@@ -20,30 +20,30 @@ func NewTypeScriptStrategy() *TypeScriptStrategy {
 // ResolveImport resolves TypeScript/JavaScript import paths to file paths
 func (ts *TypeScriptStrategy) ResolveImport(importPath string, currentFilePath string, projectRoot string) (string, error) {
 	// Handle different types of TypeScript/JavaScript imports
-	
+
 	// Remove quotes from import path
 	cleanImportPath := strings.Trim(importPath, "\"'")
-	
+
 	// Skip external modules (no relative path indicators)
 	if !strings.HasPrefix(cleanImportPath, ".") && !strings.HasPrefix(cleanImportPath, "/") {
 		// This is likely an external package (e.g., "react", "lodash")
 		return "", fmt.Errorf("external module '%s' not resolved", cleanImportPath)
 	}
-	
+
 	currentDir := filepath.Dir(currentFilePath)
 	var candidatePaths []string
-	
+
 	// Resolve relative imports
 	if strings.HasPrefix(cleanImportPath, ".") {
 		// Relative to current file's directory
 		basePath := filepath.Join(currentDir, cleanImportPath)
-		
+
 		// Try different extensions
 		extensions := []string{".ts", ".tsx", ".js", ".jsx", ".d.ts"}
 		for _, ext := range extensions {
 			candidatePaths = append(candidatePaths, basePath+ext)
 		}
-		
+
 		// Try index files in directory
 		indexExtensions := []string{"index.ts", "index.tsx", "index.js", "index.jsx", "index.d.ts"}
 		for _, indexFile := range indexExtensions {
@@ -59,7 +59,7 @@ func (ts *TypeScriptStrategy) ResolveImport(importPath string, currentFilePath s
 			}
 		}
 	}
-	
+
 	// Check which candidate paths actually exist
 	for _, candidatePath := range candidatePaths {
 		if _, err := os.Stat(candidatePath); err == nil {
@@ -71,7 +71,7 @@ func (ts *TypeScriptStrategy) ResolveImport(importPath string, currentFilePath s
 			return absPath, nil
 		}
 	}
-	
+
 	// If no file found, return an error
 	return "", fmt.Errorf("module '%s' not found, tried paths: %v", cleanImportPath, candidatePaths)
 }
@@ -81,7 +81,7 @@ func (ts *TypeScriptStrategy) ResolveMemberAccess(containerSymbol *Symbol, membe
 	if containerSymbol == nil {
 		return "", fmt.Errorf("container symbol is nil")
 	}
-	
+
 	// If container is a class, look for methods/properties in that class
 	if containerSymbol.Kind == SymbolKindClass {
 		// Look for methods with the class as scope
@@ -91,7 +91,7 @@ func (ts *TypeScriptStrategy) ResolveMemberAccess(containerSymbol *Symbol, membe
 			}
 		}
 	}
-	
+
 	// If container is an interface, look for method signatures
 	if containerSymbol.Kind == SymbolKindInterface {
 		for _, symbol := range symbolTable.Symbols {
@@ -100,7 +100,7 @@ func (ts *TypeScriptStrategy) ResolveMemberAccess(containerSymbol *Symbol, membe
 			}
 		}
 	}
-	
+
 	// If container is a namespace/module, look for top-level symbols
 	if containerSymbol.Kind == SymbolKindNamespace || containerSymbol.Kind == SymbolKindModule {
 		for _, symbol := range symbolTable.Symbols {
@@ -109,20 +109,20 @@ func (ts *TypeScriptStrategy) ResolveMemberAccess(containerSymbol *Symbol, membe
 			}
 		}
 	}
-	
+
 	return "", fmt.Errorf("member '%s' not found in %s '%s'", memberName, containerSymbol.Kind, containerSymbol.Name)
 }
 
 // DetermineScope determines the scope of a given AST node in TypeScript
 func (ts *TypeScriptStrategy) DetermineScope(node *sitter.Node, fileAST *sitter.Tree, content []byte) string {
 	current := node.Parent()
-	
+
 	for current != nil {
 		switch current.Type() {
 		case "function_declaration", "method_definition":
 			if nameNode := ts.findNameNode(current); nameNode != nil {
 				funcName := string(content[nameNode.StartByte():nameNode.EndByte()])
-				
+
 				// Check if this function is inside a class
 				classScope := ts.findContainingClass(current, content)
 				if classScope != "" {
@@ -148,14 +148,14 @@ func (ts *TypeScriptStrategy) DetermineScope(node *sitter.Node, fileAST *sitter.
 		}
 		current = current.Parent()
 	}
-	
+
 	return "" // Module-level scope
 }
 
 // InferType attempts to infer the type of a symbol usage in TypeScript
 func (ts *TypeScriptStrategy) InferType(symbolName string, context *ResolutionContext) (string, error) {
 	// TypeScript has explicit type annotations, so we can often extract them directly
-	
+
 	// Look for the symbol in local scope first
 	if symbol, exists := context.FileSymbols.GetSymbol(symbolName); exists {
 		switch symbol.Kind {
@@ -176,7 +176,7 @@ func (ts *TypeScriptStrategy) InferType(symbolName string, context *ResolutionCo
 			return symbol.Name, nil
 		}
 	}
-	
+
 	// Check imported symbols
 	for moduleName, symbolTable := range context.ImportedSymbols {
 		if symbol, exists := symbolTable.GetSymbol(symbolName); exists {
@@ -185,7 +185,7 @@ func (ts *TypeScriptStrategy) InferType(symbolName string, context *ResolutionCo
 			}
 		}
 	}
-	
+
 	return "", fmt.Errorf("unable to infer type for symbol '%s'", symbolName)
 }
 
@@ -215,13 +215,13 @@ func (ts *TypeScriptStrategy) findContainingClass(node *sitter.Node, content []b
 func (ts *TypeScriptStrategy) findNameNode(node *sitter.Node) *sitter.Node {
 	// Try different field names used in TypeScript tree-sitter grammar
 	nameFields := []string{"name", "property", "key"}
-	
+
 	for _, field := range nameFields {
 		if nameNode := node.ChildByFieldName(field); nameNode != nil {
 			return nameNode
 		}
 	}
-	
+
 	// Fallback: look for identifier or type_identifier children
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
@@ -229,7 +229,7 @@ func (ts *TypeScriptStrategy) findNameNode(node *sitter.Node) *sitter.Node {
 			return child
 		}
 	}
-	
+
 	return nil
 }
 
@@ -237,34 +237,34 @@ func (ts *TypeScriptStrategy) findNameNode(node *sitter.Node) *sitter.Node {
 func (ts *TypeScriptStrategy) GetBuiltinTypes() map[string]string {
 	return map[string]string{
 		// JavaScript built-ins
-		"console":    "object",
-		"Array":      "constructor",
-		"Object":     "constructor", 
-		"String":     "constructor",
-		"Number":     "constructor",
-		"Boolean":    "constructor",
-		"Date":       "constructor",
-		"RegExp":     "constructor",
-		"Error":      "constructor",
-		"Promise":    "constructor",
-		"JSON":       "object",
-		"Math":       "object",
-		"parseInt":   "function",
-		"parseFloat": "function",
-		"isNaN":      "function",
-		"isFinite":   "function",
-		"setTimeout": "function",
-		"setInterval": "function",
-		"clearTimeout": "function",
+		"console":       "object",
+		"Array":         "constructor",
+		"Object":        "constructor",
+		"String":        "constructor",
+		"Number":        "constructor",
+		"Boolean":       "constructor",
+		"Date":          "constructor",
+		"RegExp":        "constructor",
+		"Error":         "constructor",
+		"Promise":       "constructor",
+		"JSON":          "object",
+		"Math":          "object",
+		"parseInt":      "function",
+		"parseFloat":    "function",
+		"isNaN":         "function",
+		"isFinite":      "function",
+		"setTimeout":    "function",
+		"setInterval":   "function",
+		"clearTimeout":  "function",
 		"clearInterval": "function",
-		
+
 		// TypeScript specific
-		"any":        "type",
-		"unknown":    "type",
-		"never":      "type",
-		"void":       "type",
-		"undefined":  "value",
-		"null":       "value",
+		"any":       "type",
+		"unknown":   "type",
+		"never":     "type",
+		"void":      "type",
+		"undefined": "value",
+		"null":      "value",
 	}
 }
 

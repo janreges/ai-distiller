@@ -3,7 +3,7 @@ package summary
 import (
 	"io"
 	"os"
-	
+
 	"github.com/mattn/go-isatty"
 )
 
@@ -42,13 +42,13 @@ func GetFormatter(opts Options) Formatter {
 		formatter.NoEmoji = opts.NoEmoji
 		return formatter
 	}
-	
+
 	// Auto-detection (default when using old name like "auto")
 	// Check if we're in a CI environment or output is not a TTY
 	if os.Getenv("CI") != "" || !isatty.IsTerminal(os.Stderr.Fd()) {
 		return NewCIFormatter()
 	}
-	
+
 	// Interactive terminal - use bar formatter (visual-progress-bar)
 	formatter := NewBarFormatter()
 	formatter.NoColor = opts.NoColor || os.Getenv("NO_COLOR") != ""
@@ -62,7 +62,7 @@ func Print(w io.Writer, stats Stats, opts Options) error {
 	if formatter == nil {
 		return nil // "off" format
 	}
-	
+
 	return formatter.Format(w, stats)
 }
 

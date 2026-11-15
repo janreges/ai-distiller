@@ -10,7 +10,7 @@ type ImportFilter interface {
 	// FilterUnusedImports removes unused imports from distilled code
 	// Returns filtered code and list of removed imports for logging
 	FilterUnusedImports(code string, debugLevel int) (string, []string, error)
-	
+
 	// Language returns the language this filter handles
 	Language() string
 }
@@ -44,12 +44,12 @@ func Register(language string, filter ImportFilter) {
 func GetFilter(language string) (ImportFilter, error) {
 	filtersMu.RLock()
 	defer filtersMu.RUnlock()
-	
+
 	filter, ok := filters[language]
 	if !ok {
 		return nil, fmt.Errorf("no import filter registered for language: %s", language)
 	}
-	
+
 	return filter, nil
 }
 
@@ -60,6 +60,6 @@ func FilterImports(code string, language string, debugLevel int) (string, []stri
 		// If no filter is registered, return code unchanged
 		return code, nil, nil
 	}
-	
+
 	return filter.FilterUnusedImports(code, debugLevel)
 }

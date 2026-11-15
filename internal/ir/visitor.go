@@ -45,7 +45,7 @@ func (w *Walker) Walk(node DistilledNode) DistilledNode {
 				newChildren = append(newChildren, newChild)
 			}
 		}
-		
+
 		// Update children in the result node
 		// This requires type switching since we need to maintain immutability
 		result = w.updateChildren(result, newChildren)
@@ -62,37 +62,37 @@ func (w *Walker) updateChildren(node DistilledNode, children []DistilledNode) Di
 		newFile := *n
 		newFile.Children = children
 		return &newFile
-		
+
 	case *DistilledPackage:
 		// Create a new package node with updated children
 		newPackage := *n
 		newPackage.Children = children
 		return &newPackage
-		
+
 	case *DistilledClass:
 		// Create a new class node with updated children
 		newClass := *n
 		newClass.Children = children
 		return &newClass
-		
+
 	case *DistilledInterface:
 		// Create a new interface node with updated children
 		newInterface := *n
 		newInterface.Children = children
 		return &newInterface
-		
+
 	case *DistilledStruct:
 		// Create a new struct node with updated children
 		newStruct := *n
 		newStruct.Children = children
 		return &newStruct
-		
+
 	case *DistilledEnum:
 		// Create a new enum node with updated children
 		newEnum := *n
 		newEnum.Children = children
 		return &newEnum
-		
+
 	default:
 		// For nodes without children or unknown types, return as-is
 		return node

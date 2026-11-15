@@ -9,7 +9,7 @@ func Walk(node DistilledNode, fn WalkFunc) {
 	if node == nil || !fn(node) {
 		return
 	}
-	
+
 	children := node.GetChildren()
 	for _, child := range children {
 		Walk(child, fn)

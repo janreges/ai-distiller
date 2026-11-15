@@ -61,18 +61,18 @@ func (n *DistilledImport) Accept(visitor Visitor) DistilledNode {
 // DistilledClass represents a class/interface declaration
 type DistilledClass struct {
 	BaseNode
-	Name         string           `json:"name"`
-	Visibility   Visibility       `json:"visibility"`
-	Modifiers    []Modifier       `json:"modifiers,omitempty"`
-	Decorators   []string         `json:"decorators,omitempty"`
-	TypeParams   []TypeParam      `json:"type_params,omitempty"`
-	Extends      []TypeRef        `json:"extends,omitempty"`
-	Implements   []TypeRef        `json:"implements,omitempty"`
-	Mixins       []TypeRef        `json:"mixins,omitempty"`
-	Children     []DistilledNode  `json:"children,omitempty"`
-	Deprecated   *DeprecationInfo `json:"deprecated,omitempty"`
-	Description  string           `json:"description,omitempty"`
-	APIDocblock  string           `json:"api_docblock,omitempty"` // PHP: Docblock with @property/@method tags
+	Name        string           `json:"name"`
+	Visibility  Visibility       `json:"visibility"`
+	Modifiers   []Modifier       `json:"modifiers,omitempty"`
+	Decorators  []string         `json:"decorators,omitempty"`
+	TypeParams  []TypeParam      `json:"type_params,omitempty"`
+	Extends     []TypeRef        `json:"extends,omitempty"`
+	Implements  []TypeRef        `json:"implements,omitempty"`
+	Mixins      []TypeRef        `json:"mixins,omitempty"`
+	Children    []DistilledNode  `json:"children,omitempty"`
+	Deprecated  *DeprecationInfo `json:"deprecated,omitempty"`
+	Description string           `json:"description,omitempty"`
+	APIDocblock string           `json:"api_docblock,omitempty"` // PHP: Docblock with @property/@method tags
 }
 
 // GetNodeKind implements DistilledNode
@@ -227,21 +227,21 @@ func (n *DistilledFunction) Accept(visitor Visitor) DistilledNode {
 // DistilledField represents a field/property declaration
 type DistilledField struct {
 	BaseNode
-	Name         string           `json:"name"`
-	Visibility   Visibility       `json:"visibility"`
-	Modifiers    []Modifier       `json:"modifiers,omitempty"`
-	Type         *TypeRef         `json:"type,omitempty"`
-	DefaultValue string           `json:"default_value,omitempty"`
-	Decorators   []string         `json:"decorators,omitempty"`
+	Name         string     `json:"name"`
+	Visibility   Visibility `json:"visibility"`
+	Modifiers    []Modifier `json:"modifiers,omitempty"`
+	Type         *TypeRef   `json:"type,omitempty"`
+	DefaultValue string     `json:"default_value,omitempty"`
+	Decorators   []string   `json:"decorators,omitempty"`
 	// Property-specific fields (mainly for C#)
-	IsProperty   bool             `json:"is_property,omitempty"`
-	HasGetter    bool             `json:"has_getter,omitempty"`
-	HasSetter    bool             `json:"has_setter,omitempty"`
-	GetterVisibility *Visibility  `json:"getter_visibility,omitempty"`
-	SetterVisibility *Visibility  `json:"setter_visibility,omitempty"`
+	IsProperty       bool        `json:"is_property,omitempty"`
+	HasGetter        bool        `json:"has_getter,omitempty"`
+	HasSetter        bool        `json:"has_setter,omitempty"`
+	GetterVisibility *Visibility `json:"getter_visibility,omitempty"`
+	SetterVisibility *Visibility `json:"setter_visibility,omitempty"`
 	// PSR-19 support fields
-	Description  string           `json:"description,omitempty"`
-	Deprecated   *DeprecationInfo `json:"deprecated,omitempty"`
+	Description string           `json:"description,omitempty"`
+	Deprecated  *DeprecationInfo `json:"deprecated,omitempty"`
 }
 
 // GetNodeKind implements DistilledNode

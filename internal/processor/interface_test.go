@@ -13,7 +13,7 @@ import (
 
 func TestDefaultProcessOptions(t *testing.T) {
 	opts := DefaultProcessOptions()
-	
+
 	assert.True(t, opts.IncludeImplementation)
 	assert.True(t, opts.IncludeComments)
 	assert.True(t, opts.IncludeImports)
@@ -96,11 +96,11 @@ func TestMultiError(t *testing.T) {
 
 func TestBaseProcessor(t *testing.T) {
 	proc := NewBaseProcessor("go", "1.0.0", []string{".go"})
-	
+
 	assert.Equal(t, "go", proc.Language())
 	assert.Equal(t, "1.0.0", proc.Version())
 	assert.Equal(t, []string{".go"}, proc.SupportedExtensions())
-	
+
 	// Test CanProcess
 	assert.True(t, proc.CanProcess("main.go"))
 	assert.True(t, proc.CanProcess("test.go"))
@@ -126,12 +126,12 @@ func (m *mockProcessor) ProcessWithOptions(ctx context.Context, reader io.Reader
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Simulate options affecting the result
 	if !opts.IncludeComments {
 		file.Children = filterComments(file.Children)
 	}
-	
+
 	return file, nil
 }
 
@@ -150,23 +150,23 @@ func TestMockProcessor(t *testing.T) {
 	proc := &mockProcessor{
 		BaseProcessor: NewBaseProcessor("test", "1.0.0", []string{".test"}),
 	}
-	
+
 	// Test Process
 	reader := strings.NewReader("test content")
 	file, err := proc.Process(ctx, reader, "test.test")
-	
+
 	assert.NoError(t, err)
 	assert.NotNil(t, file)
 	assert.Equal(t, "test.test", file.Path)
 	assert.Equal(t, "test", file.Language)
 	assert.Equal(t, "1.0.0", file.Version)
-	
+
 	// Test ProcessWithOptions
 	opts := ProcessOptions{
 		IncludeComments: false,
 	}
 	file2, err := proc.ProcessWithOptions(ctx, reader, "test2.test", opts)
-	
+
 	assert.NoError(t, err)
 	assert.NotNil(t, file2)
 }

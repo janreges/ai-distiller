@@ -26,10 +26,10 @@ func TestGoConstructs(t *testing.T) {
 				IncludePrivate:        false,
 				IncludeImplementation: false,
 				IncludeComments:       false,
-				IncludeDocstrings:     true,  // Fixed: default should include docstrings
+				IncludeDocstrings:     true, // Fixed: default should include docstrings
 				IncludeImports:        true,
-				IncludeFields:         true,  // Fixed: default should include fields
-				IncludeMethods:        true,  // Fixed: default should include methods
+				IncludeFields:         true, // Fixed: default should include fields
+				IncludeMethods:        true, // Fixed: default should include methods
 			},
 			expectedFile: "default.txt",
 		},
@@ -39,11 +39,11 @@ func TestGoConstructs(t *testing.T) {
 			options: processor.ProcessOptions{
 				IncludePrivate:        false,
 				IncludeImplementation: true,
-				IncludeComments:       false,  // Fixed: implementation=1.txt doesn't include comments
+				IncludeComments:       false, // Fixed: implementation=1.txt doesn't include comments
 				IncludeDocstrings:     true,
 				IncludeImports:        true,
-				IncludeFields:         true,  // Fixed: default should include fields
-				IncludeMethods:        true,  // Fixed: default should include methods
+				IncludeFields:         true, // Fixed: default should include fields
+				IncludeMethods:        true, // Fixed: default should include methods
 			},
 			expectedFile: "implementation=1.txt",
 		},
@@ -53,11 +53,11 @@ func TestGoConstructs(t *testing.T) {
 			options: processor.ProcessOptions{
 				IncludePrivate:        true,
 				IncludeImplementation: false,
-				IncludeComments:       false,  // Fixed: private=1,protected=1,internal=1,implementation=0.txt doesn't include comments
+				IncludeComments:       false, // Fixed: private=1,protected=1,internal=1,implementation=0.txt doesn't include comments
 				IncludeDocstrings:     true,
 				IncludeImports:        true,
-				IncludeFields:         true,  // Fixed: default should include fields
-				IncludeMethods:        true,  // Fixed: default should include methods
+				IncludeFields:         true, // Fixed: default should include fields
+				IncludeMethods:        true, // Fixed: default should include methods
 			},
 			expectedFile: "private=1,protected=1,internal=1,implementation=0.txt",
 		},

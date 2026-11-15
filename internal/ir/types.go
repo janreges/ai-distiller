@@ -30,19 +30,19 @@ type SymbolRef struct {
 type NodeKind string
 
 const (
-	KindFile      NodeKind = "file"
-	KindDirectory NodeKind = "directory"
-	KindPackage   NodeKind = "package"
-	KindImport    NodeKind = "import"
-	KindClass     NodeKind = "class"
-	KindInterface NodeKind = "interface"
-	KindStruct    NodeKind = "struct"
-	KindEnum      NodeKind = "enum"
-	KindFunction  NodeKind = "function"
-	KindField     NodeKind = "field"
-	KindTypeAlias NodeKind = "type_alias"
-	KindComment   NodeKind = "comment"
-	KindError     NodeKind = "error"
+	KindFile       NodeKind = "file"
+	KindDirectory  NodeKind = "directory"
+	KindPackage    NodeKind = "package"
+	KindImport     NodeKind = "import"
+	KindClass      NodeKind = "class"
+	KindInterface  NodeKind = "interface"
+	KindStruct     NodeKind = "struct"
+	KindEnum       NodeKind = "enum"
+	KindFunction   NodeKind = "function"
+	KindField      NodeKind = "field"
+	KindTypeAlias  NodeKind = "type_alias"
+	KindComment    NodeKind = "comment"
+	KindError      NodeKind = "error"
 	KindRawContent NodeKind = "raw_content"
 )
 
@@ -50,51 +50,51 @@ const (
 type Visibility string
 
 const (
-	VisibilityPublic           Visibility = "public"
-	VisibilityPrivate          Visibility = "private"
-	VisibilityProtected        Visibility = "protected"
-	VisibilityInternal         Visibility = "internal"
-	VisibilityPackage          Visibility = "package"
-	VisibilityFilePrivate      Visibility = "fileprivate"
-	VisibilityOpen             Visibility = "open"
-	VisibilityFriend           Visibility = "friend"
-	VisibilityProtectedInternal Visibility = "protected internal"  // C# protected internal
-	VisibilityPrivateProtected  Visibility = "private protected"   // C# private protected
+	VisibilityPublic            Visibility = "public"
+	VisibilityPrivate           Visibility = "private"
+	VisibilityProtected         Visibility = "protected"
+	VisibilityInternal          Visibility = "internal"
+	VisibilityPackage           Visibility = "package"
+	VisibilityFilePrivate       Visibility = "fileprivate"
+	VisibilityOpen              Visibility = "open"
+	VisibilityFriend            Visibility = "friend"
+	VisibilityProtectedInternal Visibility = "protected internal" // C# protected internal
+	VisibilityPrivateProtected  Visibility = "private protected"  // C# private protected
 )
 
 // Modifier represents various modifiers
 type Modifier string
 
 const (
-	ModifierStatic    Modifier = "static"
-	ModifierFinal     Modifier = "final"
-	ModifierAbstract  Modifier = "abstract"
-	ModifierAsync     Modifier = "async"
-	ModifierConst     Modifier = "const"
-	ModifierReadonly  Modifier = "readonly"
-	ModifierOverride  Modifier = "override"
-	ModifierVirtual   Modifier = "virtual"
-	ModifierInline    Modifier = "inline"
-	ModifierExtern    Modifier = "extern"
-	ModifierSealed    Modifier = "sealed"
-	ModifierData      Modifier = "data"
-	ModifierReified   Modifier = "reified"
-	ModifierMutable   Modifier = "mut"
-	ModifierPartial   Modifier = "partial"
-	ModifierVolatile  Modifier = "volatile"
-	ModifierTransient Modifier = "transient"
-	ModifierEmbedded  Modifier = "embedded"
-	ModifierActor     Modifier = "actor"
-	ModifierMutating  Modifier = "mutating"
-	ModifierStruct       Modifier = "struct"
-	ModifierEnum         Modifier = "enum"
-	ModifierTypeAlias    Modifier = "type_alias"
-	ModifierThrows       Modifier = "throws"
-	ModifierRethrows     Modifier = "rethrows"
-	ModifierNonMutating  Modifier = "nonmutating"
-	ModifierClass        Modifier = "class"
-	ModifierExport       Modifier = "export"
-	ModifierAnnotation   Modifier = "annotation"
+	ModifierStatic      Modifier = "static"
+	ModifierFinal       Modifier = "final"
+	ModifierAbstract    Modifier = "abstract"
+	ModifierAsync       Modifier = "async"
+	ModifierConst       Modifier = "const"
+	ModifierReadonly    Modifier = "readonly"
+	ModifierOverride    Modifier = "override"
+	ModifierVirtual     Modifier = "virtual"
+	ModifierInline      Modifier = "inline"
+	ModifierExtern      Modifier = "extern"
+	ModifierSealed      Modifier = "sealed"
+	ModifierData        Modifier = "data"
+	ModifierReified     Modifier = "reified"
+	ModifierMutable     Modifier = "mut"
+	ModifierPartial     Modifier = "partial"
+	ModifierVolatile    Modifier = "volatile"
+	ModifierTransient   Modifier = "transient"
+	ModifierEmbedded    Modifier = "embedded"
+	ModifierActor       Modifier = "actor"
+	ModifierMutating    Modifier = "mutating"
+	ModifierStruct      Modifier = "struct"
+	ModifierEnum        Modifier = "enum"
+	ModifierTypeAlias   Modifier = "type_alias"
+	ModifierThrows      Modifier = "throws"
+	ModifierRethrows    Modifier = "rethrows"
+	ModifierNonMutating Modifier = "nonmutating"
+	ModifierClass       Modifier = "class"
+	ModifierExport      Modifier = "export"
+	ModifierAnnotation  Modifier = "annotation"
 )
 
 // DistilledNode is the base interface for all IR nodes
@@ -155,12 +155,12 @@ type GoExtensions struct {
 }
 
 type PythonExtensions struct {
-	IsGenerator     bool   `json:"is_generator,omitempty"`
-	IsCoroutine     bool   `json:"is_coroutine,omitempty"`
-	IsStaticMethod  bool   `json:"is_static_method,omitempty"`
-	IsClassMethod   bool   `json:"is_class_method,omitempty"`
-	Metaclass       string `json:"metaclass,omitempty"`
-	IsDataclass     bool   `json:"is_dataclass,omitempty"`
+	IsGenerator    bool   `json:"is_generator,omitempty"`
+	IsCoroutine    bool   `json:"is_coroutine,omitempty"`
+	IsStaticMethod bool   `json:"is_static_method,omitempty"`
+	IsClassMethod  bool   `json:"is_class_method,omitempty"`
+	Metaclass      string `json:"metaclass,omitempty"`
+	IsDataclass    bool   `json:"is_dataclass,omitempty"`
 }
 
 type JavaScriptExtensions struct {
@@ -227,7 +227,7 @@ type FieldAccessMode string
 
 const (
 	FieldAccessReadWrite FieldAccessMode = "read-write"
-	FieldAccessReadOnly  FieldAccessMode = "read-only"  
+	FieldAccessReadOnly  FieldAccessMode = "read-only"
 	FieldAccessWriteOnly FieldAccessMode = "write-only"
 )
 
@@ -248,13 +248,13 @@ type ThrowsInfo struct {
 // DistilledFile represents a single source file
 type DistilledFile struct {
 	BaseNode
-	Path        string                       `json:"path"`
-	Language    string                       `json:"language"`
-	Version     string                       `json:"version"`
-	Children    []DistilledNode              `json:"nodes"`
-	Errors      []DistilledError             `json:"errors,omitempty"`
-	SymbolTable map[SymbolID]DistilledNode  `json:"-"`
-	Metadata    *FileMetadata                `json:"metadata,omitempty"`
+	Path        string                     `json:"path"`
+	Language    string                     `json:"language"`
+	Version     string                     `json:"version"`
+	Children    []DistilledNode            `json:"nodes"`
+	Errors      []DistilledError           `json:"errors,omitempty"`
+	SymbolTable map[SymbolID]DistilledNode `json:"-"`
+	Metadata    *FileMetadata              `json:"metadata,omitempty"`
 }
 
 // FileMetadata contains additional file information

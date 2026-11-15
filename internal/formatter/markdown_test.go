@@ -61,10 +61,10 @@ func TestMarkdownFormatter_Format(t *testing.T) {
 				"__init__(self, value: int)",
 			},
 			notContains: []string{
-				"<sub>L",    // No location info
-				"Language:", // No metadata
-				"🏛️",        // No emojis
-				"🔧",        // No emojis
+				"<sub>L",       // No location info
+				"Language:",    // No metadata
+				"🏛️",           // No emojis
+				"🔧",            // No emojis
 				"## Structure", // No Structure heading
 			},
 		},
@@ -118,8 +118,8 @@ func TestMarkdownFormatter_Format(t *testing.T) {
 				"```python",
 			},
 			notContains: []string{
-				"⚠️", // No emojis
-				"❌", // No emojis
+				"⚠️",           // No emojis
+				"❌",            // No emojis
 				"## ⚠️ Errors", // No error section
 			},
 		},
@@ -174,10 +174,10 @@ func TestMarkdownFormatter_Format(t *testing.T) {
 				"-async process()", // Python formatter outputs visibility prefix + async + name
 			},
 			notContains: []string{
-				"🔧", // No emojis
+				"🔧",         // No emojis
 				"_private_", // No visibility labels
-				"_static_", // No modifier labels
-				"_async_", // No modifier labels
+				"_static_",  // No modifier labels
+				"_async_",   // No modifier labels
 			},
 		},
 		{
@@ -201,7 +201,7 @@ func TestMarkdownFormatter_Format(t *testing.T) {
 				"class Child(Parent):", // Python formatter handles inheritance
 			},
 			notContains: []string{
-				"🏛️", // No emojis
+				"🏛️",         // No emojis
 				"implements", // Python doesn't have explicit implements
 			},
 		},
@@ -239,8 +239,8 @@ func TestMarkdownFormatter_Format(t *testing.T) {
 				Language: "python",
 				Children: []ir.DistilledNode{
 					&ir.DistilledFunction{
-						Name:           "calculate",
-						Visibility:     ir.VisibilityPublic,
+						Name:       "calculate",
+						Visibility: ir.VisibilityPublic,
 						// In compact mode, implementation should already be stripped by processor
 						Implementation: "", // No implementation in compact mode
 					},

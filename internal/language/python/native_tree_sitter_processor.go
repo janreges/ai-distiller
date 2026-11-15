@@ -603,7 +603,7 @@ func (p *NativeTreeSitterProcessor) processNodeWithClassContext(node *sitter.Nod
 	switch node.Type() {
 	case "assignment":
 		p.processAssignmentWithClassContext(node, file, function, classParent)
-	
+
 	case "expression_statement":
 		// Check for assignments within expression statements
 		if node.ChildCount() > 0 {
@@ -612,7 +612,7 @@ func (p *NativeTreeSitterProcessor) processNodeWithClassContext(node *sitter.Nod
 				p.processAssignmentWithClassContext(child, file, function, classParent)
 			}
 		}
-	
+
 	default:
 		// For other node types, recurse into children with the same context
 		for i := 0; i < int(node.ChildCount()); i++ {

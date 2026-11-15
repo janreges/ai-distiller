@@ -15,11 +15,11 @@ import (
 
 // TestCase represents a single test case discovered from the filesystem
 type TestCase struct {
-	Language      string
-	ScenarioName  string
-	SourceFile    string
-	ExpectedFile  string
-	Flags         []string
+	Language     string
+	ScenarioName string
+	SourceFile   string
+	ExpectedFile string
+	Flags        []string
 }
 
 // Runner is the main test runner that discovers and executes tests
@@ -44,16 +44,16 @@ func New(testDataDir, aidBinary string) *Runner {
 func parseParametersFromFilename(filename string) []string {
 	// Remove the .txt extension
 	name := strings.TrimSuffix(filename, ".txt")
-	
+
 	// Parse parameters from filename
 	// The filename can be in formats like:
 	// - "default.txt" -> no flags
 	// - "implementation=1.txt" -> single parameter
 	// - "private=0,protected=0.txt" -> comma-separated parameters
 	// - "private=1,protected=1,internal=1,implementation=0.txt" -> multiple parameters
-	
+
 	var flags []string
-	
+
 	// Handle comma-separated parameters
 	if strings.Contains(name, ",") {
 		// Split by comma first
@@ -69,12 +69,11 @@ func parseParametersFromFilename(filename string) []string {
 		flags = append(flags, "--"+name)
 	}
 	// else: no parameters (e.g., "default")
-	
+
 	// Sort flags so the order is deterministic
 	sort.Strings(flags)
 	return flags
 }
-
 
 // validateExpectedName accepts "default.txt" or a comma-separated list of
 // key=value tokens; anything else would silently run with fewer flags.
@@ -95,41 +94,41 @@ func validateExpectedName(filename string) error {
 // DiscoverTests walks the testdata directory and finds all test cases
 func (r *Runner) DiscoverTests() ([]TestCase, error) {
 	var tests []TestCase
-	
+
 	// Walk through each language directory
 	entries, err := os.ReadDir(r.testDataDir)
 	if err != nil {
 		return nil, fmt.Errorf("reading testdata dir: %w", err)
 	}
-	
+
 	for _, langEntry := range entries {
 		if !langEntry.IsDir() {
 			continue
 		}
-		
+
 		language := langEntry.Name()
 		langDir := filepath.Join(r.testDataDir, language)
-		
+
 		// Walk through each scenario directory
 		scenarios, err := os.ReadDir(langDir)
 		if err != nil {
 			return nil, fmt.Errorf("reading language dir %s: %w", language, err)
 		}
-		
+
 		for _, scenarioEntry := range scenarios {
 			if !scenarioEntry.IsDir() {
 				continue
 			}
-			
+
 			scenarioName := scenarioEntry.Name()
 			scenarioDir := filepath.Join(langDir, scenarioName)
-			
+
 			// Find source file
 			sourceFile, err := findSourceFile(scenarioDir, language)
 			if err != nil {
 				return nil, fmt.Errorf("scenario %s/%s: %w", language, scenarioName, err)
 			}
-			
+
 			// Find expected files - require expected/ directory
 			expectedDir := filepath.Join(scenarioDir, "expected")
 			if _, err := os.Stat(expectedDir); os.IsNotExist(err) {
@@ -152,13 +151,13 @@ func (r *Runner) DiscoverTests() ([]TestCase, error) {
 				}
 				continue
 			}
-			
+
 			// Read all expected files
 			expectedFiles, err := os.ReadDir(expectedDir)
 			if err != nil {
 				return nil, fmt.Errorf("reading expected dir for %s/%s: %w", language, scenarioName, err)
 			}
-			
+
 			found := 0
 			for _, expFile := range expectedFiles {
 				if !strings.HasSuffix(expFile.Name(), ".txt") {
@@ -168,7 +167,7 @@ func (r *Runner) DiscoverTests() ([]TestCase, error) {
 				if err := validateExpectedName(expFile.Name()); err != nil {
 					return nil, fmt.Errorf("scenario %s/%s: %w", language, scenarioName, err)
 				}
-				
+
 				// Use new parameter-based parsing
 				flags := parseParametersFromFilename(expFile.Name())
 				tests = append(tests, TestCase{
@@ -184,7 +183,7 @@ func (r *Runner) DiscoverTests() ([]TestCase, error) {
 			}
 		}
 	}
-	
+
 	return tests, nil
 }
 
@@ -204,12 +203,12 @@ func findSourceFile(dir, language string) (string, error) {
 		"php":        {".php"},
 		"ruby":       {".rb"},
 	}
-	
+
 	exts, ok := extensions[language]
 	if !ok {
 		return "", fmt.Errorf("unknown language: %s", language)
 	}
-	
+
 	// Look for source.{ext} first
 	for _, ext := range exts {
 		sourcePath := filepath.Join(dir, "source"+ext)
@@ -217,25 +216,25 @@ func findSourceFile(dir, language string) (string, error) {
 			return sourcePath, nil
 		}
 	}
-	
+
 	// If not found, look for any file with the right extension
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return "", err
 	}
-	
+
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
-		
+
 		for _, ext := range exts {
 			if strings.HasSuffix(entry.Name(), ext) {
 				return filepath.Join(dir, entry.Name()), nil
 			}
 		}
 	}
-	
+
 	return "", fmt.Errorf("no source file found for language %s in %s", language, dir)
 }
 
@@ -258,20 +257,20 @@ func (r *Runner) RunTest(tc TestCase) error {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	
+
 	// Run the command
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("running aid: %w\nstderr: %s", err, stderr.String())
 	}
-	
+
 	// Get actual output
 	actual := stdout.Bytes()
-	
+
 	if r.updateMode {
 		// Update expected file
 		return os.WriteFile(tc.ExpectedFile, actual, 0644)
 	}
-	
+
 	// Read expected output
 	expected, err := os.ReadFile(tc.ExpectedFile)
 	if err != nil {
@@ -281,12 +280,12 @@ func (r *Runner) RunTest(tc TestCase) error {
 		}
 		return fmt.Errorf("reading expected file: %w", err)
 	}
-	
+
 	// Compare outputs
 	if !bytes.Equal(actual, expected) {
 		return fmt.Errorf("%s", formatMismatch(tc, args, expected, actual))
 	}
-	
+
 	return nil
 }
 
@@ -296,12 +295,12 @@ func (r *Runner) RunTests(t *testing.T) {
 	if err != nil {
 		t.Fatalf("discovering tests: %v", err)
 	}
-	
+
 	if len(tests) == 0 {
 		t.Log("No tests discovered")
 		return
 	}
-	
+
 	for _, tc := range tests {
 		testName := fmt.Sprintf("%s/%s/%s", tc.Language, tc.ScenarioName, filepath.Base(tc.ExpectedFile))
 		t.Run(testName, func(t *testing.T) {
@@ -309,7 +308,7 @@ func (r *Runner) RunTests(t *testing.T) {
 			// if tc.Language == "swift" && tc.ScenarioName == "01_basic" && filepath.Base(tc.ExpectedFile) == "imports=0.txt" {
 			//	t.Skip("Skipping Swift empty output test - needs fix for empty file handling")
 			// }
-			
+
 			if err := r.RunTest(tc); err != nil {
 				t.Errorf("test failed: %v", err)
 			}

@@ -47,7 +47,7 @@ type FunctionDefinition struct {
 	Language  string
 }
 
-// ClassDefinition holds metadata about a class for distillation  
+// ClassDefinition holds metadata about a class for distillation
 type ClassDefinition struct {
 	Name      string
 	FQN       string
@@ -63,12 +63,12 @@ type DependencyAnalyzer struct {
 	projectRoot     string
 	maxDepth        int
 	visited         map[string]bool
-	callGraph       map[string][]string                    // function -> called functions
-	typeGraph       map[string][]string                    // type -> used types
-	usedSymbols     map[string]bool                        // symbol -> used
-	functionDefs    map[string]*FunctionDefinition         // FQN -> function definition
-	classDefs       map[string]*ClassDefinition            // FQN -> class definition
-	originalContent map[string][]byte                      // file path -> original content
+	callGraph       map[string][]string            // function -> called functions
+	typeGraph       map[string][]string            // type -> used types
+	usedSymbols     map[string]bool                // symbol -> used
+	functionDefs    map[string]*FunctionDefinition // FQN -> function definition
+	classDefs       map[string]*ClassDefinition    // FQN -> class definition
+	originalContent map[string][]byte              // file path -> original content
 }
 
 // NewDependencyAnalyzer creates a new dependency analyzer
@@ -190,7 +190,7 @@ func (da *DependencyAnalyzer) findEntryPoints(file *ir.DistilledFile) []string {
 				entryPoints = append(entryPoints, funcDef.Name)
 			}
 		}
-		
+
 		// If still no main function, treat all functions in main file as entry points
 		if len(entryPoints) == 0 {
 			for _, funcDef := range da.functionDefs {
@@ -246,28 +246,28 @@ func (da *DependencyAnalyzer) buildCallGraphRecursive(ctx context.Context, symbo
 // discoverRelatedFiles finds all files related through includes/imports
 func (da *DependencyAnalyzer) discoverRelatedFiles(ctx context.Context, startFile string) ([]string, error) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	visited := make(map[string]bool)
 	toProcess := []string{startFile}
 	allFiles := []string{}
-	
+
 	for len(toProcess) > 0 {
 		filePath := toProcess[0]
 		toProcess = toProcess[1:]
-		
+
 		if visited[filePath] {
 			continue
 		}
 		visited[filePath] = true
 		allFiles = append(allFiles, filePath)
-		
+
 		// For PHP, look for require/include statements
 		includes, err := da.extractIncludeStatements(ctx, filePath)
 		if err != nil {
 			dbg.Logf(debug.LevelDetailed, "Failed to extract includes from %s: %v", filePath, err)
 			continue
 		}
-		
+
 		for _, includePath := range includes {
 			resolvedPath := da.resolveIncludePath(includePath, filePath)
 			if resolvedPath != "" && !visited[resolvedPath] {
@@ -275,29 +275,29 @@ func (da *DependencyAnalyzer) discoverRelatedFiles(ctx context.Context, startFil
 			}
 		}
 	}
-	
+
 	return allFiles, nil
 }
 
-// extractIncludeStatements extracts include/require statements from a file  
+// extractIncludeStatements extracts include/require statements from a file
 func (da *DependencyAnalyzer) extractIncludeStatements(ctx context.Context, filePath string) ([]string, error) {
 	content, err := os.Stat(filePath)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if content.IsDir() {
 		return nil, fmt.Errorf("path is directory: %s", filePath)
 	}
-	
+
 	fileContent, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Detect language and use appropriate parser
 	language := da.detectLanguage(filePath)
-	
+
 	switch language {
 	case "php":
 		return da.extractPhpIncludes(ctx, fileContent, filePath)
@@ -329,7 +329,7 @@ func (da *DependencyAnalyzer) extractIncludeStatements(ctx context.Context, file
 // extractPhpIncludes extracts PHP require/include statements
 func (da *DependencyAnalyzer) extractPhpIncludes(ctx context.Context, fileContent []byte, filePath string) ([]string, error) {
 	includes := []string{}
-	
+
 	// Look for require_once 'file.php'
 	if strings.Contains(string(fileContent), "require_once") {
 		lines := strings.Split(string(fileContent), "\n")
@@ -354,7 +354,7 @@ func (da *DependencyAnalyzer) extractPhpIncludes(ctx context.Context, fileConten
 			}
 		}
 	}
-	
+
 	return includes, nil
 }
 
@@ -362,23 +362,23 @@ func (da *DependencyAnalyzer) extractPhpIncludes(ctx context.Context, fileConten
 func (da *DependencyAnalyzer) extractPythonImports(ctx context.Context, fileContent []byte, filePath string) ([]string, error) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
 	includes := []string{}
-	
+
 	lines := strings.Split(string(fileContent), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		// Skip comments and empty lines
 		if strings.HasPrefix(line, "#") || line == "" {
 			continue
 		}
-		
+
 		// Handle different import patterns:
 		// import module
 		// import module as alias
 		// from module import something
 		// from . import relative_module
 		// from .relative_module import something
-		
+
 		if strings.HasPrefix(line, "import ") {
 			// import module [as alias]
 			parts := strings.Fields(line)
@@ -402,7 +402,7 @@ func (da *DependencyAnalyzer) extractPythonImports(ctx context.Context, fileCont
 			parts := strings.Fields(line)
 			if len(parts) >= 4 && parts[2] == "import" {
 				moduleName := parts[1]
-				
+
 				// Handle relative imports
 				if strings.HasPrefix(moduleName, ".") {
 					resolved := da.resolvePythonRelativeImport(moduleName, filePath)
@@ -423,7 +423,7 @@ func (da *DependencyAnalyzer) extractPythonImports(ctx context.Context, fileCont
 			}
 		}
 	}
-	
+
 	return includes, nil
 }
 
@@ -431,18 +431,18 @@ func (da *DependencyAnalyzer) extractPythonImports(ctx context.Context, fileCont
 func (da *DependencyAnalyzer) extractGoImports(ctx context.Context, fileContent []byte, filePath string) ([]string, error) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
 	includes := []string{}
-	
+
 	lines := strings.Split(string(fileContent), "\n")
 	inImportBlock := false
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		// Skip comments and empty lines
 		if strings.HasPrefix(line, "//") || line == "" {
 			continue
 		}
-		
+
 		// Handle single import: import "package"
 		if strings.HasPrefix(line, "import \"") && !inImportBlock {
 			start := strings.Index(line, "\"")
@@ -460,19 +460,19 @@ func (da *DependencyAnalyzer) extractGoImports(ctx context.Context, fileContent 
 			}
 			continue
 		}
-		
+
 		// Handle import block start: import (
 		if line == "import (" {
 			inImportBlock = true
 			continue
 		}
-		
+
 		// Handle import block end: )
 		if inImportBlock && line == ")" {
 			inImportBlock = false
 			continue
 		}
-		
+
 		// Handle imports within block: "package"
 		if inImportBlock {
 			line = strings.TrimSpace(line)
@@ -490,7 +490,7 @@ func (da *DependencyAnalyzer) extractGoImports(ctx context.Context, fileContent 
 			}
 		}
 	}
-	
+
 	return includes, nil
 }
 
@@ -498,23 +498,23 @@ func (da *DependencyAnalyzer) extractGoImports(ctx context.Context, fileContent 
 func (da *DependencyAnalyzer) extractJavaScriptImports(ctx context.Context, fileContent []byte, filePath string) ([]string, error) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
 	includes := []string{}
-	
+
 	lines := strings.Split(string(fileContent), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		// Skip comments and empty lines
 		if strings.HasPrefix(line, "//") || strings.HasPrefix(line, "/*") || line == "" {
 			continue
 		}
-		
+
 		// Handle different import patterns:
 		// import something from 'module'
 		// import { something } from 'module'
 		// import * as something from 'module'
 		// const something = require('module')
 		// require('module')
-		
+
 		if strings.HasPrefix(line, "import ") && strings.Contains(line, " from ") {
 			// ES6 import ... from 'module'
 			fromIndex := strings.LastIndex(line, " from ")
@@ -545,7 +545,7 @@ func (da *DependencyAnalyzer) extractJavaScriptImports(ctx context.Context, file
 			}
 		}
 	}
-	
+
 	return includes, nil
 }
 
@@ -554,17 +554,17 @@ func (da *DependencyAnalyzer) resolveIncludePath(includePath, currentFile string
 	if filepath.IsAbs(includePath) {
 		return includePath
 	}
-	
+
 	// Resolve relative to current file's directory
 	currentDir := filepath.Dir(currentFile)
 	resolved := filepath.Join(currentDir, includePath)
-	
+
 	// Check if file exists
 	if _, err := os.Stat(resolved); err == nil {
 		abs, _ := filepath.Abs(resolved)
 		return abs
 	}
-	
+
 	return ""
 }
 
@@ -572,21 +572,21 @@ func (da *DependencyAnalyzer) resolveIncludePath(includePath, currentFile string
 func (da *DependencyAnalyzer) extractRubyRequires(ctx context.Context, fileContent []byte, filePath string) ([]string, error) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
 	includes := []string{}
-	
+
 	lines := strings.Split(string(fileContent), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		// Skip comments and empty lines
 		if strings.HasPrefix(line, "#") || line == "" {
 			continue
 		}
-		
+
 		// Handle different require patterns:
 		// require 'file'
 		// require_relative 'file'
 		// require_relative './file'
-		
+
 		if strings.HasPrefix(line, "require_relative ") {
 			// require_relative 'file'
 			remaining := strings.TrimSpace(line[17:]) // +17 for "require_relative "
@@ -611,7 +611,7 @@ func (da *DependencyAnalyzer) extractRubyRequires(ctx context.Context, fileConte
 			}
 		}
 	}
-	
+
 	return includes, nil
 }
 
@@ -635,16 +635,16 @@ func (da *DependencyAnalyzer) isStandardLibraryModule(moduleName string) bool {
 // resolvePythonImport resolves a Python import to a file path
 func (da *DependencyAnalyzer) resolvePythonImport(moduleName, currentFile string) string {
 	currentDir := filepath.Dir(currentFile)
-	
+
 	// Convert package-style imports (utils.helper) to file paths (utils/helper)
 	moduleFilePath := strings.ReplaceAll(moduleName, ".", string(filepath.Separator))
-	
+
 	// Try different file patterns for Python modules
 	patterns := []string{
 		moduleFilePath + ".py",
 		moduleFilePath + "/__init__.py",
 	}
-	
+
 	for _, pattern := range patterns {
 		candidate := filepath.Join(currentDir, pattern)
 		if _, err := os.Stat(candidate); err == nil {
@@ -652,19 +652,19 @@ func (da *DependencyAnalyzer) resolvePythonImport(moduleName, currentFile string
 			return abs
 		}
 	}
-	
+
 	return ""
 }
 
 // resolvePythonRelativeImport resolves Python relative imports
 func (da *DependencyAnalyzer) resolvePythonRelativeImport(moduleName, currentFile string) string {
 	currentDir := filepath.Dir(currentFile)
-	
+
 	// Handle different levels of relative imports
 	// .module -> same directory
 	// ..module -> parent directory
 	// ...module -> grandparent directory, etc.
-	
+
 	dotsCount := 0
 	for i, char := range moduleName {
 		if char == '.' {
@@ -674,13 +674,13 @@ func (da *DependencyAnalyzer) resolvePythonRelativeImport(moduleName, currentFil
 			break
 		}
 	}
-	
+
 	// Move up the directory tree based on dots count
 	targetDir := currentDir
 	for i := 1; i < dotsCount; i++ { // -1 because current dir is already level 0
 		targetDir = filepath.Dir(targetDir)
 	}
-	
+
 	// Try to resolve the module
 	if moduleName == "" {
 		// Just dots - look for __init__.py
@@ -695,7 +695,7 @@ func (da *DependencyAnalyzer) resolvePythonRelativeImport(moduleName, currentFil
 			moduleName + ".py",
 			moduleName + "/__init__.py",
 		}
-		
+
 		for _, pattern := range patterns {
 			candidate := filepath.Join(targetDir, pattern)
 			if _, err := os.Stat(candidate); err == nil {
@@ -704,7 +704,7 @@ func (da *DependencyAnalyzer) resolvePythonRelativeImport(moduleName, currentFil
 			}
 		}
 	}
-	
+
 	return ""
 }
 
@@ -714,17 +714,17 @@ func (da *DependencyAnalyzer) resolveGoImport(importPath, currentFile string) st
 	// 1. Standard library (skip these)
 	// 2. Local relative imports (./package or ../package)
 	// 3. Module imports (github.com/user/repo/package)
-	
+
 	// Skip standard library packages (basic filtering)
 	if da.isGoStandardLibrary(importPath) {
 		return ""
 	}
-	
+
 	// Handle relative imports
 	if strings.HasPrefix(importPath, "./") || strings.HasPrefix(importPath, "../") {
 		currentDir := filepath.Dir(currentFile)
 		resolved := filepath.Join(currentDir, importPath)
-		
+
 		// Look for .go files in the target directory
 		if entries, err := os.ReadDir(resolved); err == nil {
 			for _, entry := range entries {
@@ -736,10 +736,10 @@ func (da *DependencyAnalyzer) resolveGoImport(importPath, currentFile string) st
 			}
 		}
 	}
-	
+
 	// For module imports, we would need GOPATH/GOMOD resolution
 	// For now, skip these as they are typically external dependencies
-	
+
 	return ""
 }
 
@@ -749,14 +749,14 @@ func (da *DependencyAnalyzer) resolveJavaScriptImport(modulePath, currentFile st
 	if da.isJavaScriptBuiltIn(modulePath) || !strings.HasPrefix(modulePath, ".") {
 		return ""
 	}
-	
+
 	currentDir := filepath.Dir(currentFile)
-	
+
 	// Handle relative imports
 	if strings.HasPrefix(modulePath, "./") || strings.HasPrefix(modulePath, "../") {
 		// Try different file extensions
 		basePath := filepath.Join(currentDir, modulePath)
-		
+
 		patterns := []string{
 			basePath + ".js",
 			basePath + ".ts",
@@ -765,7 +765,7 @@ func (da *DependencyAnalyzer) resolveJavaScriptImport(modulePath, currentFile st
 			basePath + "/index.js",
 			basePath + "/index.ts",
 		}
-		
+
 		for _, pattern := range patterns {
 			if _, err := os.Stat(pattern); err == nil {
 				abs, _ := filepath.Abs(pattern)
@@ -773,7 +773,7 @@ func (da *DependencyAnalyzer) resolveJavaScriptImport(modulePath, currentFile st
 			}
 		}
 	}
-	
+
 	return ""
 }
 
@@ -807,7 +807,7 @@ func (da *DependencyAnalyzer) isJavaScriptBuiltIn(modulePath string) bool {
 // extractQuotedString extracts a quoted string from text
 func (da *DependencyAnalyzer) extractQuotedString(text string) string {
 	text = strings.TrimSpace(text)
-	
+
 	// Try single quotes first
 	if strings.HasPrefix(text, "'") {
 		end := strings.Index(text[1:], "'")
@@ -815,7 +815,7 @@ func (da *DependencyAnalyzer) extractQuotedString(text string) string {
 			return text[1 : end+1]
 		}
 	}
-	
+
 	// Try double quotes
 	if strings.HasPrefix(text, "\"") {
 		end := strings.Index(text[1:], "\"")
@@ -823,7 +823,7 @@ func (da *DependencyAnalyzer) extractQuotedString(text string) string {
 			return text[1 : end+1]
 		}
 	}
-	
+
 	// Try backticks (template literals)
 	if strings.HasPrefix(text, "`") {
 		end := strings.Index(text[1:], "`")
@@ -831,7 +831,7 @@ func (da *DependencyAnalyzer) extractQuotedString(text string) string {
 			return text[1 : end+1]
 		}
 	}
-	
+
 	return ""
 }
 
@@ -854,7 +854,7 @@ func (da *DependencyAnalyzer) isRubyStandardLibrary(moduleName string) bool {
 // resolveRubyRequire resolves a Ruby require to a file path
 func (da *DependencyAnalyzer) resolveRubyRequire(modulePath, currentFile string, isRelative bool) string {
 	currentDir := filepath.Dir(currentFile)
-	
+
 	var targetPath string
 	if isRelative {
 		// require_relative - always relative to current file
@@ -868,32 +868,32 @@ func (da *DependencyAnalyzer) resolveRubyRequire(modulePath, currentFile string,
 			targetPath = filepath.Join(currentDir, modulePath)
 		}
 	}
-	
+
 	// Try different Ruby file patterns
 	patterns := []string{
 		targetPath + ".rb",
 		targetPath,
 	}
-	
+
 	for _, pattern := range patterns {
 		if _, err := os.Stat(pattern); err == nil {
 			abs, _ := filepath.Abs(pattern)
 			return abs
 		}
 	}
-	
+
 	return ""
 }
 
 // CreateDistilledProject creates a multi-file distilled project
 func (da *DependencyAnalyzer) CreateDistilledProject(ctx context.Context, entryPoints []string) (*DistilledProject, error) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	project := &DistilledProject{
 		Files:       make(map[string]*DistilledMultiFile),
 		EntryPoints: entryPoints,
 	}
-	
+
 	// Collect all used function definitions
 	usedDefinitions := make(map[string]*FunctionDefinition)
 	for fqn := range da.usedSymbols {
@@ -902,11 +902,11 @@ func (da *DependencyAnalyzer) CreateDistilledProject(ctx context.Context, entryP
 			dbg.Logf(debug.LevelDetailed, "Including definition: %s", fqn)
 		}
 	}
-	
+
 	// Group definitions by file
 	for fqn, def := range usedDefinitions {
 		filePath := def.FilePath
-		
+
 		// Initialize file if not exists
 		if _, exists := project.Files[filePath]; !exists {
 			project.Files[filePath] = &DistilledMultiFile{
@@ -916,7 +916,7 @@ func (da *DependencyAnalyzer) CreateDistilledProject(ctx context.Context, entryP
 				Language:         def.Language,
 			}
 		}
-		
+
 		// Add snippet
 		snippet := DistilledCodeSnippet{
 			StartByte: def.StartByte,
@@ -924,10 +924,10 @@ func (da *DependencyAnalyzer) CreateDistilledProject(ctx context.Context, entryP
 			FQN:       fqn,
 			Type:      "function",
 		}
-		
+
 		project.Files[filePath].Snippets = append(project.Files[filePath].Snippets, snippet)
 	}
-	
+
 	// Extract content for each file
 	for filePath, distilledFile := range project.Files {
 		err := da.extractDistilledContent(ctx, distilledFile)
@@ -935,10 +935,10 @@ func (da *DependencyAnalyzer) CreateDistilledProject(ctx context.Context, entryP
 			dbg.Logf(debug.LevelDetailed, "Failed to extract content for %s: %v", filePath, err)
 		}
 	}
-	
-	dbg.Logf(debug.LevelBasic, "Created distilled project with %d files, %d total definitions", 
+
+	dbg.Logf(debug.LevelBasic, "Created distilled project with %d files, %d total definitions",
 		len(project.Files), len(usedDefinitions))
-	
+
 	return project, nil
 }
 
@@ -948,39 +948,39 @@ func (da *DependencyAnalyzer) extractDistilledContent(ctx context.Context, disti
 		distilledFile.DistilledContent = ""
 		return nil
 	}
-	
+
 	// Sort snippets by start position
 	sort.Slice(distilledFile.Snippets, func(i, j int) bool {
 		return distilledFile.Snippets[i].StartByte < distilledFile.Snippets[j].StartByte
 	})
-	
+
 	var builder strings.Builder
-	
+
 	// Add PHP opening tag if needed
 	if distilledFile.Language == "php" {
 		builder.WriteString("<?php\n\n")
 	}
-	
+
 	// Extract each snippet
 	for i, snippet := range distilledFile.Snippets {
 		if snippet.StartByte >= snippet.EndByte {
 			continue
 		}
-		
+
 		if snippet.EndByte > uint32(len(distilledFile.OriginalContent)) {
 			continue
 		}
-		
+
 		// Add snippet content
 		content := string(distilledFile.OriginalContent[snippet.StartByte:snippet.EndByte])
 		builder.WriteString(content)
-		
+
 		// Add separator between snippets
 		if i < len(distilledFile.Snippets)-1 {
 			builder.WriteString("\n\n")
 		}
 	}
-	
+
 	distilledFile.DistilledContent = builder.String()
 	return nil
 }
@@ -988,31 +988,31 @@ func (da *DependencyAnalyzer) extractDistilledContent(ctx context.Context, disti
 // convertProjectToSingleFile converts a DistilledProject back to a single DistilledFile for compatibility
 func (da *DependencyAnalyzer) convertProjectToSingleFile(ctx context.Context, project *DistilledProject, originalFile *ir.DistilledFile) *ir.DistilledFile {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	result := &ir.DistilledFile{
 		Path:     originalFile.Path,
 		Language: originalFile.Language,
 		Version:  originalFile.Version,
 		Children: []ir.DistilledNode{},
 	}
-	
+
 	var allContent strings.Builder
 	fileCount := 0
-	
+
 	// Combine content from all distilled files
 	for filePath, distilledFile := range project.Files {
 		if distilledFile.DistilledContent == "" {
 			continue
 		}
-		
+
 		fileCount++
-		
+
 		// Add file header
 		allContent.WriteString(fmt.Sprintf("// === %s ===\n", filePath))
 		allContent.WriteString(distilledFile.DistilledContent)
 		allContent.WriteString("\n\n")
 	}
-	
+
 	if fileCount > 0 {
 		// Create a single "implementation" node with all content
 		implementationNode := &ir.DistilledComment{
@@ -1022,31 +1022,31 @@ func (da *DependencyAnalyzer) convertProjectToSingleFile(ctx context.Context, pr
 			Text:   allContent.String(),
 			Format: "implementation",
 		}
-		
+
 		result.Children = append(result.Children, implementationNode)
-		dbg.Logf(debug.LevelBasic, "Combined %d files into single output (%d chars)", 
+		dbg.Logf(debug.LevelBasic, "Combined %d files into single output (%d chars)",
 			fileCount, len(allContent.String()))
 	}
-	
+
 	return result
 }
 
 // buildSymbolTableForFile builds a symbol table for a single file
 func (da *DependencyAnalyzer) buildSymbolTableForFile(ctx context.Context, filePath string) (*semantic.SymbolTable, error) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Store original content for later extraction
 	da.originalContent[filePath] = content
-	
+
 	// Detect language from file extension
 	language := da.detectLanguage(filePath)
 	symbolTable := semantic.NewSymbolTable(filePath, language)
-	
+
 	// Language-specific function detection
 	switch language {
 	case "php":
@@ -1074,7 +1074,7 @@ func (da *DependencyAnalyzer) buildSymbolTableForFile(ctx context.Context, fileP
 	default:
 		dbg.Logf(debug.LevelDetailed, "Language %s not supported for dependency analysis yet", language)
 	}
-	
+
 	return symbolTable, nil
 }
 
@@ -1118,16 +1118,16 @@ func (da *DependencyAnalyzer) detectLanguage(filePath string) string {
 // parsePhpFunctions parses PHP function definitions
 func (da *DependencyAnalyzer) parsePhpFunctions(ctx context.Context, symbolTable *semantic.SymbolTable, content []byte, filePath string) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	lines := strings.Split(string(content), "\n")
 	currentPos := uint32(0)
-	
+
 	for i, line := range lines {
 		lineStart := currentPos
 		lineEnd := currentPos + uint32(len(line)) + 1 // +1 for newline
-		
+
 		line = strings.TrimSpace(line)
-		
+
 		// Look for function definitions: function name(
 		if strings.HasPrefix(line, "function ") {
 			parts := strings.Fields(line)
@@ -1135,13 +1135,13 @@ func (da *DependencyAnalyzer) parsePhpFunctions(ctx context.Context, symbolTable
 				funcName := parts[1]
 				if parenIndex := strings.Index(funcName, "("); parenIndex != -1 {
 					funcName = funcName[:parenIndex]
-					
+
 					// Estimate function end position (simplified - until next function or EOF)
 					funcEndPos := da.estimateFunctionEnd(content, lineStart)
-					
+
 					// Create FQN
 					fqn := fmt.Sprintf("%s::%s", filePath, funcName)
-					
+
 					// Store function definition for distillation
 					da.functionDefs[fqn] = &FunctionDefinition{
 						Name:      funcName,
@@ -1151,12 +1151,12 @@ func (da *DependencyAnalyzer) parsePhpFunctions(ctx context.Context, symbolTable
 						EndByte:   funcEndPos,
 						Language:  "php",
 					}
-					
+
 					// Create symbol
 					symbol := &semantic.Symbol{
-						ID:       semantic.GenerateSymbolID(filePath, funcName, ""),
-						Name:     funcName,
-						Kind:     semantic.SymbolKindFunction,
+						ID:   semantic.GenerateSymbolID(filePath, funcName, ""),
+						Name: funcName,
+						Kind: semantic.SymbolKindFunction,
 						Location: semantic.FileLocation{
 							FilePath:  filePath,
 							StartLine: i + 1,
@@ -1166,13 +1166,13 @@ func (da *DependencyAnalyzer) parsePhpFunctions(ctx context.Context, symbolTable
 						IsExported: true,
 						Language:   "php",
 					}
-					
+
 					symbolTable.AddSymbol(symbol)
 					dbg.Logf(debug.LevelDetailed, "Found function: %s in %s (FQN: %s)", funcName, filePath, fqn)
 				}
 			}
 		}
-		
+
 		currentPos = lineEnd
 	}
 }
@@ -1180,16 +1180,16 @@ func (da *DependencyAnalyzer) parsePhpFunctions(ctx context.Context, symbolTable
 // parsePythonFunctions parses Python function definitions
 func (da *DependencyAnalyzer) parsePythonFunctions(ctx context.Context, symbolTable *semantic.SymbolTable, content []byte, filePath string) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	lines := strings.Split(string(content), "\n")
 	currentPos := uint32(0)
-	
+
 	for i, line := range lines {
 		lineStart := currentPos
 		lineEnd := currentPos + uint32(len(line)) + 1 // +1 for newline
-		
+
 		trimmedLine := strings.TrimSpace(line)
-		
+
 		// Look for function definitions: def name(
 		if strings.HasPrefix(trimmedLine, "def ") {
 			parts := strings.Fields(trimmedLine)
@@ -1197,13 +1197,13 @@ func (da *DependencyAnalyzer) parsePythonFunctions(ctx context.Context, symbolTa
 				funcName := parts[1]
 				if parenIndex := strings.Index(funcName, "("); parenIndex != -1 {
 					funcName = funcName[:parenIndex]
-					
+
 					// Estimate function end position
 					funcEndPos := da.estimatePythonFunctionEnd(content, lineStart)
-					
+
 					// Create FQN
 					fqn := fmt.Sprintf("%s::%s", filePath, funcName)
-					
+
 					// Store function definition for distillation
 					da.functionDefs[fqn] = &FunctionDefinition{
 						Name:      funcName,
@@ -1213,12 +1213,12 @@ func (da *DependencyAnalyzer) parsePythonFunctions(ctx context.Context, symbolTa
 						EndByte:   funcEndPos,
 						Language:  "python",
 					}
-					
+
 					// Create symbol
 					symbol := &semantic.Symbol{
-						ID:       semantic.GenerateSymbolID(filePath, funcName, ""),
-						Name:     funcName,
-						Kind:     semantic.SymbolKindFunction,
+						ID:   semantic.GenerateSymbolID(filePath, funcName, ""),
+						Name: funcName,
+						Kind: semantic.SymbolKindFunction,
 						Location: semantic.FileLocation{
 							FilePath:  filePath,
 							StartLine: i + 1,
@@ -1228,13 +1228,13 @@ func (da *DependencyAnalyzer) parsePythonFunctions(ctx context.Context, symbolTa
 						IsExported: true,
 						Language:   "python",
 					}
-					
+
 					symbolTable.AddSymbol(symbol)
 					dbg.Logf(debug.LevelDetailed, "Found function: %s in %s (FQN: %s)", funcName, filePath, fqn)
 				}
 			}
 		}
-		
+
 		currentPos = lineEnd
 	}
 }
@@ -1242,22 +1242,22 @@ func (da *DependencyAnalyzer) parsePythonFunctions(ctx context.Context, symbolTa
 // parseGoFunctions parses Go function definitions
 func (da *DependencyAnalyzer) parseGoFunctions(ctx context.Context, symbolTable *semantic.SymbolTable, content []byte, filePath string) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	lines := strings.Split(string(content), "\n")
 	currentPos := uint32(0)
-	
+
 	for i, line := range lines {
 		lineStart := currentPos
 		lineEnd := currentPos + uint32(len(line)) + 1 // +1 for newline
-		
+
 		trimmedLine := strings.TrimSpace(line)
-		
+
 		// Look for function definitions: func name(
 		if strings.HasPrefix(trimmedLine, "func ") {
 			parts := strings.Fields(trimmedLine)
 			if len(parts) >= 2 {
 				funcName := parts[1]
-				
+
 				// Handle method receivers: func (r *Receiver) methodName(
 				if strings.HasPrefix(funcName, "(") {
 					// This is a method with receiver, find the actual method name
@@ -1270,16 +1270,16 @@ func (da *DependencyAnalyzer) parseGoFunctions(ctx context.Context, symbolTable 
 						}
 					}
 				}
-				
+
 				if parenIndex := strings.Index(funcName, "("); parenIndex != -1 {
 					funcName = funcName[:parenIndex]
-					
+
 					// Estimate function end position
 					funcEndPos := da.estimateGoFunctionEnd(content, lineStart)
-					
+
 					// Create FQN
 					fqn := fmt.Sprintf("%s::%s", filePath, funcName)
-					
+
 					// Store function definition for distillation
 					da.functionDefs[fqn] = &FunctionDefinition{
 						Name:      funcName,
@@ -1289,12 +1289,12 @@ func (da *DependencyAnalyzer) parseGoFunctions(ctx context.Context, symbolTable 
 						EndByte:   funcEndPos,
 						Language:  "go",
 					}
-					
+
 					// Create symbol
 					symbol := &semantic.Symbol{
-						ID:       semantic.GenerateSymbolID(filePath, funcName, ""),
-						Name:     funcName,
-						Kind:     semantic.SymbolKindFunction,
+						ID:   semantic.GenerateSymbolID(filePath, funcName, ""),
+						Name: funcName,
+						Kind: semantic.SymbolKindFunction,
 						Location: semantic.FileLocation{
 							FilePath:  filePath,
 							StartLine: i + 1,
@@ -1304,13 +1304,13 @@ func (da *DependencyAnalyzer) parseGoFunctions(ctx context.Context, symbolTable 
 						IsExported: true,
 						Language:   "go",
 					}
-					
+
 					symbolTable.AddSymbol(symbol)
 					dbg.Logf(debug.LevelDetailed, "Found function: %s in %s (FQN: %s)", funcName, filePath, fqn)
 				}
 			}
 		}
-		
+
 		currentPos = lineEnd
 	}
 }
@@ -1318,18 +1318,18 @@ func (da *DependencyAnalyzer) parseGoFunctions(ctx context.Context, symbolTable 
 // parseJavaScriptFunctions parses JavaScript/TypeScript function definitions
 func (da *DependencyAnalyzer) parseJavaScriptFunctions(ctx context.Context, symbolTable *semantic.SymbolTable, content []byte, filePath string) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	lines := strings.Split(string(content), "\n")
 	currentPos := uint32(0)
-	
+
 	for i, line := range lines {
 		lineStart := currentPos
 		lineEnd := currentPos + uint32(len(line)) + 1 // +1 for newline
-		
+
 		trimmedLine := strings.TrimSpace(line)
-		
+
 		var funcName string
-		
+
 		// Look for function definitions: function name( or const name = function( or const name = (
 		if strings.HasPrefix(trimmedLine, "function ") {
 			parts := strings.Fields(trimmedLine)
@@ -1348,14 +1348,14 @@ func (da *DependencyAnalyzer) parseJavaScriptFunctions(ctx context.Context, symb
 				}
 			}
 		}
-		
+
 		if funcName != "" {
 			// Estimate function end position
 			funcEndPos := da.estimateJavaScriptFunctionEnd(content, lineStart)
-			
+
 			// Create FQN
 			fqn := fmt.Sprintf("%s::%s", filePath, funcName)
-			
+
 			// Store function definition for distillation
 			da.functionDefs[fqn] = &FunctionDefinition{
 				Name:      funcName,
@@ -1365,12 +1365,12 @@ func (da *DependencyAnalyzer) parseJavaScriptFunctions(ctx context.Context, symb
 				EndByte:   funcEndPos,
 				Language:  symbolTable.Language,
 			}
-			
+
 			// Create symbol
 			symbol := &semantic.Symbol{
-				ID:       semantic.GenerateSymbolID(filePath, funcName, ""),
-				Name:     funcName,
-				Kind:     semantic.SymbolKindFunction,
+				ID:   semantic.GenerateSymbolID(filePath, funcName, ""),
+				Name: funcName,
+				Kind: semantic.SymbolKindFunction,
 				Location: semantic.FileLocation{
 					FilePath:  filePath,
 					StartLine: i + 1,
@@ -1380,11 +1380,11 @@ func (da *DependencyAnalyzer) parseJavaScriptFunctions(ctx context.Context, symb
 				IsExported: true,
 				Language:   symbolTable.Language,
 			}
-			
+
 			symbolTable.AddSymbol(symbol)
 			dbg.Logf(debug.LevelDetailed, "Found function: %s in %s (FQN: %s)", funcName, filePath, fqn)
 		}
-		
+
 		currentPos = lineEnd
 	}
 }
@@ -1392,22 +1392,22 @@ func (da *DependencyAnalyzer) parseJavaScriptFunctions(ctx context.Context, symb
 // parseRubyFunctions parses Ruby function definitions
 func (da *DependencyAnalyzer) parseRubyFunctions(ctx context.Context, symbolTable *semantic.SymbolTable, content []byte, filePath string) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	lines := strings.Split(string(content), "\n")
 	currentPos := uint32(0)
-	
+
 	for i, line := range lines {
 		lineStart := currentPos
 		lineEnd := currentPos + uint32(len(line)) + 1 // +1 for newline
-		
+
 		trimmedLine := strings.TrimSpace(line)
-		
+
 		// Look for function definitions: def name, def self.name
 		if strings.HasPrefix(trimmedLine, "def ") {
 			parts := strings.Fields(trimmedLine)
 			if len(parts) >= 2 {
 				funcSignature := parts[1]
-				
+
 				// Extract function name (remove parameters if present)
 				var funcName string
 				if parenIndex := strings.Index(funcSignature, "("); parenIndex != -1 {
@@ -1415,18 +1415,18 @@ func (da *DependencyAnalyzer) parseRubyFunctions(ctx context.Context, symbolTabl
 				} else {
 					funcName = funcSignature
 				}
-				
+
 				// Handle self.method_name for class methods
 				if strings.HasPrefix(funcName, "self.") {
 					funcName = funcName[5:] // Remove "self."
 				}
-				
+
 				// Estimate function end position
 				funcEndPos := da.estimateRubyFunctionEnd(content, lineStart)
-				
+
 				// Create FQN
 				fqn := fmt.Sprintf("%s::%s", filePath, funcName)
-				
+
 				// Store function definition for distillation
 				da.functionDefs[fqn] = &FunctionDefinition{
 					Name:      funcName,
@@ -1436,12 +1436,12 @@ func (da *DependencyAnalyzer) parseRubyFunctions(ctx context.Context, symbolTabl
 					EndByte:   funcEndPos,
 					Language:  "ruby",
 				}
-				
+
 				// Create symbol
 				symbol := &semantic.Symbol{
-					ID:       semantic.GenerateSymbolID(filePath, funcName, ""),
-					Name:     funcName,
-					Kind:     semantic.SymbolKindFunction,
+					ID:   semantic.GenerateSymbolID(filePath, funcName, ""),
+					Name: funcName,
+					Kind: semantic.SymbolKindFunction,
 					Location: semantic.FileLocation{
 						FilePath:  filePath,
 						StartLine: i + 1,
@@ -1451,12 +1451,12 @@ func (da *DependencyAnalyzer) parseRubyFunctions(ctx context.Context, symbolTabl
 					IsExported: true,
 					Language:   "ruby",
 				}
-				
+
 				symbolTable.AddSymbol(symbol)
 				dbg.Logf(debug.LevelDetailed, "Found function: %s in %s (FQN: %s)", funcName, filePath, fqn)
 			}
 		}
-		
+
 		currentPos = lineEnd
 	}
 }
@@ -1465,13 +1465,13 @@ func (da *DependencyAnalyzer) parseRubyFunctions(ctx context.Context, symbolTabl
 func (da *DependencyAnalyzer) estimateFunctionEnd(content []byte, startPos uint32) uint32 {
 	// Simple heuristic: find the next "function " or end of file
 	remaining := content[startPos:]
-	
+
 	// Look for the next function keyword
 	nextFunc := strings.Index(string(remaining), "\nfunction ")
 	if nextFunc != -1 {
 		return startPos + uint32(nextFunc)
 	}
-	
+
 	// No next function, go to end of file
 	return uint32(len(content))
 }
@@ -1479,7 +1479,7 @@ func (da *DependencyAnalyzer) estimateFunctionEnd(content []byte, startPos uint3
 // estimatePythonFunctionEnd estimates the end position of a Python function
 func (da *DependencyAnalyzer) estimatePythonFunctionEnd(content []byte, startPos uint32) uint32 {
 	lines := strings.Split(string(content), "\n")
-	
+
 	// Find the line containing startPos
 	currentPos := uint32(0)
 	startLine := 0
@@ -1491,7 +1491,7 @@ func (da *DependencyAnalyzer) estimatePythonFunctionEnd(content []byte, startPos
 		}
 		currentPos = lineEnd
 	}
-	
+
 	// Find the next function definition or class at the same indentation level
 	defIndent := 0
 	if startLine < len(lines) {
@@ -1502,7 +1502,7 @@ func (da *DependencyAnalyzer) estimatePythonFunctionEnd(content []byte, startPos
 			}
 		}
 	}
-	
+
 	// Look for next def/class at same or lower indentation
 	// Calculate position at the end of the start line
 	currentPos = startPos
@@ -1519,7 +1519,7 @@ func (da *DependencyAnalyzer) estimatePythonFunctionEnd(content []byte, startPos
 			currentPos += uint32(len(line)) + 1
 			continue
 		}
-		
+
 		// Check indentation
 		lineIndent := 0
 		for j, char := range line {
@@ -1528,16 +1528,16 @@ func (da *DependencyAnalyzer) estimatePythonFunctionEnd(content []byte, startPos
 				break
 			}
 		}
-		
+
 		// If we find a line at same or lower indentation with def/class, this is the end
-		if lineIndent <= defIndent && (strings.HasPrefix(strings.TrimSpace(line), "def ") || 
+		if lineIndent <= defIndent && (strings.HasPrefix(strings.TrimSpace(line), "def ") ||
 			strings.HasPrefix(strings.TrimSpace(line), "class ")) {
 			return currentPos
 		}
-		
+
 		currentPos += uint32(len(line)) + 1
 	}
-	
+
 	// No next function/class found, go to end of file
 	return uint32(len(content))
 }
@@ -1545,36 +1545,36 @@ func (da *DependencyAnalyzer) estimatePythonFunctionEnd(content []byte, startPos
 // estimateGoFunctionEnd estimates the end position of a Go function
 func (da *DependencyAnalyzer) estimateGoFunctionEnd(content []byte, startPos uint32) uint32 {
 	remaining := content[startPos:]
-	
+
 	// Look for opening brace
 	openBrace := strings.Index(string(remaining), "{")
 	if openBrace == -1 {
 		return uint32(len(content))
 	}
-	
+
 	// Count braces to find matching closing brace
 	braceCount := 0
 	inString := false
 	escapeNext := false
-	
+
 	for i := openBrace; i < len(remaining); i++ {
 		char := remaining[i]
-		
+
 		if escapeNext {
 			escapeNext = false
 			continue
 		}
-		
+
 		if char == '\\' {
 			escapeNext = true
 			continue
 		}
-		
+
 		if char == '"' || char == '`' {
 			inString = !inString
 			continue
 		}
-		
+
 		if !inString {
 			if char == '{' {
 				braceCount++
@@ -1586,7 +1586,7 @@ func (da *DependencyAnalyzer) estimateGoFunctionEnd(content []byte, startPos uin
 			}
 		}
 	}
-	
+
 	// No matching brace found, go to end of file
 	return uint32(len(content))
 }
@@ -1594,11 +1594,11 @@ func (da *DependencyAnalyzer) estimateGoFunctionEnd(content []byte, startPos uin
 // estimateJavaScriptFunctionEnd estimates the end position of a JavaScript function
 func (da *DependencyAnalyzer) estimateJavaScriptFunctionEnd(content []byte, startPos uint32) uint32 {
 	remaining := content[startPos:]
-	
+
 	// Look for opening brace or arrow function body
 	openBrace := strings.Index(string(remaining), "{")
 	arrow := strings.Index(string(remaining), "=>")
-	
+
 	// Handle arrow functions
 	if arrow != -1 && (openBrace == -1 || arrow < openBrace) {
 		// Check if it's a single expression arrow function
@@ -1622,41 +1622,41 @@ func (da *DependencyAnalyzer) estimateJavaScriptFunctionEnd(content []byte, star
 			openBrace += arrow + 2
 		}
 	}
-	
+
 	if openBrace == -1 {
 		return uint32(len(content))
 	}
-	
+
 	// Count braces to find matching closing brace
 	braceCount := 0
 	inString := false
 	stringChar := byte(0)
 	escapeNext := false
-	
+
 	for i := openBrace; i < len(remaining); i++ {
 		char := remaining[i]
-		
+
 		if escapeNext {
 			escapeNext = false
 			continue
 		}
-		
+
 		if char == '\\' {
 			escapeNext = true
 			continue
 		}
-		
+
 		if !inString && (char == '"' || char == '\'' || char == '`') {
 			inString = true
 			stringChar = char
 			continue
 		}
-		
+
 		if inString && char == stringChar {
 			inString = false
 			continue
 		}
-		
+
 		if !inString {
 			if char == '{' {
 				braceCount++
@@ -1668,7 +1668,7 @@ func (da *DependencyAnalyzer) estimateJavaScriptFunctionEnd(content []byte, star
 			}
 		}
 	}
-	
+
 	// No matching brace found, go to end of file
 	return uint32(len(content))
 }
@@ -1676,7 +1676,7 @@ func (da *DependencyAnalyzer) estimateJavaScriptFunctionEnd(content []byte, star
 // buildCrossFileCallGraph builds call graph across multiple files
 func (da *DependencyAnalyzer) buildCrossFileCallGraph(ctx context.Context, symbolTables map[string]*semantic.SymbolTable) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	// For each file, find function calls and link them in call graph
 	for filePath := range symbolTables {
 		err := da.extractCallsFromFile(ctx, filePath, symbolTables)
@@ -1689,12 +1689,12 @@ func (da *DependencyAnalyzer) buildCrossFileCallGraph(ctx context.Context, symbo
 // extractCallsFromFile extracts function calls from a file and updates call graph
 func (da *DependencyAnalyzer) extractCallsFromFile(ctx context.Context, filePath string, symbolTables map[string]*semantic.SymbolTable) error {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
 	}
-	
+
 	// Detect language and use appropriate call extraction
 	language := da.detectLanguage(filePath)
 	switch language {
@@ -1729,13 +1729,13 @@ func (da *DependencyAnalyzer) extractCallsFromFile(ctx context.Context, filePath
 // extractPhpCalls extracts function calls from PHP code
 func (da *DependencyAnalyzer) extractPhpCalls(ctx context.Context, filePath string, content []byte, symbolTables map[string]*semantic.SymbolTable) error {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	lines := strings.Split(string(content), "\n")
 	currentFunction := ""
-	
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		// Track current function context
 		if strings.HasPrefix(line, "function ") {
 			parts := strings.Fields(line)
@@ -1746,27 +1746,27 @@ func (da *DependencyAnalyzer) extractPhpCalls(ctx context.Context, filePath stri
 				}
 			}
 		}
-		
+
 		// Look for function calls: functionName(
 		if currentFunction != "" && strings.Contains(line, "(") && !strings.HasPrefix(line, "function ") {
 			// Simple pattern matching for function calls
 			words := strings.FieldsFunc(line, func(c rune) bool {
 				return c == ' ' || c == '(' || c == ')' || c == ';' || c == ',' || c == '=' || c == '$'
 			})
-			
+
 			for _, word := range words {
 				word = strings.TrimSpace(word)
 				if word == "" || strings.HasPrefix(word, "//") {
 					continue
 				}
-				
+
 				// Check if this word is a function call (exists in any symbol table)
 				for _, symTable := range symbolTables {
 					if symbol, exists := symTable.Symbols[word]; exists && symbol.Kind == semantic.SymbolKindFunction {
 						// Found a function call!
 						callerFQN := fmt.Sprintf("%s::%s", filePath, currentFunction)
 						calleeFQN := fmt.Sprintf("%s::%s", symbol.Location.FilePath, word)
-						
+
 						da.callGraph[callerFQN] = append(da.callGraph[callerFQN], calleeFQN)
 						dbg.Logf(debug.LevelDetailed, "Found call: %s -> %s", callerFQN, calleeFQN)
 						break
@@ -1775,20 +1775,20 @@ func (da *DependencyAnalyzer) extractPhpCalls(ctx context.Context, filePath stri
 			}
 		}
 	}
-	
+
 	return nil
 }
 
 // extractPythonCalls extracts function calls from Python code
 func (da *DependencyAnalyzer) extractPythonCalls(ctx context.Context, filePath string, content []byte, symbolTables map[string]*semantic.SymbolTable) error {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	lines := strings.Split(string(content), "\n")
 	currentFunction := ""
-	
+
 	for _, line := range lines {
 		trimmedLine := strings.TrimSpace(line)
-		
+
 		// Track current function context
 		if strings.HasPrefix(trimmedLine, "def ") {
 			parts := strings.Fields(trimmedLine)
@@ -1799,27 +1799,27 @@ func (da *DependencyAnalyzer) extractPythonCalls(ctx context.Context, filePath s
 				}
 			}
 		}
-		
+
 		// Look for function calls: functionName(
 		if currentFunction != "" && strings.Contains(trimmedLine, "(") && !strings.HasPrefix(trimmedLine, "def ") {
 			// Simple pattern matching for function calls
 			words := strings.FieldsFunc(trimmedLine, func(c rune) bool {
 				return c == ' ' || c == '(' || c == ')' || c == ',' || c == '=' || c == ':' || c == '.'
 			})
-			
+
 			for _, word := range words {
 				word = strings.TrimSpace(word)
 				if word == "" || strings.HasPrefix(word, "#") {
 					continue
 				}
-				
+
 				// Check if this word is a function call (exists in any symbol table)
 				for _, symTable := range symbolTables {
 					if symbol, exists := symTable.Symbols[word]; exists && symbol.Kind == semantic.SymbolKindFunction {
 						// Found a function call!
 						callerFQN := fmt.Sprintf("%s::%s", filePath, currentFunction)
 						calleeFQN := fmt.Sprintf("%s::%s", symbol.Location.FilePath, word)
-						
+
 						da.callGraph[callerFQN] = append(da.callGraph[callerFQN], calleeFQN)
 						dbg.Logf(debug.LevelDetailed, "Found call: %s -> %s", callerFQN, calleeFQN)
 						break
@@ -1828,26 +1828,26 @@ func (da *DependencyAnalyzer) extractPythonCalls(ctx context.Context, filePath s
 			}
 		}
 	}
-	
+
 	return nil
 }
 
 // extractGoCalls extracts function calls from Go code
 func (da *DependencyAnalyzer) extractGoCalls(ctx context.Context, filePath string, content []byte, symbolTables map[string]*semantic.SymbolTable) error {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	lines := strings.Split(string(content), "\n")
 	currentFunction := ""
-	
+
 	for _, line := range lines {
 		trimmedLine := strings.TrimSpace(line)
-		
+
 		// Track current function context
 		if strings.HasPrefix(trimmedLine, "func ") {
 			parts := strings.Fields(trimmedLine)
 			if len(parts) >= 2 {
 				funcName := parts[1]
-				
+
 				// Handle method receivers
 				if strings.HasPrefix(funcName, "(") {
 					parenIndex := strings.Index(trimmedLine, ") ")
@@ -1859,33 +1859,33 @@ func (da *DependencyAnalyzer) extractGoCalls(ctx context.Context, filePath strin
 						}
 					}
 				}
-				
+
 				if parenIndex := strings.Index(funcName, "("); parenIndex != -1 {
 					currentFunction = funcName[:parenIndex]
 				}
 			}
 		}
-		
+
 		// Look for function calls: functionName(
 		if currentFunction != "" && strings.Contains(trimmedLine, "(") && !strings.HasPrefix(trimmedLine, "func ") {
 			// Simple pattern matching for function calls
 			words := strings.FieldsFunc(trimmedLine, func(c rune) bool {
 				return c == ' ' || c == '(' || c == ')' || c == ',' || c == '=' || c == ':' || c == '.'
 			})
-			
+
 			for _, word := range words {
 				word = strings.TrimSpace(word)
 				if word == "" || strings.HasPrefix(word, "//") {
 					continue
 				}
-				
+
 				// Check if this word is a function call (exists in any symbol table)
 				for _, symTable := range symbolTables {
 					if symbol, exists := symTable.Symbols[word]; exists && symbol.Kind == semantic.SymbolKindFunction {
 						// Found a function call!
 						callerFQN := fmt.Sprintf("%s::%s", filePath, currentFunction)
 						calleeFQN := fmt.Sprintf("%s::%s", symbol.Location.FilePath, word)
-						
+
 						da.callGraph[callerFQN] = append(da.callGraph[callerFQN], calleeFQN)
 						dbg.Logf(debug.LevelDetailed, "Found call: %s -> %s", callerFQN, calleeFQN)
 						break
@@ -1894,20 +1894,20 @@ func (da *DependencyAnalyzer) extractGoCalls(ctx context.Context, filePath strin
 			}
 		}
 	}
-	
+
 	return nil
 }
 
 // extractJavaScriptCalls extracts function calls from JavaScript/TypeScript code
 func (da *DependencyAnalyzer) extractJavaScriptCalls(ctx context.Context, filePath string, content []byte, symbolTables map[string]*semantic.SymbolTable) error {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	lines := strings.Split(string(content), "\n")
 	currentFunction := ""
-	
+
 	for _, line := range lines {
 		trimmedLine := strings.TrimSpace(line)
-		
+
 		// Track current function context
 		if strings.HasPrefix(trimmedLine, "function ") {
 			parts := strings.Fields(trimmedLine)
@@ -1926,28 +1926,28 @@ func (da *DependencyAnalyzer) extractJavaScriptCalls(ctx context.Context, filePa
 				}
 			}
 		}
-		
+
 		// Look for function calls: functionName(
-		if currentFunction != "" && strings.Contains(trimmedLine, "(") && 
-		   !strings.HasPrefix(trimmedLine, "function ") && !strings.Contains(trimmedLine, " = function") {
+		if currentFunction != "" && strings.Contains(trimmedLine, "(") &&
+			!strings.HasPrefix(trimmedLine, "function ") && !strings.Contains(trimmedLine, " = function") {
 			// Simple pattern matching for function calls
 			words := strings.FieldsFunc(trimmedLine, func(c rune) bool {
 				return c == ' ' || c == '(' || c == ')' || c == ',' || c == '=' || c == ';' || c == '.'
 			})
-			
+
 			for _, word := range words {
 				word = strings.TrimSpace(word)
 				if word == "" || strings.HasPrefix(word, "//") {
 					continue
 				}
-				
+
 				// Check if this word is a function call (exists in any symbol table)
 				for _, symTable := range symbolTables {
 					if symbol, exists := symTable.Symbols[word]; exists && symbol.Kind == semantic.SymbolKindFunction {
 						// Found a function call!
 						callerFQN := fmt.Sprintf("%s::%s", filePath, currentFunction)
 						calleeFQN := fmt.Sprintf("%s::%s", symbol.Location.FilePath, word)
-						
+
 						da.callGraph[callerFQN] = append(da.callGraph[callerFQN], calleeFQN)
 						dbg.Logf(debug.LevelDetailed, "Found call: %s -> %s", callerFQN, calleeFQN)
 						break
@@ -1956,31 +1956,31 @@ func (da *DependencyAnalyzer) extractJavaScriptCalls(ctx context.Context, filePa
 			}
 		}
 	}
-	
+
 	return nil
 }
 
 // markSymbolAsUsedRecursive marks a symbol and its dependencies as used
 func (da *DependencyAnalyzer) markSymbolAsUsedRecursive(ctx context.Context, symbolFQN string, depth int) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	// Check depth limit
 	if depth > da.maxDepth {
 		dbg.Logf(debug.LevelDetailed, "Max depth %d reached for symbol %s", da.maxDepth, symbolFQN)
 		return
 	}
-	
+
 	// Check if already visited
 	visitKey := fmt.Sprintf("%s:%d", symbolFQN, depth)
 	if da.visited[visitKey] {
 		return
 	}
 	da.visited[visitKey] = true
-	
+
 	// Mark this symbol as used
 	da.usedSymbols[symbolFQN] = true
 	dbg.Logf(debug.LevelDetailed, "Marking symbol as used: %s (depth %d)", symbolFQN, depth)
-	
+
 	// Recursively mark called symbols
 	for _, calledSymbol := range da.callGraph[symbolFQN] {
 		da.markSymbolAsUsedRecursive(ctx, calledSymbol, depth+1)
@@ -2056,7 +2056,7 @@ func (da *DependencyAnalyzer) filterFileByUsage(ctx context.Context, file *ir.Di
 	// Filter functions
 	for _, child := range file.Children {
 		originalCount++
-		
+
 		switch node := child.(type) {
 		case *ir.DistilledFunction:
 			// Check if this function is used by FQN
@@ -2086,7 +2086,7 @@ func (da *DependencyAnalyzer) filterFileByUsage(ctx context.Context, file *ir.Di
 		}
 	}
 
-	dbg.Logf(debug.LevelBasic, "Filtered %d -> %d nodes (%.1f%% reduction)", 
+	dbg.Logf(debug.LevelBasic, "Filtered %d -> %d nodes (%.1f%% reduction)",
 		originalCount, filteredCount, float64(originalCount-filteredCount)/float64(originalCount)*100)
 
 	return filteredFile
@@ -2151,12 +2151,12 @@ func (da *DependencyAnalyzer) isSymbolUsedByFQN(fqn string) bool {
 // ProcessWithDependencyAnalysis processes a file with dependency-aware analysis
 func ProcessWithDependencyAnalysis(ctx context.Context, proc *Processor, filePath string, opts ProcessOptions) (*ir.DistilledFile, error) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	// Create a temporary copy of opts without dependency analysis to avoid recursion
 	tempOpts := opts
 	tempOpts.SymbolResolution = false
 	tempOpts.MaxDepth = 0
-	
+
 	// First, process the file normally without dependency analysis
 	file, err := proc.ProcessFile(filePath, tempOpts)
 	if err != nil {
@@ -2216,12 +2216,12 @@ func exists(path string) bool {
 // estimateRubyFunctionEnd estimates the end position of a Ruby function
 func (da *DependencyAnalyzer) estimateRubyFunctionEnd(content []byte, startPos uint32) uint32 {
 	lines := strings.Split(string(content), "\n")
-	
+
 	// Find the line containing startPos
 	currentPos := uint32(0)
 	startLine := 0
 	baseIndent := 0
-	
+
 	for i, line := range lines {
 		lineEnd := currentPos + uint32(len(line)) + 1
 		if currentPos <= startPos && startPos < lineEnd {
@@ -2240,8 +2240,8 @@ func (da *DependencyAnalyzer) estimateRubyFunctionEnd(content []byte, startPos u
 		}
 		currentPos = lineEnd
 	}
-	
-	// Look for matching 'end' or next function at same indentation level  
+
+	// Look for matching 'end' or next function at same indentation level
 	// Calculate the current position at the start of the next line after startLine
 	currentPos = uint32(0)
 	for k := 0; k <= startLine; k++ {
@@ -2249,17 +2249,17 @@ func (da *DependencyAnalyzer) estimateRubyFunctionEnd(content []byte, startPos u
 			currentPos += uint32(len(lines[k])) + 1
 		}
 	}
-	
+
 	for i := startLine + 1; i < len(lines); i++ {
 		line := lines[i]
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Skip empty lines and comments
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			currentPos += uint32(len(line)) + 1
 			continue
 		}
-		
+
 		// Calculate line indentation
 		lineIndent := 0
 		for _, char := range line {
@@ -2271,22 +2271,22 @@ func (da *DependencyAnalyzer) estimateRubyFunctionEnd(content []byte, startPos u
 				break
 			}
 		}
-		
+
 		// Found 'end' at same or lower indentation level
 		if strings.HasPrefix(trimmed, "end") && lineIndent <= baseIndent {
 			return currentPos + uint32(len(line)) + 1 // Include the 'end' line
 		}
-		
+
 		// Found another function/class/module at same or lower indentation
-		if (strings.HasPrefix(trimmed, "def ") || 
-			strings.HasPrefix(trimmed, "class ") || 
+		if (strings.HasPrefix(trimmed, "def ") ||
+			strings.HasPrefix(trimmed, "class ") ||
 			strings.HasPrefix(trimmed, "module ")) && lineIndent <= baseIndent {
 			return currentPos // Don't include the new definition
 		}
-		
+
 		currentPos += uint32(len(line)) + 1
 	}
-	
+
 	// No explicit end found, function goes to end of file
 	return uint32(len(content))
 }
@@ -2294,41 +2294,41 @@ func (da *DependencyAnalyzer) estimateRubyFunctionEnd(content []byte, startPos u
 // extractRubyCalls extracts function calls from Ruby content
 func (da *DependencyAnalyzer) extractRubyCalls(ctx context.Context, filePath string, content []byte, symbolTables map[string]*semantic.SymbolTable) error {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	lines := strings.Split(string(content), "\n")
-	
+
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Skip comments and empty lines
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
-		
+
 		// Pattern for Ruby method calls:
 		// 1. Module.method_name or Class.method_name (static method call)
 		// 2. obj.method_name (instance method call)
 		// 3. method_name with arguments (local method call)
 		// 4. method_name without arguments (local method call)
 		callPatterns := []*regexp.Regexp{
-			regexp.MustCompile(`(\w+)\.(\w+)`),                    // Module.method or obj.method
-			regexp.MustCompile(`\b(\w+)\s*\(`),                   // method_name(
-			regexp.MustCompile(`\b(\w+)\s+[\w"'\[\{]`),           // method_name arg (Ruby style without parens)
-			regexp.MustCompile(`^\s*([a-z_]\w*)\s*$`),             // method_name alone on line (start with lowercase or underscore)
+			regexp.MustCompile(`(\w+)\.(\w+)`),         // Module.method or obj.method
+			regexp.MustCompile(`\b(\w+)\s*\(`),         // method_name(
+			regexp.MustCompile(`\b(\w+)\s+[\w"'\[\{]`), // method_name arg (Ruby style without parens)
+			regexp.MustCompile(`^\s*([a-z_]\w*)\s*$`),  // method_name alone on line (start with lowercase or underscore)
 		}
-		
+
 		for _, pattern := range callPatterns {
 			matches := pattern.FindAllStringSubmatch(trimmed, -1)
 			for _, match := range matches {
 				var caller, callee, calleeFQN string
-				
+
 				if len(match) >= 3 {
 					// Module.method pattern
 					module := match[1]
 					method := match[2]
 					// For Ruby: Module.method_name should resolve to method_name in the module's file
-					callee = method  // Use just the method name for symbol lookup
-					
+					callee = method // Use just the method name for symbol lookup
+
 					// Try to resolve cross-file call by mapping module to file
 					if moduleFile := da.resolveRubyModuleToFile(module, symbolTables); moduleFile != "" {
 						calleeFQN = fmt.Sprintf("%s::%s", moduleFile, method)
@@ -2340,7 +2340,7 @@ func (da *DependencyAnalyzer) extractRubyCalls(ctx context.Context, filePath str
 					callee = match[1]
 					calleeFQN = fmt.Sprintf("%s::%s", filePath, callee)
 				}
-				
+
 				if callee != "" {
 					// Filter out common Ruby keywords and operators
 					rubyKeywords := map[string]bool{
@@ -2357,13 +2357,13 @@ func (da *DependencyAnalyzer) extractRubyCalls(ctx context.Context, filePath str
 						"map": true, "select": true, "reject": true, "sum": true,
 						"inspect": true,
 					}
-					
+
 					if !rubyKeywords[callee] && !rubyKeywords[strings.Split(callee, ".")[0]] {
 						// Look for the containing function to establish caller
 						caller = da.findContainingRubyFunction(filePath, line, content)
 						if caller != "" {
 							callerFQN := fmt.Sprintf("%s::%s", filePath, caller)
-							
+
 							// Check if callee exists in symbol tables
 							if da.symbolExistsInProjectTables(callee, symbolTables) {
 								da.callGraph[callerFQN] = append(da.callGraph[callerFQN], calleeFQN)
@@ -2375,7 +2375,7 @@ func (da *DependencyAnalyzer) extractRubyCalls(ctx context.Context, filePath str
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -2383,16 +2383,16 @@ func (da *DependencyAnalyzer) extractRubyCalls(ctx context.Context, filePath str
 func (da *DependencyAnalyzer) findContainingRubyFunction(filePath, targetLine string, content []byte) string {
 	lines := strings.Split(string(content), "\n")
 	currentFunction := ""
-	
+
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Check if this is a function definition
 		if strings.HasPrefix(trimmed, "def ") {
 			parts := strings.Fields(trimmed)
 			if len(parts) >= 2 {
 				funcSignature := parts[1]
-				
+
 				// Extract function name (remove parameters if present)
 				var funcName string
 				if parenIndex := strings.Index(funcSignature, "("); parenIndex != -1 {
@@ -2400,22 +2400,22 @@ func (da *DependencyAnalyzer) findContainingRubyFunction(filePath, targetLine st
 				} else {
 					funcName = funcSignature
 				}
-				
+
 				// Handle self.method_name for class methods
 				if strings.HasPrefix(funcName, "self.") {
 					funcName = funcName[5:] // Remove "self."
 				}
-				
+
 				currentFunction = funcName
 			}
 		}
-		
+
 		// If this is our target line, return the current function
 		if strings.TrimSpace(line) == strings.TrimSpace(targetLine) {
 			return currentFunction
 		}
 	}
-	
+
 	return currentFunction
 }
 
@@ -2438,10 +2438,10 @@ func (da *DependencyAnalyzer) resolveRubyModuleToFile(moduleName string, symbolT
 	// Common Ruby module to file mappings
 	moduleToFile := map[string]string{
 		"Utils":       "utils.rb",
-		"Processor":   "processor.rb", 
+		"Processor":   "processor.rb",
 		"DataHandler": "data_handler.rb",
 	}
-	
+
 	// Look for the module file in symbol tables
 	expectedFileName := moduleToFile[moduleName]
 	if expectedFileName != "" {
@@ -2451,7 +2451,7 @@ func (da *DependencyAnalyzer) resolveRubyModuleToFile(moduleName string, symbolT
 			}
 		}
 	}
-	
+
 	// Fallback: look for snake_case version of module name
 	snakeCase := strings.ToLower(moduleName)
 	// Convert CamelCase to snake_case roughly
@@ -2463,7 +2463,7 @@ func (da *DependencyAnalyzer) resolveRubyModuleToFile(moduleName string, symbolT
 			}
 		}
 	}
-	
+
 	return ""
 }
 
@@ -2471,29 +2471,29 @@ func (da *DependencyAnalyzer) resolveRubyModuleToFile(moduleName string, symbolT
 func (da *DependencyAnalyzer) extractJavaImports(ctx context.Context, fileContent []byte, filePath string) ([]string, error) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
 	var imports []string
-	
+
 	// First, process explicit import statements
 	lines := strings.Split(string(fileContent), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		// Match Java import statements: import package.ClassName;
 		if strings.HasPrefix(line, "import ") && strings.HasSuffix(line, ";") {
 			importLine := strings.TrimPrefix(line, "import ")
 			importLine = strings.TrimSuffix(importLine, ";")
 			importLine = strings.TrimSpace(importLine)
-			
+
 			// Skip standard library imports
 			if da.isJavaStandardLibrary(importLine) {
 				continue
 			}
-			
+
 			// For Java, we typically import classes from other packages
 			className := importLine
 			if lastDot := strings.LastIndex(importLine, "."); lastDot != -1 {
 				className = importLine[lastDot+1:]
 			}
-			
+
 			// Resolve to local Java file
 			if resolvedPath := da.resolveJavaImport(className, filePath); resolvedPath != "" {
 				imports = append(imports, resolvedPath)
@@ -2501,7 +2501,7 @@ func (da *DependencyAnalyzer) extractJavaImports(ctx context.Context, fileConten
 			}
 		}
 	}
-	
+
 	// Second, for Java auto-discover all .java files in the same directory
 	// because Java classes in the same package don't need explicit imports
 	dir := filepath.Dir(filePath)
@@ -2518,42 +2518,42 @@ func (da *DependencyAnalyzer) extractJavaImports(ctx context.Context, fileConten
 			}
 		}
 	}
-	
+
 	return imports, nil
 }
 
 // parseJavaFunctions parses Java method definitions
 func (da *DependencyAnalyzer) parseJavaFunctions(ctx context.Context, symbolTable *semantic.SymbolTable, content []byte, filePath string) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	lines := strings.Split(string(content), "\n")
 	currentPos := uint32(0)
-	
+
 	for i, line := range lines {
 		lineStart := currentPos
 		lineEnd := currentPos + uint32(len(line)) + 1 // +1 for newline
-		
+
 		trimmedLine := strings.TrimSpace(line)
-		
+
 		// Look for Java method definitions: public static void methodName(...)
 		// Pattern: [visibility] [static] returnType methodName(parameters) {
 		// Updated to handle generics in return types like Map<String, Integer>
 		methodPattern := regexp.MustCompile(`(public|private|protected)?\s*(static)?\s*[\w<>,\s]+\s+(\w+)\s*\([^)]*\)\s*\{?`)
 		if match := methodPattern.FindStringSubmatch(trimmedLine); match != nil {
 			methodName := match[3]
-			
+
 			// Skip constructors (method name same as class name)
 			className := da.extractJavaClassName(filePath)
 			if methodName == className {
 				continue
 			}
-			
+
 			// Estimate method end position
 			methodEndPos := da.estimateJavaMethodEnd(content, lineStart)
-			
+
 			// Create FQN
 			fqn := fmt.Sprintf("%s::%s", filePath, methodName)
-			
+
 			// Store method definition for distillation
 			da.functionDefs[fqn] = &FunctionDefinition{
 				Name:      methodName,
@@ -2563,17 +2563,17 @@ func (da *DependencyAnalyzer) parseJavaFunctions(ctx context.Context, symbolTabl
 				EndByte:   methodEndPos,
 				Language:  "java",
 			}
-			
+
 			// Create symbol
 			visibility := "public"
 			if match[1] != "" {
 				visibility = match[1]
 			}
-			
+
 			symbol := &semantic.Symbol{
-				ID:       semantic.GenerateSymbolID(filePath, methodName, ""),
-				Name:     methodName,
-				Kind:     semantic.SymbolKindFunction,
+				ID:   semantic.GenerateSymbolID(filePath, methodName, ""),
+				Name: methodName,
+				Kind: semantic.SymbolKindFunction,
 				Location: semantic.FileLocation{
 					FilePath:  filePath,
 					StartLine: i + 1,
@@ -2583,11 +2583,11 @@ func (da *DependencyAnalyzer) parseJavaFunctions(ctx context.Context, symbolTabl
 				IsExported: visibility == "public",
 				Language:   "java",
 			}
-			
+
 			symbolTable.AddSymbol(symbol)
 			dbg.Logf(debug.LevelDetailed, "Found Java method: %s in %s (FQN: %s)", methodName, filePath, fqn)
 		}
-		
+
 		currentPos = lineEnd
 	}
 }
@@ -2595,12 +2595,12 @@ func (da *DependencyAnalyzer) parseJavaFunctions(ctx context.Context, symbolTabl
 // estimateJavaMethodEnd estimates the end position of a Java method
 func (da *DependencyAnalyzer) estimateJavaMethodEnd(content []byte, startPos uint32) uint32 {
 	lines := strings.Split(string(content), "\n")
-	
+
 	// Find the line containing startPos
 	currentPos := uint32(0)
 	startLine := 0
 	braceCount := 0
-	
+
 	for i, line := range lines {
 		lineEnd := currentPos + uint32(len(line)) + 1
 		if currentPos <= startPos && startPos < lineEnd {
@@ -2609,12 +2609,12 @@ func (da *DependencyAnalyzer) estimateJavaMethodEnd(content []byte, startPos uin
 		}
 		currentPos = lineEnd
 	}
-	
+
 	// Look for matching closing brace
 	currentPos = startPos
 	for i := startLine; i < len(lines); i++ {
 		line := lines[i]
-		
+
 		// Count braces to find method end
 		for _, char := range line {
 			if char == '{' {
@@ -2627,10 +2627,10 @@ func (da *DependencyAnalyzer) estimateJavaMethodEnd(content []byte, startPos uin
 				}
 			}
 		}
-		
+
 		currentPos += uint32(len(line)) + 1
 	}
-	
+
 	// No explicit end found, method goes to end of file
 	return uint32(len(content))
 }
@@ -2638,37 +2638,37 @@ func (da *DependencyAnalyzer) estimateJavaMethodEnd(content []byte, startPos uin
 // extractJavaCalls extracts method calls from Java content
 func (da *DependencyAnalyzer) extractJavaCalls(ctx context.Context, filePath string, content []byte, symbolTables map[string]*semantic.SymbolTable) error {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	lines := strings.Split(string(content), "\n")
-	
+
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Skip comments and empty lines
 		if trimmed == "" || strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "/*") {
 			continue
 		}
-		
+
 		// Pattern for Java method calls:
 		// 1. ClassName.methodName (static method call)
-		// 2. obj.methodName (instance method call)  
+		// 2. obj.methodName (instance method call)
 		// 3. methodName (local method call)
 		callPatterns := []*regexp.Regexp{
-			regexp.MustCompile(`(\w+)\.(\w+)\s*\(`),                // ClassName.method( or obj.method(
-			regexp.MustCompile(`\b(\w+)\s*\(`),                     // method(
+			regexp.MustCompile(`(\w+)\.(\w+)\s*\(`), // ClassName.method( or obj.method(
+			regexp.MustCompile(`\b(\w+)\s*\(`),      // method(
 		}
-		
+
 		for _, pattern := range callPatterns {
 			matches := pattern.FindAllStringSubmatch(trimmed, -1)
 			for _, match := range matches {
 				var caller, callee, calleeFQN string
-				
+
 				if len(match) >= 3 {
 					// ClassName.method pattern
 					className := match[1]
 					method := match[2]
-					callee = method  // Use just the method name for symbol lookup
-					
+					callee = method // Use just the method name for symbol lookup
+
 					// Try to resolve cross-file call by mapping class to file
 					if classFile := da.resolveJavaClassToFile(className, symbolTables); classFile != "" {
 						calleeFQN = fmt.Sprintf("%s::%s", classFile, method)
@@ -2680,7 +2680,7 @@ func (da *DependencyAnalyzer) extractJavaCalls(ctx context.Context, filePath str
 					callee = match[1]
 					calleeFQN = fmt.Sprintf("%s::%s", filePath, callee)
 				}
-				
+
 				if callee != "" {
 					// Filter out common Java keywords and operators
 					javaKeywords := map[string]bool{
@@ -2698,13 +2698,13 @@ func (da *DependencyAnalyzer) extractJavaCalls(ctx context.Context, filePath str
 						"get": true, "put": true, "add": true, "remove": true, "contains": true,
 						"toString": true, "equals": true, "hashCode": true,
 					}
-					
+
 					if !javaKeywords[callee] && !javaKeywords[strings.Split(callee, ".")[0]] {
 						// Look for the containing method to establish caller
 						caller = da.findContainingJavaMethod(filePath, line, content)
 						if caller != "" {
 							callerFQN := fmt.Sprintf("%s::%s", filePath, caller)
-							
+
 							// Check if callee exists in symbol tables
 							if da.symbolExistsInProjectTables(callee, symbolTables) {
 								da.callGraph[callerFQN] = append(da.callGraph[callerFQN], calleeFQN)
@@ -2716,7 +2716,7 @@ func (da *DependencyAnalyzer) extractJavaCalls(ctx context.Context, filePath str
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -2724,29 +2724,29 @@ func (da *DependencyAnalyzer) extractJavaCalls(ctx context.Context, filePath str
 func (da *DependencyAnalyzer) findContainingJavaMethod(filePath, targetLine string, content []byte) string {
 	lines := strings.Split(string(content), "\n")
 	currentMethod := ""
-	
+
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Check if this is a method definition
 		// Updated to handle generics in return types like Map<String, Integer>
 		methodPattern := regexp.MustCompile(`(public|private|protected)?\s*(static)?\s*[\w<>,\s]+\s+(\w+)\s*\([^)]*\)\s*\{?`)
 		if match := methodPattern.FindStringSubmatch(trimmed); match != nil {
 			methodName := match[3]
-			
+
 			// Skip constructors
 			className := da.extractJavaClassName(filePath)
 			if methodName != className {
 				currentMethod = methodName
 			}
 		}
-		
+
 		// If this is our target line, return the current method
 		if strings.TrimSpace(line) == strings.TrimSpace(targetLine) {
 			return currentMethod
 		}
 	}
-	
+
 	return currentMethod
 }
 
@@ -2755,7 +2755,7 @@ func (da *DependencyAnalyzer) isJavaStandardLibrary(importPath string) bool {
 	javaStdPrefixes := []string{
 		"java.", "javax.", "org.w3c.", "org.xml.", "org.ietf.jgss.",
 	}
-	
+
 	for _, prefix := range javaStdPrefixes {
 		if strings.HasPrefix(importPath, prefix) {
 			return true
@@ -2768,11 +2768,11 @@ func (da *DependencyAnalyzer) resolveJavaImport(className, currentFilePath strin
 	// For local classes, look for ClassName.java in the same directory
 	dir := filepath.Dir(currentFilePath)
 	expectedFile := filepath.Join(dir, className+".java")
-	
+
 	if exists(expectedFile) {
 		return expectedFile
 	}
-	
+
 	return ""
 }
 
@@ -2784,7 +2784,7 @@ func (da *DependencyAnalyzer) resolveJavaClassToFile(className string, symbolTab
 			return filePath
 		}
 	}
-	
+
 	return ""
 }
 
@@ -2801,30 +2801,30 @@ func (da *DependencyAnalyzer) extractJavaClassName(filePath string) string {
 func (da *DependencyAnalyzer) extractCSharpImports(ctx context.Context, fileContent []byte, filePath string) ([]string, error) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
 	var imports []string
-	
+
 	// First, process explicit using statements
 	lines := strings.Split(string(fileContent), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		// Match C# using statements: using System.Collections.Generic;
 		if strings.HasPrefix(line, "using ") && strings.HasSuffix(line, ";") {
 			usingLine := strings.TrimPrefix(line, "using ")
 			usingLine = strings.TrimSuffix(usingLine, ";")
 			usingLine = strings.TrimSpace(usingLine)
-			
+
 			// Skip standard library using statements
 			if da.isCSharpStandardLibrary(usingLine) {
 				continue
 			}
-			
+
 			// For C#, we typically import namespaces from other assemblies
 			// But for our test case, we're looking for local class files
 			className := usingLine
 			if lastDot := strings.LastIndex(usingLine, "."); lastDot != -1 {
 				className = usingLine[lastDot+1:]
 			}
-			
+
 			// Resolve to local C# file
 			if resolvedPath := da.resolveCSharpImport(className, filePath); resolvedPath != "" {
 				imports = append(imports, resolvedPath)
@@ -2832,7 +2832,7 @@ func (da *DependencyAnalyzer) extractCSharpImports(ctx context.Context, fileCont
 			}
 		}
 	}
-	
+
 	// Second, for C# auto-discover all .cs files in the same directory
 	// because C# classes in the same namespace don't need explicit using
 	dir := filepath.Dir(filePath)
@@ -2849,42 +2849,42 @@ func (da *DependencyAnalyzer) extractCSharpImports(ctx context.Context, fileCont
 			}
 		}
 	}
-	
+
 	return imports, nil
 }
 
 // parseCSharpFunctions parses C# method definitions
 func (da *DependencyAnalyzer) parseCSharpFunctions(ctx context.Context, symbolTable *semantic.SymbolTable, content []byte, filePath string) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	lines := strings.Split(string(content), "\n")
 	currentPos := uint32(0)
-	
+
 	for i, line := range lines {
 		lineStart := currentPos
 		lineEnd := currentPos + uint32(len(line)) + 1 // +1 for newline
-		
+
 		trimmedLine := strings.TrimSpace(line)
-		
+
 		// Look for C# method definitions: public static void MethodName(...)
 		// Pattern: [visibility] [static] returnType MethodName(parameters) {
 		// Updated to handle generics in return types like Dictionary<string, int>
 		methodPattern := regexp.MustCompile(`(public|private|protected|internal)?\s*(static)?\s*[\w<>,\s\[\]]+\s+(\w+)\s*\([^)]*\)\s*\{?`)
 		if match := methodPattern.FindStringSubmatch(trimmedLine); match != nil {
 			methodName := match[3]
-			
+
 			// Skip constructors (method name same as class name)
 			className := da.extractCSharpClassName(filePath)
 			if methodName == className {
 				continue
 			}
-			
+
 			// Estimate method end position
 			methodEndPos := da.estimateCSharpMethodEnd(content, lineStart)
-			
+
 			// Create FQN
 			fqn := fmt.Sprintf("%s::%s", filePath, methodName)
-			
+
 			// Store method definition for distillation
 			da.functionDefs[fqn] = &FunctionDefinition{
 				Name:      methodName,
@@ -2894,17 +2894,17 @@ func (da *DependencyAnalyzer) parseCSharpFunctions(ctx context.Context, symbolTa
 				EndByte:   methodEndPos,
 				Language:  "csharp",
 			}
-			
+
 			// Create symbol
 			visibility := "public"
 			if match[1] != "" {
 				visibility = match[1]
 			}
-			
+
 			symbol := &semantic.Symbol{
-				ID:       semantic.GenerateSymbolID(filePath, methodName, ""),
-				Name:     methodName,
-				Kind:     semantic.SymbolKindFunction,
+				ID:   semantic.GenerateSymbolID(filePath, methodName, ""),
+				Name: methodName,
+				Kind: semantic.SymbolKindFunction,
 				Location: semantic.FileLocation{
 					FilePath:  filePath,
 					StartLine: i + 1,
@@ -2914,11 +2914,11 @@ func (da *DependencyAnalyzer) parseCSharpFunctions(ctx context.Context, symbolTa
 				IsExported: visibility == "public",
 				Language:   "csharp",
 			}
-			
+
 			symbolTable.AddSymbol(symbol)
 			dbg.Logf(debug.LevelDetailed, "Found C# method: %s in %s (FQN: %s)", methodName, filePath, fqn)
 		}
-		
+
 		currentPos = lineEnd
 	}
 }
@@ -2926,12 +2926,12 @@ func (da *DependencyAnalyzer) parseCSharpFunctions(ctx context.Context, symbolTa
 // estimateCSharpMethodEnd estimates the end position of a C# method
 func (da *DependencyAnalyzer) estimateCSharpMethodEnd(content []byte, startPos uint32) uint32 {
 	lines := strings.Split(string(content), "\n")
-	
+
 	// Find the line containing startPos
 	currentPos := uint32(0)
 	startLine := 0
 	braceCount := 0
-	
+
 	for i, line := range lines {
 		lineEnd := currentPos + uint32(len(line)) + 1
 		if currentPos <= startPos && startPos < lineEnd {
@@ -2940,14 +2940,14 @@ func (da *DependencyAnalyzer) estimateCSharpMethodEnd(content []byte, startPos u
 		}
 		currentPos = lineEnd
 	}
-	
+
 	// Look for matching closing brace
 	currentPos = startPos
 	foundOpeningBrace := false
-	
+
 	for i := startLine; i < len(lines); i++ {
 		line := lines[i]
-		
+
 		// Count braces to find method end
 		for _, char := range line {
 			if char == '{' {
@@ -2962,10 +2962,10 @@ func (da *DependencyAnalyzer) estimateCSharpMethodEnd(content []byte, startPos u
 				}
 			}
 		}
-		
+
 		currentPos += uint32(len(line)) + 1
 	}
-	
+
 	// No explicit end found, method goes to end of file
 	return uint32(len(content))
 }
@@ -2973,37 +2973,37 @@ func (da *DependencyAnalyzer) estimateCSharpMethodEnd(content []byte, startPos u
 // extractCSharpCalls extracts method calls from C# content
 func (da *DependencyAnalyzer) extractCSharpCalls(ctx context.Context, filePath string, content []byte, symbolTables map[string]*semantic.SymbolTable) error {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	lines := strings.Split(string(content), "\n")
-	
+
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Skip comments and empty lines
 		if trimmed == "" || strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "/*") {
 			continue
 		}
-		
+
 		// Pattern for C# method calls:
 		// 1. ClassName.MethodName (static method call)
-		// 2. obj.MethodName (instance method call)  
+		// 2. obj.MethodName (instance method call)
 		// 3. MethodName (local method call)
 		callPatterns := []*regexp.Regexp{
-			regexp.MustCompile(`(\w+)\.(\w+)\s*\(`),                // ClassName.Method( or obj.Method(
-			regexp.MustCompile(`\b(\w+)\s*\(`),                     // Method(
+			regexp.MustCompile(`(\w+)\.(\w+)\s*\(`), // ClassName.Method( or obj.Method(
+			regexp.MustCompile(`\b(\w+)\s*\(`),      // Method(
 		}
-		
+
 		for _, pattern := range callPatterns {
 			matches := pattern.FindAllStringSubmatch(trimmed, -1)
 			for _, match := range matches {
 				var caller, callee, calleeFQN string
-				
+
 				if len(match) >= 3 {
 					// ClassName.Method pattern
 					className := match[1]
 					method := match[2]
-					callee = method  // Use just the method name for symbol lookup
-					
+					callee = method // Use just the method name for symbol lookup
+
 					// Try to resolve cross-file call by mapping class to file
 					if classFile := da.resolveCSharpClassToFile(className, symbolTables); classFile != "" {
 						calleeFQN = fmt.Sprintf("%s::%s", classFile, method)
@@ -3015,7 +3015,7 @@ func (da *DependencyAnalyzer) extractCSharpCalls(ctx context.Context, filePath s
 					callee = match[1]
 					calleeFQN = fmt.Sprintf("%s::%s", filePath, callee)
 				}
-				
+
 				if callee != "" {
 					// Filter out common C# keywords and operators
 					csharpKeywords := map[string]bool{
@@ -3034,13 +3034,13 @@ func (da *DependencyAnalyzer) extractCSharpCalls(ctx context.Context, filePath s
 						"GetHashCode": true, "Count": true, "Length": true, "Add": true,
 						"Remove": true, "Contains": true, "Clear": true,
 					}
-					
+
 					if !csharpKeywords[callee] && !csharpKeywords[strings.Split(callee, ".")[0]] {
 						// Look for the containing method to establish caller
 						caller = da.findContainingCSharpMethod(filePath, line, content)
 						if caller != "" {
 							callerFQN := fmt.Sprintf("%s::%s", filePath, caller)
-							
+
 							// Check if callee exists in symbol tables
 							if da.symbolExistsInProjectTables(callee, symbolTables) {
 								da.callGraph[callerFQN] = append(da.callGraph[callerFQN], calleeFQN)
@@ -3052,7 +3052,7 @@ func (da *DependencyAnalyzer) extractCSharpCalls(ctx context.Context, filePath s
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -3060,29 +3060,29 @@ func (da *DependencyAnalyzer) extractCSharpCalls(ctx context.Context, filePath s
 func (da *DependencyAnalyzer) findContainingCSharpMethod(filePath, targetLine string, content []byte) string {
 	lines := strings.Split(string(content), "\n")
 	currentMethod := ""
-	
+
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		
+
 		// Check if this is a method definition
 		// Updated to handle generics in return types like Dictionary<string, int>
 		methodPattern := regexp.MustCompile(`(public|private|protected|internal)?\s*(static)?\s*[\w<>,\s\[\]]+\s+(\w+)\s*\([^)]*\)\s*\{?`)
 		if match := methodPattern.FindStringSubmatch(trimmed); match != nil {
 			methodName := match[3]
-			
+
 			// Skip constructors
 			className := da.extractCSharpClassName(filePath)
 			if methodName != className {
 				currentMethod = methodName
 			}
 		}
-		
+
 		// If this is our target line, return the current method
 		if strings.TrimSpace(line) == strings.TrimSpace(targetLine) {
 			return currentMethod
 		}
 	}
-	
+
 	return currentMethod
 }
 
@@ -3091,7 +3091,7 @@ func (da *DependencyAnalyzer) isCSharpStandardLibrary(usingPath string) bool {
 	csharpStdPrefixes := []string{
 		"System", "Microsoft", "Windows",
 	}
-	
+
 	for _, prefix := range csharpStdPrefixes {
 		if strings.HasPrefix(usingPath, prefix) {
 			return true
@@ -3104,11 +3104,11 @@ func (da *DependencyAnalyzer) resolveCSharpImport(className, currentFilePath str
 	// For local classes, look for ClassName.cs in the same directory
 	dir := filepath.Dir(currentFilePath)
 	expectedFile := filepath.Join(dir, className+".cs")
-	
+
 	if exists(expectedFile) {
 		return expectedFile
 	}
-	
+
 	return ""
 }
 
@@ -3120,7 +3120,7 @@ func (da *DependencyAnalyzer) resolveCSharpClassToFile(className string, symbolT
 			return filePath
 		}
 	}
-	
+
 	return ""
 }
 
@@ -3139,52 +3139,52 @@ func (da *DependencyAnalyzer) extractCSharpClassName(filePath string) string {
 func (da *DependencyAnalyzer) extractRustImports(ctx context.Context, fileContent []byte, filePath string) ([]string, error) {
 	imports := []string{}
 	content := string(fileContent)
-	
+
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	// Look for 'mod module_name;' declarations
 	modRegex := regexp.MustCompile(`mod\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*;`)
 	modMatches := modRegex.FindAllStringSubmatch(content, -1)
-	
+
 	for _, match := range modMatches {
 		if len(match) >= 2 {
 			moduleName := match[1]
-			
+
 			// Look for module_name.rs in the same directory
 			dir := filepath.Dir(filePath)
 			moduleFile := filepath.Join(dir, moduleName+".rs")
-			
+
 			if exists(moduleFile) {
 				imports = append(imports, moduleFile)
 				dbg.Logf(debug.LevelDetailed, "Found Rust mod import: %s -> %s", moduleName, moduleFile)
 			}
 		}
 	}
-	
+
 	// Look for 'use module_name::' statements for cross-module function calls
 	useRegex := regexp.MustCompile(`use\s+([a-zA-Z_][a-zA-Z0-9_]*)::[^;]*;`)
 	useMatches := useRegex.FindAllStringSubmatch(content, -1)
-	
+
 	for _, match := range useMatches {
 		if len(match) >= 2 {
 			moduleName := match[1]
-			
+
 			// Skip std library and external crates
 			if da.isRustStandardLibrary(moduleName) {
 				continue
 			}
-			
+
 			// Look for module_name.rs in the same directory
 			dir := filepath.Dir(filePath)
 			moduleFile := filepath.Join(dir, moduleName+".rs")
-			
+
 			if exists(moduleFile) {
 				imports = append(imports, moduleFile)
 				dbg.Logf(debug.LevelDetailed, "Found Rust use import: %s -> %s", moduleName, moduleFile)
 			}
 		}
 	}
-	
+
 	dbg.Logf(debug.LevelDetailed, "Found %d Rust imports in %s", len(imports), filePath)
 	return imports, nil
 }
@@ -3193,31 +3193,31 @@ func (da *DependencyAnalyzer) extractRustImports(ctx context.Context, fileConten
 func (da *DependencyAnalyzer) parseRustFunctions(ctx context.Context, symbolTable *semantic.SymbolTable, content []byte, filePath string) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
 	contentStr := string(content)
-	
+
 	// Parse function definitions: pub fn function_name(params) -> ReturnType { or fn function_name(params) {
 	funcRegex := regexp.MustCompile(`(?m)(pub\s+)?fn\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\([^)]*\)(?:\s*->\s*[^{]+)?\s*\{`)
 	matches := funcRegex.FindAllStringSubmatch(contentStr, -1)
-	
+
 	for _, match := range matches {
 		if len(match) >= 3 {
 			visibility := match[1] // "pub " or empty
 			funcName := match[2]
-			
+
 			// Determine if function is public
 			isPublic := strings.TrimSpace(visibility) == "pub"
-			
+
 			// Find start position of the function
 			funcStart := strings.Index(contentStr, match[0])
 			if funcStart == -1 {
 				continue
 			}
-			
+
 			// Estimate end position by finding the matching closing brace
 			funcEnd := da.estimateRustFunctionEnd(contentStr, funcStart)
-			
+
 			// Create FQN
 			fqn := filePath + "::" + funcName
-			
+
 			// Store function definition
 			da.functionDefs[fqn] = &FunctionDefinition{
 				Name:      funcName,
@@ -3227,7 +3227,7 @@ func (da *DependencyAnalyzer) parseRustFunctions(ctx context.Context, symbolTabl
 				EndByte:   uint32(funcEnd),
 				Language:  "rust",
 			}
-			
+
 			// Add to symbol table
 			symbol := &semantic.Symbol{
 				ID:         semantic.SymbolID(fqn),
@@ -3239,47 +3239,47 @@ func (da *DependencyAnalyzer) parseRustFunctions(ctx context.Context, symbolTabl
 				IsExported: isPublic,
 			}
 			symbolTable.AddSymbol(symbol)
-			
-			dbg.Logf(debug.LevelDetailed, "Found Rust function: %s (public: %v) at bytes %d-%d", 
-					 funcName, isPublic, funcStart, funcEnd)
+
+			dbg.Logf(debug.LevelDetailed, "Found Rust function: %s (public: %v) at bytes %d-%d",
+				funcName, isPublic, funcStart, funcEnd)
 		}
 	}
-	
+
 	// Parse struct implementations: impl StructName {
 	implRegex := regexp.MustCompile(`impl\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\{`)
 	implMatches := implRegex.FindAllStringSubmatch(contentStr, -1)
-	
+
 	for _, implMatch := range implMatches {
 		if len(implMatch) >= 2 {
 			structName := implMatch[1]
-			
+
 			// Find the impl block start
 			implStart := strings.Index(contentStr, implMatch[0])
 			if implStart == -1 {
 				continue
 			}
-			
+
 			// Find methods within this impl block
 			implBlock := da.extractRustImplBlock(contentStr, implStart)
-			
+
 			// Parse methods within the impl block
 			methodRegex := regexp.MustCompile(`(?m)(pub\s+)?fn\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\([^)]*\)(?:\s*->\s*[^{]+)?\s*\{`)
 			methodMatches := methodRegex.FindAllStringSubmatch(implBlock, -1)
-			
+
 			for _, methodMatch := range methodMatches {
 				if len(methodMatch) >= 3 {
 					visibility := methodMatch[1]
 					methodName := methodMatch[2]
-					
+
 					isPublic := strings.TrimSpace(visibility) == "pub"
-					
+
 					// Find method position within the impl block
 					methodStart := implStart + strings.Index(implBlock, methodMatch[0])
 					methodEnd := da.estimateRustFunctionEnd(contentStr, methodStart)
-					
+
 					// Create FQN for the method
 					fqn := filePath + "::" + structName + "::" + methodName
-					
+
 					// Store method definition
 					da.functionDefs[fqn] = &FunctionDefinition{
 						Name:      structName + "::" + methodName,
@@ -3289,7 +3289,7 @@ func (da *DependencyAnalyzer) parseRustFunctions(ctx context.Context, symbolTabl
 						EndByte:   uint32(methodEnd),
 						Language:  "rust",
 					}
-					
+
 					// Add to symbol table
 					methodSymbol := &semantic.Symbol{
 						ID:         semantic.SymbolID(fqn),
@@ -3302,9 +3302,9 @@ func (da *DependencyAnalyzer) parseRustFunctions(ctx context.Context, symbolTabl
 						IsExported: isPublic,
 					}
 					symbolTable.AddSymbol(methodSymbol)
-					
-					dbg.Logf(debug.LevelDetailed, "Found Rust method: %s::%s (public: %v) at bytes %d-%d", 
-							 structName, methodName, isPublic, methodStart, methodEnd)
+
+					dbg.Logf(debug.LevelDetailed, "Found Rust method: %s::%s (public: %v) at bytes %d-%d",
+						structName, methodName, isPublic, methodStart, methodEnd)
 				}
 			}
 		}
@@ -3315,64 +3315,64 @@ func (da *DependencyAnalyzer) parseRustFunctions(ctx context.Context, symbolTabl
 func (da *DependencyAnalyzer) extractRustCalls(ctx context.Context, filePath string, content []byte, symbolTables map[string]*semantic.SymbolTable) error {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
 	contentStr := string(content)
-	
+
 	// Find function calls in various formats:
 	// 1. Module::function() - static function calls
 	// 2. object.method() - method calls
 	// 3. function() - local function calls
-	
+
 	// Pattern 1: Module::function() calls
 	staticCallRegex := regexp.MustCompile(`([A-Z][a-zA-Z0-9_]*)::\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\(`)
 	staticMatches := staticCallRegex.FindAllStringSubmatch(contentStr, -1)
-	
+
 	for _, match := range staticMatches {
 		if len(match) >= 3 {
 			structName := match[1]
 			methodName := match[2]
-			
+
 			// Look for the target file
 			targetFile := da.resolveRustStructToFile(structName, symbolTables)
 			if targetFile != "" {
 				calledFQN := targetFile + "::" + structName + "::" + methodName
 				currentFQN := filePath + "::main" // Simplified for now
-				
+
 				da.callGraph[currentFQN] = append(da.callGraph[currentFQN], calledFQN)
 				da.usedSymbols[calledFQN] = true
-				
+
 				dbg.Logf(debug.LevelDetailed, "Found Rust static call: %s -> %s", currentFQN, calledFQN)
 			}
 		}
 	}
-	
+
 	// Pattern 2: Regular function calls
 	funcCallRegex := regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)\s*\(`)
 	funcMatches := funcCallRegex.FindAllStringSubmatch(contentStr, -1)
-	
+
 	for _, match := range funcMatches {
 		if len(match) >= 2 {
 			funcName := match[1]
-			
+
 			// Skip Rust keywords and common control structures
 			if da.isRustKeyword(funcName) {
 				continue
 			}
-			
+
 			// Look for the function across all symbol tables
 			for tablePath, table := range symbolTables {
 				if symbol, exists := table.GetSymbol(funcName); exists && symbol.Kind == semantic.SymbolKindFunction {
 					calledFQN := tablePath + "::" + funcName
 					currentFQN := filePath + "::main" // Simplified
-					
+
 					da.callGraph[currentFQN] = append(da.callGraph[currentFQN], calledFQN)
 					da.usedSymbols[calledFQN] = true
-					
+
 					dbg.Logf(debug.LevelDetailed, "Found Rust function call: %s -> %s", currentFQN, calledFQN)
 					break
 				}
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -3381,10 +3381,10 @@ func (da *DependencyAnalyzer) estimateRustFunctionEnd(content string, startPos i
 	braceCount := 0
 	inString := false
 	escaped := false
-	
+
 	for i := startPos; i < len(content); i++ {
 		char := content[i]
-		
+
 		if inString {
 			if escaped {
 				escaped = false
@@ -3407,7 +3407,7 @@ func (da *DependencyAnalyzer) estimateRustFunctionEnd(content string, startPos i
 			}
 		}
 	}
-	
+
 	return len(content)
 }
 
@@ -3417,10 +3417,10 @@ func (da *DependencyAnalyzer) extractRustImplBlock(content string, implStart int
 	inString := false
 	escaped := false
 	foundFirstBrace := false
-	
+
 	for i := implStart; i < len(content); i++ {
 		char := content[i]
-		
+
 		if inString {
 			if escaped {
 				escaped = false
@@ -3439,12 +3439,12 @@ func (da *DependencyAnalyzer) extractRustImplBlock(content string, implStart int
 			case '}':
 				braceCount--
 				if foundFirstBrace && braceCount == 0 {
-					return content[implStart:i+1]
+					return content[implStart : i+1]
 				}
 			}
 		}
 	}
-	
+
 	return content[implStart:]
 }
 
@@ -3453,7 +3453,7 @@ func (da *DependencyAnalyzer) isRustStandardLibrary(moduleName string) bool {
 	rustStdPrefixes := []string{
 		"std", "core", "alloc", "proc_macro",
 	}
-	
+
 	for _, prefix := range rustStdPrefixes {
 		if strings.HasPrefix(moduleName, prefix) {
 			return true
@@ -3470,7 +3470,7 @@ func (da *DependencyAnalyzer) isRustKeyword(name string) bool {
 		"async", "await", "move", "ref", "dyn", "where", "type", "as", "in",
 		"println", "print", "panic", "assert", "vec", "format",
 	}
-	
+
 	for _, keyword := range rustKeywords {
 		if name == keyword {
 			return true
@@ -3487,7 +3487,7 @@ func (da *DependencyAnalyzer) resolveRustStructToFile(structName string, symbolT
 			return filePath
 		}
 	}
-	
+
 	// Also try exact struct name
 	exactFileName := structName + ".rs"
 	for filePath := range symbolTables {
@@ -3495,7 +3495,7 @@ func (da *DependencyAnalyzer) resolveRustStructToFile(structName string, symbolT
 			return filePath
 		}
 	}
-	
+
 	return ""
 }
 
@@ -3504,19 +3504,19 @@ func (da *DependencyAnalyzer) resolveRustStructToFile(structName string, symbolT
 // extractSwiftImports extracts Swift import statements
 func (da *DependencyAnalyzer) extractSwiftImports(ctx context.Context, fileContent []byte, filePath string) ([]string, error) {
 	imports := []string{}
-	
+
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	// Swift doesn't have explicit file imports like other languages
 	// Instead, it automatically imports all .swift files in the same directory/module
-	
+
 	// Auto-discover all .swift files in the same directory
 	dir := filepath.Dir(filePath)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return imports, err
 	}
-	
+
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".swift") {
 			// Don't import self
@@ -3527,7 +3527,7 @@ func (da *DependencyAnalyzer) extractSwiftImports(ctx context.Context, fileConte
 			}
 		}
 	}
-	
+
 	dbg.Logf(debug.LevelDetailed, "Found %d Swift auto-imports in %s", len(imports), filePath)
 	return imports, nil
 }
@@ -3536,31 +3536,31 @@ func (da *DependencyAnalyzer) extractSwiftImports(ctx context.Context, fileConte
 func (da *DependencyAnalyzer) parseSwiftFunctions(ctx context.Context, symbolTable *semantic.SymbolTable, content []byte, filePath string) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
 	contentStr := string(content)
-	
+
 	// Parse standalone function definitions: func functionName(params) -> ReturnType {
 	funcRegex := regexp.MustCompile(`(?m)(private\s+|public\s+|internal\s+)?func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\([^)]*\)(?:\s*->\s*[^{]+)?\s*\{`)
 	matches := funcRegex.FindAllStringSubmatch(contentStr, -1)
-	
+
 	for _, match := range matches {
 		if len(match) >= 3 {
 			visibility := strings.TrimSpace(match[1])
 			funcName := match[2]
-			
+
 			// Determine if function is public (default is internal in Swift)
 			isPublic := visibility == "public" || visibility == ""
-			
+
 			// Find start position of the function
 			funcStart := strings.Index(contentStr, match[0])
 			if funcStart == -1 {
 				continue
 			}
-			
+
 			// Estimate end position by finding the matching closing brace
 			funcEnd := da.estimateSwiftFunctionEnd(contentStr, funcStart)
-			
+
 			// Create FQN
 			fqn := filePath + "::" + funcName
-			
+
 			// Store function definition
 			da.functionDefs[fqn] = &FunctionDefinition{
 				Name:      funcName,
@@ -3570,7 +3570,7 @@ func (da *DependencyAnalyzer) parseSwiftFunctions(ctx context.Context, symbolTab
 				EndByte:   uint32(funcEnd),
 				Language:  "swift",
 			}
-			
+
 			// Add to symbol table
 			symbol := &semantic.Symbol{
 				ID:         semantic.SymbolID(fqn),
@@ -3582,49 +3582,49 @@ func (da *DependencyAnalyzer) parseSwiftFunctions(ctx context.Context, symbolTab
 				IsExported: isPublic,
 			}
 			symbolTable.AddSymbol(symbol)
-			
-			dbg.Logf(debug.LevelDetailed, "Found Swift function: %s (public: %v) at bytes %d-%d", 
-					 funcName, isPublic, funcStart, funcEnd)
+
+			dbg.Logf(debug.LevelDetailed, "Found Swift function: %s (public: %v) at bytes %d-%d",
+				funcName, isPublic, funcStart, funcEnd)
 		}
 	}
-	
+
 	// Parse class definitions and their methods: class ClassName {
 	classRegex := regexp.MustCompile(`(?m)(private\s+|public\s+|internal\s+)?class\s+([a-zA-Z_][a-zA-Z0-9_]*)[^{]*\{`)
 	classMatches := classRegex.FindAllStringSubmatch(contentStr, -1)
-	
+
 	for _, classMatch := range classMatches {
 		if len(classMatch) >= 3 {
 			className := classMatch[2]
-			
+
 			// Find the class block start
 			classStart := strings.Index(contentStr, classMatch[0])
 			if classStart == -1 {
 				continue
 			}
-			
+
 			// Find methods within this class block
 			classBlock := da.extractSwiftClassBlock(contentStr, classStart)
-			
+
 			// Parse methods within the class block (including static methods)
 			methodRegex := regexp.MustCompile(`(?m)(private\s+|public\s+|internal\s+)?(static\s+)?func\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\([^)]*\)(?:\s*->\s*[^{]+)?\s*\{`)
 			methodMatches := methodRegex.FindAllStringSubmatch(classBlock, -1)
-			
+
 			for _, methodMatch := range methodMatches {
 				if len(methodMatch) >= 4 {
 					visibility := strings.TrimSpace(methodMatch[1])
 					staticModifier := strings.TrimSpace(methodMatch[2])
 					methodName := methodMatch[3]
-					
+
 					isPublic := visibility == "public" || visibility == ""
 					isStatic := staticModifier == "static"
-					
+
 					// Find method position within the class block
 					methodStart := classStart + strings.Index(classBlock, methodMatch[0])
 					methodEnd := da.estimateSwiftFunctionEnd(contentStr, methodStart)
-					
+
 					// Create FQN for the method
 					fqn := filePath + "::" + className + "::" + methodName
-					
+
 					// Store method definition
 					da.functionDefs[fqn] = &FunctionDefinition{
 						Name:      className + "::" + methodName,
@@ -3634,7 +3634,7 @@ func (da *DependencyAnalyzer) parseSwiftFunctions(ctx context.Context, symbolTab
 						EndByte:   uint32(methodEnd),
 						Language:  "swift",
 					}
-					
+
 					// Add to symbol table
 					methodSymbol := &semantic.Symbol{
 						ID:         semantic.SymbolID(fqn),
@@ -3648,9 +3648,9 @@ func (da *DependencyAnalyzer) parseSwiftFunctions(ctx context.Context, symbolTab
 						IsStatic:   isStatic,
 					}
 					symbolTable.AddSymbol(methodSymbol)
-					
-					dbg.Logf(debug.LevelDetailed, "Found Swift method: %s::%s (public: %v, static: %v) at bytes %d-%d", 
-							 className, methodName, isPublic, isStatic, methodStart, methodEnd)
+
+					dbg.Logf(debug.LevelDetailed, "Found Swift method: %s::%s (public: %v, static: %v) at bytes %d-%d",
+						className, methodName, isPublic, isStatic, methodStart, methodEnd)
 				}
 			}
 		}
@@ -3661,64 +3661,64 @@ func (da *DependencyAnalyzer) parseSwiftFunctions(ctx context.Context, symbolTab
 func (da *DependencyAnalyzer) extractSwiftCalls(ctx context.Context, filePath string, content []byte, symbolTables map[string]*semantic.SymbolTable) error {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
 	contentStr := string(content)
-	
+
 	// Find function calls in various formats:
 	// 1. ClassName.methodName() - static method calls
 	// 2. object.method() - instance method calls
 	// 3. functionName() - standalone function calls
-	
+
 	// Pattern 1: ClassName.methodName() calls (static methods)
 	staticCallRegex := regexp.MustCompile(`([A-Z][a-zA-Z0-9_]*)\.\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\(`)
 	staticMatches := staticCallRegex.FindAllStringSubmatch(contentStr, -1)
-	
+
 	for _, match := range staticMatches {
 		if len(match) >= 3 {
 			className := match[1]
 			methodName := match[2]
-			
+
 			// Look for the target file
 			targetFile := da.resolveSwiftClassToFile(className, symbolTables)
 			if targetFile != "" {
 				calledFQN := targetFile + "::" + className + "::" + methodName
 				currentFQN := filePath + "::main" // Simplified for now
-				
+
 				da.callGraph[currentFQN] = append(da.callGraph[currentFQN], calledFQN)
 				da.usedSymbols[calledFQN] = true
-				
+
 				dbg.Logf(debug.LevelDetailed, "Found Swift static call: %s -> %s", currentFQN, calledFQN)
 			}
 		}
 	}
-	
+
 	// Pattern 2: Regular function calls
 	funcCallRegex := regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)\s*\(`)
 	funcMatches := funcCallRegex.FindAllStringSubmatch(contentStr, -1)
-	
+
 	for _, match := range funcMatches {
 		if len(match) >= 2 {
 			funcName := match[1]
-			
+
 			// Skip Swift keywords and common control structures
 			if da.isSwiftKeyword(funcName) {
 				continue
 			}
-			
+
 			// Look for the function across all symbol tables
 			for tablePath, table := range symbolTables {
 				if symbol, exists := table.GetSymbol(funcName); exists && symbol.Kind == semantic.SymbolKindFunction {
 					calledFQN := tablePath + "::" + funcName
 					currentFQN := filePath + "::main" // Simplified
-					
+
 					da.callGraph[currentFQN] = append(da.callGraph[currentFQN], calledFQN)
 					da.usedSymbols[calledFQN] = true
-					
+
 					dbg.Logf(debug.LevelDetailed, "Found Swift function call: %s -> %s", currentFQN, calledFQN)
 					break
 				}
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -3727,7 +3727,7 @@ func (da *DependencyAnalyzer) estimateSwiftFunctionEnd(content string, startPos 
 	braceCount := 0
 	inString := false
 	escaped := false
-	
+
 	for i := startPos; i < len(content); i++ {
 		if i+1 < len(content) && content[i:i+2] == "//" && !inString {
 			// Skip to end of line for single-line comments
@@ -3736,9 +3736,9 @@ func (da *DependencyAnalyzer) estimateSwiftFunctionEnd(content string, startPos 
 			}
 			continue
 		}
-		
+
 		char := content[i]
-		
+
 		if inString {
 			if escaped {
 				escaped = false
@@ -3761,7 +3761,7 @@ func (da *DependencyAnalyzer) estimateSwiftFunctionEnd(content string, startPos 
 			}
 		}
 	}
-	
+
 	return len(content)
 }
 
@@ -3771,10 +3771,10 @@ func (da *DependencyAnalyzer) extractSwiftClassBlock(content string, classStart 
 	inString := false
 	escaped := false
 	foundFirstBrace := false
-	
+
 	for i := classStart; i < len(content); i++ {
 		char := content[i]
-		
+
 		if inString {
 			if escaped {
 				escaped = false
@@ -3793,12 +3793,12 @@ func (da *DependencyAnalyzer) extractSwiftClassBlock(content string, classStart 
 			case '}':
 				braceCount--
 				if foundFirstBrace && braceCount == 0 {
-					return content[classStart:i+1]
+					return content[classStart : i+1]
 				}
 			}
 		}
 	}
-	
+
 	return content[classStart:]
 }
 
@@ -3813,7 +3813,7 @@ func (da *DependencyAnalyzer) isSwiftKeyword(name string) bool {
 		"async", "await", "actor", "isolated", "nonisolated",
 		"print", "assert", "fatalError", "precondition", "debugPrint",
 	}
-	
+
 	for _, keyword := range swiftKeywords {
 		if name == keyword {
 			return true
@@ -3830,7 +3830,7 @@ func (da *DependencyAnalyzer) resolveSwiftClassToFile(className string, symbolTa
 			return filePath
 		}
 	}
-	
+
 	return ""
 }
 
@@ -3840,25 +3840,25 @@ func (da *DependencyAnalyzer) resolveSwiftClassToFile(className string, symbolTa
 func (da *DependencyAnalyzer) extractCppIncludes(ctx context.Context, fileContent []byte, filePath string) ([]string, error) {
 	includes := []string{}
 	content := string(fileContent)
-	
+
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	// Look for #include "header.h" statements (local headers)
 	includeRegex := regexp.MustCompile(`#include\s+"([^"]+\.h(?:pp)?)"`)
 	includeMatches := includeRegex.FindAllStringSubmatch(content, -1)
-	
+
 	for _, match := range includeMatches {
 		if len(match) >= 2 {
 			headerName := match[1]
-			
+
 			// Look for header file in the same directory
 			dir := filepath.Dir(filePath)
 			headerFile := filepath.Join(dir, headerName)
-			
+
 			if exists(headerFile) {
 				includes = append(includes, headerFile)
 				dbg.Logf(debug.LevelDetailed, "Found C++ include: %s -> %s", headerName, headerFile)
-				
+
 				// For each header, also look for corresponding .cpp file
 				cppFile := da.getCppSourceFile(headerFile)
 				if cppFile != "" && exists(cppFile) {
@@ -3868,7 +3868,7 @@ func (da *DependencyAnalyzer) extractCppIncludes(ctx context.Context, fileConten
 			}
 		}
 	}
-	
+
 	dbg.Logf(debug.LevelDetailed, "Found %d C++ includes in %s", len(includes), filePath)
 	return includes, nil
 }
@@ -3877,12 +3877,12 @@ func (da *DependencyAnalyzer) extractCppIncludes(ctx context.Context, fileConten
 func (da *DependencyAnalyzer) parseCppFunctions(ctx context.Context, symbolTable *semantic.SymbolTable, content []byte, filePath string) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
 	contentStr := string(content)
-	
+
 	// Parse function definitions in both headers and source files
 	// Pattern: [return_type] [ClassName::]functionName(params) [const] {
 	funcRegex := regexp.MustCompile(`(?m)(public|private|protected)?\s*(static\s+)?([a-zA-Z_][a-zA-Z0-9_<>,\s:]*)\s+([a-zA-Z_][a-zA-Z0-9_]*::)?([a-zA-Z_][a-zA-Z0-9_]*)\s*\([^)]*\)\s*(const\s*)?\s*(\{|;)`)
 	matches := funcRegex.FindAllStringSubmatch(contentStr, -1)
-	
+
 	for _, match := range matches {
 		if len(match) >= 8 {
 			visibility := strings.TrimSpace(match[1])
@@ -3892,27 +3892,27 @@ func (da *DependencyAnalyzer) parseCppFunctions(ctx context.Context, symbolTable
 			funcName := strings.TrimSpace(match[5])
 			// constModifier := strings.TrimSpace(match[6]) // Not used currently
 			declaration := strings.TrimSpace(match[7])
-			
+
 			// Skip constructors, destructors, and operators
 			if funcName == "" || strings.HasPrefix(funcName, "~") || strings.HasPrefix(funcName, "operator") {
 				continue
 			}
-			
+
 			// Skip C++ keywords and common STL functions
 			if da.isCppKeyword(funcName) {
 				continue
 			}
-			
+
 			// Determine visibility (default is public for functions, private for class members)
 			isPublic := visibility == "public" || (visibility == "" && className == "")
 			isStatic := staticModifier == "static"
-			
+
 			// Find start position of the function
 			funcStart := strings.Index(contentStr, match[0])
 			if funcStart == -1 {
 				continue
 			}
-			
+
 			var funcEnd int
 			if declaration == "{" {
 				// Function with body - estimate end by counting braces
@@ -3921,7 +3921,7 @@ func (da *DependencyAnalyzer) parseCppFunctions(ctx context.Context, symbolTable
 				// Declaration only - just use the match end
 				funcEnd = funcStart + len(match[0])
 			}
-			
+
 			// Create FQN
 			var fqn string
 			if className != "" {
@@ -3931,7 +3931,7 @@ func (da *DependencyAnalyzer) parseCppFunctions(ctx context.Context, symbolTable
 			} else {
 				fqn = filePath + "::" + funcName
 			}
-			
+
 			// Store function definition
 			da.functionDefs[fqn] = &FunctionDefinition{
 				Name:      funcName,
@@ -3941,7 +3941,7 @@ func (da *DependencyAnalyzer) parseCppFunctions(ctx context.Context, symbolTable
 				EndByte:   uint32(funcEnd),
 				Language:  "cpp",
 			}
-			
+
 			// Add to symbol table
 			if className != "" {
 				// Method
@@ -3957,9 +3957,9 @@ func (da *DependencyAnalyzer) parseCppFunctions(ctx context.Context, symbolTable
 					IsStatic:   isStatic,
 				}
 				symbolTable.AddSymbol(methodSymbol)
-				
-				dbg.Logf(debug.LevelDetailed, "Found C++ method: %s::%s (public: %v, static: %v) at bytes %d-%d", 
-						 className, funcName, isPublic, isStatic, funcStart, funcEnd)
+
+				dbg.Logf(debug.LevelDetailed, "Found C++ method: %s::%s (public: %v, static: %v) at bytes %d-%d",
+					className, funcName, isPublic, isStatic, funcStart, funcEnd)
 			} else {
 				// Function
 				funcSymbol := &semantic.Symbol{
@@ -3973,9 +3973,9 @@ func (da *DependencyAnalyzer) parseCppFunctions(ctx context.Context, symbolTable
 					IsStatic:   isStatic,
 				}
 				symbolTable.AddSymbol(funcSymbol)
-				
-				dbg.Logf(debug.LevelDetailed, "Found C++ function: %s (public: %v, static: %v) at bytes %d-%d", 
-						 funcName, isPublic, isStatic, funcStart, funcEnd)
+
+				dbg.Logf(debug.LevelDetailed, "Found C++ function: %s (public: %v, static: %v) at bytes %d-%d",
+					funcName, isPublic, isStatic, funcStart, funcEnd)
 			}
 		}
 	}
@@ -3985,69 +3985,69 @@ func (da *DependencyAnalyzer) parseCppFunctions(ctx context.Context, symbolTable
 func (da *DependencyAnalyzer) extractCppCalls(ctx context.Context, filePath string, content []byte, symbolTables map[string]*semantic.SymbolTable) error {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
 	contentStr := string(content)
-	
+
 	// Find function calls in various formats:
 	// 1. ClassName::methodName() - static method calls
-	// 2. object.method() or object->method() - instance method calls  
+	// 2. object.method() or object->method() - instance method calls
 	// 3. functionName() - standalone function calls
-	
+
 	// Pattern 1: ClassName::methodName() calls (static methods and namespace functions)
 	staticCallRegex := regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)::\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\(`)
 	staticMatches := staticCallRegex.FindAllStringSubmatch(contentStr, -1)
-	
+
 	for _, match := range staticMatches {
 		if len(match) >= 3 {
 			className := match[1]
 			methodName := match[2]
-			
+
 			// Skip std:: and other standard library calls
 			if da.isCppStandardLibrary(className) {
 				continue
 			}
-			
+
 			// Look for the target file
 			targetFile := da.resolveCppClassToFile(className, symbolTables)
 			if targetFile != "" {
 				calledFQN := targetFile + "::" + className + "::" + methodName
 				currentFQN := filePath + "::main" // Simplified for now
-				
+
 				da.callGraph[currentFQN] = append(da.callGraph[currentFQN], calledFQN)
 				da.usedSymbols[calledFQN] = true
-				
+
 				dbg.Logf(debug.LevelDetailed, "Found C++ static call: %s -> %s", currentFQN, calledFQN)
 			}
 		}
 	}
-	
+
 	// Pattern 2: Regular function calls
 	funcCallRegex := regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)\s*\(`)
 	funcMatches := funcCallRegex.FindAllStringSubmatch(contentStr, -1)
-	
+
 	for _, match := range funcMatches {
 		if len(match) >= 2 {
 			funcName := match[1]
-			
+
 			// Skip C++ keywords and common control structures
 			if da.isCppKeyword(funcName) {
 				continue
 			}
-			
+
 			// Look for the function across all symbol tables
 			for tablePath, table := range symbolTables {
 				if symbol, exists := table.GetSymbol(funcName); exists && symbol.Kind == semantic.SymbolKindFunction {
 					calledFQN := tablePath + "::" + funcName
 					currentFQN := filePath + "::main" // Simplified
-					
+
 					da.callGraph[currentFQN] = append(da.callGraph[currentFQN], calledFQN)
 					da.usedSymbols[calledFQN] = true
-					
+
 					dbg.Logf(debug.LevelDetailed, "Found C++ function call: %s -> %s", currentFQN, calledFQN)
 					break
 				}
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -4059,36 +4059,36 @@ func (da *DependencyAnalyzer) estimateCppFunctionEnd(content string, startPos in
 	escaped := false
 	inComment := false
 	inLineComment := false
-	
+
 	for i := startPos; i < len(content); i++ {
 		if i+1 < len(content) && content[i:i+2] == "//" && !inString && !inChar && !inComment {
 			inLineComment = true
 			continue
 		}
-		
+
 		if i+1 < len(content) && content[i:i+2] == "/*" && !inString && !inChar && !inLineComment {
 			inComment = true
 			i++ // Skip the next character
 			continue
 		}
-		
+
 		if i+1 < len(content) && content[i:i+2] == "*/" && inComment {
 			inComment = false
 			i++ // Skip the next character
 			continue
 		}
-		
+
 		if content[i] == '\n' && inLineComment {
 			inLineComment = false
 			continue
 		}
-		
+
 		if inComment || inLineComment {
 			continue
 		}
-		
+
 		char := content[i]
-		
+
 		if inString {
 			if escaped {
 				escaped = false
@@ -4121,7 +4121,7 @@ func (da *DependencyAnalyzer) estimateCppFunctionEnd(content string, startPos in
 			}
 		}
 	}
-	
+
 	return len(content)
 }
 
@@ -4129,7 +4129,7 @@ func (da *DependencyAnalyzer) estimateCppFunctionEnd(content string, startPos in
 func (da *DependencyAnalyzer) getCppSourceFile(headerFile string) string {
 	// Try various extensions
 	base := strings.TrimSuffix(headerFile, filepath.Ext(headerFile))
-	
+
 	extensions := []string{".cpp", ".cc", ".cxx", ".c++"}
 	for _, ext := range extensions {
 		sourceFile := base + ext
@@ -4137,16 +4137,16 @@ func (da *DependencyAnalyzer) getCppSourceFile(headerFile string) string {
 			return sourceFile
 		}
 	}
-	
+
 	return ""
 }
 
 // Helper functions for C++
 func (da *DependencyAnalyzer) isCppStandardLibrary(className string) bool {
 	cppStdPrefixes := []string{
-		"std", "boost", "__gnu", "__", "detail", "_", 
+		"std", "boost", "__gnu", "__", "detail", "_",
 	}
-	
+
 	for _, prefix := range cppStdPrefixes {
 		if strings.HasPrefix(className, prefix) {
 			return true
@@ -4161,11 +4161,11 @@ func (da *DependencyAnalyzer) isCppKeyword(name string) bool {
 		"auto", "bool", "char", "double", "float", "int", "long", "short", "signed", "unsigned", "void",
 		"class", "struct", "enum", "union", "typedef", "typename", "template", "namespace", "using",
 		"public", "private", "protected", "virtual", "static", "const", "mutable", "inline", "extern",
-		"new", "delete", "this", "operator", "sizeof", "typeid", "const_cast", "dynamic_cast", 
+		"new", "delete", "this", "operator", "sizeof", "typeid", "const_cast", "dynamic_cast",
 		"reinterpret_cast", "static_cast", "try", "catch", "throw", "friend", "explicit",
 		"cout", "cin", "endl", "printf", "scanf", "malloc", "free", "strlen", "strcpy", "strcmp",
 	}
-	
+
 	for _, keyword := range cppKeywords {
 		if name == keyword {
 			return true
@@ -4178,47 +4178,47 @@ func (da *DependencyAnalyzer) resolveCppClassToFile(className string, symbolTabl
 	// Look for the class file in symbol tables
 	expectedHeaderName := className + ".h"
 	expectedHeaderName2 := className + ".hpp"
-	
+
 	for filePath := range symbolTables {
 		if strings.HasSuffix(filePath, expectedHeaderName) || strings.HasSuffix(filePath, expectedHeaderName2) {
 			return filePath
 		}
 	}
-	
+
 	return ""
-}// ========== KOTLIN SUPPORT ==========
+} // ========== KOTLIN SUPPORT ==========
 
 // extractKotlinImports extracts Kotlin import statements
 func (da *DependencyAnalyzer) extractKotlinImports(ctx context.Context, fileContent []byte, filePath string) ([]string, error) {
 	imports := []string{}
 	content := string(fileContent)
-	
+
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	
+
 	// Extract import statements - Kotlin uses similar syntax to Java
 	// Pattern: import package.Class or import package.function
 	importRegex := regexp.MustCompile(`^\s*import\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*(?:\.\*)?)\s*$`)
-	
+
 	lines := strings.Split(content, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		
+
 		// Skip comments and empty lines
 		if strings.HasPrefix(line, "//") || strings.HasPrefix(line, "/*") || line == "" {
 			continue
 		}
-		
+
 		if matches := importRegex.FindStringSubmatch(line); matches != nil {
 			importPath := matches[1]
-			
+
 			// Skip standard library imports
 			if strings.HasPrefix(importPath, "kotlin.") ||
-			   strings.HasPrefix(importPath, "java.") ||
-			   strings.HasPrefix(importPath, "android.") ||
-			   strings.HasPrefix(importPath, "kotlinx.") {
+				strings.HasPrefix(importPath, "java.") ||
+				strings.HasPrefix(importPath, "android.") ||
+				strings.HasPrefix(importPath, "kotlinx.") {
 				continue
 			}
-			
+
 			// Convert package.Class to local file path
 			if localPath := da.resolveKotlinImportToFile(ctx, importPath, filePath); localPath != "" {
 				imports = append(imports, localPath)
@@ -4226,7 +4226,7 @@ func (da *DependencyAnalyzer) extractKotlinImports(ctx context.Context, fileCont
 			}
 		}
 	}
-	
+
 	dbg.Logf(debug.LevelDetailed, "Found %d Kotlin imports in %s", len(imports), filePath)
 	return imports, nil
 }
@@ -4235,13 +4235,13 @@ func (da *DependencyAnalyzer) extractKotlinImports(ctx context.Context, fileCont
 func (da *DependencyAnalyzer) resolveKotlinImportToFile(ctx context.Context, importPath, filePath string) string {
 	// Get directory of current file
 	dir := filepath.Dir(filePath)
-	
+
 	// Try different strategies to find the imported file
 	parts := strings.Split(importPath, ".")
 	if len(parts) == 0 {
 		return ""
 	}
-	
+
 	// Strategy 1: Same directory - just filename.kt
 	className := parts[len(parts)-1]
 	if className != "*" {
@@ -4250,7 +4250,7 @@ func (da *DependencyAnalyzer) resolveKotlinImportToFile(ctx context.Context, imp
 			return candidatePath
 		}
 	}
-	
+
 	// Strategy 2: Relative path based on package structure
 	// Convert package.subpackage.Class to subpackage/Class.kt
 	if len(parts) > 1 {
@@ -4260,7 +4260,7 @@ func (da *DependencyAnalyzer) resolveKotlinImportToFile(ctx context.Context, imp
 			return candidatePath
 		}
 	}
-	
+
 	// Strategy 3: Look for any .kt file with the class name in nearby directories
 	baseDir := dir
 	for i := 0; i < 3; i++ { // Look up to 3 levels up
@@ -4273,7 +4273,7 @@ func (da *DependencyAnalyzer) resolveKotlinImportToFile(ctx context.Context, imp
 			break
 		}
 	}
-	
+
 	return ""
 }
 
@@ -4281,35 +4281,35 @@ func (da *DependencyAnalyzer) resolveKotlinImportToFile(ctx context.Context, imp
 func (da *DependencyAnalyzer) parseKotlinFunctions(ctx context.Context, symbolTable *semantic.SymbolTable, content []byte, filePath string) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
 	contentStr := string(content)
-	
+
 	// Parse function definitions:
 	// fun functionName(...): ReturnType { ... }
 	// private/public/internal fun functionName(...)
 	functionRegex := regexp.MustCompile(`(?:^|\n)\s*((?:private\s+|public\s+|internal\s+|protected\s+)?(?:inline\s+|suspend\s+|override\s+)*fun\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\([^)]*\))`)
-	
+
 	matches := functionRegex.FindAllStringSubmatch(contentStr, -1)
 	for _, match := range matches {
 		fullDeclaration := match[1]
 		functionName := match[2]
-		
+
 		// Determine visibility
 		isPublic := !strings.Contains(fullDeclaration, "private") && !strings.Contains(fullDeclaration, "internal") && !strings.Contains(fullDeclaration, "protected")
 		isStatic := false // Kotlin doesn't have static methods in the same way, but companion objects have static-like behavior
-		
+
 		// Find function body to determine byte range
 		funcIndex := strings.Index(contentStr, fullDeclaration)
 		if funcIndex == -1 {
 			continue
 		}
-		
+
 		startByte := funcIndex
 		endByte := da.findKotlinFunctionEnd(contentStr, funcIndex)
-		
+
 		fqn := fmt.Sprintf("%s::%s", filePath, functionName)
 		symbolTable.Symbols[functionName] = &semantic.Symbol{
-			ID:         semantic.SymbolID(fqn),
-			Name:       functionName,
-			Kind:       semantic.SymbolKindFunction,
+			ID:   semantic.SymbolID(fqn),
+			Name: functionName,
+			Kind: semantic.SymbolKindFunction,
 			Location: semantic.FileLocation{
 				FilePath:  filePath,
 				StartLine: 0,
@@ -4323,59 +4323,59 @@ func (da *DependencyAnalyzer) parseKotlinFunctions(ctx context.Context, symbolTa
 			}(),
 			IsStatic: isStatic,
 		}
-		
-		dbg.Logf(debug.LevelDetailed, "Found Kotlin function: %s (public: %t, static: %t) at bytes %d-%d", 
+
+		dbg.Logf(debug.LevelDetailed, "Found Kotlin function: %s (public: %t, static: %t) at bytes %d-%d",
 			functionName, isPublic, isStatic, startByte, endByte)
 	}
-	
+
 	// Parse class methods within classes
 	// class ClassName { ... }
 	classRegex := regexp.MustCompile(`(?:^|\n)\s*(?:(?:open|abstract|final|data|sealed)\s+)*class\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*[^{]*\{`)
 	classMatches := classRegex.FindAllStringSubmatch(contentStr, -1)
-	
+
 	for _, classMatch := range classMatches {
 		className := classMatch[1]
 		classStartIndex := strings.Index(contentStr, classMatch[0])
 		if classStartIndex == -1 {
 			continue
 		}
-		
+
 		// Find class body
 		classBodyStart := strings.Index(contentStr[classStartIndex:], "{")
 		if classBodyStart == -1 {
 			continue
 		}
 		classBodyStart += classStartIndex
-		
+
 		classBodyEnd := da.findMatchingBrace(contentStr, classBodyStart)
 		if classBodyEnd == -1 {
 			continue
 		}
-		
+
 		classBody := contentStr[classBodyStart:classBodyEnd]
-		
+
 		// Parse methods within the class
 		methodMatches := functionRegex.FindAllStringSubmatch(classBody, -1)
 		for _, methodMatch := range methodMatches {
 			fullMethodDeclaration := methodMatch[1]
 			methodName := methodMatch[2]
-			
+
 			isPublic := !strings.Contains(fullMethodDeclaration, "private") && !strings.Contains(fullMethodDeclaration, "internal") && !strings.Contains(fullMethodDeclaration, "protected")
 			isStatic := false
-			
+
 			methodIndex := strings.Index(classBody, fullMethodDeclaration)
 			if methodIndex == -1 {
 				continue
 			}
-			
+
 			startByte := classBodyStart + methodIndex
 			endByte := da.findKotlinFunctionEnd(contentStr, startByte)
-			
+
 			fqn := fmt.Sprintf("%s::%s::%s", filePath, className, methodName)
 			symbolTable.Symbols[methodName] = &semantic.Symbol{
-				ID:         semantic.SymbolID(fqn),
-				Name:       methodName,
-				Kind:       semantic.SymbolKindMethod,
+				ID:   semantic.SymbolID(fqn),
+				Name: methodName,
+				Kind: semantic.SymbolKindMethod,
 				Location: semantic.FileLocation{
 					FilePath:  filePath,
 					StartLine: 0,
@@ -4390,7 +4390,7 @@ func (da *DependencyAnalyzer) parseKotlinFunctions(ctx context.Context, symbolTa
 				}(),
 				IsStatic: isStatic,
 			}
-			
+
 			dbg.Logf(debug.LevelDetailed, "Found Kotlin method: %s::%s (public: %t, static: %t) at bytes %d-%d",
 				className, methodName, isPublic, isStatic, startByte, endByte)
 		}
@@ -4409,7 +4409,7 @@ func (da *DependencyAnalyzer) findKotlinFunctionEnd(content string, startIndex i
 		}
 		return len(content)
 	}
-	
+
 	openBraceIndex += startIndex
 	return da.findMatchingBrace(content, openBraceIndex)
 }
@@ -4418,26 +4418,26 @@ func (da *DependencyAnalyzer) findKotlinFunctionEnd(content string, startIndex i
 func (da *DependencyAnalyzer) extractKotlinCalls(ctx context.Context, filePath string, content []byte, symbolTables map[string]*semantic.SymbolTable) error {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
 	contentStr := string(content)
-	
+
 	// Find function calls in various formats:
 	// 1. ClassName.methodName() - companion object static calls
 	// 2. functionName() - function calls
 	// 3. objectName.methodName() - object method calls
-	
+
 	// Pattern for function calls: identifier(
 	callRegex := regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)\s*\(`)
-	
+
 	matches := callRegex.FindAllStringSubmatch(contentStr, -1)
 	for _, match := range matches {
 		fullCall := match[1]
-		
+
 		// Split by dot to handle ClassName.methodName format
 		parts := strings.Split(fullCall, ".")
-		
+
 		if len(parts) == 1 {
 			// Simple function call: functionName()
 			functionName := parts[0]
-			
+
 			// Look for this function in symbol tables
 			for targetFile, symbolTable := range symbolTables {
 				// Check functions in the target file
@@ -4454,8 +4454,8 @@ func (da *DependencyAnalyzer) extractKotlinCalls(ctx context.Context, filePath s
 			// Class.method or object.method call
 			className := parts[0]
 			methodName := parts[1]
-			
-			// Look for ClassName::methodName in symbol tables  
+
+			// Look for ClassName::methodName in symbol tables
 			for targetFile, symbolTable := range symbolTables {
 				staticFQN := fmt.Sprintf("%s::%s::%s", targetFile, className, methodName)
 				found := false
@@ -4470,7 +4470,7 @@ func (da *DependencyAnalyzer) extractKotlinCalls(ctx context.Context, filePath s
 					da.callGraph[callerFQN] = append(da.callGraph[callerFQN], staticFQN)
 					dbg.Logf(debug.LevelDetailed, "Found Kotlin static call: %s -> %s", filePath+"::main", staticFQN)
 				}
-				
+
 				// Also check for simple function calls from other files
 				simpleFQN := fmt.Sprintf("%s::%s", targetFile, methodName)
 				found2 := false
@@ -4488,7 +4488,7 @@ func (da *DependencyAnalyzer) extractKotlinCalls(ctx context.Context, filePath s
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -4497,10 +4497,10 @@ func (da *DependencyAnalyzer) findMatchingBrace(content string, openBraceIndex i
 	braceCount := 0
 	inString := false
 	escaped := false
-	
+
 	for i := openBraceIndex; i < len(content); i++ {
 		char := content[i]
-		
+
 		if inString {
 			if escaped {
 				escaped = false
@@ -4523,6 +4523,6 @@ func (da *DependencyAnalyzer) findMatchingBrace(content string, openBraceIndex i
 			}
 		}
 	}
-	
+
 	return -1
 }

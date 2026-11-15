@@ -23,11 +23,11 @@ func NewActionRegistry() *ActionRegistry {
 func (r *ActionRegistry) Register(action AIAction) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	if _, exists := r.actions[action.Name()]; exists {
 		return fmt.Errorf("action %q already registered", action.Name())
 	}
-	
+
 	r.actions[action.Name()] = action
 	return nil
 }
@@ -36,13 +36,13 @@ func (r *ActionRegistry) Register(action AIAction) error {
 func (r *ActionRegistry) Get(name string) (AIAction, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	action, ok := r.actions[name]
 	if !ok {
 		available := r.getAvailableNames()
 		return nil, fmt.Errorf("unknown action %q. Available actions: %v", name, available)
 	}
-	
+
 	return action, nil
 }
 
@@ -50,17 +50,17 @@ func (r *ActionRegistry) Get(name string) (AIAction, error) {
 func (r *ActionRegistry) List() []AIAction {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	var list []AIAction
 	for _, action := range r.actions {
 		list = append(list, action)
 	}
-	
+
 	// Sort by name for consistent output
 	sort.Slice(list, func(i, j int) bool {
 		return list[i].Name() < list[j].Name()
 	})
-	
+
 	return list
 }
 
@@ -68,7 +68,7 @@ func (r *ActionRegistry) List() []AIAction {
 func (r *ActionRegistry) GetNames() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	
+
 	return r.getAvailableNames()
 }
 

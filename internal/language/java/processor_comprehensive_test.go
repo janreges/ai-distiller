@@ -31,8 +31,8 @@ func TestJavaConstructs(t *testing.T) {
 				IncludeComments:       false,
 				IncludeDocstrings:     true,
 				IncludeImports:        true,
-				IncludeFields:         true,  // Fixed: default should include fields
-				IncludeMethods:        true,  // Fixed: default should include methods
+				IncludeFields:         true, // Fixed: default should include fields
+				IncludeMethods:        true, // Fixed: default should include methods
 			},
 			expectedFile: "default.txt",
 		},
@@ -45,8 +45,8 @@ func TestJavaConstructs(t *testing.T) {
 				IncludeComments:       false,
 				IncludeDocstrings:     true,
 				IncludeImports:        true,
-				IncludeFields:         true,  // Fixed: default should include fields
-				IncludeMethods:        true,  // Fixed: default should include methods
+				IncludeFields:         true, // Fixed: default should include fields
+				IncludeMethods:        true, // Fixed: default should include methods
 			},
 			expectedFile: "implementation=1.txt",
 		},
@@ -59,8 +59,8 @@ func TestJavaConstructs(t *testing.T) {
 				IncludeComments:       false,
 				IncludeDocstrings:     true,
 				IncludeImports:        true,
-				IncludeFields:         true,  // Fixed: default should include fields
-				IncludeMethods:        true,  // Fixed: default should include methods
+				IncludeFields:         true, // Fixed: default should include fields
+				IncludeMethods:        true, // Fixed: default should include methods
 			},
 			expectedFile: "private=1,protected=1,internal=1,implementation=0.txt",
 		},

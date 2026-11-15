@@ -35,21 +35,21 @@ func (f *MarkdownFormatter) Format(w io.Writer, file *ir.DistilledFile) error {
 	if err := f.textFormatter.Format(&textBuf, file); err != nil {
 		return err
 	}
-	
+
 	// Convert text format to markdown
 	text := textBuf.String()
-	
+
 	// Debug: Show what text formatter returned
 	// fmt.Fprintf(os.Stderr, "DEBUG: Text formatter output:\n%s\n", text)
-	
+
 	// Extract file content from <file> tags using simple string operations
 	// This preserves all formatting exactly as output by the text formatter
 	startTag := fmt.Sprintf(`<file path="%s">`, escapeFilePath(file.Path))
 	endTag := "</file>"
-	
+
 	startIdx := strings.Index(text, startTag)
 	endIdx := strings.Index(text, endTag)
-	
+
 	if startIdx != -1 && endIdx != -1 && endIdx > startIdx {
 		// Extract content between tags, including the newline after opening tag
 		contentStart := startIdx + len(startTag)
@@ -57,17 +57,17 @@ func (f *MarkdownFormatter) Format(w io.Writer, file *ir.DistilledFile) error {
 			contentStart++ // Skip the newline after opening tag
 		}
 		content := text[contentStart:endIdx]
-		
+
 		// Debug: print what we extracted
 		// Temporarily disable debug to see actual output
 		// fmt.Fprintf(os.Stderr, "NEW DEBUG FORMAT\n")
-		
+
 		// Write as markdown
 		fmt.Fprintf(w, "### %s\n\n", file.Path)
-		
+
 		// Determine language for syntax highlighting
 		lang := f.getLanguageIdentifier(file.Language)
-		
+
 		fmt.Fprintf(w, "```%s\n", lang)
 		fmt.Fprint(w, content)
 		if !strings.HasSuffix(content, "\n") {
@@ -80,7 +80,7 @@ func (f *MarkdownFormatter) Format(w io.Writer, file *ir.DistilledFile) error {
 		// fmt.Fprintf(os.Stderr, "DEBUG: Text length: %d, First 100 chars: %q\n", len(text), text[:100])
 		fmt.Fprint(w, text)
 	}
-	
+
 	return nil
 }
 
@@ -91,9 +91,9 @@ func (f *MarkdownFormatter) FormatMultiple(w io.Writer, files []*ir.DistilledFil
 	if err := f.textFormatter.FormatMultiple(&textBuf, files); err != nil {
 		return err
 	}
-	
+
 	text := textBuf.String()
-	
+
 	// Find all file blocks in the text output
 	processed := 0
 	for {
@@ -103,7 +103,7 @@ func (f *MarkdownFormatter) FormatMultiple(w io.Writer, files []*ir.DistilledFil
 			break
 		}
 		startIdx += processed
-		
+
 		// Extract the path
 		pathStart := startIdx + 12 // len(`<file path="`)
 		pathEnd := strings.Index(text[pathStart:], `">`)
@@ -111,7 +111,7 @@ func (f *MarkdownFormatter) FormatMultiple(w io.Writer, files []*ir.DistilledFil
 			break
 		}
 		path := unescapeFilePath(text[pathStart : pathStart+pathEnd])
-		
+
 		// Find the closing tag
 		tagEnd := pathStart + pathEnd + 2
 		endIdx := strings.Index(text[tagEnd:], "</file>")
@@ -119,35 +119,35 @@ func (f *MarkdownFormatter) FormatMultiple(w io.Writer, files []*ir.DistilledFil
 			break
 		}
 		endIdx += tagEnd
-		
+
 		// Extract content (skip newline after opening tag)
 		contentStart := tagEnd
 		if contentStart < len(text) && text[contentStart] == '\n' {
 			contentStart++
 		}
 		content := text[contentStart:endIdx]
-		
+
 		// Write markdown
 		if processed > 0 {
 			fmt.Fprintln(w)
 			fmt.Fprintln(w)
 		}
-		
+
 		fmt.Fprintf(w, "### %s\n\n", path)
-		
+
 		// Determine language from file extension
 		lang := f.getLanguageFromPath(path)
-		
+
 		fmt.Fprintf(w, "```%s\n", lang)
 		fmt.Fprint(w, content)
 		if !strings.HasSuffix(content, "\n") {
 			fmt.Fprintln(w)
 		}
 		fmt.Fprintln(w, "```")
-		
+
 		processed = endIdx + 7 // len("</file>")
 	}
-	
+
 	return nil
 }
 
@@ -157,7 +157,7 @@ func (f *MarkdownFormatter) getLanguageFromPath(path string) string {
 	if idx := strings.LastIndex(path, "."); idx != -1 {
 		ext = path[idx+1:]
 	}
-	
+
 	switch ext {
 	case "py":
 		return "python"

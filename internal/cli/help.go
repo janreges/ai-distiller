@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/janreges/ai-distiller/internal/ai"
 	"github.com/janreges/ai-distiller/internal/aiactions"
 	"github.com/janreges/ai-distiller/internal/version"
+	"github.com/spf13/cobra"
 )
 
 // Color codes for terminal output
@@ -43,7 +43,7 @@ func getVersionInfo() string {
 // getHelpTemplate returns the help template with version info
 func getHelpTemplate() string {
 	versionInfo := getVersionInfo()
-	
+
 	// Determine if we should use colors
 	gray := ""
 	reset := ""
@@ -51,7 +51,7 @@ func getHelpTemplate() string {
 		gray = colorGray
 		reset = colorReset
 	}
-	
+
 	return fmt.Sprintf(`%s{{.Short}} (%s)
 
 AI Distiller transforms source code into optimized formats for Large Language Models.
@@ -155,7 +155,7 @@ func getExtendedHelpContent() string {
 		gray = colorGray
 		reset = colorReset
 	}
-	
+
 	return fmt.Sprintf(`%sAI DISTILLER - COMPLETE REFERENCE%s
 
 NAME
@@ -394,11 +394,11 @@ Explore the project on GitHub: https://github.com/janreges/ai-distiller%s
 func initializeHelpSystem() {
 	// Set custom help template
 	rootCmd.SetHelpTemplate(getHelpTemplate())
-	
+
 	// Add extended help functionality
 	rootCmd.Flags().Bool("help-extended", false, "Show extended help documentation")
 	rootCmd.Flags().Bool("cheat", false, "Show quick reference card")
-	
+
 	// Add help subcommands
 	helpCmd := &cobra.Command{
 		Use:   "help [topic]",
@@ -407,9 +407,9 @@ func initializeHelpSystem() {
 		Args:  cobra.MaximumNArgs(1),
 		RunE:  runHelpCommand,
 	}
-	
+
 	rootCmd.AddCommand(helpCmd)
-	
+
 	// Handle special help flags in PreRun
 	originalPreRun := rootCmd.PreRun
 	rootCmd.PreRun = func(cmd *cobra.Command, args []string) {
@@ -418,13 +418,13 @@ func initializeHelpSystem() {
 			showExtendedHelp()
 			os.Exit(0)
 		}
-		
+
 		// Check for cheat sheet
 		if cheat, _ := cmd.Flags().GetBool("cheat"); cheat {
 			showCheatSheet()
 			os.Exit(0)
 		}
-		
+
 		// Call original PreRun if it exists
 		if originalPreRun != nil {
 			originalPreRun(cmd, args)
@@ -437,7 +437,7 @@ func runHelpCommand(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return cmd.Help()
 	}
-	
+
 	topic := args[0]
 	switch topic {
 	case "actions":
@@ -449,7 +449,7 @@ func runHelpCommand(cmd *cobra.Command, args []string) error {
 	default:
 		return fmt.Errorf("unknown help topic: %s\nAvailable topics: actions, filtering, git", topic)
 	}
-	
+
 	return nil
 }
 
@@ -462,7 +462,7 @@ func showAIActionsHelp() {
 		gray = colorGray
 		reset = colorReset
 	}
-	
+
 	output := fmt.Sprintf(`%sAI ACTIONS - DETAILED REFERENCE%s
 
 AI Actions are pre-configured analysis workflows that format the distilled output
@@ -770,7 +770,7 @@ func showFilteringHelp() {
 		gray = colorGray
 		reset = colorReset
 	}
-	
+
 	fmt.Printf(`%sFILTERING - COMPLETE REFERENCE%s
 
 AI Distiller provides flexible filtering to control exactly what code elements
@@ -944,7 +944,7 @@ func showGitHelp() {
 		gray = colorGray
 		reset = colorReset
 	}
-	
+
 	fmt.Printf(`%sGIT MODE - COMPLETE REFERENCE%s
 
 When you target a .git directory, AI Distiller switches to a special git analysis
@@ -1090,7 +1090,7 @@ func showCheatSheet() {
 		gray = colorGray
 		reset = colorReset
 	}
-	
+
 	fmt.Printf(`%sAI DISTILLER - QUICK REFERENCE%s
 
 Transform source code into AI-optimized formats. Compress codebases 60-90%% while preserving
@@ -1175,17 +1175,17 @@ Explore the project on GitHub: %s%s
 // getAIActionsList returns a list of available AI actions with descriptions
 func getAIActionsList() []string {
 	registry := ai.NewActionRegistry()
-	
+
 	// Register actions to get the list
 	aiactions.Register(registry)
-	
+
 	var actions []string
 	actionList := registry.List()
 	for _, action := range actionList {
 		description := action.Description()
 		actions = append(actions, fmt.Sprintf("  %-35s %s", action.Name(), description))
 	}
-	
+
 	return actions
 }
 
@@ -1197,18 +1197,18 @@ func showExtendedHelp() {
 		// Determine the project root (executable should be in project root during development)
 		projectRoot := filepath.Dir(execPath)
 		docsPath := filepath.Join(projectRoot, "docs", "COMMAND-LINE-OPTIONS.md")
-		
+
 		// If not found, try relative to current directory (for development)
 		if _, err := os.Stat(docsPath); os.IsNotExist(err) {
 			docsPath = filepath.Join("docs", "COMMAND-LINE-OPTIONS.md")
 		}
-		
+
 		if content, err := os.ReadFile(docsPath); err == nil {
 			fmt.Print(string(content))
 			return
 		}
 	}
-	
+
 	// Fallback to embedded content
 	fmt.Print(getExtendedHelpContent())
 }

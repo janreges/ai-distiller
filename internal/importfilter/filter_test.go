@@ -7,7 +7,7 @@ import (
 
 func TestPythonFilter(t *testing.T) {
 	filter := NewPythonFilter()
-	
+
 	tests := []struct {
 		name     string
 		code     string
@@ -52,14 +52,14 @@ print(path)
 			expected: []string{}, // Wildcard imports are kept
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filtered, removed, err := filter.FilterUnusedImports(tt.code, 0)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			
+
 			// Check that expected imports were removed
 			for _, exp := range tt.expected {
 				found := false
@@ -73,7 +73,7 @@ print(path)
 					t.Errorf("expected import %q to be removed, but it wasn't", exp)
 				}
 			}
-			
+
 			// Check that removed imports are not in the output
 			for _, rem := range removed {
 				if strings.Contains(filtered, rem) {
@@ -86,7 +86,7 @@ print(path)
 
 func TestJavaScriptFilter(t *testing.T) {
 	filter := NewJavaScriptFilter()
-	
+
 	tests := []struct {
 		name     string
 		code     string
@@ -136,14 +136,14 @@ const app = express()
 			expected: []string{}, // Side-effect imports are kept
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filtered, removed, err := filter.FilterUnusedImports(tt.code, 0)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			
+
 			// Check that expected imports were removed
 			for _, exp := range tt.expected {
 				found := false
@@ -157,7 +157,7 @@ const app = express()
 					t.Errorf("expected import %q to be removed, but it wasn't", exp)
 				}
 			}
-			
+
 			// Check that removed imports are not in the output
 			for _, rem := range removed {
 				if strings.Contains(filtered, rem) {
@@ -170,7 +170,7 @@ const app = express()
 
 func TestGoFilter(t *testing.T) {
 	filter := NewGoFilter()
-	
+
 	tests := []struct {
 		name     string
 		code     string
@@ -228,14 +228,14 @@ func Debug(v interface{}) {
 			expected: []string{`j "encoding/json"`},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filtered, removed, err := filter.FilterUnusedImports(tt.code, 0)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			
+
 			// Check that expected imports were removed
 			for _, exp := range tt.expected {
 				found := false
@@ -249,7 +249,7 @@ func Debug(v interface{}) {
 					t.Errorf("expected import %q to be removed, but it wasn't", exp)
 				}
 			}
-			
+
 			// Check that removed imports are not in the output
 			for _, rem := range removed {
 				if strings.Contains(filtered, rem) {
@@ -262,13 +262,13 @@ func Debug(v interface{}) {
 
 func TestSearchForUsage(t *testing.T) {
 	base := NewBaseFilter("test")
-	
+
 	tests := []struct {
-		name           string
-		code           string
-		searchName     string
-		importEndLine  int
-		expectedFound  bool
+		name          string
+		code          string
+		searchName    string
+		importEndLine int
+		expectedFound bool
 	}{
 		{
 			name:          "simple usage",
@@ -306,7 +306,7 @@ func TestSearchForUsage(t *testing.T) {
 			expectedFound: true, // We do match in strings
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			found := base.SearchForUsage(tt.code, tt.searchName, tt.importEndLine)

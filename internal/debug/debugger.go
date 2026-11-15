@@ -6,7 +6,7 @@ import (
 	"log"
 	"strings"
 	"time"
-	
+
 	"github.com/davecgh/go-spew/spew"
 )
 
@@ -25,7 +25,7 @@ type Debugger interface {
 	// Dump conditionally prints a detailed view of a data structure
 	// Typically used with LevelTrace
 	Dump(level int, label string, data any)
-	
+
 	// IsEnabledFor checks if a given verbosity level is active
 	// This is a performance optimization to avoid expensive argument preparation
 	IsEnabledFor(level int) bool
@@ -33,11 +33,11 @@ type Debugger interface {
 	// WithSubsystem returns a new Debugger instance scoped to a specific part of the pipeline
 	// e.g., "parser", "formatter", "stripper"
 	WithSubsystem(name string) Debugger
-	
+
 	// Timing starts a timer and returns a function to stop it and log the duration
 	// Usage: defer dbg.Timing(LevelDetailed, "parsing")()
 	Timing(level int, operation string) func()
-	
+
 	// SetFormat sets the output format (text or json)
 	SetFormat(format string)
 }
@@ -67,10 +67,10 @@ func (d *cliDebugger) Logf(level int, format string, args ...any) {
 	if !d.IsEnabledFor(level) {
 		return
 	}
-	
+
 	levelStr := d.levelString(level)
 	timestamp := time.Now().Format("15:04:05.000")
-	
+
 	if d.format == "json" {
 		// Simple JSON output for now, can be enhanced with zap/zerolog later
 		msg := fmt.Sprintf(format, args...)
@@ -88,9 +88,9 @@ func (d *cliDebugger) Dump(level int, label string, data any) {
 	if !d.IsEnabledFor(level) {
 		return
 	}
-	
+
 	timestamp := time.Now().Format("15:04:05.000")
-	
+
 	if d.format == "json" {
 		// For JSON, we'll use a simplified dump
 		dumpedString := fmt.Sprintf("%+v", data) // Simple for now
@@ -100,7 +100,7 @@ func (d *cliDebugger) Dump(level int, label string, data any) {
 	} else {
 		// Use go-spew for human-readable dumps
 		d.logger.Printf("[%s] %sDUMP: === %s ===\n", timestamp, d.prefix, label)
-		
+
 		// Configure spew for readable output
 		config := spew.ConfigState{
 			Indent:                  "  ",
@@ -110,7 +110,7 @@ func (d *cliDebugger) Dump(level int, label string, data any) {
 			SpewKeys:                false,
 		}
 		dumpedString := config.Sdump(data)
-		
+
 		// Add prefix to each line for consistent formatting
 		lines := strings.Split(dumpedString, "\n")
 		for _, line := range lines {
@@ -131,7 +131,7 @@ func (d *cliDebugger) WithSubsystem(name string) Debugger {
 		newPrefix = strings.TrimSuffix(d.prefix, " ")
 		newPrefix = fmt.Sprintf("%s:%s] ", strings.TrimSuffix(newPrefix, "]"), name)
 	}
-	
+
 	return &cliDebugger{
 		logger:    d.logger,
 		verbosity: d.verbosity,
@@ -144,10 +144,10 @@ func (d *cliDebugger) Timing(level int, operation string) func() {
 	if !d.IsEnabledFor(level) {
 		return func() {} // No-op
 	}
-	
+
 	start := time.Now()
 	d.Logf(level, "Starting %s", operation)
-	
+
 	return func() {
 		duration := time.Since(start)
 		d.Logf(level, "Completed %s in %v", operation, duration)
@@ -185,12 +185,12 @@ func escapeJSON(s string) string {
 
 type noOpDebugger struct{}
 
-func (n *noOpDebugger) Logf(level int, format string, args ...any)    {}
-func (n *noOpDebugger) Dump(level int, label string, data any)        {}
-func (n *noOpDebugger) IsEnabledFor(level int) bool                   { return false }
-func (n *noOpDebugger) WithSubsystem(name string) Debugger            { return n }
-func (n *noOpDebugger) Timing(level int, operation string) func()     { return func() {} }
-func (n *noOpDebugger) SetFormat(format string)                       {}
+func (n *noOpDebugger) Logf(level int, format string, args ...any) {}
+func (n *noOpDebugger) Dump(level int, label string, data any)     {}
+func (n *noOpDebugger) IsEnabledFor(level int) bool                { return false }
+func (n *noOpDebugger) WithSubsystem(name string) Debugger         { return n }
+func (n *noOpDebugger) Timing(level int, operation string) func()  { return func() {} }
+func (n *noOpDebugger) SetFormat(format string)                    {}
 
 // Silent returns a no-op debugger that does nothing
 func Silent() Debugger {

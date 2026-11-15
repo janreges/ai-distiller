@@ -55,27 +55,27 @@ func (p *RawProcessor) CanProcessRaw(filename string) bool {
 	if p.CanProcess(filename) {
 		return true
 	}
-	
+
 	// Check by base filename (no extension)
 	base := filepath.Base(filename)
 	baseUpper := strings.ToUpper(base)
-	
+
 	// Common text files without extensions
 	textFiles := []string{
-		"README", "LICENSE", "CHANGELOG", "TODO", 
+		"README", "LICENSE", "CHANGELOG", "TODO",
 		"MAKEFILE", "DOCKERFILE", "VAGRANTFILE",
 		"GEMFILE", "RAKEFILE", "GULPFILE",
 		".GITIGNORE", ".DOCKERIGNORE", ".NPMIGNORE",
 		".EDITORCONFIG", ".PRETTIERRC", ".ESLINTRC",
 		".BABELRC", ".GITATTRIBUTES", ".GITMODULES",
 	}
-	
+
 	for _, tf := range textFiles {
 		if baseUpper == tf || base == strings.ToLower(tf) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -93,7 +93,7 @@ func (p *RawProcessor) Process(ctx context.Context, reader io.Reader, filename s
 		".pyc", ".pyo", ".class", ".o", ".obj",
 		".db", ".sqlite", ".mdb",
 	}
-	
+
 	for _, binExt := range binaryExtensions {
 		if ext == binExt {
 			// Log warning and skip binary file
@@ -101,7 +101,7 @@ func (p *RawProcessor) Process(ctx context.Context, reader io.Reader, filename s
 			return nil, nil
 		}
 	}
-	
+
 	file := &ir.DistilledFile{
 		BaseNode: ir.BaseNode{
 			Location: ir.Location{
@@ -118,18 +118,18 @@ func (p *RawProcessor) Process(ctx context.Context, reader io.Reader, filename s
 	scanner := bufio.NewScanner(reader)
 	var lines []string
 	lineNum := 0
-	
+
 	for scanner.Scan() {
 		lineNum++
 		lines = append(lines, scanner.Text())
 	}
-	
+
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
-	
+
 	file.BaseNode.Location.EndLine = lineNum
-	
+
 	// Create a single raw content node
 	content := strings.Join(lines, "\n")
 	// Debug: print content length
@@ -143,9 +143,9 @@ func (p *RawProcessor) Process(ctx context.Context, reader io.Reader, filename s
 		},
 		Content: content,
 	}
-	
+
 	file.Children = append(file.Children, rawNode)
-	
+
 	return file, nil
 }
 
@@ -158,33 +158,33 @@ func (p *RawProcessor) ProcessWithOptions(ctx context.Context, reader io.Reader,
 // IsTextFile checks if a file might be a text file based on extension
 func IsTextFile(filename string) bool {
 	ext := strings.ToLower(filepath.Ext(filename))
-	
+
 	// Check common text extensions
 	textExtensions := []string{
-		".txt", ".text", ".md", ".markdown", 
+		".txt", ".text", ".md", ".markdown",
 		".json", ".yaml", ".yml", ".xml", ".html",
 		".csv", ".ini", ".conf", ".config",
 		".log", ".sh", ".bat", ".sql",
 	}
-	
+
 	for _, textExt := range textExtensions {
 		if ext == textExt {
 			return true
 		}
 	}
-	
+
 	// Check filenames without extensions
 	base := strings.ToLower(filepath.Base(filename))
 	textFiles := []string{
 		"readme", "license", "changelog", "todo",
 		"makefile", "dockerfile", ".gitignore",
 	}
-	
+
 	for _, tf := range textFiles {
 		if base == tf {
 			return true
 		}
 	}
-	
+
 	return false
 }

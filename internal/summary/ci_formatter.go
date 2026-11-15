@@ -3,7 +3,7 @@ package summary
 import (
 	"fmt"
 	"io"
-	
+
 	"github.com/dustin/go-humanize"
 )
 
@@ -18,7 +18,7 @@ func NewCIFormatter() *CIFormatter {
 // Format outputs a clean, parseable summary line for CI environments
 func (f *CIFormatter) Format(w io.Writer, stats Stats) error {
 	ratio := getCompressionRatio(stats.OriginalBytes, stats.DistilledBytes)
-	
+
 	// Format: [aid] ✓ 97.6% saved | 5.2MB → 128KB | 450ms | ~1.2M → ~30k tokens
 	fmt.Fprintf(w, "[aid] ✓ %.1f%% saved | %s → %s | %s",
 		ratio,
@@ -26,7 +26,7 @@ func (f *CIFormatter) Format(w io.Writer, stats Stats) error {
 		humanize.Bytes(uint64(stats.DistilledBytes)),
 		formatDuration(stats.Duration),
 	)
-	
+
 	// Add token savings if available
 	if stats.OriginalTokens > 0 && stats.DistilledTokens > 0 {
 		tokensSaved := stats.OriginalTokens - stats.DistilledTokens
@@ -34,19 +34,19 @@ func (f *CIFormatter) Format(w io.Writer, stats Stats) error {
 			formatTokenCount(tokensSaved),
 		)
 	}
-	
+
 	// Add output path if not stdout
 	if !stats.IsStdout && stats.OutputPath != "" {
 		fmt.Fprintf(w, " | saved to: %s", stats.OutputPath)
 	}
-	
+
 	fmt.Fprintln(w)
-	
+
 	// Add AI agent recommendation when the output went only to the file
 	if !stats.IsStdout && !stats.Printed && stats.OutputPath != "" {
 		fmt.Fprintln(w, "AI agent recommendation: Load the ENTIRE output file into your context (don't use grep/tail/head) for a comprehensive code overview.")
 	}
-	
+
 	return nil
 }
 

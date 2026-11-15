@@ -55,13 +55,13 @@ func TestAidignoreIntegration(t *testing.T) {
 
 	// Create test files
 	files := map[string]string{
-		"main.go":                     "package main",
-		"src/app.go":                  "package src",
-		"vendor/lib/vendor.go":        "package vendor",
+		"main.go":                       "package main",
+		"src/app.go":                    "package src",
+		"vendor/lib/vendor.go":          "package vendor",
 		"node_modules/package/index.js": "export default {}",
-		"build/output.go":             "package build",
-		"README.md":                   "# README",
-		"docs/API.md":                 "# API",
+		"build/output.go":               "package build",
+		"README.md":                     "# README",
+		"docs/API.md":                   "# API",
 	}
 	for file, content := range files {
 		path := filepath.Join(tmpDir, file)
@@ -71,34 +71,34 @@ func TestAidignoreIntegration(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
+		name             string
 		aidignoreContent string
-		expectedFiles  []string
+		expectedFiles    []string
 	}{
 		{
-			name:           "Default behavior - vendor and node_modules ignored",
+			name:             "Default behavior - vendor and node_modules ignored",
 			aidignoreContent: "",
-			expectedFiles:  []string{"README.md", "docs/API.md", "main.go", "src/app.go"},
+			expectedFiles:    []string{"README.md", "docs/API.md", "main.go", "src/app.go"},
 		},
 		{
-			name:           "Include vendor with !vendor/",
+			name:             "Include vendor with !vendor/",
 			aidignoreContent: "!vendor/\n",
-			expectedFiles:  []string{".aidignore", "README.md", "docs/API.md", "main.go", "src/app.go", "vendor/lib/vendor.go"},
+			expectedFiles:    []string{".aidignore", "README.md", "docs/API.md", "main.go", "src/app.go", "vendor/lib/vendor.go"},
 		},
 		{
-			name:           "Include node_modules and exclude src",
+			name:             "Include node_modules and exclude src",
 			aidignoreContent: "!node_modules/\nsrc/\n",
-			expectedFiles:  []string{".aidignore", "README.md", "docs/API.md", "main.go", "node_modules/package/index.js"},
+			expectedFiles:    []string{".aidignore", "README.md", "docs/API.md", "main.go", "node_modules/package/index.js"},
 		},
 		{
-			name:           "Include markdown files",
+			name:             "Include markdown files",
 			aidignoreContent: "!*.md\n!**/*.md\n",
-			expectedFiles:  []string{".aidignore", "README.md", "docs/API.md", "main.go", "src/app.go"},
+			expectedFiles:    []string{".aidignore", "README.md", "docs/API.md", "main.go", "src/app.go"},
 		},
 		{
-			name:           "Include all default ignored directories",
+			name:             "Include all default ignored directories",
 			aidignoreContent: "!vendor/\n!node_modules/\n!build/\n",
-			expectedFiles:  []string{".aidignore", "README.md", "build/output.go", "docs/API.md", "main.go", "node_modules/package/index.js", "src/app.go", "vendor/lib/vendor.go"},
+			expectedFiles:    []string{".aidignore", "README.md", "build/output.go", "docs/API.md", "main.go", "node_modules/package/index.js", "src/app.go", "vendor/lib/vendor.go"},
 		},
 	}
 
@@ -119,11 +119,11 @@ func TestAidignoreIntegration(t *testing.T) {
 			proc := NewWithContext(context.Background())
 			opts := ProcessOptions{
 				Recursive: true,
-				RawMode: true, // Use RawProcessor for all files
+				RawMode:   true, // Use RawProcessor for all files
 				// Limit to text files only for safety
 				IncludePatterns: []string{"*.go", "*.js", "*.tsx", "*.md", ".aidignore"},
 			}
-			
+
 			result, err := proc.processDirectory(tmpDir, opts)
 			if err != nil {
 				t.Fatalf("Failed to process directory: %v", err)
@@ -162,11 +162,11 @@ func TestAidignoreNestedFiles(t *testing.T) {
 
 	// Create files
 	files := map[string]string{
-		"main.go":                      "package main",
-		"src/app.go":                   "package src",
-		"src/components/Button.tsx":    "export class Button {}",
-		"src/tests/Button.test.tsx":    "test('Button', () => {})",
-		"test_main.go":                 "package main",
+		"main.go":                   "package main",
+		"src/app.go":                "package src",
+		"src/components/Button.tsx": "export class Button {}",
+		"src/tests/Button.test.tsx": "test('Button', () => {})",
+		"test_main.go":              "package main",
 	}
 	for file, content := range files {
 		path := filepath.Join(tmpDir, file)
@@ -192,11 +192,11 @@ func TestAidignoreNestedFiles(t *testing.T) {
 	proc := NewWithContext(context.Background())
 	opts := ProcessOptions{
 		Recursive: true,
-		RawMode: true, // Use RawProcessor for all files
+		RawMode:   true, // Use RawProcessor for all files
 		// Limit to text files only for safety
 		IncludePatterns: []string{"*.go", "*.js", "*.tsx", "*.md", ".aidignore"},
 	}
-	
+
 	result, err := proc.processDirectory(tmpDir, opts)
 	if err != nil {
 		t.Fatalf("Failed to process directory: %v", err)
@@ -235,18 +235,18 @@ func stringSlicesEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	
+
 	// Create maps for comparison
 	aMap := make(map[string]bool)
 	for _, s := range a {
 		aMap[s] = true
 	}
-	
+
 	for _, s := range b {
 		if !aMap[s] {
 			return false
 		}
 	}
-	
+
 	return true
 }
