@@ -20,6 +20,7 @@ var knownGaps = map[string]string{
 	"go/private-hidden":    "H1: doc comment of a removed member stays",
 	"java/private-hidden":  "H1: doc comment of a removed member stays",
 	"swift/private-hidden": "H1: doc comment of a removed member stays",
+	"rust/private-hidden":  "H1: doc comment of a removed member stays",
 
 	// The fixture is detected as "typescript" before C# is scored, because the
 	// TypeScript pattern <\w+> matches <summary>; without that tag the detector

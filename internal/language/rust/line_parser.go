@@ -459,42 +459,33 @@ func (p *LineParser) parseFunction(file *ir.DistilledFile, parent ir.DistilledNo
 
 	p.currentLine++
 
-	// Parse function body
-	if p.currentLine < len(p.lines) {
-		line := strings.TrimSpace(p.lines[p.currentLine])
-		prevLine := strings.TrimSpace(p.lines[p.currentLine-1])
+	// Parse function body. It opens and closes on the line before
+	// p.currentLine (the signature or the last where-clause line), opens at
+	// the end of that line, or opens on a line of its own.
+	if body := oneLineBody(p.lines[p.currentLine-1]); body != "" {
+		fn.Implementation = body
+		fn.Location.EndLine = p.currentLine
+	} else if p.currentLine < len(p.lines) {
+		open := -1
+		if strings.HasSuffix(strings.TrimSpace(p.lines[p.currentLine-1]), "{") {
+			open = p.currentLine - 1
+		} else if strings.TrimSpace(p.lines[p.currentLine]) == "{" {
+			open = p.currentLine
+		}
 
-		if strings.HasSuffix(prevLine, "{") {
-			// Opening brace is on the same line as function declaration
-			startLine := p.currentLine - 1
-			p.currentLine-- // Go back to the line with the brace
-			p.skipBlock()
+		if open >= 0 {
+			p.currentLine = open
+			p.skipBlock() // stops on the line holding the closing brace
+			closing := min(p.currentLine, len(p.lines)-1)
 			p.currentLine++ // Move past the closing brace
 			fn.Location.EndLine = p.currentLine
 
-			// Extract implementation
-			if p.currentLine > startLine {
-				var implLines []string
-				for i := startLine; i <= p.currentLine && i < len(p.lines); i++ {
-					implLines = append(implLines, p.lines[i])
-				}
-				fn.Implementation = strings.Join(implLines, "\n")
-			}
-		} else if line == "{" {
-			// Opening brace is on the next line
-			startLine := p.currentLine
-			p.skipBlock()
-			p.currentLine++ // Move past the closing brace
-			fn.Location.EndLine = p.currentLine
-
-			// Extract implementation
-			if p.currentLine > startLine {
-				var implLines []string
-				for i := startLine; i <= p.currentLine && i < len(p.lines); i++ {
-					implLines = append(implLines, p.lines[i])
-				}
-				fn.Implementation = strings.Join(implLines, "\n")
-			}
+			// The body starts at the opening brace, so the signature is not
+			// repeated; the lines after it are kept verbatim.
+			first := p.lines[open]
+			implLines := []string{first[strings.LastIndex(first, "{"):]}
+			implLines = append(implLines, p.lines[open+1:closing+1]...)
+			fn.Implementation = strings.Join(implLines, "\n")
 		} else {
 			// No body (e.g., trait method declaration)
 			fn.Location.EndLine = p.currentLine
@@ -999,22 +990,107 @@ func (p *LineParser) isSelfParameter(param string) bool {
 	return false
 }
 
-// skipBlock skips over a code block by counting braces
-// TODO: This block skipping logic is based on brace counting and is not robust.
-// It can be fooled by braces inside strings or comments. This is a known
-// limitation of the line-based parser and a key reason to move to the
-// tree-sitter implementation.
+// skipBlock skips over a code block whose opening brace is the last one on
+// p.currentLine, and leaves p.currentLine on the line holding the matching
+// closing brace (or past the end when the block never closes). Braces are
+// counted with braceDelta; block comments and string literals that span
+// lines can still fool it.
 func (p *LineParser) skipBlock() {
 	braceCount := 1
 	p.currentLine++
 
 	for p.currentLine < len(p.lines) && braceCount > 0 {
-		line := p.lines[p.currentLine]
-		braceCount += strings.Count(line, "{") - strings.Count(line, "}")
+		braceCount += braceDelta(p.lines[p.currentLine])
 		if braceCount > 0 {
 			p.currentLine++
 		}
 	}
+}
+
+// braceDelta returns the number of '{' minus the number of '}' on line,
+// counting only the braces codeBraces reports.
+func braceDelta(line string) int {
+	delta := 0
+	codeBraces(line, func(_ int, open bool) bool {
+		if open {
+			delta++
+		} else {
+			delta--
+		}
+		return true
+	})
+	return delta
+}
+
+// oneLineBody returns the function body that opens and closes on line, from
+// its first code '{' to the matching '}', or "" when line holds no complete
+// body. Text after the closing brace (a comment) is not part of the body.
+func oneLineBody(line string) string {
+	start, depth, body := -1, 0, ""
+	codeBraces(line, func(i int, open bool) bool {
+		switch {
+		case open:
+			if start < 0 {
+				start = i
+			}
+			depth++
+		case start < 0:
+			return false // a '}' before any '{' closes an outer block
+		default:
+			depth--
+			if depth == 0 {
+				body = line[start : i+1]
+				return false
+			}
+		}
+		return true
+	})
+	return body
+}
+
+// codeBraces calls visit with the index of each '{' (open) and '}' on line
+// that is code, ignoring braces inside double-quoted string literals, inside
+// char literals such as '{' or '"', and after a // comment. Lifetimes ('a)
+// are not char literals and are scanned as code. Scanning stops when visit
+// returns false.
+func codeBraces(line string, visit func(i int, open bool) bool) {
+	inString := false
+	for i := 0; i < len(line); i++ {
+		c := line[i]
+		switch {
+		case inString:
+			if c == '\\' {
+				i++ // skip the escaped character
+			} else if c == '"' {
+				inString = false
+			}
+		case c == '"':
+			inString = true
+		case c == '\'':
+			i += charLiteralLen(line[i:]) - 1
+		case c == '/' && i+1 < len(line) && line[i+1] == '/':
+			return
+		case c == '{' || c == '}':
+			if !visit(i, c == '{') {
+				return
+			}
+		}
+	}
+}
+
+// charLiteralLen returns the byte length of the char literal at the start of
+// s, either one byte ('x') or an escape ('\n', '\u{7B}', an escaped quote),
+// or 1 when the quote opens a lifetime or anything else.
+func charLiteralLen(s string) int {
+	if len(s) >= 3 && s[1] != '\\' && s[2] == '\'' {
+		return 3
+	}
+	if len(s) >= 4 && s[1] == '\\' {
+		if end := strings.IndexByte(s[3:], '\''); end >= 0 {
+			return 3 + end + 1
+		}
+	}
+	return 1
 }
 
 func (p *LineParser) getIndent(line string) int {

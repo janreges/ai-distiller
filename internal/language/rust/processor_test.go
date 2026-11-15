@@ -237,3 +237,89 @@ func TestProcessor_CanProcess(t *testing.T) {
 		})
 	}
 }
+
+// parseRust runs the real processor on src with implementations and private
+// items kept.
+func parseRust(t *testing.T, src string) *ir.DistilledFile {
+	t.Helper()
+	file, err := NewProcessor().Process(context.Background(), strings.NewReader(src), "test.rs")
+	require.NoError(t, err)
+	return file
+}
+
+// findRustFn returns the function called name, searching the top level of file
+// and the members of its classes (structs, impls, traits, modules). The test
+// fails when there is none.
+func findRustFn(t *testing.T, file *ir.DistilledFile, name string) *ir.DistilledFunction {
+	t.Helper()
+	for _, node := range file.Children {
+		switch n := node.(type) {
+		case *ir.DistilledFunction:
+			if n.Name == name {
+				return n
+			}
+		case *ir.DistilledClass:
+			for _, child := range n.Children {
+				if fn, ok := child.(*ir.DistilledFunction); ok && fn.Name == name {
+					return fn
+				}
+			}
+		}
+	}
+	require.Failf(t, "function not found", "no function %q in the parsed file", name)
+	return nil
+}
+
+func TestRust_ImplementationStartsAtBrace(t *testing.T) {
+	file := parseRust(t, "pub struct P {\n    pub x: i32,\n}\n\nimpl P {\n    pub fn get(&self) -> i32 {\n        self.x\n    }\n}\n")
+	get := findRustFn(t, file, "get")
+	assert.Equal(t, "{\n        self.x\n    }", get.Implementation)
+}
+
+func TestRust_ImplementationBraceOnOwnLine(t *testing.T) {
+	file := parseRust(t, "pub fn f<T>(x: T) -> T\nwhere\n    T: Clone,\n{\n    x\n}\n")
+	assert.Equal(t, "{\n    x\n}", findRustFn(t, file, "f<T>").Implementation)
+}
+
+func TestRust_BraceInsideStringLiteral(t *testing.T) {
+	file := parseRust(t, "pub fn a() {\n    println!(\"}\"); // }\n}\n\npub fn b() {\n}\n")
+	assert.Equal(t, "{\n    println!(\"}\"); // }\n}", findRustFn(t, file, "a").Implementation)
+	assert.NotNil(t, findRustFn(t, file, "b"))
+}
+
+func TestRust_BraceDelta(t *testing.T) {
+	assert.Equal(t, 1, braceDelta("pub fn a() {"))
+	assert.Equal(t, -1, braceDelta("}"))
+	assert.Equal(t, 0, braceDelta(`println!("}"); // }`))
+	assert.Equal(t, 0, braceDelta(`let s = "\"{";`))
+	// Char literals hold braces and quotes; lifetimes are not char literals.
+	assert.Equal(t, 0, braceDelta(`'{' => depth += 1,`))
+	assert.Equal(t, 1, braceDelta(`'}' => {`))
+	assert.Equal(t, 1, braceDelta(`if c == '"' {`))
+	assert.Equal(t, 1, braceDelta(`if c == '\'' {`))
+	assert.Equal(t, 1, braceDelta(`fn f<'a>(x: &'a str) -> &'a str {`))
+}
+
+func TestRust_OneLineBody(t *testing.T) {
+	src := "pub struct S {\n    items: Vec<i32>,\n}\n\nimpl S {\n" +
+		"    pub fn quick(&self) -> usize { self.items.len() }\n" +
+		"    pub fn empty() {}\n" +
+		"    pub fn brace(&self) -> char { if self.items.is_empty() { '}' } else { '{' } } // }\n" +
+		"    pub fn after(&self) -> i32 {\n        1\n    }\n}\n\n" +
+		"pub fn top() -> i32 { 42 }\n"
+	file := parseRust(t, src)
+	assert.Equal(t, "{ self.items.len() }", findRustFn(t, file, "quick").Implementation)
+	assert.Equal(t, "usize", findRustFn(t, file, "quick").Returns.Name)
+	assert.Equal(t, "{}", findRustFn(t, file, "empty").Implementation)
+	assert.Equal(t, "{ if self.items.is_empty() { '}' } else { '{' } }", findRustFn(t, file, "brace").Implementation)
+	assert.Equal(t, "{\n        1\n    }", findRustFn(t, file, "after").Implementation)
+	assert.Equal(t, "{ 42 }", findRustFn(t, file, "top").Implementation)
+}
+
+func TestRust_OneLineBodyOpenOnly(t *testing.T) {
+	// A body that opens on the signature line but closes later is not a
+	// one-line body.
+	assert.Equal(t, "", oneLineBody("pub fn f() { let x = 1;"))
+	assert.Equal(t, "", oneLineBody("pub fn f() -> i32;"))
+	assert.Equal(t, "{ x }", oneLineBody("pub fn f(x: i32) -> i32 { x } // trailing"))
+}

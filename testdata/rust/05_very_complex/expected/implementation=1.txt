@@ -31,13 +31,11 @@ impl Configurable for ServerConfig {
 // The `F` closure must work for *any* lifetime `'a`.
 
 pub fn process_all_sources<F>(sources: Vec<&dyn DataSource>, mut processor: F) where F: for<'a> FnMut(Box<dyn std::io::Read + 'a>), {
-    {
-        for source in sources {
-            let reader = source.get_reader();
-            // The type of `reader` is tied to the lifetime of `source` in this loop iteration.
-            // The closure `processor` must be able to handle this.
-            processor(Box::new(reader));
-        }
+    for source in sources {
+        let reader = source.get_reader();
+        // The type of `reader` is tied to the lifetime of `source` in this loop iteration.
+        // The closure `processor` must be able to handle this.
+        processor(Box::new(reader));
     }
 }
 // Advanced trait with const generics and GATs
@@ -58,11 +56,9 @@ impl FixedArray<T, N> {
     // Create new fixed array
 
     pub fn new() -> Self {
-        pub const fn new() -> Self {
-                Self {
-                    data: [None; N],
-                }
-            }
+        Self {
+            data: [None; N],
+        }
     }
 }
 

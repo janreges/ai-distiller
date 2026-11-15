@@ -65,11 +65,14 @@ var fixtures = []fixture{
 		Private:   []string{"confPrivate"},
 		ExpandSym: "ConfPublic",
 	})},
-	{Lang: "rust", File: "rust/sample.rs", Checks: standard(markers{
+	{Lang: "rust", File: "rust/sample.rs", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "conf_field", "conf_public", "conf_other"},
 		Private:   []string{"conf_private"},
 		ExpandSym: "conf_public",
-	})},
+	}), check{Cap: "body-signature-once", Flags: []string{"--implementation=1"}, Once: []string{"fn conf_public"}},
+		check{Cap: "body-indent", Flags: []string{"--implementation=1"},
+			Contains: []string{"        let a = \"CONF_BODY_A\";\n        a\n    }\n"}},
+		check{Cap: "one-line-body", Flags: []string{"--implementation=1"}, Contains: []string{"conf_quick(&self) -> i32 { 1 }"}})},
 	{Lang: "swift", File: "swift/sample.swift", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
 		Private:   []string{"confPrivate"},

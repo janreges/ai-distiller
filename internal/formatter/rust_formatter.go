@@ -422,12 +422,7 @@ func (f *RustFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, in
 
 	// Implementation
 	if fn.Implementation != "" {
-		fmt.Fprintln(w, " {")
-		impl := strings.TrimSpace(fn.Implementation)
-		for _, line := range strings.Split(impl, "\n") {
-			fmt.Fprintf(w, "%s    %s\n", indent, line)
-		}
-		fmt.Fprintf(w, "%s}\n", indent)
+		fmt.Fprint(w, renderBody(fn.Implementation, indent))
 	} else {
 		fmt.Fprintln(w)
 	}
@@ -494,12 +489,7 @@ func (f *RustFormatter) formatImplMethod(w io.Writer, fn *ir.DistilledFunction, 
 
 	// Implementation
 	if fn.Implementation != "" {
-		fmt.Fprintln(w, " {")
-		impl := strings.TrimSpace(fn.Implementation)
-		for _, line := range strings.Split(impl, "\n") {
-			fmt.Fprintf(w, "%s    %s\n", indentStr, line)
-		}
-		fmt.Fprintf(w, "%s}\n", indentStr)
+		fmt.Fprint(w, renderBody(fn.Implementation, indentStr))
 	} else {
 		fmt.Fprintln(w)
 	}
@@ -555,12 +545,7 @@ func (f *RustFormatter) formatTraitMethod(w io.Writer, fn *ir.DistilledFunction,
 
 	// Default implementation or just signature
 	if fn.Implementation != "" {
-		fmt.Fprintln(w, " {")
-		impl := strings.TrimSpace(fn.Implementation)
-		for _, line := range strings.Split(impl, "\n") {
-			fmt.Fprintf(w, "%s    %s\n", indentStr, line)
-		}
-		fmt.Fprintf(w, "%s}\n", indentStr)
+		fmt.Fprint(w, renderBody(fn.Implementation, indentStr))
 	} else {
 		fmt.Fprintln(w, ";")
 	}

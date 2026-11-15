@@ -17,21 +17,17 @@ impl SourceFile {
     // Creates a new SourceFile, demonstrating ownership (takes ownership of path and content).
 
     pub fn new(path: String, content: String) -> Self {
-        pub fn new(path: String, content: String) -> Self {
-                let lines_of_code = content.lines().count() as u32;
-                Self {
-                    path,
-                    content,
-                    lines_of_code,
-                }
-            }
+        let lines_of_code = content.lines().count() as u32;
+        Self {
+            path,
+            content,
+            lines_of_code,
+        }
     }
     // A public method to access a derived property.
 
     pub fn line_count(&self) -> u32 {
-        pub fn line_count(&self) -> u32 {
-                self.lines_of_code
-            }
+        self.lines_of_code
     }
 }
 

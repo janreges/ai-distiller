@@ -11,14 +11,12 @@ pub mod settings {
     // This function is public and can be called from outside `settings`.
 
     pub fn get_version() -> String {
-        pub fn get_version() -> String {
-                // This function demonstrates internal logic and calls a private function.
-                if is_stable() {
-                    format!("{}.{}", MAJOR_VERSION, MINOR_VERSION)
-                } else {
-                    format!("{}.{}-beta", MAJOR_VERSION, MINOR_VERSION)
-                }
-            }
+        // This function demonstrates internal logic and calls a private function.
+        if is_stable() {
+            format!("{}.{}", MAJOR_VERSION, MINOR_VERSION)
+        } else {
+            format!("{}.{}-beta", MAJOR_VERSION, MINOR_VERSION)
+        }
     }
 }
 </file>

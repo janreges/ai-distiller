@@ -18,37 +18,33 @@ impl AnalysisService {
     // Create new analysis service
 
     pub fn new() -> Self {
-        pub fn new() -> Self {
-                Self {
-                    cache: Arc::new(Mutex::new(Vec::new())),
-                    async_processor: None,
-                }
-            }
+        Self {
+            cache: Arc::new(Mutex::new(Vec::new())),
+            async_processor: None,
+        }
     }
     // Asynchronously validates a piece of code using the native FFI function.
     // This tests `async fn` syntax and `unsafe` blocks.
 
     pub async fn validate_code(&self, code: &str) -> Result<bool, &'static str> {
-        pub async fn validate_code(&self, code: &str) -> Result<bool, &'static str> {
-                println!("Starting async validation...");
-                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        
-                let c_str = std::ffi::CString::new(code).map_err(|_| "Invalid CString")?;
-                let result_code: i32;
-        
-                // The `unsafe` block is a critical syntactic construct to parse.
-                unsafe {
-                    result_code = validate_syntax_natively(c_str.as_ptr());
-                }
-        
-                let is_valid = result_code == 0;
-                if is_valid {
-                    // Accessing shared state requires locking the mutex.
-                    let mut cache_guard = self.cache.lock().unwrap();
-                    cache_guard.push(format!("Validated: {}", self.name_from_code(code)));
-                }
-                Ok(is_valid)
-            }
+        println!("Starting async validation...");
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+
+        let c_str = std::ffi::CString::new(code).map_err(|_| "Invalid CString")?;
+        let result_code: i32;
+
+        // The `unsafe` block is a critical syntactic construct to parse.
+        unsafe {
+            result_code = validate_syntax_natively(c_str.as_ptr());
+        }
+
+        let is_valid = result_code == 0;
+        if is_valid {
+            // Accessing shared state requires locking the mutex.
+            let mut cache_guard = self.cache.lock().unwrap();
+            cache_guard.push(format!("Validated: {}", self.name_from_code(code)));
+        }
+        Ok(is_valid)
     }
 }
 // Advanced trait with async methods
@@ -67,16 +63,12 @@ impl FFIData {
     // Safe constructor
 
     pub fn new_integer(value: i64) -> Self {
-        pub fn new_integer(value: i64) -> Self {
-                Self { integer: value }
-            }
+        Self { integer: value }
     }
     // Unsafe getter
 
     pub fn get_integer(&self) -> i64 {
-        pub unsafe fn get_integer(&self) -> i64 {
-                self.integer
-            }
+        self.integer
     }
 }
 </file>

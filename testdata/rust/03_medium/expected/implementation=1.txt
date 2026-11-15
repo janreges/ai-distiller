@@ -26,31 +26,27 @@ impl AnalysisResult<T> {
     // Create new analysis result
 
     pub fn new(source_id: String, result: T) -> Self {
-        pub fn new(source_id: String, result: T) -> Self {
-                Self {
-                    source_id,
-                    result,
-                    metadata: None,
-                }
-            }
+        Self {
+            source_id,
+            result,
+            metadata: None,
+        }
     }
 }
 // A generic function with a lifetime `'a` and trait bounds.
 // It analyzes a data source and returns a result.
 
 pub fn analyze<'a, S>(source: &'a S) -> Result<AnalysisResult<String>, AnalysisError> where S: DataSource + ?Sized, // `?Sized` is an interesting bound to parse. {
-    {
-        let content = source.get_content()?.as_ref().to_vec();
-    
-        if content.is_empty() {
-            return Err(AnalysisError::EmptyContent);
-        }
-    
-        // A mock analysis.
-        let analysis_summary = format!("Analyzed {} bytes", content.len());
-    
-        Ok(AnalysisResult::new("mock_id".to_string(), analysis_summary))
+    let content = source.get_content()?.as_ref().to_vec();
+
+    if content.is_empty() {
+        return Err(AnalysisError::EmptyContent);
     }
+
+    // A mock analysis.
+    let analysis_summary = format!("Analyzed {} bytes", content.len());
+
+    Ok(AnalysisResult::new("mock_id".to_string(), analysis_summary))
 }
 // Advanced generic function with multiple lifetime parameters
 
