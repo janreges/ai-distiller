@@ -141,14 +141,8 @@ func (s *Stripper) Visit(node ir.DistilledNode) ir.DistilledNode {
 }
 
 func (s *Stripper) visitFile(n *ir.DistilledFile) *ir.DistilledFile {
-	result := &ir.DistilledFile{
-		BaseNode: n.BaseNode,
-		Path:     n.Path,
-		Language: n.Language,
-		Version:  n.Version,
-		Metadata: n.Metadata,
-		Errors:   n.Errors,
-	}
+	result := *n
+	result.Children = nil
 	
 	// Visit children
 	for _, child := range n.Children {
@@ -160,7 +154,7 @@ func (s *Stripper) visitFile(n *ir.DistilledFile) *ir.DistilledFile {
 	// Post-process to remove orphaned docstrings
 	result.Children = s.removeOrphanedDocstrings(result.Children)
 
-	return result
+	return &result
 }
 
 // visitPackage strips the children of a package/namespace node. Without this,
@@ -169,10 +163,8 @@ func (s *Stripper) visitFile(n *ir.DistilledFile) *ir.DistilledFile {
 // unchanged — so visibility and implementation filtering never applied to
 // anything inside the namespace.
 func (s *Stripper) visitPackage(n *ir.DistilledPackage) ir.DistilledNode {
-	result := &ir.DistilledPackage{
-		BaseNode: n.BaseNode,
-		Name:     n.Name,
-	}
+	result := *n
+	result.Children = nil
 
 	for _, child := range n.Children {
 		if visited := child.Accept(s); visited != nil {
@@ -182,7 +174,7 @@ func (s *Stripper) visitPackage(n *ir.DistilledPackage) ir.DistilledNode {
 
 	result.Children = s.removeOrphanedDocstrings(result.Children)
 
-	return result
+	return &result
 }
 
 func (s *Stripper) visitFunction(n *ir.DistilledFunction) ir.DistilledNode {
@@ -196,18 +188,8 @@ func (s *Stripper) visitFunction(n *ir.DistilledFunction) ir.DistilledNode {
 		return nil
 	}
 	
-	// Create copy
-	result := &ir.DistilledFunction{
-		BaseNode:   n.BaseNode,
-		Name:       n.Name,
-		Visibility: n.Visibility,
-		Modifiers:  n.Modifiers,
-		Decorators: n.Decorators,
-		TypeParams: n.TypeParams,
-		Parameters: n.Parameters,
-		Returns:    n.Returns,
-		Implementation: n.Implementation,
-	}
+	// Copy every field, then change only what the options require
+	result := *n
 	
 	// Strip implementation if requested, unless this symbol is explicitly
 	// expanded via --expand (by its own name, or by being inside a type whose
@@ -223,7 +205,7 @@ func (s *Stripper) visitFunction(n *ir.DistilledFunction) ir.DistilledNode {
 	
 	// Functions don't have children in our IR
 	
-	return result
+	return &result
 }
 
 func (s *Stripper) visitClass(n *ir.DistilledClass) ir.DistilledNode {
@@ -232,21 +214,9 @@ func (s *Stripper) visitClass(n *ir.DistilledClass) ir.DistilledNode {
 		return nil
 	}
 	
-	// Create copy
-	result := &ir.DistilledClass{
-		BaseNode:    n.BaseNode,
-		Name:        n.Name,
-		Visibility:  n.Visibility,
-		Modifiers:   n.Modifiers,
-		Decorators:  n.Decorators,
-		TypeParams:  n.TypeParams,
-		Extends:     n.Extends,
-		Implements:  n.Implements,
-		Mixins:      n.Mixins,
-		Deprecated:  n.Deprecated,
-		Description: n.Description,
-		APIDocblock: n.APIDocblock,
-	}
+	// Copy every field, then change only what the options require
+	result := *n
+	result.Children = nil
 
 	// Visit children. If this class name matched --expand, keep all of its
 	// methods' implementations.
@@ -269,7 +239,7 @@ func (s *Stripper) visitClass(n *ir.DistilledClass) ir.DistilledNode {
 		result.Decorators = nil
 	}
 	
-	return result
+	return &result
 }
 
 func (s *Stripper) visitInterface(n *ir.DistilledInterface) ir.DistilledNode {
@@ -278,16 +248,9 @@ func (s *Stripper) visitInterface(n *ir.DistilledInterface) ir.DistilledNode {
 		return nil
 	}
 	
-	// Create copy
-	result := &ir.DistilledInterface{
-		BaseNode:   n.BaseNode,
-		Name:       n.Name,
-		Visibility: n.Visibility,
-		Modifiers:  n.Modifiers,
-		TypeParams: n.TypeParams,
-		Extends:    n.Extends,
-		Permits:    n.Permits,
-	}
+	// Copy every field, then change only what the options require
+	result := *n
+	result.Children = nil
 	
 	// Visit children
 	for _, child := range n.Children {
@@ -296,7 +259,7 @@ func (s *Stripper) visitInterface(n *ir.DistilledInterface) ir.DistilledNode {
 		}
 	}
 	
-	return result
+	return &result
 }
 
 func (s *Stripper) visitStruct(n *ir.DistilledStruct) ir.DistilledNode {
@@ -305,13 +268,9 @@ func (s *Stripper) visitStruct(n *ir.DistilledStruct) ir.DistilledNode {
 		return nil
 	}
 	
-	// Create copy
-	result := &ir.DistilledStruct{
-		BaseNode:   n.BaseNode,
-		Name:       n.Name,
-		Visibility: n.Visibility,
-		TypeParams: n.TypeParams,
-	}
+	// Copy every field, then change only what the options require
+	result := *n
+	result.Children = nil
 
 	// Visit children. If this struct name matched --expand, keep all of its
 	// methods' implementations.
@@ -326,7 +285,7 @@ func (s *Stripper) visitStruct(n *ir.DistilledStruct) ir.DistilledNode {
 	}
 	s.inExpandedScope = prevExpandedScope
 
-	return result
+	return &result
 }
 
 func (s *Stripper) visitEnum(n *ir.DistilledEnum) ir.DistilledNode {
@@ -335,12 +294,9 @@ func (s *Stripper) visitEnum(n *ir.DistilledEnum) ir.DistilledNode {
 		return nil
 	}
 	
-	// Create copy
-	result := &ir.DistilledEnum{
-		BaseNode:   n.BaseNode,
-		Name:       n.Name,
-		Visibility: n.Visibility,
-	}
+	// Copy every field, then change only what the options require
+	result := *n
+	result.Children = nil
 	
 	// Visit children
 	for _, child := range n.Children {
@@ -349,7 +305,7 @@ func (s *Stripper) visitEnum(n *ir.DistilledEnum) ir.DistilledNode {
 		}
 	}
 	
-	return result
+	return &result
 }
 
 func (s *Stripper) visitField(n *ir.DistilledField) ir.DistilledNode {
@@ -363,36 +319,13 @@ func (s *Stripper) visitField(n *ir.DistilledField) ir.DistilledNode {
 		return nil
 	}
 	
-	// Determine if we should strip the default value
-	defaultValue := n.DefaultValue
-	
-	// For enum cases, always show values regardless of implementation flag
-	// Enum values are part of the API definition, not implementation
-	
-	// Determine decorators
-	decorators := n.Decorators
+	// Copy every field, then change only what the options require.
+	// Enum case values are always kept: they are API, not implementation.
+	result := *n
 	if s.options.RemoveAnnotations {
-		decorators = nil
+		result.Decorators = nil
 	}
-	
-	// Return copy
-	return &ir.DistilledField{
-		BaseNode:     n.BaseNode,
-		Name:         n.Name,
-		Visibility:   n.Visibility,
-		Modifiers:    n.Modifiers,
-		Type:         n.Type,
-		DefaultValue: defaultValue,
-		Decorators:   decorators,
-		// Property-specific fields
-		IsProperty:       n.IsProperty,
-		HasGetter:        n.HasGetter,
-		HasSetter:        n.HasSetter,
-		GetterVisibility: n.GetterVisibility,
-		SetterVisibility: n.SetterVisibility,
-		Description:      n.Description,
-		Deprecated:       n.Deprecated,
-	}
+	return &result
 }
 
 func (s *Stripper) visitTypeAlias(n *ir.DistilledTypeAlias) ir.DistilledNode {
@@ -401,14 +334,9 @@ func (s *Stripper) visitTypeAlias(n *ir.DistilledTypeAlias) ir.DistilledNode {
 		return nil
 	}
 	
-	// Return copy
-	return &ir.DistilledTypeAlias{
-		BaseNode:   n.BaseNode,
-		Name:       n.Name,
-		Visibility: n.Visibility,
-		TypeParams: n.TypeParams,
-		Type:       n.Type,
-	}
+	// Copy every field
+	result := *n
+	return &result
 }
 
 func (s *Stripper) visitChildren(node ir.DistilledNode) ir.DistilledNode {

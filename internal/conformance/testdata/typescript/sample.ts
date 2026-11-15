@@ -11,13 +11,15 @@ export class ConfWidget {
         return a;
     }
 
-    confOther(): string {
-        const b = "CONF_BODY_B";
-        return b;
-    }
-
     /** CONF_PRIVATE_DOC */
     private confPrivate(): string {
         return sep;
     }
+
+    confOther(): string {
+        const b = "CONF_BODY_B";
+        return b;
+    }
 }
+
+export type ConfId = string;

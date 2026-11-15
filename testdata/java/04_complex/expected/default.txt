@@ -3,7 +3,7 @@ package com.aidi.test.advanced
 import java.io.Serializable
 
 public class Advanced<T extends Number & Runnable & Serializable> {
-    public <U extends T> U process(@NotNull U input);
+    public <U extends T> U process(@NotNull U input) throws Exception;
     public Runnable createRunner(int value);
     public void readFile(String filePath);
 }

@@ -13,7 +13,7 @@ import java.lang.annotation.Target
 
 public class Advanced<T extends Number & Runnable & Serializable> {
     private T complexField;
-    public <U extends T> U process(@NotNull U input);
+    public <U extends T> U process(@NotNull U input) throws Exception;
     public Runnable createRunner(int value);
     public void readFile(String filePath);
 }

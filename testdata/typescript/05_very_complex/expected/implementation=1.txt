@@ -1,6 +1,6 @@
 <file path="source.ts">
-type ChangeEvent<T extends string> = `${T}Changed`
-type ListenerMap<TEventMap extends object> = {
+export type ChangeEvent<T extends string> = `${T}Changed`
+export type ListenerMap<TEventMap extends object> = {
   [K in keyof TEventMap as ChangeEvent<K & string>]: (payload: TEventMap[K]) => void;
 }
 

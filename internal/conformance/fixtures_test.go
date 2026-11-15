@@ -46,11 +46,11 @@ var fixtures = []fixture{
 		Private:   []string{"_conf_private"},
 		ExpandSym: "conf_public",
 	})},
-	{Lang: "typescript", File: "typescript/sample.ts", Checks: standard(markers{
+	{Lang: "typescript", File: "typescript/sample.ts", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
 		Private:   []string{"confPrivate"},
 		ExpandSym: "confPublic",
-	})},
+	}), check{Cap: "export-type-alias", Contains: []string{"export type ConfId = string"}})},
 	{Lang: "javascript", File: "javascript/sample.js", Checks: standard(markers{
 		Public:    []string{"ConfWidget", "confPublic", "confOther"},
 		Private:   []string{"#confPrivate"},
@@ -76,11 +76,11 @@ var fixtures = []fixture{
 		Private:   []string{"conf_private"},
 		ExpandSym: "conf_public",
 	})},
-	{Lang: "java", File: "java/ConfWidget.java", Checks: standard(markers{
+	{Lang: "java", File: "java/ConfWidget.java", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
 		Private:   []string{"confPrivate"},
 		ExpandSym: "confPublic",
-	})},
+	}), check{Cap: "throws-kept", Contains: []string{"confThrows() throws java.io.IOException"}})},
 	{Lang: "csharp", File: "csharp/ConfWidget.cs", Checks: standard(markers{
 		Public:    []string{"ConfWidget", "ConfField", "ConfPublic", "ConfOther"},
 		Private:   []string{"ConfPrivate"},

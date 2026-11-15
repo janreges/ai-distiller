@@ -1,5 +1,5 @@
 <file path="source.ts">
-type UserID = string | number
+export type UserID = string | number
 export const isValidEmail(email: string): boolean
 export const formatUserID(id: UserID): string
 </file>

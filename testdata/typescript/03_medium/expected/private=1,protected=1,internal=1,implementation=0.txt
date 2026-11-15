@@ -3,7 +3,7 @@
 export interface INotifiable<P> {
     method handleNotification(payload: P): void
 }
-type NotificationPayload<T> = {
+export type NotificationPayload<T> = {
   recipient: T;
   message: string;
   timestamp: Date;

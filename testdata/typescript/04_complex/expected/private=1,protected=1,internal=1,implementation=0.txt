@@ -1,5 +1,5 @@
 <file path="source.ts">
-type PluginSettings = {
+export type PluginSettings = {
   [K in 'timeout' | 'retries']?: K extends 'timeout' ? number : number;
 }
 function LogExecution(target: any, propertyKey: string, descriptor: PropertyDescriptor)

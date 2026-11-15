@@ -1,6 +1,7 @@
 package stripper
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/janreges/ai-distiller/internal/ir"
@@ -435,5 +436,55 @@ func TestExpandSymbols_StructLevel(t *testing.T) {
 	for _, m := range strct.Children {
 		fn := m.(*ir.DistilledFunction)
 		assert.NotEmpty(t, fn.Implementation, "matched struct: Server.%s body should be kept", fn.Name)
+	}
+}
+
+// fillNonZero sets every settable exported field it understands to a non-zero value.
+// depth stops the recursion for self-referential types such as TypeRef.TypeArgs.
+func fillNonZero(v reflect.Value, depth int) {
+	if depth > 3 {
+		return
+	}
+	switch v.Kind() {
+	case reflect.String:
+		v.SetString("x")
+	case reflect.Bool:
+		v.SetBool(true)
+	case reflect.Int, reflect.Int64:
+		v.SetInt(7)
+	case reflect.Ptr:
+		if v.Type().Elem().Kind() == reflect.Struct {
+			v.Set(reflect.New(v.Type().Elem()))
+			fillNonZero(v.Elem(), depth+1)
+		}
+	case reflect.Slice:
+		if k := v.Type().Elem().Kind(); k == reflect.String || k == reflect.Struct {
+			s := reflect.MakeSlice(v.Type(), 1, 1)
+			fillNonZero(s.Index(0), depth+1)
+			v.Set(s)
+		}
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			if v.Field(i).CanSet() {
+				fillNonZero(v.Field(i), depth+1)
+			}
+		}
+	}
+}
+
+func TestStripperPreservesEveryField(t *testing.T) {
+	nodes := []ir.DistilledNode{
+		&ir.DistilledFunction{}, &ir.DistilledClass{}, &ir.DistilledInterface{},
+		&ir.DistilledStruct{}, &ir.DistilledEnum{}, &ir.DistilledField{},
+		&ir.DistilledTypeAlias{}, &ir.DistilledPackage{}, &ir.DistilledFile{},
+	}
+	for _, n := range nodes {
+		fillNonZero(reflect.ValueOf(n).Elem(), 0)
+		if f := reflect.ValueOf(n).Elem().FieldByName("Visibility"); f.IsValid() {
+			f.SetString(string(ir.VisibilityPublic))
+		}
+		// RemoveComments makes the stripper run without touching these node types.
+		got := New(Options{RemoveComments: true}).Visit(n)
+		assert.Equal(t, n, got, "%T lost a field in the stripper", n)
 	}
 }

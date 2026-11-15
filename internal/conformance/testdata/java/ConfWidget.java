@@ -13,13 +13,18 @@ public class ConfWidget {
         return a;
     }
 
+    /** CONF_PRIVATE_DOC */
+    private String confPrivate() {
+        return File.separator;
+    }
+
     public String confOther() {
         String b = "CONF_BODY_B";
         return b;
     }
 
-    /** CONF_PRIVATE_DOC */
-    private String confPrivate() {
-        return File.separator;
+    public String confThrows() throws java.io.IOException {
+        String c = "CONF_BODY_C";
+        return c;
     }
 }
