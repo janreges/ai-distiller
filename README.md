@@ -12,7 +12,6 @@
   <img src="https://img.shields.io/badge/Languages-12+-blue" alt="12+ Languages">
   <img src="https://img.shields.io/badge/Performance-5k+_files/sec-green" alt="Performance">
   <img src="https://img.shields.io/badge/Compression-90%25+-orange" alt="Compression">
-  <img src="https://img.shields.io/badge/Tests-1211_passed-purple" alt="Tests">
 </p
 
 
@@ -171,7 +170,7 @@ AID_PROJECT_ROOT=/build/workspace aid src/
 ```
 
 ### 🌍 Language Support
-Currently supports 12 languages via tree-sitter:
+Currently supports 12 languages:
 - **Full Support**: Python, Go, JavaScript, PHP, Ruby
 - **Beta**: TypeScript, Java, C#, Rust, Kotlin, Swift, C++
 - **Coming Soon**: Zig, Scala, Clojure
@@ -192,12 +191,12 @@ Currently supports 12 languages via tree-sitter:
 
 ## 🎯 How It Works
 
-1. **Scans** your codebase recursively for supported file types (10+ languages)
-2. **Parses** each file using language-specific tree-sitter parsers (all bundled, no dependencies)
+1. **Scans** your codebase recursively for supported file types (12 languages)
+2. **Parses** each file with a language-specific parser, all bundled in the binary with no external dependencies: nine languages (Python, JavaScript, TypeScript, PHP, Ruby, Java, C#, Kotlin, C++) use tree-sitter, Go uses the Go standard library parser, and Rust and Swift use line-based parsers
 3. **Extracts** only what you need: public APIs, type signatures, class hierarchies
 4. **Outputs** in your preferred format: compact text, markdown, or structured JSON
 
-All tree-sitter grammars are compiled into the `aid` binary - zero external dependencies!
+The tree-sitter grammars are compiled into the `aid` binary through cgo - zero external dependencies at run time.
 
 ## 🔗 Dependency-Aware Distillation (experimental)
 
@@ -448,8 +447,6 @@ aid ./micro-service --private=1 --protected=1 --implementation=1
 
 **Granular Control**: Process your entire codebase, specific modules, directories, or even individual files. Perfect for focusing AI on the exact context it needs - whether that's understanding the whole system architecture or diving deep into a specific authentication module.
 
-📈 **[Full benchmark details](benchmark/BENCHMARK_RESULTS.md)** | 🧪 **[Reproduce these results](benchmark/test_benchmark.sh)**
-
 ## 🚀 Quick Start
 
 ### One-Line Installation
@@ -602,25 +599,17 @@ claude mcp add aid -- npx -y @janreges/ai-distiller-mcp
 
 #### Available MCP Tools
 
-**🔍 Code Structure Tools:**
+The server registers 16 tools. Parameters per tool are in [`mcp-npm/README.md`](mcp-npm/README.md) and [`mcp-tools.md`](.claude/skills/aid-release-mcp/references/mcp-tools.md).
+
+**Code structure tools:**
 - `distill_file` - Extract structure from a single file
 - `distill_directory` - Extract structure from entire directories
+- `distill_with_dependencies` - **EXPERIMENTAL**: distill a file together with the files it depends on (heuristic, regex-based analysis)
 - `list_files` - Browse directories with file statistics
 - `get_capabilities` - Get info about AI Distiller capabilities
 
-**🎯 Specialized AI Analysis Tools:**
-- `aid_hunt_bugs` - Generate bug-hunting prompts with distilled code
-- `aid_suggest_refactoring` - Create refactoring analysis prompts
-- `aid_generate_diagram` - Produce diagram generation prompts (Mermaid)
-- `aid_analyze_security` - Generate security audit prompts (OWASP Top 10)
-- `aid_generate_docs` - Create documentation generation prompts
-- `aid_deep_file_analysis` - Systematic file-by-file analysis workflow
-- `aid_multi_file_docs` - Multi-file documentation workflow
-- `aid_complex_analysis` - Enterprise-grade analysis prompts
-- `aid_performance_analysis` - Performance optimization prompts
-- `aid_best_practices` - Code quality and best practices prompts
-
-**🔧 Core Analysis Engine:**
+**AI analysis prompt tools:**
+- `aid_hunt_bugs`, `aid_suggest_refactoring`, `aid_generate_diagram`, `aid_analyze_security`, `aid_generate_docs`, `aid_deep_file_analysis`, `aid_multi_file_docs`, `aid_complex_analysis`, `aid_performance_analysis`, `aid_best_practices` - each generates a specialized prompt for that kind of analysis, with the distilled code
 - `aid_analyze` - Direct access to all AI actions for custom workflows
 
 **Important**: AI Distiller **generates analysis prompts** with distilled code - it does NOT perform the actual analysis! The output is a specialized prompt + distilled code that AI agents (like Claude) then execute. For large codebases, you can copy the output to tools like Gemini 2.0 with 1M context window.
@@ -647,7 +636,7 @@ aid <path> [OPTIONS]
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `-o, --output` | String | `.aid/<dirname>.[options].txt` | Output file path. Auto-generated based on input directory basename and options if not specified |
-| `--stdout` | Flag | `false` | Print output to stdout in addition to file. When used alone, no file is created |
+| `--stdout` | Flag | `false` | Print to stdout; no file is written unless `-o` is also given; AI actions always write to `--ai-output` and reject `-o` |
 | `--format` | String | `text` | Output format: `text` (ultra-compact), `md` (clean Markdown), `jsonl` (one JSON per file), `json-structured` (rich semantic data), `xml` (structured XML) |
 
 #### 🤖 AI Actions
@@ -812,6 +801,7 @@ aid ./internal --summary-type=ci-friendly --no-emoji
 - **Dynamic Features**: Runtime-determined types/interfaces in dynamic languages are not resolved
 - **Macro Expansion**: Complex macros (Rust, C++) show pre-expansion source
 - **Generated Code**: Consider using `.aidignore` to skip generated files
+- **Known gaps**: a few language behaviours still differ from the others (for example PHP docblocks and Swift comments); the current list is in [`internal/conformance/known_gaps_test.go`](internal/conformance/known_gaps_test.go)
 
 ## 🔒 Security Considerations
 
@@ -1100,7 +1090,7 @@ No! AI Distiller runs 100% locally. It only extracts and formats your code struc
 <details>
 <summary><strong>Which programming languages are supported?</strong></summary>
 
-Currently 12+ languages via tree-sitter: Python, TypeScript, JavaScript, Go, Java, C#, Rust, Ruby, Swift, Kotlin, PHP, C++. All parsers are bundled in the binary - no external dependencies needed.
+Currently 12 languages: Python, TypeScript, JavaScript, Go, Java, C#, Rust, Ruby, Swift, Kotlin, PHP, C++. Parsers are bundled in the binary - no external dependencies needed. See [How It Works](#-how-it-works) for which parser each language uses.
 </details>
 
 ## 🤝 Contributing
@@ -1109,56 +1099,12 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ### Development Setup
 
-```bash
-# Clone and setup
-git clone https://github.com/janreges/ai-distiller
-cd ai-distiller
-make dev-init    # Initialize development environment
+Prerequisites, build and test commands are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-# Run tests
-make test         # Unit tests
-make test-integration  # Integration tests
+### Releases
 
-# Build binary
-make build        # Build for current platform
-```
-
-### Building Release Binaries
-
-AI Distiller requires CGO for full language support via tree-sitter parsers. To build release binaries for all supported platforms:
-
-#### Prerequisites
-
-**Ubuntu/Debian:**
-```bash
-# Install cross-compilation toolchains
-sudo apt-get update
-sudo apt-get install -y gcc-aarch64-linux-gnu gcc-mingw-w64-x86-64
-
-# For macOS cross-compilation, you need osxcross:
-# 1. Clone osxcross: git clone https://github.com/tpoechtrager/osxcross tools/osxcross
-# 2. Obtain macOS SDK (see https://github.com/tpoechtrager/osxcross#packaging-the-sdk)
-# 3. Place SDK in tools/osxcross/tarballs/
-# 4. Build osxcross: cd tools/osxcross && ./build.sh
-```
-
-#### Build All Platforms
-
-```bash
-# Build release archives for all platforms
-./scripts/build-releases.sh
-
-# This creates:
-# - aid-linux-amd64.tar.gz    (Linux 64-bit)
-# - aid-linux-arm64.tar.gz    (Linux ARM64)
-# - aid-darwin-amd64.tar.gz   (macOS Intel)
-# - aid-darwin-arm64.tar.gz   (macOS Apple Silicon)
-# - aid-windows-amd64.zip     (Windows 64-bit)
-```
-
-The script automatically detects available toolchains and builds for all possible platforms. Each archive contains the `aid` binary (or `aid.exe` for Windows) with full language support.
-
-**Note**: Without proper toolchains, only the native platform will be built.
+Releases are built by [`.github/workflows/release.yml`](.github/workflows/release.yml), which runs when a maintainer pushes a `vX.Y.Z` tag (or starts the workflow manually with that tag).
+The procedure is in [`.claude/skills/aid-release-mcp/SKILL.md`](.claude/skills/aid-release-mcp/SKILL.md) and [`release-runbook.md`](.claude/skills/aid-release-mcp/references/release-runbook.md).
 
 ## 📄 License
 

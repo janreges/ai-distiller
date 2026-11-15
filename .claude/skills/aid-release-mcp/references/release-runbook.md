@@ -17,7 +17,8 @@ use `v1.4.1`; replace it.
 
    The newest line must say `completed` and `success`. The release workflow runs
    the Go suite and the package tests again, but not the CI `checks` job
-   (version drift, installer test, cgo check, skill anchors); see
+   (go vet, go mod tidy, version drift, installer test, cgo check, skill
+   anchors, README links); see
    `.claude/skills/aid-testing-debugging/references/ci.md`.
 2. The package tests pass locally: `(cd mcp-npm && npm ci && npm test)`.
 3. `sh scripts/version-drift.sh` exits 0 and prints nothing.

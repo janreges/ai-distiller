@@ -66,6 +66,8 @@ jobs:
         run: sh scripts/check-cgo.sh
       - name: Skill anchors
         run: sh scripts/tests/check_skill_anchors_test.sh && sh scripts/check-skill-anchors.sh
+      - name: README links
+        run: sh scripts/tests/readme_links_test.sh
 
   mcp:
     runs-on: ubuntu-latest

@@ -51,11 +51,9 @@ jobs:
   #   aid-<os>-<arch>-v<version>.zip      (windows)
   #
   # CGO_ENABLED MUST be 1: the language parsers are tree-sitter C libraries
-  # compiled via cgo. With CGO disabled the build falls back to stub parsers
-  # (internal/language/nocgo.go) that error out for every language, so a
-  # CGO=0 release binary cannot parse anything. Native runners are used where
-  # possible; Linux-arm64 and Windows are cross-compiled with the same gcc
-  # toolchains proven in scripts/build-releases.sh.
+  # compiled via cgo, and the project does not compile with cgo disabled.
+  # Native runners are used where possible; Linux-arm64 and Windows are
+  # cross-compiled with gcc cross toolchains.
   # ---------------------------------------------------------------------------
   build:
     needs: test
@@ -218,7 +216,7 @@ jobs:
   # the package's postinstall downloads the aid binary from that release at
   # install time — publishing first would make every install 404.
   #
-  # Requires an npm automation token in the NPM_TOKEN repository secret.
+  # Publishing uses npm Trusted Publishing (OIDC); no npm token is stored.
   # ---------------------------------------------------------------------------
   publish-npm:
     needs: [build, release]

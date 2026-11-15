@@ -8,7 +8,7 @@ parallel:
 |---|---|---|
 | `test` | ubuntu-latest | builds `aid` into the runner's temp directory, then the full suite with `AID_TEST_BINARY` pointing at that binary, so the snapshot and conformance suites test it instead of building their own |
 | `build` | ubuntu-latest and macos-14 | builds `aid`, runs `aid --version` and checks that `aid testdata/python/01_basic/source.py --stdout` prints `is_valid_email`; no tests |
-| `checks` | ubuntu-latest | `go vet` on the same package list as the suite; `go mod tidy` must leave `go.mod` and `go.sum` unchanged; `scripts/version-drift.sh`; `scripts/tests/install_sh_test.sh`; `scripts/check-cgo.sh`; `scripts/tests/check_skill_anchors_test.sh` and `scripts/check-skill-anchors.sh` |
+| `checks` | ubuntu-latest | `go vet` on the same package list as the suite; `go mod tidy` must leave `go.mod` and `go.sum` unchanged; `scripts/version-drift.sh`; `scripts/tests/install_sh_test.sh`; `scripts/check-cgo.sh`; `scripts/tests/check_skill_anchors_test.sh` and `scripts/check-skill-anchors.sh`; `scripts/tests/readme_links_test.sh` |
 | `mcp` | ubuntu-latest, Node 20 | `npm ci` and `npm test` in `mcp-npm/` |
 
 All jobs check out with `submodules: recursive` except `mcp`; the Go jobs use the
@@ -23,14 +23,14 @@ go vet $(go list -e ./... | grep -vE '/tools/|/test_project/|/cmd/aid-validate')
 sh scripts/version-drift.sh
 sh scripts/tests/install_sh_test.sh
 sh scripts/check-cgo.sh
-sh scripts/tests/check_skill_anchors_test.sh
+sh scripts/tests/check_skill_anchors_test.sh && sh scripts/check-skill-anchors.sh
+sh scripts/tests/readme_links_test.sh
 (cd mcp-npm && npm test)
 ```
 
-For the skill anchor check itself, run the command in the workflow's
-`Skill anchors` step. `go mod tidy` is left out above:
-it reads every Go package in the working tree, including directories that git
-ignores, so in a checkout that has such packages it fails or differs from CI.
+`go mod tidy` is left out above: it reads every Go package in the working
+tree, including directories that git ignores, so in a checkout that has such
+packages it fails or differs from CI.
 
 ## Release workflow
 

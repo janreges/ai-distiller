@@ -20,7 +20,7 @@ expect line-anchor 1 "use path#Symbol"
 mkdir -p "$tmp/bad-name/demo"; printf '%s\n' "---" "name: other" "description: x" "---" > "$tmp/bad-name/demo/SKILL.md"
 expect bad-name 1 "name"
 # non-Go anchors: whole word in the file; markdown fragments only check the path
-mk word-ok 'See `scripts/check-cgo.sh#cgo` and `docs/TESTING.md#anything`.'
+mk word-ok 'See `scripts/check-cgo.sh#cgo` and `docs/user/COMMAND-LINE-OPTIONS.md#anything`.'
 expect word-ok 0 ""
 mk word-missing 'See `scripts/check-cgo.sh#NoSuchWordAnywhere`.'
 expect word-missing 1 "NoSuchWordAnywhere"

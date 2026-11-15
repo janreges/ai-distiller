@@ -76,4 +76,4 @@ own Go module, so `go list ./...` and the full suite do not include them.
 | `mcp-npm/test/tool-text.test.js` | `npm test` | texts the MCP tools return: saved paths, truncation notice, spawn failures, removed parameters |
 | `mcp-npm/test/list-files.test.js` | `npm test` | the file listing tool: missing path, file instead of directory, unreadable subdirectories, the cap |
 | `mcp-npm/test/postinstall.test.js` | `npm test` | postinstall helpers: platform mapping and unsupported platforms, asset names, versions, checksum lookup and verification, download errors |
-| `scripts/tests/install_sh_test.sh`, `scripts/tests/check_skill_anchors_test.sh` | CI job `checks` | the installer's version resolution; the skill anchor check |
+| `scripts/tests/install_sh_test.sh`, `scripts/tests/check_skill_anchors_test.sh`, `scripts/tests/readme_links_test.sh` | CI job `checks` | the installer's version resolution; the skill anchor check; the relative links in `README.md` and `CONTRIBUTING.md` point at existing paths |

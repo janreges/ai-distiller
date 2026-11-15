@@ -1,6 +1,6 @@
 # Rust Language Support
 
-AI Distiller provides support for Rust codebases using both tree-sitter and line-based parsing, with comprehensive support for Rust's ownership system, traits, generics, and modern language features.
+AI Distiller provides support for Rust codebases using a line-based parser, with comprehensive support for Rust's ownership system, traits, generics, and modern language features.
 
 ## Overview
 
