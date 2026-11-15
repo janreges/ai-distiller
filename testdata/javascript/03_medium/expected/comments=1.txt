@@ -1,23 +1,66 @@
 <file path="source.js">
+/**
+ * Medium complexity JavaScript notification service
+ * Demonstrates: inheritance, mixins, async/await, event patterns, composition
+ */
 const EventEmitter = require('events')
+/** Base notification interface (mixin pattern) */
 const NotificationMixin = { async send(payload) -> Promise<boolean>, _validatePayload(payload) -> boolean }
-
+/** Abstract base notification service */
 class BaseNotificationService extends EventEmitter:
+    /** @param {string} serviceName - Name of the service */
     constructor(serviceName: string)
+    /**
+     * Gets service statistics
+     * @returns {Object} Service stats
+     */
     get stats() -> Object
+    /**
+     * Checks if service is active
+     * @returns {boolean} Active status
+     */
     get isActive() -> boolean
+    /**
+     * Abstract send method
+     * @abstract
+     * @param {Object} payload - Notification payload
+     * @returns {Promise<boolean>} Success status
+     */
     async send(payload: Object) -> Promise<boolean>
+    /**
+     * Processes notification with error handling and stats
+     * @param {Object} payload - Notification data
+     * @returns {Promise<boolean>} Success status
+     */
     async processNotification(payload: Object) -> Promise<boolean>
+    /** Deactivates the service */
     deactivate()
+    /** Reactivates the service */
     activate()
-
+/** Email notification service implementation */
 class EmailNotificationService extends BaseNotificationService:
+    /** @param {Object} config - Email configuration */
     constructor(config: Object = {})
+    /**
+     * Sends email notification
+     * @param {Object} payload - Email data
+     * @returns {Promise<boolean>} Success status
+     */
     async send(payload: Object) -> Promise<boolean>
+    /**
+     * Gets current connection count
+     * @returns {number} Active connections
+     */
     getActiveConnections() -> number
-
+/** SMS notification service implementation */
 class SMSNotificationService extends BaseNotificationService:
+    /** @param {string} provider - SMS provider name */
     constructor(provider: string = 'default')
+    /**
+     * Sends SMS notification
+     * @param {Object} payload - SMS data
+     * @returns {Promise<boolean>} Success status
+     */
     async send(payload: Object) -> Promise<boolean>
 // Apply mixin to classes
 // module.exports = {

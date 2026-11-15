@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/janreges/ai-distiller/internal/ir"
+	"github.com/janreges/ai-distiller/internal/language/commentutil"
 	sitter "github.com/smacker/go-tree-sitter"
 	tree_sitter_javascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
 )
@@ -252,9 +253,17 @@ func (p *TreeSitterProcessor) processNode(node *sitter.Node, file *ir.DistilledF
 
 	switch nodeType {
 	case "program":
-		// Process all children at top level
+		// Process all children at top level. The doc comments of a statement
+		// that yields no declaration (a re-export, `module.exports = ...`, a
+		// call) are dropped, so they do not document the next declaration.
 		for i := 0; i < int(node.ChildCount()); i++ {
-			p.processNode(node.Child(i), file, parent)
+			child := node.Child(i)
+			before := len(file.Children)
+			p.processNode(child, file, parent)
+			if child.IsNamed() && child.Type() != "comment" {
+				added := append([]ir.DistilledNode(nil), file.Children[before:]...)
+				file.Children = commentutil.AppendStatement(file.Children[:before], added)
+			}
 		}
 
 	case "import_statement":
@@ -489,6 +498,9 @@ func (p *TreeSitterProcessor) processClassBody(node *sitter.Node, file *ir.Disti
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
 		switch child.Type() {
+		case "comment":
+			p.processComment(child, file, class)
+
 		case "method_definition":
 			p.processMethod(child, file, class)
 
@@ -1013,29 +1025,19 @@ func (p *TreeSitterProcessor) processExpressionStatement(node *sitter.Node, file
 	}
 }
 
-// processComment processes comments
+// processComment emits a comment node where the comment occurs. A JSDoc block
+// becomes a doc comment; its tags were already read by collectJSDocComments.
+// A file-level doc that carries a file tag (@file, @module, ...) documents
+// the file, not the declaration after it.
 func (p *TreeSitterProcessor) processComment(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) {
-	text := p.getNodeText(node)
-
-	// Skip JSDoc comments as they're already processed
-	if strings.HasPrefix(text, "/**") && !strings.HasPrefix(text, "/***") {
-		return
-	}
-
-	// Determine comment type
-	format := ir.CommentLine
-	if strings.HasPrefix(text, "/*") {
-		format = ir.CommentBlock
-		text = strings.TrimPrefix(text, "/*")
-		text = strings.TrimSuffix(text, "*/")
-	} else if strings.HasPrefix(text, "//") {
-		text = strings.TrimPrefix(text, "//")
-	}
-
+	text, format := commentutil.StripJSStyle(p.getNodeText(node))
 	comment := &ir.DistilledComment{
 		BaseNode: p.nodeLocation(node),
-		Text:     strings.TrimSpace(text),
+		Text:     text,
 		Format:   format,
+	}
+	if treeParent := node.Parent(); format == ir.CommentDoc && treeParent != nil && treeParent.Type() == "program" {
+		comment.Inner = commentutil.DocumentsFile(text)
 	}
 
 	p.addNode(file, parent, comment)

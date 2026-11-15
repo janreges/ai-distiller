@@ -1,19 +1,90 @@
 <file path="source.js">
+/**
+ * @file 04_complex.js
+ * @description Demonstrates complex JavaScript features including Proxies for metaprogramming,
+ * the Observer design pattern, WeakMaps for memory-safe metadata, Symbols for unique properties,
+ * and Generators for iterable history.
+ * This module provides a factory for creating "observable" objects.
+ */
+/**
+ * A private symbol used to access the original, raw object from its proxy.
+ * Using a Symbol prevents accidental property name collisions.
+ * @type {symbol}
+ */
 const RAW_OBJECT_SYMBOL: symbol = Symbol('rawObject')
+/**
+ * A WeakMap to store event listeners for each observable object.
+ * Using a WeakMap is crucial for memory management. If an observed object is garbage collected,
+ * its corresponding entry in the WeakMap (and thus its listeners) will also be removed automatically,
+ * preventing memory leaks that would occur with a standard Map.
+ * @type {WeakMap<object, Set<Function>>}
+ */
 const objectListeners: WeakMap<object, = new WeakMap()
+/**
+ * A log of all mutations for demonstration of generators.
+ * @type {Array<{type: string, key: string, value?: any, timestamp: number}>}
+ */
 const mutationLog: Array<{type: = []
+/**
+ * The handler for the Proxy object. It contains the "traps" that intercept operations
+ * on the target object. This is the core of the metaprogramming aspect.
+ * @type {ProxyHandler<object>}
+ */
 const observableProxyHandler: ProxyHandler<object> = { get(target, key, receiver) -> any, set(target, key, value, receiver) -> boolean }
-
+/**
+ * @class ObservableFactory
+ * @description A factory for creating observable configuration objects.
+ * Encapsulates the logic of creating proxies and managing subscriptions.
+ */
 class ObservableFactory:
+    /**
+     * Creates a new observable object backed by a Proxy.
+     * @param {object} initialData - The initial plain JavaScript object.
+     * @returns {object} A new Proxy-wrapped observable object.
+     */
     static create(initialData: object) -> object
+    /**
+     * Subscribes a callback function to changes on an observable object.
+     * @param {object} observable - The proxy object created by this factory.
+     * @param {Function} callback - The function to call on change.
+     */
     static subscribe(observable: object, callback: Function)
+    /**
+     * Unsubscribes a callback function.
+     * @param {object} observable - The proxy object.
+     * @param {Function} callback - The function to remove.
+     */
     static unsubscribe(observable: object, callback: Function)
+    /**
+     * A generator function that yields the history of all mutations across all observables.
+     * This demonstrates a practical use for generators: creating an iterable sequence
+     * without loading all data into memory at once.
+     * @returns {Generator<string, void, void>} An iterator for the mutation history.
+     */
     static * getMutationHistory() -> Generator<string,
-
+/**
+ * Advanced configuration manager with deep observation capabilities
+ * @class ConfigManager
+ */
 class ConfigManager:
+    /** @param {object} config - Initial configuration */
     constructor(config: object = {})
+    /**
+     * Gets configuration value
+     * @param {string} key - Configuration key
+     * @returns {any} Configuration value
+     */
     get(key: string) -> any
+    /**
+     * Sets configuration value
+     * @param {string} key - Configuration key
+     * @param {any} value - New value
+     */
     set(key: string, value: any)
+    /**
+     * Gets change history for this config
+     * @returns {Array} Change history
+     */
     getChangeHistory() -> Array
 const appConfig = ObservableFactory.create({
     apiEndpoint: 'https://api.example.com/v1',

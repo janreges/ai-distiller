@@ -11,6 +11,11 @@ import (
 // TypeScriptFormatter is a language-specific formatter for TypeScript
 type TypeScriptFormatter struct {
 	BaseLanguageFormatter
+
+	// afterComment is set while the last node written was a comment. A class
+	// or interface then omits its leading blank line, so its doc comment stays
+	// directly above it.
+	afterComment bool
 }
 
 // NewTypeScriptFormatter creates a new TypeScript formatter
@@ -18,9 +23,23 @@ func NewTypeScriptFormatter() *TypeScriptFormatter {
 	return &TypeScriptFormatter{}
 }
 
+// Reset clears the per-file state.
+func (f *TypeScriptFormatter) Reset() {
+	f.afterComment = false
+}
+
 // FormatNode formats a TypeScript node
 func (f *TypeScriptFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent int) error {
+	err := f.formatNode(w, node, indent)
+	_, f.afterComment = node.(*ir.DistilledComment)
+	return err
+}
+
+func (f *TypeScriptFormatter) formatNode(w io.Writer, node ir.DistilledNode, indent int) error {
 	switch n := node.(type) {
+	case *ir.DistilledComment:
+		writeCStyleComment(w, n, strings.Repeat("    ", indent))
+		return nil
 	case *ir.DistilledImport:
 		return f.formatImport(w, n)
 	case *ir.DistilledClass:
@@ -97,10 +116,11 @@ func (f *TypeScriptFormatter) formatClass(w io.Writer, class *ir.DistilledClass,
 		}
 	}
 
+	f.writeBlankLine(w)
 	if hasExport {
-		fmt.Fprintf(w, "\nexport %sclass %s", modifiers, class.Name)
+		fmt.Fprintf(w, "export %sclass %s", modifiers, class.Name)
 	} else {
-		fmt.Fprintf(w, "\n%sclass %s", modifiers, class.Name)
+		fmt.Fprintf(w, "%sclass %s", modifiers, class.Name)
 	}
 
 	// Add generic type parameters
@@ -145,6 +165,14 @@ func (f *TypeScriptFormatter) formatClass(w io.Writer, class *ir.DistilledClass,
 	return nil
 }
 
+// writeBlankLine writes the blank line that opens a class or interface,
+// unless a comment was just written: that comment documents the declaration.
+func (f *TypeScriptFormatter) writeBlankLine(w io.Writer) {
+	if !f.afterComment {
+		fmt.Fprintln(w)
+	}
+}
+
 func (f *TypeScriptFormatter) formatInterface(w io.Writer, intf *ir.DistilledInterface, indent int) error {
 	hasExport := false
 	for _, mod := range intf.Modifiers {
@@ -154,10 +182,11 @@ func (f *TypeScriptFormatter) formatInterface(w io.Writer, intf *ir.DistilledInt
 		}
 	}
 
+	f.writeBlankLine(w)
 	if hasExport {
-		fmt.Fprintf(w, "\nexport interface %s", intf.Name)
+		fmt.Fprintf(w, "export interface %s", intf.Name)
 	} else {
-		fmt.Fprintf(w, "\ninterface %s", intf.Name)
+		fmt.Fprintf(w, "interface %s", intf.Name)
 	}
 
 	// Add generic type parameters

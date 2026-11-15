@@ -1,8 +1,14 @@
 <file path="source.js">
+/**
+ * Medium complexity JavaScript notification service
+ * Demonstrates: inheritance, mixins, async/await, event patterns, composition
+ */
 const EventEmitter = require('events')
+/** Base notification interface (mixin pattern) */
 const NotificationMixin = { async send(payload) -> Promise<boolean>, _validatePayload(payload) -> boolean }
-
+/** Abstract base notification service */
 class BaseNotificationService extends EventEmitter:
+    /** @param {string} serviceName - Name of the service */
     constructor(serviceName: string) {
         super();
         this.serviceName = serviceName;
@@ -13,15 +19,34 @@ class BaseNotificationService extends EventEmitter:
         };
         this._isActive = true;
     }
+    /**
+     * Gets service statistics
+     * @returns {Object} Service stats
+     */
     get stats() -> Object {
         return { ...this._stats };
     }
+    /**
+     * Checks if service is active
+     * @returns {boolean} Active status
+     */
     get isActive() -> boolean {
         return this._isActive;
     }
+    /**
+     * Abstract send method
+     * @abstract
+     * @param {Object} payload - Notification payload
+     * @returns {Promise<boolean>} Success status
+     */
     async send(payload: Object) -> Promise<boolean> {
         throw new Error('send() must be implemented by subclass');
     }
+    /**
+     * Processes notification with error handling and stats
+     * @param {Object} payload - Notification data
+     * @returns {Promise<boolean>} Success status
+     */
     async processNotification(payload: Object) -> Promise<boolean> {
         if (!this._isActive) {
             throw new Error('Service is not active');
@@ -52,16 +77,19 @@ class BaseNotificationService extends EventEmitter:
             throw error;
         }
     }
+    /** Deactivates the service */
     deactivate() {
         this._isActive = false;
         this.emit('deactivated');
     }
+    /** Reactivates the service */
     activate() {
         this._isActive = true;
         this.emit('activated');
     }
-
+/** Email notification service implementation */
 class EmailNotificationService extends BaseNotificationService:
+    /** @param {Object} config - Email configuration */
     constructor(config: Object = {}) {
         super('email');
         this._config = {
@@ -72,6 +100,11 @@ class EmailNotificationService extends BaseNotificationService:
         };
         this._connectionPool = new Map();
     }
+    /**
+     * Sends email notification
+     * @param {Object} payload - Email data
+     * @returns {Promise<boolean>} Success status
+     */
     async send(payload: Object) -> Promise<boolean> {
         const { recipient, message, subject = 'Notification' } = payload;
 
@@ -94,16 +127,26 @@ class EmailNotificationService extends BaseNotificationService:
             this._releaseConnection(connection);
         }
     }
+    /**
+     * Gets current connection count
+     * @returns {number} Active connections
+     */
     getActiveConnections() -> number {
         return this._connectionPool.size;
     }
-
+/** SMS notification service implementation */
 class SMSNotificationService extends BaseNotificationService:
+    /** @param {string} provider - SMS provider name */
     constructor(provider: string = 'default') {
         super('sms');
         this._provider = provider;
         this._rateLimitQueue = [];
     }
+    /**
+     * Sends SMS notification
+     * @param {Object} payload - SMS data
+     * @returns {Promise<boolean>} Success status
+     */
     async send(payload: Object) -> Promise<boolean> {
         const { recipient, message } = payload;
 

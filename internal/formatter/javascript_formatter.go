@@ -11,6 +11,11 @@ import (
 // JavaScriptFormatter is a language-specific formatter for JavaScript
 type JavaScriptFormatter struct {
 	BaseLanguageFormatter
+
+	// afterComment is set while the last node written was a comment. A class
+	// then omits its leading blank line, so its doc comment stays directly
+	// above it.
+	afterComment bool
 }
 
 // NewJavaScriptFormatter creates a new JavaScript formatter
@@ -20,8 +25,19 @@ func NewJavaScriptFormatter() *JavaScriptFormatter {
 	}
 }
 
+// Reset clears the per-file state.
+func (f *JavaScriptFormatter) Reset() {
+	f.afterComment = false
+}
+
 // FormatNode formats a JavaScript node
 func (f *JavaScriptFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent int) error {
+	err := f.formatNode(w, node, indent)
+	_, f.afterComment = node.(*ir.DistilledComment)
+	return err
+}
+
+func (f *JavaScriptFormatter) formatNode(w io.Writer, node ir.DistilledNode, indent int) error {
 	switch n := node.(type) {
 	case *ir.DistilledImport:
 		return f.formatImport(w, n)
@@ -101,8 +117,12 @@ func (f *JavaScriptFormatter) formatClass(w io.Writer, class *ir.DistilledClass,
 	// JavaScript classes don't have visibility keywords (ES6)
 	// Private fields use # prefix which is handled at field level
 
-	// Format class declaration
-	fmt.Fprintf(w, "\n%sclass %s", indentStr, class.Name)
+	// Format class declaration. It opens with a blank line unless a comment
+	// was just written: that comment documents the class.
+	if !f.afterComment {
+		fmt.Fprintln(w)
+	}
+	fmt.Fprintf(w, "%sclass %s", indentStr, class.Name)
 
 	// Add extends clause
 	if len(class.Extends) > 0 {
@@ -302,28 +322,12 @@ func (f *JavaScriptFormatter) formatField(w io.Writer, field *ir.DistilledField,
 
 func (f *JavaScriptFormatter) formatComment(w io.Writer, comment *ir.DistilledComment, indent int) error {
 	indentStr := strings.Repeat("    ", indent)
-
-	// Handle special comment formats
-	switch comment.Format {
-	case "export":
-		// Export-related comments (e.g., module.exports)
+	if comment.Format == ir.CommentExport {
+		// Export markers (module.exports, export { ... }) are not source comments.
 		fmt.Fprintf(w, "%s// %s\n", indentStr, comment.Text)
-	case "block":
-		// Block comments (e.g., static initialization blocks)
-		fmt.Fprintf(w, "%s// %s\n", indentStr, comment.Text)
-	default:
-		// Regular comments
-		if strings.Contains(comment.Text, "\n") {
-			// Multi-line comment
-			lines := strings.Split(comment.Text, "\n")
-			for _, line := range lines {
-				fmt.Fprintf(w, "%s// %s\n", indentStr, strings.TrimSpace(line))
-			}
-		} else {
-			fmt.Fprintf(w, "%s// %s\n", indentStr, comment.Text)
-		}
+		return nil
 	}
-
+	writeCStyleComment(w, comment, indentStr)
 	return nil
 }
 

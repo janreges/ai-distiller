@@ -1,9 +1,35 @@
 <file path="source.js">
+/**
+ * Basic JavaScript validation utilities
+ * Demonstrates: module exports, functions, constants, JSDoc
+ */
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MIN_PASSWORD_LENGTH = 8
 const _VALIDATION_CACHE = new Map()
+/**
+ * Validates an email address
+ * @param {string} email - Email to validate
+ * @returns {boolean} True if valid
+ */
 function isValidEmail(email: string) -> boolean
+/**
+ * Validates password strength
+ * @param {string} password - Password to validate
+ * @returns {boolean} True if strong enough
+ */
 function isValidPassword(password: string) -> boolean
+/**
+ * Private helper to format user ID
+ * @private
+ * @param {number} id - User ID
+ * @returns {string} Formatted ID
+ */
 function _formatUserID(id: number) -> string
+/**
+ * Formats user display name
+ * @param {number} id - User ID
+ * @param {string} name - User name
+ * @returns {string} Formatted display name
+ */
 function formatUserDisplay(id: number, name: string) -> string
 </file>

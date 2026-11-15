@@ -3,6 +3,12 @@
 export class UserModel {
     public readonly id: number
     public username: string
+    /**
+     * Creates a new user model.
+     * @param id The unique user ID.
+     * @param username The user's public name.
+     * @param email The user's private email address.
+     */
     public constructor(id: number, username: string, email: string) {
         this.id = id;
         this._validateEmail(email);

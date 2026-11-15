@@ -1,6 +1,16 @@
 <file path="source.js">
-
+/**
+ * Simple JavaScript user model with classes
+ * Demonstrates: ES6 classes, private fields, getters/setters, static methods
+ */
+/** User model class with validation and formatting */
 class UserModel:
+    /**
+     * Creates a new user
+     * @param {number} id - User ID
+     * @param {string} email - User email
+     * @param {string} name - User name
+     */
     constructor(id: number, email: string, name: string) {
         this.#id = id;
         this.#email = email;
@@ -8,23 +18,47 @@ class UserModel:
         this.#createdAt = new Date();
         this._validateEmail();
     }
+    /**
+     * Gets user ID (readonly)
+     * @returns {number} User ID
+     */
     get id() -> number {
         return this.#id;
     }
+    /**
+     * Gets user email
+     * @returns {string} User email
+     */
     get email() -> string {
         return this.#email;
     }
+    /**
+     * Sets user email with validation
+     * @param {string} email - New email
+     */
     set email(email: string) {
         this.#email = email;
         this._validateEmail();
     }
+    /**
+     * Gets creation timestamp
+     * @returns {Date} Creation date
+     */
     get createdAt() -> Date {
         return new Date(this.#createdAt);
     }
+    /**
+     * Gets user display string
+     * @returns {string} Formatted user info
+     */
     toString() -> string {
         const age = this._getAccountAge();
         return `User #${this.#id}: ${this.name} (${this.#email}) - ${age} days old`;
     }
+    /**
+     * Converts user to JSON object
+     * @returns {Object} User data
+     */
     toJSON() -> Object {
         return {
             id: this.#id,
@@ -33,6 +67,12 @@ class UserModel:
             createdAt: this.#createdAt.toISOString()
         };
     }
+    /**
+     * Static factory method for creating users
+     * @static
+     * @param {Object} data - User data
+     * @returns {UserModel} New user instance
+     */
     static fromJSON(data: Object) -> UserModel {
         const user = new UserModel(data.id, data.email, data.name);
         if (data.createdAt) {
@@ -40,6 +80,12 @@ class UserModel:
         }
         return user;
     }
+    /**
+     * Static method to validate user data
+     * @static
+     * @param {Object} data - Data to validate
+     * @returns {boolean} True if valid
+     */
     static isValidUserData(data: Object) -> boolean {
         return data && 
                typeof data.id === 'number' && 

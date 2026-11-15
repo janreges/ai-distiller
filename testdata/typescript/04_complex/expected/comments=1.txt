@@ -1,8 +1,9 @@
 <file path="source.ts">
+// Mapped type for flexible plugin configuration
 export type PluginSettings = {
   [K in 'timeout' | 'retries']?: K extends 'timeout' ? number : number;
 }
-
+// A simple Method Decorator
 export interface IPlugin {
     property name: string
     method execute(data: any): void

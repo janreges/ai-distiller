@@ -1,19 +1,77 @@
 <file path="source.js">
+/**
+ * @file 05_very_complex.js
+ * @description Demonstrates highly advanced JavaScript concepts including a custom cooperative
+ * task scheduler, advanced generators as coroutines, prototype-based object creation,
+ * the Reflect API for metaprogramming, and complex async coordination with Promise.allSettled.
+ */
+/**
+ * A symbol to attach private metadata to a task object.
+ * @type {symbol}
+ */
 const TASK_METADATA: symbol = Symbol('taskMetadata')
+/**
+ * Base prototype for all tasks. Using a prototype instead of a class
+ * allows for more dynamic and flexible object creation and modification at runtime.
+ * @type {object}
+ */
 const TaskPrototype: object = { init(id, generatorFunc, props), getMetadata(key) -> any, _updateMetadata(key, value) }
-
+/**
+ * @class CooperativeScheduler
+ * @description Manages and runs tasks (as generators) in a cooperative, non-blocking manner.
+ */
 class CooperativeScheduler:
     constructor()
+    /**
+     * Registers a new task with the scheduler.
+     * @param {GeneratorFunction} generatorFunc - The task's logic.
+     * @param {object} [options={}] - Task options
+     * @returns {number} The ID of the newly registered task.
+     */
     registerTask(generatorFunc: GeneratorFunction, options = {}) -> number
+    /** Starts the scheduler's event loop. */
     start()
+    /**
+     * Stops the scheduler gracefully, waiting for all tasks to complete.
+     * @param {number} [timeout=5000] - Max time to wait in ms.
+     * @returns {Promise<void>}
+     */
     async shutdown(timeout = 5000) -> Promise<void>
+    /**
+     * Gets scheduler performance metrics
+     * @returns {object} Performance metrics
+     */
     getMetrics() -> object
+    /**
+     * Advanced task introspection using Reflect API
+     * @param {number} taskId - Task ID to inspect
+     * @returns {object} Task inspection data
+     */
     inspectTask(taskId: number) -> object
-
+/**
+ * Advanced memory pool for object reuse
+ * @class MemoryPool
+ */
 class MemoryPool:
+    /**
+     * @param {Function} factory - Factory function for creating objects
+     * @param {number} maxSize - Maximum pool size
+     */
     constructor(factory: Function, maxSize: number = 10)
+    /**
+     * Acquires object from pool or creates new one
+     * @returns {object} Object from pool
+     */
     acquire() -> object
+    /**
+     * Returns object to pool
+     * @param {object} obj - Object to return
+     */
     release(obj: object)
+    /**
+     * Gets pool statistics
+     * @returns {object} Pool stats
+     */
     getStats() -> object
 // --- Usage Example ---
 // A helper function that returns a promise, for tasks to yield.

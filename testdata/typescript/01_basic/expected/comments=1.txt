@@ -1,5 +1,17 @@
 <file path="source.ts">
+// A type alias for clarity and reusability.
 export type UserID = string | number
+/**
+ * Checks if a given string is a valid email format.
+ * @param email The string to validate.
+ * @returns True if the email is valid, false otherwise.
+ */
 export const isValidEmail(email: string): boolean
+// Internal utility function, not exported from the module.
+/**
+ * Formats a user ID into a canonical string.
+ * @param id The UserID to format.
+ * @returns A formatted string.
+ */
 export const formatUserID(id: UserID): string
 </file>

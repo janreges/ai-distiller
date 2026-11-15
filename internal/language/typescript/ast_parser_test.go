@@ -178,3 +178,82 @@ func TestTS_HashMethodsAndAccessorsArePrivate(t *testing.T) {
 	assert.Equal(t, ir.VisibilityPrivate, vis["#g"])
 	assert.Equal(t, ir.VisibilityPublic, vis["open"])
 }
+
+func TestTS_Comments(t *testing.T) {
+	f := parseTS(t, "// line c\n/** Doc c */\nexport class K {\n  // inner\n  /** m doc */\n  m(): void {}\n}\n")
+	top0 := f.Children[0].(*ir.DistilledComment)
+	assert.Equal(t, "line c", top0.Text)
+	assert.Equal(t, ir.CommentLine, top0.Format)
+	top1 := f.Children[1].(*ir.DistilledComment)
+	assert.Equal(t, "Doc c", top1.Text)
+	assert.True(t, top1.IsDoc())
+	cls := f.Children[2].(*ir.DistilledClass)
+	assert.Equal(t, "inner", cls.Children[0].(*ir.DistilledComment).Text)
+	assert.True(t, cls.Children[1].(*ir.DistilledComment).IsDoc())
+}
+
+// The class body is reordered (fields, constructor, methods); a member's
+// comments move with it, so a doc stays directly before what it documents.
+func TestTS_ClassCommentsMoveWithTheirMember(t *testing.T) {
+	src := "class K {\n  /** m doc */\n  m(): void {}\n  /** ctor doc */\n  constructor(private a: number) {}\n  /** f doc */\n  f = 1;\n  /** index doc */\n  [key: string]: unknown;\n  // trailing\n}\n"
+	cls := parseTS(t, src).Children[0].(*ir.DistilledClass)
+	var got []string
+	for _, c := range cls.Children {
+		switch n := c.(type) {
+		case *ir.DistilledComment:
+			got = append(got, "/"+n.Text)
+		case *ir.DistilledField:
+			got = append(got, n.Name)
+		case *ir.DistilledFunction:
+			got = append(got, n.Name+"()")
+		}
+	}
+	// The doc of the index signature, which is not emitted, is dropped.
+	assert.Equal(t, []string{"a", "/f doc", "f", "/ctor doc", "constructor()", "/m doc", "m()", "/trailing"}, got)
+}
+
+func TestTS_FileDocIsInner(t *testing.T) {
+	f := parseTS(t, "/**\n * @packageDocumentation\n * The app.\n */\n/** K doc */\nexport class K {}\n")
+	assert.True(t, f.Children[0].(*ir.DistilledComment).Inner, "a file doc documents the file")
+	assert.False(t, f.Children[1].(*ir.DistilledComment).Inner)
+}
+
+// docTexts returns the texts of the doc comments among nodes.
+func docTexts(nodes []ir.DistilledNode) []string {
+	var texts []string
+	for _, n := range nodes {
+		if c, ok := n.(*ir.DistilledComment); ok && c.IsDoc() {
+			texts = append(texts, c.Text)
+		}
+	}
+	return texts
+}
+
+// A doc before a statement that yields no declaration documented that
+// statement; it must not end up above the next declaration. Line comments
+// keep their place.
+func TestTS_DocOfStatementWithoutDeclarationIsDropped(t *testing.T) {
+	for name, stmt := range map[string]string{
+		"re-export":      `export { foo } from "./foo";`,
+		"exports.x":      "exports.add = function (a: number) { return a; };",
+		"module.exports": "module.exports = { a: 1 };",
+		"export default": "export default { a: 1 };",
+		"call":           "main();",
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := parseTS(t, "/** @deprecated Use bar. */\n// line kept\n"+stmt+"\n/** bar doc */\nexport function bar(): void {}\n")
+			require.Len(t, f.Children, 3)
+			assert.Equal(t, "line kept", f.Children[0].(*ir.DistilledComment).Text)
+			assert.Equal(t, "bar doc", f.Children[1].(*ir.DistilledComment).Text)
+			assert.Equal(t, "bar", f.Children[2].(*ir.DistilledFunction).Name)
+		})
+	}
+	t.Run("namespace", func(t *testing.T) {
+		ns := parseTS(t, "namespace N {\n  /** orphan */\n  main();\n  /** g doc */\n  export function g(): void {}\n}\n").Children[0].(*ir.DistilledPackage)
+		assert.Equal(t, []string{"g doc"}, docTexts(ns.Children))
+	})
+	t.Run("export default class keeps its doc", func(t *testing.T) {
+		f := parseTS(t, "/** Foo doc */\nexport default class Foo {}\n")
+		assert.Equal(t, []string{"Foo doc"}, docTexts(f.Children))
+	})
+}

@@ -1,8 +1,9 @@
 <file path="source.ts">
-
+// Interface for any object that can receive a notification payload.
 export interface INotifiable<P> {
     method handleNotification(payload: P): void
 }
+// Generic payload structure
 export type NotificationPayload<T> = {
   recipient: T;
   message: string;

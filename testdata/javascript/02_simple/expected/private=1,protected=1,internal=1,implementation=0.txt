@@ -1,18 +1,73 @@
 <file path="source.js">
-
+/**
+ * Simple JavaScript user model with classes
+ * Demonstrates: ES6 classes, private fields, getters/setters, static methods
+ */
+/** User model class with validation and formatting */
 class UserModel:
     #id
     #email
     #createdAt
+    /**
+     * Creates a new user
+     * @param {number} id - User ID
+     * @param {string} email - User email
+     * @param {string} name - User name
+     */
     constructor(id: number, email: string, name: string)
+    /**
+     * Gets user ID (readonly)
+     * @returns {number} User ID
+     */
     get id() -> number
+    /**
+     * Gets user email
+     * @returns {string} User email
+     */
     get email() -> string
+    /**
+     * Sets user email with validation
+     * @param {string} email - New email
+     */
     set email(email: string)
+    /**
+     * Gets creation timestamp
+     * @returns {Date} Creation date
+     */
     get createdAt() -> Date
+    /**
+     * Private email validation
+     * @private
+     */
     _validateEmail()
+    /**
+     * Gets user display string
+     * @returns {string} Formatted user info
+     */
     toString() -> string
+    /**
+     * Private helper for account age calculation
+     * @private
+     * @returns {number} Account age in days
+     */
     _getAccountAge() -> number
+    /**
+     * Converts user to JSON object
+     * @returns {Object} User data
+     */
     toJSON() -> Object
+    /**
+     * Static factory method for creating users
+     * @static
+     * @param {Object} data - User data
+     * @returns {UserModel} New user instance
+     */
     static fromJSON(data: Object) -> UserModel
+    /**
+     * Static method to validate user data
+     * @static
+     * @param {Object} data - Data to validate
+     * @returns {boolean} True if valid
+     */
     static isValidUserData(data: Object) -> boolean
 </file>

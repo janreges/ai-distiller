@@ -1,7 +1,25 @@
 <file path="source.js">
+/**
+ * @file 05_very_complex.js
+ * @description Demonstrates highly advanced JavaScript concepts including a custom cooperative
+ * task scheduler, advanced generators as coroutines, prototype-based object creation,
+ * the Reflect API for metaprogramming, and complex async coordination with Promise.allSettled.
+ */
+/**
+ * A symbol to attach private metadata to a task object.
+ * @type {symbol}
+ */
 const TASK_METADATA: symbol = Symbol('taskMetadata')
+/**
+ * Base prototype for all tasks. Using a prototype instead of a class
+ * allows for more dynamic and flexible object creation and modification at runtime.
+ * @type {object}
+ */
 const TaskPrototype: object = { init(id, generatorFunc, props), getMetadata(key) -> any, _updateMetadata(key, value) }
-
+/**
+ * @class CooperativeScheduler
+ * @description Manages and runs tasks (as generators) in a cooperative, non-blocking manner.
+ */
 class CooperativeScheduler:
     constructor() {
         /** @private */
@@ -19,6 +37,12 @@ class CooperativeScheduler:
             averageTaskTime: 0
         };
     }
+    /**
+     * Registers a new task with the scheduler.
+     * @param {GeneratorFunction} generatorFunc - The task's logic.
+     * @param {object} [options={}] - Task options
+     * @returns {number} The ID of the newly registered task.
+     */
     registerTask(generatorFunc: GeneratorFunction, options = {}) -> number {
         const id = this.nextTaskId++;
         // Create a new task object using prototype-based "inheritance".
@@ -28,12 +52,18 @@ class CooperativeScheduler:
         console.log(`Task ${id} registered.`);
         return id;
     }
+    /** Starts the scheduler's event loop. */
     start() {
         if (this.isRunning) return;
         this.isRunning = true;
         console.log('Scheduler started.');
         this.run();
     }
+    /**
+     * Stops the scheduler gracefully, waiting for all tasks to complete.
+     * @param {number} [timeout=5000] - Max time to wait in ms.
+     * @returns {Promise<void>}
+     */
     async shutdown(timeout = 5000) -> Promise<void> {
         console.log('Scheduler shutting down gracefully...');
         this.isRunning = false; // Prevent new iterations from starting with new tasks
@@ -57,9 +87,18 @@ class CooperativeScheduler:
         const results = await Promise.allSettled([Promise.race([Promise.all(completionPromises), timeoutPromise])]);
         console.log('Shutdown complete.', results);
     }
+    /**
+     * Gets scheduler performance metrics
+     * @returns {object} Performance metrics
+     */
     getMetrics() -> object {
         return { ...this._metrics };
     }
+    /**
+     * Advanced task introspection using Reflect API
+     * @param {number} taskId - Task ID to inspect
+     * @returns {object} Task inspection data
+     */
     inspectTask(taskId: number) -> object {
         const task = this.tasks.get(taskId);
         if (!task) return null;
@@ -79,8 +118,15 @@ class CooperativeScheduler:
 
         return inspection;
     }
-
+/**
+ * Advanced memory pool for object reuse
+ * @class MemoryPool
+ */
 class MemoryPool:
+    /**
+     * @param {Function} factory - Factory function for creating objects
+     * @param {number} maxSize - Maximum pool size
+     */
     constructor(factory: Function, maxSize: number = 10) {
         this._factory = factory;
         this._maxSize = maxSize;
@@ -88,6 +134,10 @@ class MemoryPool:
         this._created = 0;
         this._reused = 0;
     }
+    /**
+     * Acquires object from pool or creates new one
+     * @returns {object} Object from pool
+     */
     acquire() -> object {
         if (this._pool.length > 0) {
             this._reused++;
@@ -97,6 +147,10 @@ class MemoryPool:
         this._created++;
         return this._factory();
     }
+    /**
+     * Returns object to pool
+     * @param {object} obj - Object to return
+     */
     release(obj: object) {
         if (this._pool.length < this._maxSize) {
             // Reset object state if it has a reset method
@@ -106,6 +160,10 @@ class MemoryPool:
             this._pool.push(obj);
         }
     }
+    /**
+     * Gets pool statistics
+     * @returns {object} Pool stats
+     */
     getStats() -> object {
         return {
             poolSize: this._pool.length,

@@ -302,3 +302,75 @@ func TestArrowFunctionBody(t *testing.T) {
 		})
 	}
 }
+
+func TestJS_Comments(t *testing.T) {
+	f := parseJS(t, "// line c\n/** Doc c */\nexport class K {\n  // inner\n  /** m doc */\n  m() {}\n}\n")
+	top0 := f.Children[0].(*ir.DistilledComment)
+	assert.Equal(t, "line c", top0.Text)
+	assert.Equal(t, ir.CommentLine, top0.Format)
+	top1 := f.Children[1].(*ir.DistilledComment)
+	assert.Equal(t, "Doc c", top1.Text)
+	assert.True(t, top1.IsDoc())
+	cls := findJSClass(t, f, "K")
+	assert.Equal(t, "inner", cls.Children[0].(*ir.DistilledComment).Text)
+	doc := cls.Children[1].(*ir.DistilledComment)
+	assert.Equal(t, "m doc", doc.Text)
+	assert.True(t, doc.IsDoc())
+}
+
+// The JSDoc block is emitted as a doc and its tags are still read.
+func TestJS_DocKeepsTagParsing(t *testing.T) {
+	f := parseJS(t, "/**\n * Adds.\n * @param {number} a\n * @returns {number}\n */\nfunction add(a) { return a; }\n/* block c */\n")
+	doc := f.Children[0].(*ir.DistilledComment)
+	assert.Equal(t, "Adds.\n@param {number} a\n@returns {number}", doc.Text)
+	assert.Equal(t, ir.CommentDoc, doc.Format)
+	fn := f.Children[1].(*ir.DistilledFunction)
+	assert.Equal(t, "number", fn.Returns.Name)
+	assert.Equal(t, "number", fn.Parameters[0].Type.Name)
+	block := f.Children[2].(*ir.DistilledComment)
+	assert.Equal(t, "block c", block.Text)
+	assert.Equal(t, ir.CommentBlock, block.Format)
+}
+
+func TestJS_FileDocIsInner(t *testing.T) {
+	f := parseJS(t, "/**\n * @file app.js\n */\n/** K doc */\nclass K {}\n")
+	assert.True(t, f.Children[0].(*ir.DistilledComment).Inner, "a @file doc documents the file")
+	assert.False(t, f.Children[1].(*ir.DistilledComment).Inner)
+}
+
+// docTexts returns the texts of the doc comments among nodes.
+func docTexts(nodes []ir.DistilledNode) []string {
+	var texts []string
+	for _, n := range nodes {
+		if c, ok := n.(*ir.DistilledComment); ok && c.IsDoc() {
+			texts = append(texts, c.Text)
+		}
+	}
+	return texts
+}
+
+// A doc before a statement that yields no declaration (at most an export
+// marker) documented that statement; it must not end up above the next
+// declaration. Line comments keep their place.
+func TestJS_DocOfStatementWithoutDeclarationIsDropped(t *testing.T) {
+	for name, stmt := range map[string]string{
+		"re-export":      `export { foo } from "./foo";`,
+		"exports.x":      "exports.add = function (a) { return a; };",
+		"module.exports": "module.exports = { a: 1 };",
+		"export default": "export default { a: 1 };",
+		"call":           "main();",
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := parseJS(t, "/** @deprecated Use bar. */\n// line kept\n"+stmt+"\n/** bar doc */\nexport function bar() {}\n")
+			assert.Equal(t, []string{"bar doc"}, docTexts(f.Children))
+			assert.Equal(t, "line kept", f.Children[0].(*ir.DistilledComment).Text)
+			last := len(f.Children) - 1
+			assert.Equal(t, "bar doc", f.Children[last-1].(*ir.DistilledComment).Text)
+			assert.Equal(t, "bar", f.Children[last].(*ir.DistilledFunction).Name)
+		})
+	}
+	t.Run("export default class keeps its doc", func(t *testing.T) {
+		f := parseJS(t, "/** Foo doc */\nexport default class Foo {}\n")
+		assert.Equal(t, []string{"Foo doc"}, docTexts(f.Children))
+	})
+}

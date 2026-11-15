@@ -35,3 +35,22 @@ func TestJavaScriptFormatter_FunctionBody(t *testing.T) {
 		assert.Equal(t, "function f(a)\n", jsFormat(t, fn, 0))
 	})
 }
+
+func TestJavaScriptFormatter_Comments(t *testing.T) {
+	var b strings.Builder
+	f := NewJavaScriptFormatter()
+	cls := &ir.DistilledClass{Name: "K", Children: []ir.DistilledNode{
+		&ir.DistilledComment{Text: "inner", Format: ir.CommentLine},
+		&ir.DistilledComment{Text: "First.\nSecond.", Format: ir.CommentDoc},
+		&ir.DistilledFunction{Name: "m"},
+		&ir.DistilledComment{Text: "static initialization block", Format: ir.CommentBlock},
+	}}
+	for _, n := range []ir.DistilledNode{
+		&ir.DistilledComment{Text: "K doc", Format: ir.CommentDoc},
+		cls,
+		&ir.DistilledComment{Text: "module.exports = K", Format: ir.CommentExport},
+	} {
+		require.NoError(t, f.FormatNode(&b, n, 0))
+	}
+	assert.Equal(t, "/** K doc */\nclass K:\n    // inner\n    /**\n     * First.\n     * Second.\n     */\n    m()\n    /* static initialization block */\n// module.exports = K\n", b.String())
+}

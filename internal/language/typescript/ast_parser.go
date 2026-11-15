@@ -7,6 +7,7 @@ import (
 	"unsafe"
 
 	"github.com/janreges/ai-distiller/internal/ir"
+	"github.com/janreges/ai-distiller/internal/language/commentutil"
 	sitter "github.com/smacker/go-tree-sitter"
 	typescript "tree-sitter-typescript"
 )
@@ -92,8 +93,19 @@ func (p *ASTParser) parseProgram(node *sitter.Node, file *ir.DistilledFile) {
 		if child == nil {
 			continue
 		}
-		file.Children = append(file.Children, p.parseStatement(child, false)...)
+		file.Children = appendStatement(file.Children, child, p.parseStatement(child, false))
 	}
+}
+
+// appendStatement appends to list the nodes parsed from statement. A comment
+// is appended as it is; for any other statement commentutil.AppendStatement
+// drops the doc comments of a statement that yields no declaration (a
+// re-export, `export default {...}`, an expression).
+func appendStatement(list []ir.DistilledNode, statement *sitter.Node, parsed []ir.DistilledNode) []ir.DistilledNode {
+	if statement.Type() == "comment" || !statement.IsNamed() {
+		return append(list, parsed...)
+	}
+	return commentutil.AppendStatement(list, parsed)
 }
 
 // parseStatement parses one declaration-level node. It is shared by the
@@ -101,6 +113,8 @@ func (p *ASTParser) parseProgram(node *sitter.Node, file *ir.DistilledFile) {
 func (p *ASTParser) parseStatement(node *sitter.Node, isExported bool) []ir.DistilledNode {
 	var nodes []ir.DistilledNode
 	switch node.Type() {
+	case "comment":
+		nodes = append(nodes, p.parseComment(node))
 	case "import_statement":
 		if imp := p.parseImport(node); imp != nil {
 			nodes = append(nodes, imp)
@@ -149,6 +163,22 @@ func (p *ASTParser) parseStatement(node *sitter.Node, isExported bool) []ir.Dist
 	return nodes
 }
 
+// parseComment turns a comment token into a comment node. A doc comment at
+// file level that carries a file tag (@file, @module, @packageDocumentation,
+// ...) documents the file, not the declaration after it.
+func (p *ASTParser) parseComment(node *sitter.Node) *ir.DistilledComment {
+	text, format := commentutil.StripJSStyle(p.nodeText(node))
+	comment := &ir.DistilledComment{
+		BaseNode: ir.BaseNode{Location: p.nodeToLocation(node)},
+		Text:     text,
+		Format:   format,
+	}
+	if parent := node.Parent(); format == ir.CommentDoc && parent != nil && parent.Type() == "program" {
+		comment.Inner = commentutil.DocumentsFile(text)
+	}
+	return comment
+}
+
 // parseNamespace parses `namespace X {}` and `declare module "x" {}` into a
 // DistilledPackage whose children are the declarations of the body. In an
 // ambient namespace or module (one inside a `declare`, such as `declare
@@ -166,13 +196,14 @@ func (p *ASTParser) parseNamespace(node *sitter.Node) *ir.DistilledPackage {
 	ambient := insideAmbientDeclaration(node)
 	if body := node.ChildByFieldName("body"); body != nil {
 		for i := 0; i < int(body.NamedChildCount()); i++ {
-			members := p.parseStatement(body.NamedChild(i), false)
+			statement := body.NamedChild(i)
+			members := p.parseStatement(statement, false)
 			if ambient {
 				for _, member := range members {
 					makePublic(member)
 				}
 			}
-			pkg.Children = append(pkg.Children, members...)
+			pkg.Children = appendStatement(pkg.Children, statement, members)
 		}
 	}
 	return pkg
@@ -415,13 +446,23 @@ func (p *ASTParser) parseClass(node *sitter.Node, isExported bool) *ir.Distilled
 	return class
 }
 
-// parseClassBody parses class body members
+// parseClassBody parses class body members. They are emitted fields first,
+// then the constructor, then methods; the comments before a member move with
+// it, so a doc comment stays directly before the member it documents.
 func (p *ASTParser) parseClassBody(node *sitter.Node, class *ir.DistilledClass) {
 	// First pass: collect all fields including parameter properties
 	var fields []ir.DistilledNode
 	var methods []ir.DistilledNode
-	var constructorMethod *ir.DistilledFunction
+	var constructorGroup []ir.DistilledNode
 	var pendingDecorators []string
+	var pendingComments []ir.DistilledNode
+
+	// withComments returns member preceded by the comments waiting for it.
+	withComments := func(member ir.DistilledNode) []ir.DistilledNode {
+		group := append(pendingComments, member)
+		pendingComments = nil
+		return group
+	}
 
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
@@ -430,6 +471,8 @@ func (p *ASTParser) parseClassBody(node *sitter.Node, class *ir.DistilledClass) 
 		}
 
 		switch child.Type() {
+		case "comment":
+			pendingComments = append(pendingComments, p.parseComment(child))
 		case "decorated_definition":
 			// Collect decorators and locate the real definition
 			var localDecs []string
@@ -453,7 +496,7 @@ func (p *ASTParser) parseClassBody(node *sitter.Node, class *ir.DistilledClass) 
 					if m := p.parseMethod(def); m != nil {
 						m.Decorators = append(m.Decorators, localDecs...)
 						if m.Name == "constructor" {
-							constructorMethod = m
+							constructorGroup = withComments(m)
 							for k := 0; k < int(def.ChildCount()); k++ {
 								if fc := def.Child(k); fc != nil && fc.Type() == "formal_parameters" {
 									for _, f := range p.parseParameterProperties(fc) {
@@ -463,13 +506,13 @@ func (p *ASTParser) parseClassBody(node *sitter.Node, class *ir.DistilledClass) 
 								}
 							}
 						} else {
-							methods = append(methods, m)
+							methods = append(methods, withComments(m)...)
 						}
 					}
 				case "public_field_definition", "private_field_definition", "protected_field_definition":
 					if f := p.parseField(def); f != nil {
 						f.Decorators = append(f.Decorators, localDecs...)
-						fields = append(fields, f)
+						fields = append(fields, withComments(f)...)
 					}
 				}
 			}
@@ -487,7 +530,7 @@ func (p *ASTParser) parseClassBody(node *sitter.Node, class *ir.DistilledClass) 
 				}
 
 				if method.Name == "constructor" {
-					constructorMethod = method
+					constructorGroup = withComments(method)
 					// Find parameter properties from constructor
 					for j := 0; j < int(child.ChildCount()); j++ {
 						methodChild := child.Child(j)
@@ -501,7 +544,7 @@ func (p *ASTParser) parseClassBody(node *sitter.Node, class *ir.DistilledClass) 
 						}
 					}
 				} else {
-					methods = append(methods, method)
+					methods = append(methods, withComments(method)...)
 				}
 			}
 		case "public_field_definition", "private_field_definition", "protected_field_definition":
@@ -511,7 +554,7 @@ func (p *ASTParser) parseClassBody(node *sitter.Node, class *ir.DistilledClass) 
 					field.Decorators = append(field.Decorators, pendingDecorators...)
 					pendingDecorators = nil // Reset for next item
 				}
-				fields = append(fields, field)
+				fields = append(fields, withComments(field)...)
 			}
 		case "method_signature", "abstract_method_signature":
 			if method := p.parseMethodSignature(child); method != nil {
@@ -535,17 +578,23 @@ func (p *ASTParser) parseClassBody(node *sitter.Node, class *ir.DistilledClass) 
 						method.Modifiers = append(method.Modifiers, ir.ModifierAbstract)
 					}
 				}
-				methods = append(methods, method)
+				methods = append(methods, withComments(method)...)
+			}
+		default:
+			// A member that is not emitted (an index signature, a static
+			// block): the docs before it documented it, not the next member.
+			if child.IsNamed() {
+				pendingComments = commentutil.WithoutDocs(pendingComments)
 			}
 		}
 	}
 
-	// Add members in the correct order: fields first, then constructor, then methods
+	// Add members in the correct order: fields first, then constructor, then
+	// methods; comments after the last member close the body.
 	class.Children = append(class.Children, fields...)
-	if constructorMethod != nil {
-		class.Children = append(class.Children, constructorMethod)
-	}
+	class.Children = append(class.Children, constructorGroup...)
 	class.Children = append(class.Children, methods...)
+	class.Children = append(class.Children, pendingComments...)
 }
 
 // parseMethod parses method definitions
