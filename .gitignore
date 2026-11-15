@@ -10,7 +10,8 @@ tmp/
 *.tmp
 *.log
 aid.*.txt
-.claude/
+.claude/*
+!.claude/skills/
 
 # Binary files
 aid
