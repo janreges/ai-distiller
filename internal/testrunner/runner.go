@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/pmezard/go-difflib/difflib"
 )
 
 // TestCase represents a single test case discovered from the filesystem
@@ -25,8 +27,6 @@ type Runner struct {
 	testDataDir string
 	aidBinary   string
 	updateMode  bool
-	useGoRun    bool   // Whether to use "go run" instead of binary
-	projectRoot string // Project root for go run mode
 }
 
 // New creates a new test runner
@@ -35,16 +35,6 @@ func New(testDataDir, aidBinary string) *Runner {
 		testDataDir: testDataDir,
 		aidBinary:   aidBinary,
 		updateMode:  os.Getenv("UPDATE_EXPECTED") == "true",
-	}
-}
-
-// NewWithGoRun creates a test runner that uses "go run" instead of a binary
-func NewWithGoRun(testDataDir, projectRoot string) *Runner {
-	return &Runner{
-		testDataDir: testDataDir,
-		projectRoot: projectRoot,
-		updateMode:  os.Getenv("UPDATE_EXPECTED") == "true",
-		useGoRun:    true,
 	}
 }
 
@@ -102,7 +92,7 @@ func parseParametersFromFilename(filename string) []string {
 	}
 	// else: no parameters (e.g., "default")
 	
-	// Sort flags for consistency with flagsToFilename
+	// Sort flags so the order is deterministic
 	sort.Strings(flags)
 	return flags
 }
@@ -246,39 +236,19 @@ func findSourceFile(dir, language string) (string, error) {
 
 // RunTest executes a single test case
 func (r *Runner) RunTest(tc TestCase) error {
-	// Build command
-	var cmd *exec.Cmd
-	
 	// Make source file path relative to testdata directory
 	relSourceFile, err := filepath.Rel(r.testDataDir, tc.SourceFile)
 	if err != nil {
 		// If we can't make it relative, just use the basename
 		relSourceFile = filepath.Base(tc.SourceFile)
 	}
-	
-	if r.useGoRun {
-		// Use go run mode
-		// Calculate relative path from testdata to project root
-		relProjectPath, err := filepath.Rel(r.testDataDir, r.projectRoot)
-		if err != nil {
-			return fmt.Errorf("calculating relative project path: %w", err)
-		}
-		goArgs := []string{"run", filepath.Join(relProjectPath, "cmd/aid")}
-		goArgs = append(goArgs, relSourceFile)
-		goArgs = append(goArgs, tc.Flags...)
-		goArgs = append(goArgs, "--format", "text", "--stdout", "--summary-type=off")
-		
-		cmd = exec.Command("go", goArgs...)
-		cmd.Dir = r.testDataDir
-	} else {
-		// Use binary mode
-		args := append([]string{relSourceFile}, tc.Flags...)
-		args = append(args, "--format", "text", "--stdout", "--summary-type=off")
-		
-		cmd = exec.Command(r.aidBinary, args...)
-		cmd.Dir = r.testDataDir
-	}
-	
+
+	args := append([]string{relSourceFile}, tc.Flags...)
+	args = append(args, "--format", "text", "--stdout", "--summary-type=off")
+
+	cmd := exec.Command(r.aidBinary, args...)
+	cmd.Dir = r.testDataDir
+
 	// Capture output
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -309,7 +279,7 @@ func (r *Runner) RunTest(tc TestCase) error {
 	
 	// Compare outputs
 	if !bytes.Equal(actual, expected) {
-		return fmt.Errorf("output mismatch:\nEXPECTED:\n%s\nACTUAL:\n%s", expected, actual)
+		return fmt.Errorf("%s", formatMismatch(tc, args, expected, actual))
 	}
 	
 	return nil
@@ -342,95 +312,19 @@ func (r *Runner) RunTests(t *testing.T) {
 	}
 }
 
-// GenerateExpectedFiles is a helper to generate expected files for existing source files
-func (r *Runner) GenerateExpectedFiles(language, scenario string, flagSets [][]string) error {
-	scenarioDir := filepath.Join(r.testDataDir, language, scenario)
-	sourceFile, err := findSourceFile(scenarioDir, language)
+// formatMismatch builds a failure message with the expected file path, the
+// command to reproduce the run, and a unified diff of expected vs actual.
+func formatMismatch(tc TestCase, args []string, expected, actual []byte) string {
+	diff, err := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
+		A:        difflib.SplitLines(string(expected)),
+		B:        difflib.SplitLines(string(actual)),
+		FromFile: "expected",
+		ToFile:   "actual",
+		Context:  3,
+	})
 	if err != nil {
-		return fmt.Errorf("finding source file: %w", err)
+		diff = fmt.Sprintf("(could not compute diff: %v)", err)
 	}
-	
-	expectedDir := filepath.Join(scenarioDir, "expected")
-	if err := os.MkdirAll(expectedDir, 0755); err != nil {
-		return fmt.Errorf("creating expected dir: %w", err)
-	}
-	
-	for _, flags := range flagSets {
-		// Determine filename from flags
-		filename := r.flagsToFilename(flags)
-		
-		// Run aid with these flags
-		args := append([]string{sourceFile}, flags...)
-		args = append(args, "--format", "text", "--stdout", "--summary-type=off")
-		
-		cmd := exec.Command(r.aidBinary, args...)
-		output, err := cmd.Output()
-		if err != nil {
-			return fmt.Errorf("running aid with flags %v: %w", flags, err)
-		}
-		
-		// Write expected file
-		expectedFile := filepath.Join(expectedDir, filename)
-		if err := os.WriteFile(expectedFile, output, 0644); err != nil {
-			return fmt.Errorf("writing expected file %s: %w", expectedFile, err)
-		}
-	}
-	
-	return nil
-}
-
-// flagsToFilename converts a set of flags to an expected filename
-func (r *Runner) flagsToFilename(flags []string) string {
-	if len(flags) == 0 {
-		return "default.expected"
-	}
-	
-	// Convert flags to parameter format
-	var params []string
-	for _, flag := range flags {
-		// Remove -- prefix
-		param := strings.TrimPrefix(flag, "--")
-		params = append(params, param)
-	}
-	
-	// Sort for consistent naming
-	sort.Strings(params)
-	
-	return "test." + strings.Join(params, ".") + ".expected"
-}
-
-// Helper functions
-
-func equalFlags(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	
-	aMap := make(map[string]bool)
-	for _, flag := range a {
-		aMap[flag] = true
-	}
-	
-	for _, flag := range b {
-		if !aMap[flag] {
-			return false
-		}
-	}
-	
-	return true
-}
-
-func containsAll(flags, subset []string) bool {
-	flagMap := make(map[string]bool)
-	for _, flag := range flags {
-		flagMap[flag] = true
-	}
-	
-	for _, flag := range subset {
-		if !flagMap[flag] {
-			return false
-		}
-	}
-	
-	return true
+	return fmt.Sprintf("output mismatch\nexpected file: %s\ncommand: (cd testdata && aid %s </dev/null)\n%s",
+		tc.ExpectedFile, strings.Join(args, " "), diff)
 }
