@@ -2,7 +2,7 @@
 from typing import Protocol, List, Dict, Callable, Any
 
 class Plugin(Protocol):
-    name = str
+    name: str
     execute(self, data: Dict[str, Any]) -> None
 register_plugin(name: str) -> Callable[[Callable[[], Plugin]], None]
 

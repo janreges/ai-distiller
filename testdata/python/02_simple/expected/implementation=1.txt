@@ -5,6 +5,7 @@ class User:
     user_id = user_id
     username = username
     email = email
+    created_at: datetime = datetime.utcnow()
     def __init__(self, user_id: int, username: str, email: str):
         if not username or not email:
             raise ValueError("Username and email cannot be empty.")

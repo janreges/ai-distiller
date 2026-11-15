@@ -18,3 +18,8 @@ class ConfWidget:
     def conf_other(self):
         b = "CONF_BODY_B"
         return b
+
+
+class ConfRecord:
+    conf_id: int
+    conf_name: str = "x"

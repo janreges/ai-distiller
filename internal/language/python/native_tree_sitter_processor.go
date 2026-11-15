@@ -521,68 +521,35 @@ func (p *NativeTreeSitterProcessor) processParameters(node *sitter.Node, fn *ir.
 	}
 }
 
-// processAssignment processes variable assignments
-func (p *NativeTreeSitterProcessor) processAssignment(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) {
-	var name string
-	var typeRef *ir.TypeRef
-	var value string
-
-	// Find left and right sides
-	var leftNode, rightNode *sitter.Node
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "=" {
-			if i > 0 {
-				leftNode = node.Child(i - 1)
-			}
-			if i < int(node.ChildCount())-1 {
-				rightNode = node.Child(i + 1)
-			}
-			break
-		}
-	}
-
-	if leftNode == nil {
-		// Try pattern: first child is left, last is right
-		if node.ChildCount() >= 3 {
-			leftNode = node.Child(0)
-			rightNode = node.Child(int(node.ChildCount()) - 1)
-		}
-	}
-
-	// Extract name from left side
+// assignmentParts reads an assignment through the grammar's field names
+// (left, type, right), so `x = 1`, `x: int`, `x: int = 1` and `self.x: int = 1`
+// all resolve to the right name, type and value. leftNode is returned so
+// callers can detect `self.x` (attribute) targets.
+func (p *NativeTreeSitterProcessor) assignmentParts(node *sitter.Node) (name string, typeRef *ir.TypeRef, value string, leftNode *sitter.Node) {
+	leftNode = node.ChildByFieldName("left")
 	if leftNode != nil {
-		if leftNode.Type() == "identifier" {
+		switch leftNode.Type() {
+		case "identifier":
 			name = p.getNodeText(leftNode)
-		} else if leftNode.Type() == "attribute" {
-			// Handle self.field_name = value assignments
-			// Extract the attribute name (field name) from attribute node
-			for i := 0; i < int(leftNode.ChildCount()); i++ {
-				child := leftNode.Child(i)
-				if child.Type() == "identifier" && i > 0 { // Skip the first identifier (usually "self")
-					name = p.getNodeText(child)
-					break
-				}
-			}
-		} else if leftNode.Type() == "typed_assignment" {
-			// variable: Type = value
-			for i := 0; i < int(leftNode.ChildCount()); i++ {
-				child := leftNode.Child(i)
-				if child.Type() == "identifier" && name == "" {
-					name = p.getNodeText(child)
-				} else if child.Type() == "type" {
-					typeRef = &ir.TypeRef{
-						Name: p.getNodeText(child),
-					}
-				}
+		case "attribute":
+			// self.field_name: use the attribute (field) name, not the object
+			if attr := leftNode.ChildByFieldName("attribute"); attr != nil {
+				name = p.getNodeText(attr)
 			}
 		}
 	}
-
-	// Extract value from right side
-	if rightNode != nil {
+	if typeNode := node.ChildByFieldName("type"); typeNode != nil {
+		typeRef = &ir.TypeRef{Name: p.getNodeText(typeNode)}
+	}
+	if rightNode := node.ChildByFieldName("right"); rightNode != nil {
 		value = p.getNodeText(rightNode)
 	}
+	return name, typeRef, value, leftNode
+}
+
+// processAssignment processes variable assignments
+func (p *NativeTreeSitterProcessor) processAssignment(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) {
+	name, typeRef, value, leftNode := p.assignmentParts(node)
 
 	if name != "" {
 		field := &ir.DistilledField{
@@ -642,66 +609,7 @@ func (p *NativeTreeSitterProcessor) processNodeWithClassContext(node *sitter.Nod
 
 // processAssignmentWithClassContext processes assignments with class context available
 func (p *NativeTreeSitterProcessor) processAssignmentWithClassContext(node *sitter.Node, file *ir.DistilledFile, function *ir.DistilledFunction, classParent ir.DistilledNode) {
-	var name string
-	var typeRef *ir.TypeRef
-	var value string
-
-	// Find left and right sides
-	var leftNode, rightNode *sitter.Node
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "=" {
-			if i > 0 {
-				leftNode = node.Child(i - 1)
-			}
-			if i < int(node.ChildCount())-1 {
-				rightNode = node.Child(i + 1)
-			}
-			break
-		}
-	}
-
-	if leftNode == nil {
-		// Try pattern: first child is left, last is right
-		if node.ChildCount() >= 3 {
-			leftNode = node.Child(0)
-			rightNode = node.Child(int(node.ChildCount()) - 1)
-		}
-	}
-
-	// Extract name from left side
-	if leftNode != nil {
-		if leftNode.Type() == "identifier" {
-			name = p.getNodeText(leftNode)
-		} else if leftNode.Type() == "attribute" {
-			// Handle self.field_name = value assignments
-			// Extract the attribute name (field name) from attribute node
-			for i := 0; i < int(leftNode.ChildCount()); i++ {
-				child := leftNode.Child(i)
-				if child.Type() == "identifier" && i > 0 { // Skip the first identifier (usually "self")
-					name = p.getNodeText(child)
-					break
-				}
-			}
-		} else if leftNode.Type() == "typed_assignment" {
-			// variable: Type = value
-			for i := 0; i < int(leftNode.ChildCount()); i++ {
-				child := leftNode.Child(i)
-				if child.Type() == "identifier" && name == "" {
-					name = p.getNodeText(child)
-				} else if child.Type() == "type" {
-					typeRef = &ir.TypeRef{
-						Name: p.getNodeText(child),
-					}
-				}
-			}
-		}
-	}
-
-	// Extract value from right side
-	if rightNode != nil {
-		value = p.getNodeText(rightNode)
-	}
+	name, typeRef, value, leftNode := p.assignmentParts(node)
 
 	if name != "" {
 		field := &ir.DistilledField{

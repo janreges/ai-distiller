@@ -46,7 +46,8 @@ var fixtures = []fixture{
 		Private:   []string{"_conf_private"},
 		ExpandSym: "conf_public",
 	}), check{Cap: "body-indent", Flags: []string{"--implementation=1"},
-		Contains: []string{"        a = \"CONF_BODY_A\"\n        return a\n"}})},
+		Contains: []string{"        a = \"CONF_BODY_A\"\n        return a\n"}},
+		check{Cap: "dataclass-fields", Contains: []string{"conf_id: int", `conf_name: str = "x"`}, NotContains: []string{"conf_id = int"}})},
 	{Lang: "typescript", File: "typescript/sample.ts", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
 		Private:   []string{"confPrivate"},

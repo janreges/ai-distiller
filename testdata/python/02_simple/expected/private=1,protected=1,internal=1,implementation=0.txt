@@ -1,9 +1,11 @@
 <file path="source.py">
+from datetime import datetime
 
 class User:
     user_id = user_id
     username = username
     email = email
+    created_at: datetime = datetime.utcnow()
     -_is_active = True
     -_is_active = False
     __init__(self, user_id: int, username: str, email: str)

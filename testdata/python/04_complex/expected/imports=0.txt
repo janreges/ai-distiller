@@ -1,7 +1,7 @@
 <file path="source.py">
 
 class Plugin(Protocol):
-    name = str
+    name: str
     execute(self, data: Dict[str, Any]) -> None
 register_plugin(name: str) -> Callable[[Callable[[], Plugin]], None]
 

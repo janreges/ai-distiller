@@ -2,8 +2,9 @@
 from typing import Protocol, List, Dict, Callable, Any
 
 class Plugin(Protocol):
-    name = str
+    name: str
     execute(self, data: Dict[str, Any]) -> None
+-_registry: Dict[str, Plugin] = {}
 register_plugin(name: str) -> Callable[[Callable[[], Plugin]], None]
 
 class DataProcessingPlugin:
@@ -13,6 +14,7 @@ class DataProcessingPlugin:
 create_data_plugin() -> Plugin
 
 class PluginManager:
+    -_instances: Dict[str, Plugin] = {}
     __init__(self)
     activate(self, name: str) -> None
     run_all(self, data: Dict[str, Any])

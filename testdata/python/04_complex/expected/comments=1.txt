@@ -5,7 +5,7 @@ from typing import Protocol, List, Dict, Callable, Any
 
 class Plugin(Protocol):
     # A protocol defining the interface for a valid plugin.
-    name = str
+    name: str
     execute(self, data: Dict[str, Any]) -> None
 register_plugin(name: str) -> Callable[[Callable[[], Plugin]], None]
 

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/janreges/ai-distiller/internal/ir"
 	"github.com/janreges/ai-distiller/internal/processor"
 	"github.com/stretchr/testify/assert"
 )
@@ -230,4 +231,42 @@ type failingReader struct{}
 
 func (r *failingReader) Read(p []byte) (n int, err error) {
 	return 0, bytes.ErrTooLarge
+}
+
+func TestPython_AnnotatedClassAttributes(t *testing.T) {
+	src := "from dataclasses import dataclass\n\n@dataclass\nclass User:\n    id: int\n    name: str = \"x\"\n    plain = 1\n    tags: list[str] = field(default_factory=list)\n"
+	tsp, err := NewNativeTreeSitterProcessor()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tsp.parser.Close()
+	file, err := tsp.ProcessSource(context.Background(), []byte(src), "user.py") // raw IR, no stripper
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cls *ir.DistilledClass
+	for _, c := range file.Children {
+		if k, ok := c.(*ir.DistilledClass); ok && k.Name == "User" {
+			cls = k
+		}
+	}
+	if cls == nil {
+		t.Fatal("class User not found")
+	}
+	got := map[string][2]string{}
+	for _, c := range cls.Children {
+		if f, ok := c.(*ir.DistilledField); ok {
+			typ := ""
+			if f.Type != nil {
+				typ = f.Type.Name
+			}
+			got[f.Name] = [2]string{typ, f.DefaultValue}
+		}
+	}
+	assert.Equal(t, map[string][2]string{
+		"id":    {"int", ""},
+		"name":  {"str", `"x"`},
+		"plain": {"", "1"},
+		"tags":  {"list[str]", "field(default_factory=list)"},
+	}, got)
 }
