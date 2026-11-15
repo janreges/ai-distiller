@@ -3,6 +3,7 @@ package conformance
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -238,4 +239,68 @@ func TestDefaultWritesFileAndPrintsNothing(t *testing.T) {
 	written, err := os.ReadFile(filepath.Join(dir, ".aid", "aid.m.py.txt"))
 	require.NoError(t, err)
 	assert.Contains(t, string(written), "visible")
+}
+
+func TestSummaryReportsMeasuredSize(t *testing.T) {
+	data := conformanceData(t)
+	info, err := os.Stat(filepath.Join(data, "python", "sample.py"))
+	require.NoError(t, err)
+	_, stderr, code := aidRun(t, data, nil, "python/sample.py", "--stdout", "--summary-type=json")
+	require.Equal(t, 0, code)
+	var s struct {
+		OriginalBytes int64  `json:"original_bytes"`
+		Tokenizer     string `json:"tokenizer"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stderr[strings.Index(stderr, "{"):]), &s))
+	assert.Equal(t, info.Size(), s.OriginalBytes)
+	assert.Equal(t, "estimate (bytes/4)", s.Tokenizer)
+}
+
+func TestStructuredFormatsDoNotLeakMetadata(t *testing.T) {
+	for _, format := range []string{"jsonl", "json-structured", "xml", "md"} {
+		out, _, code := aidRun(t, conformanceData(t), nil, "python/sample.py", "--stdout", "--summary-type=off", "--format", format)
+		require.Equal(t, 0, code, format)
+		assert.NotContains(t, out, "size_bytes", format)
+		assert.NotContains(t, out, "<metadata", format)
+	}
+}
+
+func TestSummaryMentionsWrittenFileWithStdout(t *testing.T) {
+	dir := projectWithSample(t)
+	_, stderr, code := aidRun(t, dir, nil, "m.py", "--stdout", "-o", "out.txt")
+	require.Equal(t, 0, code)
+	assert.Contains(t, stderr, "out.txt")
+}
+
+// distilled_bytes is the size of the text written: empty <file> blocks are
+// dropped and --show-ai-agent-instructions is added before the write.
+func TestSummaryDistilledBytesIsWrittenSize(t *testing.T) {
+	dir := projectWithSample(t)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "p.py"), []byte("def _hidden():\n    return 1\n"), 0o644))
+	for _, extra := range [][]string{nil, {"--show-ai-agent-instructions"}} {
+		args := append([]string{".", "-o", "out.txt", "--summary-type=json"}, extra...)
+		_, stderr, code := aidRun(t, dir, nil, args...)
+		require.Equal(t, 0, code, stderr)
+		var s struct {
+			DistilledBytes int64 `json:"distilled_bytes"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(stderr[strings.Index(stderr, "{"):]), &s))
+		info, err := os.Stat(filepath.Join(dir, "out.txt"))
+		require.NoError(t, err)
+		assert.Equal(t, info.Size(), s.DistilledBytes, "extra flags %v", extra)
+	}
+}
+
+// With -o FILE --stdout the text was printed, so the summary names the file
+// but does not tell an AI agent to load it.
+func TestSummaryDoesNotAskToLoadPrintedOutput(t *testing.T) {
+	dir := projectWithSample(t)
+	_, stderr, code := aidRun(t, dir, nil, "m.py", "--stdout", "-o", "out.txt")
+	require.Equal(t, 0, code)
+	assert.Contains(t, stderr, "out.txt")
+	assert.NotContains(t, stderr, "ENTIRE")
+
+	_, stderr, code = aidRun(t, dir, nil, "m.py", "-o", "out.txt")
+	require.Equal(t, 0, code)
+	assert.Contains(t, stderr, "load this ENTIRE file")
 }

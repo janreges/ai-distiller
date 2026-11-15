@@ -127,7 +127,7 @@ aid ./src --summary-type=json
   "token_savings_pct": 88.22622107969151,
   "file_count": 9,
   "output_path": "/home/user/project/.aid/aid.processor.txt",
-  "tokenizer": "cl100k_base"
+  "tokenizer": "estimate (bytes/4)"
 }
 ```
 
@@ -256,7 +256,7 @@ We've worked extensively to make dependency-aware distillation as reliable as po
 
 **Very Good Performance** (8 languages):
 - **Processing Time**: 36-41ms consistently
-- **Compression**: 65-72% size reduction
+- **Compression**: roughly 65-72% size reduction (approximate, measured on small sample files)
 - **Scalability**: Handles projects up to 10 files efficiently
 - **Memory Usage**: Minimal, no hanging or timeout issues
 
@@ -383,6 +383,7 @@ aid src/ --dependency-aware --include="*.py,*.js,*.go"
 </tr>
 </table>
 
+<sub>Project sizes and percentages in this table are approximate. They were gathered with an earlier summary that estimated the source size instead of measuring it, and the exact input snapshots are not part of this repository.</sub><br>
 <sub><sup>1</sup> Context windows: ChatGPT-4o (128K), Claude (200K), Gemini (1M). ✅ = fits completely, ⚠️ = needs splitting</sub><br>
 <sub><sup>2</sup> Processing speed with 12 parallel workers on AMD Ryzen 7945HX. Use `-w 1` for serial mode or `-w N` for custom workers.</sub><br>
 <sub><sup>3</sup> These frameworks exceed 200K tokens and work only with Gemini due to its larger 1M token context window.</sub>
@@ -1067,7 +1068,7 @@ The output file contains both the analysis prompt and formatted git history, rea
 <details>
 <summary><strong>How accurate are the token counts?</strong></summary>
 
-Token counts are estimated using OpenAI's cl100k_base tokenizer (1 token ≈ 4 characters). Actual token usage varies by model - Claude and GPT-4 use similar tokenizers, while others may differ by ±10%.
+Token counts are estimates, not tokenizer output: they are computed as bytes / 4 (1 token ≈ 4 characters). Sizes in the summary are measured (the source file size on disk and the size of the distilled output). Actual token usage varies by model and by language, typically by around ±10% or more.
 </details>
 
 <details>

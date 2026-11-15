@@ -66,9 +66,8 @@ func Print(w io.Writer, stats Stats, opts Options) error {
 	return formatter.Format(w, stats)
 }
 
-// EstimateTokens provides a rough estimate of token count from byte size
-// Using the cl100k_base tokenizer approximation (GPT-4)
-// This is a very rough estimate: ~1 token per 4 bytes for code
+// EstimateTokens provides a rough estimate of token count from byte size:
+// ~1 token per 4 bytes for code. No tokenizer is run.
 func EstimateTokens(bytes int64) int64 {
 	if bytes == 0 {
 		return 0

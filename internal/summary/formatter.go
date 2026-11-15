@@ -16,7 +16,8 @@ type Stats struct {
 	Duration        time.Duration
 	FileCount       int
 	OutputPath      string
-	IsStdout        bool
+	IsStdout        bool // no output file was written
+	Printed         bool // the output was printed to stdout
 }
 
 // Formatter defines the interface for summary formatters

@@ -542,14 +542,8 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 		duration := time.Since(startTime)
 		
 		// Get original size
-		var originalSize int64
-		if rawMode {
-			// For raw mode, the original size equals distilled size (no compression)
-			originalSize = int64(output.Len())
-		} else {
-			originalSize = getOriginalSize(result)
-		}
-		distilledSize := int64(output.Len())
+		originalSize := getOriginalSize(result)
+		distilledSize := int64(len(outputStr)) // what was written or printed
 		
 		// Create summary stats
 		stats := summary.Stats{
@@ -560,7 +554,8 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 			Duration:        duration,
 			FileCount:       fileCount,
 			OutputPath:      outputFile,
-			IsStdout:        outputToStdout || outputFile == "",
+			IsStdout:        outputFile == "",
+			Printed:         outputToStdout || outputFile == "",
 		}
 		
 		// Print summary
@@ -2125,91 +2120,21 @@ func pluralS(count int) string {
 	return "s"
 }
 
-// getOriginalSize calculates the total size of source files in the result
+// getOriginalSize sums the measured source sizes recorded on the processed files.
 func getOriginalSize(result interface{}) int64 {
-	var totalSize int64
-	
 	switch r := result.(type) {
 	case *ir.DistilledFile:
-		// For single file, estimate based on content
-		// This is a rough estimate - actual file might be larger
-		totalSize = estimateOriginalSize(r)
+		if r.Metadata != nil {
+			return r.Metadata.Size
+		}
 	case *ir.DistilledDirectory:
-		// For directory, sum up all files
+		var total int64
 		for _, child := range r.Children {
-			if file, ok := child.(*ir.DistilledFile); ok {
-				totalSize += estimateOriginalSize(file)
-			}
+			total += getOriginalSize(child)
 		}
+		return total
 	}
-	
-	return totalSize
-}
-
-// estimateOriginalSize estimates the original file size based on distilled content
-func estimateOriginalSize(file *ir.DistilledFile) int64 {
-	// This is a rough estimate based on typical compression ratios
-	// In reality, we should track actual file sizes during processing
-	
-	// Count base structure size
-	size := int64(len(file.Path)) + 100 // File overhead
-	
-	// Process all children recursively
-	for _, child := range file.Children {
-		size += estimateNodeSize(child)
-	}
-	
-	// Apply a multiplier for typical source file overhead (comments, whitespace, etc.)
-	// This is a conservative estimate
-	return size * 3
-}
-
-func estimateNodeSize(node ir.DistilledNode) int64 {
-	if node == nil {
-		return 0
-	}
-	
-	var size int64
-	
-	switch n := node.(type) {
-	case *ir.DistilledImport:
-		size += int64(len(n.Module)) + 20
-		for _, sym := range n.Symbols {
-			size += int64(len(sym.Name)) + 5
-		}
-	case *ir.DistilledClass:
-		size += int64(len(n.Name)) + 50
-		for _, child := range n.Children {
-			size += estimateNodeSize(child)
-		}
-	case *ir.DistilledFunction:
-		size += int64(len(n.Name)) + 30
-		for _, param := range n.Parameters {
-			size += int64(len(param.Name)) + 10
-			size += int64(len(param.Type.Name)) + 5
-		}
-		// If implementation is included, use its actual size
-		if n.Implementation != "" {
-			size += int64(len(n.Implementation))
-		} else {
-			// Estimate typical function body size
-			size += 200
-		}
-	case *ir.DistilledField:
-		size += int64(len(n.Name)) + 20
-		if n.Type != nil {
-			size += int64(len(n.Type.Name)) + 10
-		}
-	case *ir.DistilledComment:
-		size += int64(len(n.Text))
-	default:
-		// For other node types, estimate based on children
-		for _, child := range node.GetChildren() {
-			size += estimateNodeSize(child)
-		}
-	}
-	
-	return size
+	return 0
 }
 
 // generateDistillationInstructions generates dynamic instructions based on processing options

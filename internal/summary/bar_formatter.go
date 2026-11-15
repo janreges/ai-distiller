@@ -90,12 +90,14 @@ func (f *BarFormatter) Format(w io.Writer, stats Stats) error {
 		}
 		fmt.Fprintf(w, "%s Distilled output saved to: %s\n", fileEmoji, stats.OutputPath)
 		
-		// Add AI agent recommendation
-		aiEmoji := "🤖"
-		if f.NoEmoji {
-			aiEmoji = "→"
+		// Add AI agent recommendation, unless the same output was printed
+		if !stats.Printed {
+			aiEmoji := "🤖"
+			if f.NoEmoji {
+				aiEmoji = "→"
+			}
+			fmt.Fprintf(w, "%s If you're an AI agent, load this ENTIRE file into your context (don't use grep/tail/head) for a comprehensive code overview.\n", aiEmoji)
 		}
-		fmt.Fprintf(w, "%s If you're an AI agent, load this ENTIRE file into your context (don't use grep/tail/head) for a comprehensive code overview.\n", aiEmoji)
 	}
 	return nil
 }

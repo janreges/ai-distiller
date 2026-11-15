@@ -102,7 +102,7 @@ Machine-readable JSON format for programmatic processing.
   "token_savings_pct": 84.31,
   "file_count": 1,
   "output_path": "/path/to/output.txt",
-  "tokenizer": "cl100k_base"
+  "tokenizer": "estimate (bytes/4)"
 }
 ```
 
@@ -144,7 +144,7 @@ aid src/ --summary-type=stock-ticker --no-emoji
 
 ## Token Estimation
 
-All formatters use the cl100k_base tokenizer approximation (GPT-4 standard):
+All formatters use a plain estimate, not a real tokenizer:
 - Rough formula: ~1 token per 4 bytes for code
 - Always prefixed with `~` to indicate estimation
 - Tokenizer name included in JSON output

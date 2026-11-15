@@ -49,7 +49,23 @@ func (p *Processor) ProcessPath(path string, opts ProcessOptions) (ir.DistilledN
 }
 
 // ProcessFile processes a single file
-func (p *Processor) ProcessFile(filename string, opts ProcessOptions) (*ir.DistilledFile, error) {
+func (p *Processor) ProcessFile(filename string, opts ProcessOptions) (file *ir.DistilledFile, err error) {
+	// Record the measured source size on every result, whichever path produced it.
+	defer func() {
+		if file == nil || err != nil || (file.Metadata != nil && file.Metadata.Size > 0) {
+			return
+		}
+		if info, statErr := os.Stat(filename); statErr == nil {
+			if file.Metadata == nil {
+				file.Metadata = &ir.FileMetadata{}
+			}
+			file.Metadata.Size = info.Size()
+		}
+	}()
+	return p.processFile(filename, opts)
+}
+
+func (p *Processor) processFile(filename string, opts ProcessOptions) (*ir.DistilledFile, error) {
 	dbg := debug.FromContext(p.ctx).WithSubsystem("processor")
 	defer dbg.Timing(debug.LevelDetailed, fmt.Sprintf("ProcessFile %s", filepath.Base(filename)))()
 	

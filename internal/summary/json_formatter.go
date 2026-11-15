@@ -44,7 +44,7 @@ func (f *JSONFormatter) Format(w io.Writer, stats Stats) error {
 		output.TokensAfter = stats.DistilledTokens
 		output.TokensSaved = stats.OriginalTokens - stats.DistilledTokens
 		output.TokenSavingsPct = getCompressionRatio(stats.OriginalTokens, stats.DistilledTokens)
-		output.Tokenizer = "cl100k_base" // GPT-4 tokenizer
+		output.Tokenizer = "estimate (bytes/4)"
 	}
 	
 	encoder := json.NewEncoder(w)

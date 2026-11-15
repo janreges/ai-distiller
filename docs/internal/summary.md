@@ -207,7 +207,7 @@ func (f *BarFormatter) Format(w io.Writer, stats DistillationStats) error {
 
 ### Token Estimation
 
-Token counts are estimates using the cl100k_base tokenizer (GPT-4 standard):
+Token counts are estimates (bytes / 4), not real tokenizer output:
 - Always prefix with `~` to indicate estimation
 - Include tokenizer name in JSON output
 - Rough formula: `tokens ≈ bytes / 4` for code
