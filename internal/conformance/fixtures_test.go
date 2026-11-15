@@ -1,0 +1,104 @@
+package conformance
+
+// check is one capability assertion run against a single aid invocation.
+type check struct {
+	Cap         string   // capability id, unique within a language
+	Flags       []string // extra CLI flags
+	ViaStdin    bool     // pipe the fixture to stdin; pass no path and no --lang
+	Contains    []string // each must occur in stdout
+	NotContains []string // none may occur in stdout
+	Once        []string // each must occur exactly once in stdout
+}
+
+// fixture is one source file and the checks run against it.
+type fixture struct {
+	Lang   string // processor name, e.g. "typescript"
+	File   string // relative to internal/conformance/testdata
+	Checks []check
+}
+
+// markers are the language-specific names the standard checks look for.
+type markers struct {
+	Public    []string // names that must be in default output; Public[0] is the type name
+	Private   []string // names that must not be in default output
+	ExpandSym string   // name of the function whose body holds CONF_BODY_A
+}
+
+// standard returns the ten checks every fixture must pass.
+func standard(m markers) []check {
+	return []check{
+		{Cap: "public-decls", Contains: m.Public},
+		{Cap: "private-hidden", NotContains: append(append([]string{}, m.Private...), "CONF_PRIVATE_DOC")},
+		{Cap: "body-hidden-by-default", NotContains: []string{"CONF_BODY_A", "CONF_BODY_B"}},
+		{Cap: "body-with-implementation", Flags: []string{"--implementation=1"}, Contains: []string{"CONF_BODY_A", "CONF_BODY_B"}},
+		{Cap: "expand-by-name", Flags: []string{"--expand=" + m.ExpandSym}, Contains: []string{"CONF_BODY_A"}, NotContains: []string{"CONF_BODY_B"}},
+		{Cap: "comment-hidden-by-default", NotContains: []string{"CONF_LINE_COMMENT"}},
+		{Cap: "comment-with-comments", Flags: []string{"--comments=1"}, Contains: []string{"CONF_LINE_COMMENT"}},
+		{Cap: "doc-by-default", Contains: []string{"CONF_DOC_COMMENT"}},
+		{Cap: "doc-off", Flags: []string{"--docstrings=0"}, NotContains: []string{"CONF_DOC_COMMENT"}},
+		{Cap: "stdin-detect", ViaStdin: true, Contains: []string{m.Public[0]}},
+	}
+}
+
+var fixtures = []fixture{
+	{Lang: "python", File: "python/sample.py", Checks: standard(markers{
+		Public:    []string{"ConfWidget", "conf_field", "conf_public", "conf_other"},
+		Private:   []string{"_conf_private"},
+		ExpandSym: "conf_public",
+	})},
+	{Lang: "typescript", File: "typescript/sample.ts", Checks: standard(markers{
+		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
+		Private:   []string{"confPrivate"},
+		ExpandSym: "confPublic",
+	})},
+	{Lang: "javascript", File: "javascript/sample.js", Checks: standard(markers{
+		Public:    []string{"ConfWidget", "confPublic", "confOther"},
+		Private:   []string{"#confPrivate"},
+		ExpandSym: "confPublic",
+	})},
+	{Lang: "go", File: "go/sample.go", Checks: standard(markers{
+		Public:    []string{"ConfWidget", "ConfField", "ConfPublic", "ConfOther"},
+		Private:   []string{"confPrivate"},
+		ExpandSym: "ConfPublic",
+	})},
+	{Lang: "rust", File: "rust/sample.rs", Checks: standard(markers{
+		Public:    []string{"ConfWidget", "conf_field", "conf_public", "conf_other"},
+		Private:   []string{"conf_private"},
+		ExpandSym: "conf_public",
+	})},
+	{Lang: "swift", File: "swift/sample.swift", Checks: standard(markers{
+		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
+		Private:   []string{"confPrivate"},
+		ExpandSym: "confPublic",
+	})},
+	{Lang: "ruby", File: "ruby/sample.rb", Checks: standard(markers{
+		Public:    []string{"ConfWidget", "conf_public", "conf_other"},
+		Private:   []string{"conf_private"},
+		ExpandSym: "conf_public",
+	})},
+	{Lang: "java", File: "java/ConfWidget.java", Checks: standard(markers{
+		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
+		Private:   []string{"confPrivate"},
+		ExpandSym: "confPublic",
+	})},
+	{Lang: "csharp", File: "csharp/ConfWidget.cs", Checks: standard(markers{
+		Public:    []string{"ConfWidget", "ConfField", "ConfPublic", "ConfOther"},
+		Private:   []string{"ConfPrivate"},
+		ExpandSym: "ConfPublic",
+	})},
+	{Lang: "kotlin", File: "kotlin/ConfWidget.kt", Checks: standard(markers{
+		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
+		Private:   []string{"confPrivate"},
+		ExpandSym: "confPublic",
+	})},
+	{Lang: "cpp", File: "cpp/sample.cpp", Checks: standard(markers{
+		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
+		Private:   []string{"confPrivate"},
+		ExpandSym: "confPublic",
+	})},
+	{Lang: "php", File: "php/sample.php", Checks: standard(markers{
+		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
+		Private:   []string{"confPrivate"},
+		ExpandSym: "confPublic",
+	})},
+}
