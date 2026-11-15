@@ -553,6 +553,10 @@ func (p *TreeSitterProcessor) processMethod(node *sitter.Node, file *ir.Distille
 
 		case "property_identifier":
 			propertyName = text
+			// Underscore convention: private unless JSDoc says otherwise
+			if isUnderscorePrivate(text) && fn.Visibility == ir.VisibilityPublic && !p.jsdocMarksPublic(nodeLine) {
+				fn.Visibility = ir.VisibilityPrivate
+			}
 
 		case "private_property_identifier":
 			// Private field/method with # prefix
@@ -605,6 +609,18 @@ func (p *TreeSitterProcessor) processMethod(node *sitter.Node, file *ir.Distille
 	p.addNode(file, parent, fn)
 }
 
+// isUnderscorePrivate reports whether name follows the leading-underscore
+// "private by convention" rule.
+func isUnderscorePrivate(name string) bool {
+	return strings.HasPrefix(name, "_")
+}
+
+// jsdocMarksPublic reports whether the JSDoc block attached to line carries @public.
+func (p *TreeSitterProcessor) jsdocMarksPublic(line int) bool {
+	jsdoc, ok := p.jsdocComments[line]
+	return ok && jsdoc.isPublic
+}
+
 // processField processes field definitions
 func (p *TreeSitterProcessor) processField(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) {
 	field := &ir.DistilledField{
@@ -637,6 +653,10 @@ func (p *TreeSitterProcessor) processField(node *sitter.Node, file *ir.Distilled
 
 		case "property_identifier":
 			field.Name = p.getNodeText(child)
+			// Underscore convention: private unless JSDoc says otherwise
+			if isUnderscorePrivate(field.Name) && field.Visibility == ir.VisibilityPublic && !p.jsdocMarksPublic(nodeLine) {
+				field.Visibility = ir.VisibilityPrivate
+			}
 
 		case "private_property_identifier":
 			// Private field with # prefix

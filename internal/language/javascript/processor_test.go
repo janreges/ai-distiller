@@ -6,7 +6,60 @@ import (
 	"testing"
 
 	"github.com/janreges/ai-distiller/internal/ir"
+	"github.com/stretchr/testify/assert"
 )
+
+// parseJS parses src with the real JavaScript processor and returns the raw IR.
+func parseJS(t *testing.T, src string) *ir.DistilledFile {
+	t.Helper()
+	f, err := NewProcessor().Process(context.Background(), strings.NewReader(src), "t.js")
+	if err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	return f
+}
+
+// findJSClass returns the top-level class called name; it fails the test when absent.
+func findJSClass(t *testing.T, file *ir.DistilledFile, name string) *ir.DistilledClass {
+	t.Helper()
+	for _, c := range file.Children {
+		if cls, ok := c.(*ir.DistilledClass); ok && cls.Name == name {
+			return cls
+		}
+	}
+	t.Fatalf("class %q not found", name)
+	return nil
+}
+
+func jsMemberVisibility(cls *ir.DistilledClass) map[string]ir.Visibility {
+	vis := map[string]ir.Visibility{}
+	for _, c := range cls.Children {
+		switch n := c.(type) {
+		case *ir.DistilledFunction:
+			vis[n.Name] = n.Visibility
+		case *ir.DistilledField:
+			vis[n.Name] = n.Visibility
+		}
+	}
+	return vis
+}
+
+func TestJS_UnderscoreMembersArePrivate(t *testing.T) {
+	cls := findJSClass(t, parseJS(t, "class K {\n  _helper() { return 1; }\n  open() { return 2; }\n  static _cache = 1;\n  /** @public */\n  _exposed() { return 3; }\n}\n"), "K")
+	vis := jsMemberVisibility(cls)
+	assert.Equal(t, ir.VisibilityPrivate, vis["_helper"])
+	assert.Equal(t, ir.VisibilityPublic, vis["open"])
+	assert.Equal(t, ir.VisibilityPrivate, vis["_cache"])
+	assert.Equal(t, ir.VisibilityPublic, vis["_exposed"], "JSDoc @public overrides the underscore rule")
+}
+
+func TestJS_HashMembersAreNamedAndPrivate(t *testing.T) {
+	cls := findJSClass(t, parseJS(t, "class K {\n  #p() { return 1; }\n  get #g() { return 1; }\n  static #s = 1;\n}\n"), "K")
+	vis := jsMemberVisibility(cls)
+	assert.Equal(t, ir.VisibilityPrivate, vis["#p"])
+	assert.Equal(t, ir.VisibilityPrivate, vis["get #g"])
+	assert.Equal(t, ir.VisibilityPrivate, vis["#s"])
+}
 
 func TestProcessorGeneratorFunctions(t *testing.T) {
 	tests := []struct {

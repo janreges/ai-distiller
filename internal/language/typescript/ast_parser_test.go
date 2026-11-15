@@ -158,3 +158,23 @@ func TestTS_AmbientMembersArePublic(t *testing.T) {
 	plain := f.Children[2].(*ir.DistilledPackage)
 	assert.Equal(t, ir.VisibilityInternal, visibility(plain.Children[0]), "a plain namespace keeps non-exported members internal")
 }
+
+func TestTS_HashMethodsAndAccessorsArePrivate(t *testing.T) {
+	f := parseTS(t, "class A {\n  #p(): void {}\n  get #g(): number { return 1; }\n  open(): void {}\n}\n")
+	var cls *ir.DistilledClass
+	for _, c := range f.Children {
+		if k, ok := c.(*ir.DistilledClass); ok {
+			cls = k
+		}
+	}
+	require.NotNil(t, cls)
+	vis := map[string]ir.Visibility{}
+	for _, c := range cls.Children {
+		if fn, ok := c.(*ir.DistilledFunction); ok {
+			vis[fn.Name] = fn.Visibility
+		}
+	}
+	assert.Equal(t, ir.VisibilityPrivate, vis["#p"])
+	assert.Equal(t, ir.VisibilityPrivate, vis["#g"])
+	assert.Equal(t, ir.VisibilityPublic, vis["open"])
+}

@@ -17,6 +17,8 @@ export class ConfWidget {
         return sep;
     }
 
+    #confHashMethod() { return 1; }
+
     confOther(): string {
         const b = "CONF_BODY_B";
         return b;

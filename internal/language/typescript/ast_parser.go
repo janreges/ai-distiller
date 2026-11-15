@@ -597,6 +597,10 @@ func (p *ASTParser) parseMethod(node *sitter.Node) *ir.DistilledFunction {
 			}
 		case "property_identifier":
 			method.Name = p.nodeText(child)
+		case "private_property_identifier":
+			// #name method or accessor: keep the name and mark it private
+			method.Name = p.nodeText(child)
+			method.Visibility = ir.VisibilityPrivate
 		case "type_parameters":
 			method.TypeParams = p.parseTypeParameters(child)
 		case "formal_parameters":

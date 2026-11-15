@@ -60,6 +60,7 @@ var fixtures = []fixture{
 		check{Cap: "fn-return-type", Contains: []string{"confTopLevel(n: number): number"}},
 		check{Cap: "const-type", Contains: []string{"export const confConst: number = 1"}},
 		check{Cap: "hash-private-hidden", NotContains: []string{"confSecret"}},
+		check{Cap: "hash-method-hidden", NotContains: []string{"confHashMethod"}},
 		check{Cap: "hash-private-named", Flags: []string{"--private=1"}, Contains: []string{"#confSecret"}},
 		check{Cap: "arrow-expression-body", Flags: []string{"--implementation=1"}, Contains: []string{"confArrow(n: number) => n"}},
 		check{Cap: "type-guard-return", Contains: []string{"confIsNum(x: unknown): x is number"}},
@@ -72,6 +73,8 @@ var fixtures = []fixture{
 		ExpandSym: "confPublic",
 	}), check{Cap: "body-indent", Flags: []string{"--implementation=1"},
 		Contains: []string{"        const a = \"CONF_BODY_A\";\n        return a;\n    }\n"}},
+		check{Cap: "underscore-method-hidden", NotContains: []string{"_confUnderscore"}},
+		check{Cap: "hash-method-hidden", NotContains: []string{"confHashMethod"}},
 		check{Cap: "arrow-expression-body", Flags: []string{"--implementation=1"}, Contains: []string{"=> a + 1"}})},
 	{Lang: "go", File: "go/sample.go", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "ConfField", "ConfPublic", "ConfOther"},

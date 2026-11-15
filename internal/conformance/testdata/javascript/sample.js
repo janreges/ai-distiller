@@ -14,6 +14,14 @@ export class ConfWidget {
         return sep;
     }
 
+    _confUnderscore() {
+        return 1;
+    }
+
+    #confHashMethod() {
+        return 1;
+    }
+
     confOther() {
         const b = "CONF_BODY_B";
         return b;
