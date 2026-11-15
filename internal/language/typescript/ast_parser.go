@@ -150,7 +150,10 @@ func (p *ASTParser) parseStatement(node *sitter.Node, isExported bool) []ir.Dist
 }
 
 // parseNamespace parses `namespace X {}` and `declare module "x" {}` into a
-// DistilledPackage whose children are the declarations of the body.
+// DistilledPackage whose children are the declarations of the body. In an
+// ambient namespace or module (one inside a `declare`, such as `declare
+// namespace X {}`, `declare module "x" {}` and the namespaces nested in them)
+// every member is exported without the `export` keyword, so it is public.
 func (p *ASTParser) parseNamespace(node *sitter.Node) *ir.DistilledPackage {
 	nameNode := node.ChildByFieldName("name")
 	if nameNode == nil {
@@ -160,12 +163,49 @@ func (p *ASTParser) parseNamespace(node *sitter.Node) *ir.DistilledPackage {
 		BaseNode: ir.BaseNode{Location: p.nodeToLocation(node)},
 		Name:     p.nodeText(nameNode),
 	}
+	ambient := insideAmbientDeclaration(node)
 	if body := node.ChildByFieldName("body"); body != nil {
 		for i := 0; i < int(body.NamedChildCount()); i++ {
-			pkg.Children = append(pkg.Children, p.parseStatement(body.NamedChild(i), false)...)
+			members := p.parseStatement(body.NamedChild(i), false)
+			if ambient {
+				for _, member := range members {
+					makePublic(member)
+				}
+			}
+			pkg.Children = append(pkg.Children, members...)
 		}
 	}
 	return pkg
+}
+
+// insideAmbientDeclaration reports whether node lies within a `declare`
+// (ambient_declaration) node.
+func insideAmbientDeclaration(node *sitter.Node) bool {
+	for n := node.Parent(); n != nil; n = n.Parent() {
+		if n.Type() == "ambient_declaration" {
+			return true
+		}
+	}
+	return false
+}
+
+// makePublic gives a declaration public visibility. It adds no `export`
+// modifier, so the output does not show a keyword the source lacks.
+func makePublic(node ir.DistilledNode) {
+	switch n := node.(type) {
+	case *ir.DistilledFunction:
+		n.Visibility = ir.VisibilityPublic
+	case *ir.DistilledField:
+		n.Visibility = ir.VisibilityPublic
+	case *ir.DistilledClass:
+		n.Visibility = ir.VisibilityPublic
+	case *ir.DistilledInterface:
+		n.Visibility = ir.VisibilityPublic
+	case *ir.DistilledTypeAlias:
+		n.Visibility = ir.VisibilityPublic
+	case *ir.DistilledEnum:
+		n.Visibility = ir.VisibilityPublic
+	}
 }
 
 // parseImport parses import statements
@@ -561,15 +601,8 @@ func (p *ASTParser) parseMethod(node *sitter.Node) *ir.DistilledFunction {
 			method.TypeParams = p.parseTypeParameters(child)
 		case "formal_parameters":
 			method.Parameters = p.parseParameters(child)
-		case "type_annotation":
-			// Extract the actual type from the type annotation (skip the colon)
-			for j := 0; j < int(child.ChildCount()); j++ {
-				typeChild := child.Child(j)
-				if typeChild != nil && typeChild.Type() != ":" {
-					method.Returns = &ir.TypeRef{Name: p.nodeText(typeChild)}
-					break
-				}
-			}
+		case "type_annotation", "type_predicate_annotation", "asserts_annotation":
+			method.Returns = p.typeFromAnnotation(child)
 		case "statement_block":
 			method.Implementation = p.nodeText(child)
 		}
@@ -620,15 +653,8 @@ func (p *ASTParser) parseMethodSignature(node *sitter.Node) *ir.DistilledFunctio
 			method.TypeParams = p.parseTypeParameters(child)
 		case "formal_parameters":
 			method.Parameters = p.parseParameters(child)
-		case "type_annotation":
-			// Extract the actual type from the type annotation (skip the colon)
-			for j := 0; j < int(child.ChildCount()); j++ {
-				typeChild := child.Child(j)
-				if typeChild != nil && typeChild.Type() != ":" {
-					method.Returns = &ir.TypeRef{Name: p.nodeText(typeChild)}
-					break
-				}
-			}
+		case "type_annotation", "type_predicate_annotation", "asserts_annotation":
+			method.Returns = p.typeFromAnnotation(child)
 		}
 	}
 
@@ -677,22 +703,21 @@ func (p *ASTParser) parseField(node *sitter.Node) *ir.DistilledField {
 			field.Modifiers = append(field.Modifiers, ir.ModifierReadonly)
 		case "property_name":
 			if nameChild := child.Child(0); nameChild != nil {
-				if nameChild.Type() == "identifier" || nameChild.Type() == "property_identifier" {
+				switch nameChild.Type() {
+				case "identifier", "property_identifier":
 					field.Name = p.nodeText(nameChild)
+				case "private_property_identifier":
+					field.Name = p.nodeText(nameChild)
+					field.Visibility = ir.VisibilityPrivate
 				}
 			}
 		case "property_identifier":
 			field.Name = p.nodeText(child)
+		case "private_property_identifier":
+			field.Name = p.nodeText(child)
+			field.Visibility = ir.VisibilityPrivate
 		case "type_annotation":
-			// The type annotation includes the colon, so we need to extract just the type
-			// Find the actual type node (skip the colon)
-			for j := 0; j < int(child.ChildCount()); j++ {
-				typeChild := child.Child(j)
-				if typeChild != nil && typeChild.Type() != ":" {
-					field.Type = &ir.TypeRef{Name: p.nodeText(typeChild)}
-					break
-				}
-			}
+			field.Type = p.typeFromAnnotation(child)
 		case "identifier": // For simple field declarations
 			field.Name = p.nodeText(child)
 		}
@@ -944,13 +969,9 @@ func (p *ASTParser) parseEnumBody(node *sitter.Node, enum *ir.DistilledEnum) {
 					Modifiers:  []ir.Modifier{ir.ModifierStatic, ir.ModifierReadonly},
 				}
 
-				// Get the assigned value
-				for j := 0; j < int(child.ChildCount()); j++ {
-					valueChild := child.Child(j)
-					if valueChild != nil && (valueChild.Type() == "string" || valueChild.Type() == "number") {
-						field.DefaultValue = p.nodeText(valueChild)
-						break
-					}
+				// The initialiser as written: a literal, "-1", "1 << 2", "Other.X"
+				if value := child.ChildByFieldName("value"); value != nil {
+					field.DefaultValue = strings.Join(strings.Fields(p.nodeText(value)), " ")
 				}
 
 				enum.Children = append(enum.Children, field)
@@ -1006,15 +1027,8 @@ func (p *ASTParser) parseFunction(node *sitter.Node, isExported bool) *ir.Distil
 			fn.TypeParams = p.parseTypeParameters(child)
 		case "formal_parameters":
 			fn.Parameters = p.parseParameters(child)
-		case "type_annotation":
-			// Extract the actual type from the type annotation (skip the colon)
-			for j := 0; j < int(child.ChildCount()); j++ {
-				typeChild := child.Child(j)
-				if typeChild != nil && typeChild.Type() != ":" {
-					fn.Returns = &ir.TypeRef{Name: p.nodeText(typeChild)}
-					break
-				}
-			}
+		case "type_annotation", "type_predicate_annotation", "asserts_annotation":
+			fn.Returns = p.typeFromAnnotation(child)
 		case "statement_block":
 			fn.Implementation = p.nodeText(child)
 		}
@@ -1022,6 +1036,26 @@ func (p *ASTParser) parseFunction(node *sitter.Node, isExported bool) *ir.Distil
 
 	return fn
 }
+
+// typeFromAnnotation returns the type of a type_annotation node, or of a
+// return-type type_predicate_annotation ("x is T") or asserts_annotation
+// ("asserts x is T"): its first child that is not the ":" token, or nil when
+// there is none.
+func (p *ASTParser) typeFromAnnotation(node *sitter.Node) *ir.TypeRef {
+	if node == nil {
+		return nil
+	}
+	for i := 0; i < int(node.ChildCount()); i++ {
+		c := node.Child(i)
+		if c != nil && c.Type() != ":" {
+			return &ir.TypeRef{Name: p.nodeText(c)}
+		}
+	}
+	return nil
+}
+
+// maxConstValueLen is the longest single-line initialiser printed for a constant.
+const maxConstValueLen = 80
 
 // parseVariableDeclaration parses variable declarations
 func (p *ASTParser) parseVariableDeclaration(node *sitter.Node, isExported bool) []ir.DistilledNode {
@@ -1095,8 +1129,16 @@ func (p *ASTParser) parseVariableDeclaration(node *sitter.Node, isExported bool)
 
 			typeAnnotation := p.findChild(child, "type_annotation")
 			if typeAnnotation != nil {
-				if typeNode := p.findChild(typeAnnotation, "type"); typeNode != nil {
-					field.Type = &ir.TypeRef{Name: p.nodeText(typeNode)}
+				field.Type = p.typeFromAnnotation(typeAnnotation)
+			}
+
+			// Keep short single-line initialisers; large literals would bloat the output.
+			for j := 0; j+1 < int(child.ChildCount()); j++ {
+				if c := child.Child(j); c != nil && c.Type() == "=" {
+					if v := p.nodeText(child.Child(j + 1)); !strings.Contains(v, "\n") && len(v) <= maxConstValueLen {
+						field.DefaultValue = v
+					}
+					break
 				}
 			}
 
@@ -1146,15 +1188,8 @@ func (p *ASTParser) parseArrowFunction(node *sitter.Node, isExported bool) *ir.D
 					Name: p.nodeText(child),
 				})
 			}
-		case "type_annotation":
-			// Return type annotation
-			for j := 0; j < int(child.ChildCount()); j++ {
-				typeChild := child.Child(j)
-				if typeChild != nil && typeChild.Type() != ":" {
-					fn.Returns = &ir.TypeRef{Name: p.nodeText(typeChild)}
-					break
-				}
-			}
+		case "type_annotation", "type_predicate_annotation", "asserts_annotation":
+			fn.Returns = p.typeFromAnnotation(child)
 		case "statement_block":
 			fn.Implementation = p.nodeText(child)
 		case "=>":
@@ -1175,6 +1210,14 @@ func (p *ASTParser) parseArrowFunction(node *sitter.Node, isExported bool) *ir.D
 					fn.Implementation = p.nodeText(child)
 				}
 			}
+		}
+	}
+
+	// An expression body that is a bare identifier (x => x) is mistaken for a
+	// parameter above; the body field is authoritative.
+	if fn.Implementation == "" {
+		if body := node.ChildByFieldName("body"); body != nil {
+			fn.Implementation = p.nodeText(body)
 		}
 	}
 

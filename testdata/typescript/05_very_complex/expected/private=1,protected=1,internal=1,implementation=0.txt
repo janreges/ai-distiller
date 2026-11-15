@@ -15,5 +15,5 @@ interface AppEvents {
     property user: { id: number; name: string }
     property settings: { theme: 'dark' | 'light' }
 }
-const appEmitter
+const appEmitter = new TypedEventEmitter<AppEvents>()
 </file>

@@ -5,6 +5,7 @@ import { sep } from "path";
 /** CONF_DOC_COMMENT */
 export class ConfWidget {
     confField: number = 1;
+    #confSecret = 1;
 
     confPublic(): string {
         const a = "CONF_BODY_A";
@@ -22,13 +23,27 @@ export class ConfWidget {
     }
 }
 
+export function confTopLevel(n: number): number { return n; }
+
+export const confConst: number = 1;
+
+export const confArrow = (n: number) => n;
+
+export function confIsNum(x: unknown): x is number { return true; }
+
 export type ConfId = string;
 
 export enum ConfColor { ConfRed, ConfGreen = "green" }
+
+export enum ConfFlags { ConfNone = 0, ConfShift = 1 << 2, ConfNeg = -1 }
 
 export namespace ConfSpace {
     export function confInSpace(): number { return 1; }
 }
 declare module "conf-ambient" {
     export function confAmbient(): void;
+    function confAmbientImplicit(): void;
+}
+declare namespace ConfDeclared {
+    function confDeclaredFn(): void;
 }
