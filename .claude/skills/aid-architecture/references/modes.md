@@ -1,0 +1,191 @@
+# Modes
+
+`internal/cli/root.go#runDistiller` picks one mode per run; the order is in
+`SKILL.md` section 3. This file says what each mode does and where it lives.
+
+## Stdin
+
+When it is taken: `CLAUDE.md` section 4 (a path argument wins; `-` or no
+argument with a non-terminal stdin reads stdin).
+
+`internal/cli/root.go#processStdinWithContext`:
+
+1. reads all of stdin; with `--lang auto` (the default) empty input fails with
+   `no input on stdin`, and the detector (`internal/language/detector.go`;
+   rules in `.claude/skills/aid-language-parsers/references/detector.md`)
+   picks the language or the run fails with a list of the languages;
+2. maps aliases through `internal/language/names.go#Canonical` (`py`, `ts`,
+   `c++`, ...); an unknown name fails with the list of names and aliases;
+3. parses under the name `stdin.tsx` when the language is TypeScript and
+   either `--lang tsx` was given or `--lang auto` found JSX
+   (`internal/language/detector.go#HasJSX`), else under `stdin`;
+4. calls the language processor's `ProcessWithOptions` directly with the
+   options from `createProcessOptionsFromFlags`, then formats.
+
+What it skips: the walk and every file-selection rule, `--dependency-aware`
+(that runs in `Processor.ProcessFile`), the check of `--format` against the
+five names (so the registry's aliases `markdown`, `json` and `json-lines` work
+here), the removal of empty `<file>` blocks, `--show-ai-agent-instructions`
+and the summary. The output is always printed, labelled `stdin`; `-o FILE`
+also writes it to FILE.
+
+## Git mode
+
+Taken when the base name of the path is `.git`, after the check that the path
+exists and before AI actions. `internal/cli/root.go#handleGitMode` runs
+`git -C <parent of .git> log` with a custom format, adding `-n<N>` when
+`--git-limit` is above 0 (default 200), and prints one block per commit:
+
+```text
+[0894db6] 2026-11-15 14:16:24 | t                    | second
+        body line
+```
+
+The author is the name without the e-mail, padded to 20 characters and cut to
+17 plus `...` when longer; the subject is cut to 77 plus `...` beyond 80
+characters; body lines are trimmed, empty ones dropped, and indented by 8
+spaces; a blank line separates commits.
+
+`--with-analysis-prompt` puts the `git-analysis` template in front
+(`internal/aiactions/templates/git-analysis.md`, loaded by
+`internal/cli/root.go#getGitAnalysisPrompt`, with a short built-in prompt if
+loading fails) and wraps the log in `=== BEGIN GIT LOG ===` and
+`=== END GIT LOG ===`.
+
+Output: stdout by default. `-o FILE` writes FILE and prints only with
+`--stdout`; without it a `Git log written to: <path>` line goes to stderr.
+No `.aid/` file, no summary; `--format` and every filter flag are ignored. No
+test runs git mode.
+
+## Raw mode (`--raw`)
+
+Not a branch of `runDistiller`: the normal mode with `RawMode` set. The walk
+drops its "has a processor" test, and `Processor.processFile` hands every
+file, source code included, to `internal/processor/raw_processor.go#RawProcessor`,
+which returns the whole text as one `DistilledRawContent` node; nothing is
+stripped. A file whose extension is on the raw processor's binary list
+(images, archives, `.pyc`, `.class`, ...) is skipped with `Warning: skipping
+binary file`; a binary file with another extension is read as text.
+`.aidignore`, the default-ignored directories, `.aid.` names and
+`--include`/`--exclude` still apply.
+
+Without `--raw`, a file with no processor that `.aidignore` re-includes with a
+`!` pattern also goes to the raw processor (`file-discovery.md`).
+
+## AI actions (`--ai-action`)
+
+Taken when `--ai-action` is set; the deprecated `--ai-analysis-task-list`
+becomes `--ai-action=flow-for-deep-file-to-file-analysis`. With `-o` the run
+fails with a message pointing to `--ai-output`.
+
+The parts:
+
+- `internal/ai/action.go#AIAction`: `Name`, `Description`, `Type`,
+  `DefaultOutput`, `Validate`. A prompt action is an
+  `internal/ai/action.go#ContentAction` (`GenerateContent` returns the text to
+  put before and after the distilled code); a flow action is an
+  `internal/ai/action.go#FlowAction` (`ExecuteFlow` returns files and
+  messages).
+- The registry: `internal/ai/registry.go#ActionRegistry`, the process-wide
+  instance `internal/ai/registry_global.go#GetRegistry`, filled at start-up by
+  `internal/cli/root.go#registerAIActions` through
+  `internal/aiactions/register.go#Register`.
+- The actions, `internal/aiactions`: two flows
+  (`internal/aiactions/deep_analysis_flow.go#DeepAnalysisFlowAction`,
+  `internal/aiactions/multi_file_docs_flow.go#MultiFileDocsFlowAction`) and
+  eight prompt actions in `internal/aiactions/template_actions.go`, each
+  rendering one template. The older prompt types in `refactoring_prompt.go`,
+  `security_prompt.go`, `performance_prompt.go` and
+  `complex_codebase_prompt.go` are compiled but not registered.
+- The templates, `internal/aiactions/templates/*.md`, embedded by
+  `//go:embed templates/*.md` (`internal/aiactions/template_loader.go#embeddedTemplates`).
+  `internal/aiactions/template_loader.go#LoadTemplate` reads the embedded file
+  (falling back to a search of the file system) and renders it with
+  `text/template`: data `{{.ProjectName}}` and `{{.AnalysisDate}}`, functions
+  `VERSION` and `WEBSITE_URL`.
+
+A prompt action (`internal/cli/root.go#handleAIAction`, then
+`#distillForAction` and `#executeContentAction`) distils the path with the
+same options as a normal run, but with relative paths and always as `text`
+with the import filter on, regardless of `--format` and `--filter-imports`. It
+writes the template followed by the distilled text to the output path and
+prints a status block; with `--stdout` it prints the prompt instead (status on
+stderr) and still writes the file, unless `--ai-output -` is given.
+
+A flow action (`#executeFlowAction`) distils nothing. It lists files with
+`internal/aiactions/source_files.go#collectSourceFiles`, a walk of its own:
+
+- its own extension list;
+- below the walk root it skips the directories named in its map `skipDirs`
+  (`node_modules`, `__pycache__`, `target`, `build`, `dist`, `out`, `vendor`,
+  `coverage`, `grammars`, `test-data`, `testdata`, `docs`, `examples`,
+  `assets`, `static`, and hidden names such as `.git`), every directory whose
+  name starts with `.`, and every directory whose path relative to the walk
+  root contains `grammars` or `tree-sitter` (`lib/my-tree-sitter-x` too);
+- it leaves out files whose name starts with `.` or contains `generated`;
+- it reads no `.aidignore`; `--include`/`--exclude` go through
+  `internal/processor/processor.go#MatchesPatterns`.
+
+It writes the returned files under the output directory and prints status
+lines to stdout, with or without `--stdout`.
+
+The output path is `--ai-output` or the action's `DefaultOutput`, expanded by
+`internal/ai/template.go#ExpandTemplate` and checked by
+`internal/ai/template.go#ValidateOutputPath` (it must lie inside the analysed
+path or in the project root's `.aid/`):
+
+- a leading `./.aid/` or `.aid/` becomes the project root's `.aid/`, so the
+  prompt actions' defaults (`./.aid/<NAME>.%YYYY-MM-DD.HH-MM-SS%.%folder-basename%.md`)
+  land there wherever aid runs;
+- the flows' default is `./.aid` without a slash, which is not mapped: flows
+  write into `.aid/` of the working directory (run from `src/sub`, a flow
+  created `src/sub/.aid/`);
+- placeholders: `%YYYY%`, `%MM%`, `%DD%`, `%HH%`, `%mm%`, `%SS%`,
+  `%YYYY-MM-DD%`, `%HH-MM-SS%`, `%YYYY-MM-DD.HH-MM-SS%`, `%folder-basename%`
+  and `%project%` (both the base name of the path).
+
+### Adding a prompt action
+
+1. Write `internal/aiactions/templates/<template>.md`; the embed glob picks it
+   up.
+2. Add a type to `internal/aiactions/template_actions.go` that implements
+   `ai.ContentAction`: `Name` (`prompt-for-...`), `Type` returning
+   `ai.ActionTypePrompt`, `DefaultOutput` starting with `./.aid/`, and
+   `GenerateContent` calling `LoadTemplate("<template>", ...)`.
+3. Register it in `internal/aiactions/register.go#Register`.
+4. List it in `docs/user/COMMAND-LINE-OPTIONS.md` in backticks
+   (`internal/cli/flags_doc_test.go#TestCommandLineOptionsDocListsEveryAIAction`
+   fails until it is), and in the hand-written lists in
+   `internal/cli/help.go` (`getHelpTemplate`, `showAIActionsHelp`,
+   `showCheatSheet`); nothing checks those.
+5. For the MCP server, add the name to the `ai_action` enum in
+   `mcp-npm/mcp-server-sdk.ts#TOOL_SCHEMAS`.
+6. Test it: run `aid <dir> --ai-action <name> --stdout --ai-output ./.aid/x.md`
+   on a temporary project and read the prompt. No test checks prompt texts
+   today (`aid-testing-debugging`, section 8).
+
+A flow action implements `ai.FlowAction` instead and gets its file list from
+`collectSourceFiles`; tests: `internal/aiactions/source_files_test.go`.
+
+## Dependency-aware (`--dependency-aware`, experimental)
+
+Off by default; `internal/processor/interface.go#DefaultProcessOptions` also
+keeps it off (`SymbolResolution` false, `MaxDepth` 2). The flag sets
+`SymbolResolution`, `--max-depth` sets `MaxDepth`.
+
+`Processor.processFile` (each file of a directory run too) calls
+`internal/processor/dependency.go#ProcessWithDependencyAnalysis` after the
+normal result. That function processes the file again without the option,
+finds a root of its own (the file's directory or the nearest one above it
+with `go.mod`, `package.json`, `pyproject.toml`, `Cargo.toml` or `.git`, else
+the file's directory; not `internal/project`) and runs
+`internal/processor/dependency.go#DependencyAnalyzer.AnalyzeDependencies`: it
+follows import and include statements to related files, builds symbol tables
+and a call graph with per-language regular expressions (the symbol-table
+types come from `internal/semantic`), and marks what the entry file uses up
+to `MaxDepth`.
+The result is one file at the entry file's absolute path holding the source
+text of the used definitions, file by file. On an error it falls back to the
+normal result and logs why at `-v`. Stdin never reaches it; the MCP tool
+`distill_with_dependencies` uses it. Tests check only that it is off by
+default.

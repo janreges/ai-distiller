@@ -60,15 +60,17 @@ More commands and the update workflow: `.claude/skills/aid-testing-debugging/SKI
 - `cmd/aid`: the CLI entry point; other `cmd/*` are developer tools.
 - `internal/cli`: flags, the run pipeline, stdin handling.
 - `internal/language`: one processor per language plus the registry and stdin detector.
-- `internal/parser`: tree-sitter glue shared by the processors.
+- `internal/parser`: the TypeScript and Swift grammar modules that `go.mod` replaces (`grammars/`); the Go package itself is a WASM runtime the live path does not use.
 - `internal/ir`: the intermediate representation every processor produces.
 - `internal/stripper`: removes what the flags exclude (visibility, bodies, comments).
 - `internal/formatter`: text, markdown, json, jsonl and xml output.
-- `internal/processor`, `internal/distiller`: file discovery and parallel processing.
+- `internal/processor`: file discovery and parallel processing.
 - `internal/aiactions`, `internal/ai`, `internal/summary`: `--ai-action` prompts and summaries.
 - `internal/project`: project root detection and the `.aid/` output directory.
 - `internal/testrunner`, `internal/conformance`: snapshot and conformance suites.
 - `testdata/`, `mcp-npm/`: snapshot fixtures; the npm MCP server package.
+
+Every package, and which of them run: `.claude/skills/aid-architecture/references/code-map.md`.
 
 ## 6. Which skill to load
 
@@ -76,6 +78,7 @@ More commands and the update workflow: `.claude/skills/aid-testing-debugging/SKI
 |---|---|
 | Running or updating tests, a test fails, finding a bug's layer, `-v` debug output | `.claude/skills/aid-testing-debugging/SKILL.md` |
 | A language's output is wrong, parser or visibility change, adding a language | `.claude/skills/aid-language-parsers/SKILL.md` |
+| Where something is implemented, adding a CLI flag or mode, file selection, the stripper, git mode, AI actions | `.claude/skills/aid-architecture/SKILL.md` |
 
 The index of skills is `.claude/skills/README.md`.
 
