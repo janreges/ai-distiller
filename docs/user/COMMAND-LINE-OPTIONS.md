@@ -48,7 +48,7 @@ C# combined access modifiers show when the flag of either of their words is on: 
 
 Valid categories for `--include-only` and `--exclude-items`: `public`, `protected`, `internal`, `private`, `comments`, `docstrings`, `implementation`, `imports`, `annotations`, `fields`, `methods`.
 
-`--include-only` starts from nothing: list `methods` and/or `fields`, or every class and interface is printed with an empty body. `--exclude-items` starts from everything (all visibility levels, comments, docstrings, bodies, imports) and removes the listed categories, so `--exclude-items=internal` prints private and protected members and bodies too. In `--exclude-items`, `docstrings` removes regular comments, not docstrings (a known bug); use `--docstrings=0` instead.
+`--include-only` starts from nothing: list `methods` and/or `fields`, or every class and interface is printed with an empty body. `--exclude-items` starts from everything (all visibility levels, comments, docstrings, bodies, imports) and removes the listed categories, so `--exclude-items=internal` prints private and protected members and bodies too. In `--exclude-items`, `docstrings` is exactly `--docstrings=0`: it removes documentation comments (Python docstrings, Javadoc, JSDoc, XML docs and so on) and leaves regular comments to the `comments` category.
 
 ## Content
 

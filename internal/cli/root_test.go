@@ -381,7 +381,8 @@ func TestRunDistillerValidation(t *testing.T) {
 		cmd := rootCmd
 		cmd.ResetFlags()
 		initFlags()
-		cmd.SetArgs([]string{tempDir})
+		// Write the output file into the temp directory, not the repository's .aid/
+		cmd.SetArgs([]string{tempDir, "-o", filepath.Join(tempDir, "out.txt")})
 
 		// This will return "not yet implemented" which is expected for now
 		err := cmd.Execute()

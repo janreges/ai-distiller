@@ -337,3 +337,67 @@ func TestExcludeItemsInternalRemovesInternalOnly(t *testing.T) {
 		assert.NotContains(t, out, "InternalCount", "%v", args)
 	}
 }
+
+// --exclude-items docstrings starts from a run that includes every category (all visibilities, regular comments,
+// bodies, imports, annotations) and turns documentation off, so its output equals --docstrings=0 with every other
+// category on: --implementation=1 --comments=1 --private=1 --protected=1 --internal=1. It removes documentation
+// (Python docstrings, Javadoc) and keeps regular comments and non-public members.
+func TestExcludeItemsDocstrings(t *testing.T) {
+	dir := t.TempDir()
+	py := "# Box module comment text.\nclass Box:\n    \"\"\"Box docstring text.\"\"\"\n\n    def fetch(self, x: int) -> int:\n        \"\"\"Fetch docstring text.\"\"\"\n        return x\n\n    def _hidden_method(self):\n        pass\n"
+	java := "// Widget line comment text.\n/** Widget javadoc text. */\npublic class Widget {\n    private int secretField;\n    /** Run javadoc text. */\n    public void run() {}\n    private void hiddenMethod() {}\n}\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "box.py"), []byte(py), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "Widget.java"), []byte(java), 0o644))
+
+	allButDocstrings := []string{"--docstrings=0", "--implementation=1", "--comments=1", "--private=1", "--protected=1", "--internal=1"}
+	cases := []struct {
+		file      string
+		docs      []string // documentation: removed by the docstrings category
+		comment   string   // a regular comment: kept by docstrings, removed by comments
+		nonPublic []string // non-public members: kept, because --exclude-items starts from everything
+	}{
+		{"box.py", []string{"Box docstring text.", "Fetch docstring text."}, "Box module comment text.", []string{"_hidden_method"}},
+		{"Widget.java", []string{"Widget javadoc text.", "Run javadoc text."}, "Widget line comment text.", []string{"secretField", "hiddenMethod"}},
+	}
+	for _, c := range cases {
+		base := []string{c.file, "--stdout", "--summary-type=off"}
+		def, stderr, code := aidRun(t, dir, nil, base...)
+		require.Equal(t, 0, code, stderr)
+		for _, d := range c.docs {
+			assert.Contains(t, def, d, "%s default run", c.file)
+		}
+
+		excluded, stderr, code := aidRun(t, dir, nil, append(append([]string{}, base...), "--exclude-items", "docstrings")...)
+		require.Equal(t, 0, code, stderr)
+		for _, d := range c.docs {
+			assert.NotContains(t, excluded, d, "%s --exclude-items docstrings removes documentation", c.file)
+		}
+		assert.Contains(t, excluded, c.comment, "%s --exclude-items docstrings keeps regular comments", c.file)
+		for _, m := range c.nonPublic {
+			assert.Contains(t, excluded, m, "%s --exclude-items docstrings keeps non-public members", c.file)
+		}
+		off, stderr, code := aidRun(t, dir, nil, append(append([]string{}, base...), allButDocstrings...)...)
+		require.Equal(t, 0, code, stderr)
+		assert.Equal(t, off, excluded, "%s: --exclude-items docstrings must equal %s", c.file, strings.Join(allButDocstrings, " "))
+
+		// --include-only lists docstrings as a kept category; leaving it out removes them.
+		kept, stderr, code := aidRun(t, dir, nil, append(append([]string{}, base...), "--include-only", "public,methods,fields,docstrings")...)
+		require.Equal(t, 0, code, stderr)
+		for _, d := range c.docs {
+			assert.Contains(t, kept, d, "%s --include-only with docstrings", c.file)
+		}
+		dropped, stderr, code := aidRun(t, dir, nil, append(append([]string{}, base...), "--include-only", "public,methods,fields")...)
+		require.Equal(t, 0, code, stderr)
+		for _, d := range c.docs {
+			assert.NotContains(t, dropped, d, "%s --include-only without docstrings", c.file)
+		}
+
+		// The comments category is separate: it removes the regular comment and keeps the documentation.
+		noComments, stderr, code := aidRun(t, dir, nil, append(append([]string{}, base...), "--exclude-items", "comments")...)
+		require.Equal(t, 0, code, stderr)
+		assert.NotContains(t, noComments, c.comment, "%s --exclude-items comments removes regular comments", c.file)
+		for _, d := range c.docs {
+			assert.Contains(t, noComments, d, "%s --exclude-items comments keeps documentation", c.file)
+		}
+	}
+}

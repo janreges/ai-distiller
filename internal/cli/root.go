@@ -1027,8 +1027,8 @@ func processExcludeList(list string) processor.ProcessOptions {
 		case "comments":
 			opts.IncludeComments = false
 		case "docstrings":
-			// TODO: Implement separate docstring handling
-			opts.IncludeComments = false
+			// Exactly --docstrings=0; regular comments belong to "comments".
+			opts.IncludeDocstrings = false
 		case "implementation":
 			opts.IncludeImplementation = false
 		case "imports":
