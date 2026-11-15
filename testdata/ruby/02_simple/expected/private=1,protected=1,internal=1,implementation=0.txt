@@ -10,7 +10,9 @@ module Loggable
 module Serializable
     def to_json(*args*)
     def from_json(json_string)
+    # private
     def serializable_hash
+    # private
     def load_from_hash(hash)
 
 module RoleManager
@@ -35,7 +37,9 @@ class Document
     def find_sections(pattern = ...)
     def method_missing(method_name, *args*, &block)
     def respond_to_missing?(method_name, include_private = ...)
+    # private
     def serializable_hash
+    # private
     def load_from_hash(hash)
 
 class DocumentRepository
@@ -43,6 +47,8 @@ class DocumentRepository
     def add_document(document)
     def filter_documents(&block)
     def sort_documents(sort_proc = ...)
+    # protected
     def log_action(message)
+    # private
     def validate_document(document)
 </file>

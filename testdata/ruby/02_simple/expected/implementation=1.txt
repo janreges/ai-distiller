@@ -21,10 +21,6 @@ module Serializable
     def from_json(json_string)
         data = JSON.parse(json_string)
         load_from_hash(data)
-    def serializable_hash
-        raise NotImplementedError, "Must implement serializable_hash"
-    def load_from_hash(hash)
-        raise NotImplementedError, "Must implement load_from_hash"
 
 module RoleManager
     VALID_ROLES
@@ -94,18 +90,6 @@ class Document
         end
     def respond_to_missing?(method_name, include_private = ...)
         method_name.to_s.start_with?('find_by_') || super
-    def serializable_hash
-        {
-          title: @title,
-          content: @content,
-          author: @author,
-          created_at: @created_at.iso8601
-        }
-    def load_from_hash(hash)
-        @title = hash['title']
-        @content = hash['content']
-        @author = hash['author']
-        @created_at = Time.parse(hash['created_at']) if hash['created_at']
 
 class DocumentRepository
     def initialize
@@ -119,8 +103,4 @@ class DocumentRepository
     def sort_documents(sort_proc = ...)
         sort_logic = sort_proc || lambda { |a, b| a.created_at <=> b.created_at }
         @documents.sort(&sort_logic)
-    def log_action(message)
-        puts "[DocumentRepository] #{message}"
-    def validate_document(document)
-        document.is_a?(Document) && !document.title.empty?
 </file>

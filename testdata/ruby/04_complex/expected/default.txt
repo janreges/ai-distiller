@@ -31,7 +31,6 @@ class ConfigurationBuilder
     def method_missing(method_name, *args*, &block)
     def respond_to_missing?(method_name, include_private = ...)
     def to_hash
-    def validate_configuration
 
 class PluginConfiguration
     def initialize

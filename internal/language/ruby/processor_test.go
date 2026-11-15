@@ -120,3 +120,46 @@ func TestRuby_SelfReceiverKeywordCalls(t *testing.T) {
 	}
 	assert.Equal(t, []string{"name"}, fns)
 }
+
+func TestRuby_VisibilitySections(t *testing.T) {
+	file := parseRuby(t, "class A\n  def a; end\n  private\n  def b; end\n  attr_reader :r\n  protected\n  def c; end\n  public\n  def d; end\n  private def e; end\n  def f; end\n  def g; end\n  private :g\nend\n\nclass B\n  def h; end\nend\n")
+	vis := map[string]ir.Visibility{}
+	for _, name := range []string{"A", "B"} {
+		for _, c := range findRubyClass(t, file, name).Children {
+			if fn, ok := c.(*ir.DistilledFunction); ok {
+				vis[fn.Name] = fn.Visibility
+			}
+		}
+	}
+	assert.Equal(t, map[string]ir.Visibility{
+		"a": ir.VisibilityPublic, "b": ir.VisibilityPrivate, "r": ir.VisibilityPrivate,
+		"c": ir.VisibilityProtected, "d": ir.VisibilityPublic, "e": ir.VisibilityPrivate,
+		"f": ir.VisibilityPublic, "g": ir.VisibilityPrivate, "h": ir.VisibilityPublic,
+	}, vis)
+}
+
+func TestRuby_SingletonMethodsStayPublic(t *testing.T) {
+	file := parseRuby(t, "class S\n  private\n  def self.a; end\n  def b; end\n  private def self.c; end\n  def self.d; end\n  private :d\nend\n")
+	vis := map[string]ir.Visibility{}
+	for _, c := range findRubyClass(t, file, "S").Children {
+		if fn, ok := c.(*ir.DistilledFunction); ok {
+			vis[fn.Name] = fn.Visibility
+		}
+	}
+	assert.Equal(t, map[string]ir.Visibility{
+		"a": ir.VisibilityPublic, "b": ir.VisibilityPrivate, "c": ir.VisibilityPublic, "d": ir.VisibilityPublic,
+	}, vis)
+}
+
+func TestRuby_ModuleInclude(t *testing.T) {
+	file := parseRuby(t, "module M\n  include Comparable\n  def x; end\nend\n")
+	var mod *ir.DistilledInterface
+	for _, c := range file.Children {
+		if m, ok := c.(*ir.DistilledInterface); ok {
+			mod = m
+		}
+	}
+	require.NotNil(t, mod)
+	require.Len(t, mod.Extends, 1)
+	assert.Equal(t, "Comparable", mod.Extends[0].Name)
+}

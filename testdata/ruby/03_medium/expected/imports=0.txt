@@ -18,8 +18,6 @@ module Trackable
     module ClassMethods
         def track_method(method_name)
         def tracked_methods
-    def track_method_call(method_name, args)
-    def method_call_history
 
 class ConfigurableModel
     include MetaProgrammingUtils
@@ -29,8 +27,6 @@ class ConfigurableModel
     def evaluate_expression(expression, context = ...)
     def add_instance_method(method_name, &block)
     def self.method_added(method_name)
-    def invoke_if_exists(method_name, *args*)
-    def configure(&block)
 
 class DynamicConstants
     def self.const_missing(const_name)
@@ -39,5 +35,4 @@ class DynamicConstants
 
 class SmartDocument < ConfigurableModel
     def initialize(config = ...)
-    def configure_smart_features
 </file>

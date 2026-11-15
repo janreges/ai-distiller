@@ -16,7 +16,6 @@ var knownGaps = map[string]string{
 	"java/comment-with-comments":       "H5: comments do not reach the output",
 	"python/doc-by-default":            "H5: docstrings follow --comments",
 
-	"ruby/private-hidden":  "H1: every Ruby method is public",
 	"go/private-hidden":    "H1: doc comment of a removed member stays",
 	"java/private-hidden":  "H1: doc comment of a removed member stays",
 	"swift/private-hidden": "H1: doc comment of a removed member stays",

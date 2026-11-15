@@ -23,7 +23,9 @@ class User
     def initialize(name, email)
     def to_s
     def valid?
+    # protected
     def compare_creation_time(other_user)
+    # private
     def generate_id
 
 class AdminUser < User
@@ -32,5 +34,6 @@ class AdminUser < User
     def initialize(name, email, permissions = ...)
     def to_s
     def has_permission?(permission)
+    # private
     def validate_permissions
 </file>

@@ -107,6 +107,12 @@ func (f *RubyFormatter) formatModule(w io.Writer, mod *ir.DistilledInterface, in
 	// Format module declaration
 	fmt.Fprintf(w, "%smodule %s\n", indentStr, mod.Name)
 
+	// Included modules (the parser records `include X` in a module as Extends)
+	memberIndent := strings.Repeat("    ", indent+1)
+	for _, mixin := range mod.Extends {
+		fmt.Fprintf(w, "%sinclude %s\n", memberIndent, mixin.Name)
+	}
+
 	// Format module members
 	for _, child := range mod.Children {
 		f.FormatNode(w, child, indent+1)

@@ -77,15 +77,6 @@ module Trackable
             end
         def tracked_methods
             @tracked_methods || []
-    def track_method_call(method_name, args)
-        @method_calls ||= []
-        @method_calls << {
-          method: method_name,
-          args: args,
-          timestamp: Time.now
-        }
-    def method_call_history
-        @method_calls || []
 
 class ConfigurableModel
     include MetaProgrammingUtils
@@ -125,14 +116,6 @@ class ConfigurableModel
     def self.method_added(method_name)
         puts "Method '#{method_name}' added to class #{self}"
         super
-    def invoke_if_exists(method_name, *args*)
-        if respond_to?(method_name, true)
-          send(method_name, *args)
-        else
-          nil
-        end
-    def configure(&block)
-        instance_eval(&block) if block_given?
 
 class DynamicConstants
     def self.const_missing(const_name)
@@ -152,14 +135,4 @@ class SmartDocument < ConfigurableModel
     def initialize(config = ...)
         super(config)
         configure_smart_features
-    def configure_smart_features
-        configure do
-          def word_count
-            content.split.length
-          end
-
-          def summary(length = 50)
-            content[0, length] + (content.length > length ? "..." : "")
-          end
-        end
 </file>

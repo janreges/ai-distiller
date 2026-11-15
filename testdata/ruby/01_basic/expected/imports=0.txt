@@ -19,13 +19,10 @@ class User
     def initialize(name, email)
     def to_s
     def valid?
-    def compare_creation_time(other_user)
-    def generate_id
 
 class AdminUser < User
     def permissions
     def initialize(name, email, permissions = ...)
     def to_s
     def has_permission?(permission)
-    def validate_permissions
 </file>

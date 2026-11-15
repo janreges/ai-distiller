@@ -36,10 +36,6 @@ class User
         "User(#{@id}): #{@name} <#{@email}>"
     def valid?
         UserUtils.valid_email?(@email) && !@name.empty?
-    def compare_creation_time(other_user)
-        @created_at <=> other_user.created_at
-    def generate_id
-        "user_#{Time.now.to_i}_#{rand(1000)}"
 
 class AdminUser < User
     def permissions
@@ -50,6 +46,4 @@ class AdminUser < User
         "#{super} [Admin]"
     def has_permission?(permission)
         @permissions.include?(permission)
-    def validate_permissions
-        @permissions.all? { |p| p.is_a?(String) }
 </file>

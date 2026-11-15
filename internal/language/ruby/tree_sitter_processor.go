@@ -13,6 +13,9 @@ import (
 // TreeSitterProcessor uses tree-sitter for Ruby parsing
 type TreeSitterProcessor struct {
 	parser *sitter.Parser
+	// visibility holds the current `private`/`protected`/`public` section of
+	// each class or module body being processed; the top is the active one.
+	visibility []ir.Visibility
 }
 
 // NewTreeSitterProcessor creates a new tree-sitter based processor
@@ -184,6 +187,9 @@ func (p *TreeSitterProcessor) processMethod(node *sitter.Node, source []byte, fi
 	// Check if it's a singleton method (class method)
 	if node.Type() == "singleton_method" {
 		fn.Modifiers = append(fn.Modifiers, ir.ModifierStatic)
+		// `def self.x` stays public inside a private section; only
+		// `private_class_method` hides it.
+		fn.Visibility = ir.VisibilityPublic
 	}
 
 	// Extract method components
@@ -292,8 +298,7 @@ func (p *TreeSitterProcessor) processCall(node *sitter.Node, source []byte, file
 		// keyword, and printing them as `include` would change the meaning.
 		p.processModuleInclusion(methodName, arguments, node, file, parent)
 	case "private", "protected", "public":
-		// These affect visibility of subsequent methods
-		// This is simplified - real Ruby is more complex
+		p.processVisibilityCall(ir.Visibility(methodName), node, file, parent, source)
 	case "alias_method":
 		if len(arguments) >= 2 {
 			p.processAliasMethod(arguments[0], arguments[1], node, file, parent)
@@ -314,7 +319,7 @@ func (p *TreeSitterProcessor) processAttrMethods(methodName string, arguments []
 					Location: p.nodeLocation(node),
 				},
 				Name:       attrName,
-				Visibility: ir.VisibilityPublic,
+				Visibility: p.getCurrentVisibility(parent),
 				Returns:    &ir.TypeRef{Name: "Object"},
 			}
 			p.addToParent(file, parent, getter)
@@ -327,7 +332,7 @@ func (p *TreeSitterProcessor) processAttrMethods(methodName string, arguments []
 					Location: p.nodeLocation(node),
 				},
 				Name:       attrName + "=",
-				Visibility: ir.VisibilityPublic,
+				Visibility: p.getCurrentVisibility(parent),
 				Parameters: []ir.Parameter{
 					{Name: "value", Type: ir.TypeRef{Name: "Object"}},
 				},
@@ -352,11 +357,92 @@ func (p *TreeSitterProcessor) processAttrMethods(methodName string, arguments []
 // Implements of the enclosing class. `extend` and `prepend` are not routed
 // here: Implements cannot carry the keyword.
 func (p *TreeSitterProcessor) processModuleInclusion(methodName string, arguments []string, node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) {
-	if class, ok := parent.(*ir.DistilledClass); ok {
-		for _, arg := range arguments {
-			moduleName := strings.Trim(arg, "\"' ")
-			class.Implements = append(class.Implements, ir.TypeRef{Name: moduleName})
+	for _, arg := range arguments {
+		ref := ir.TypeRef{Name: strings.Trim(arg, "\"' ")}
+		switch n := parent.(type) {
+		case *ir.DistilledClass:
+			n.Implements = append(n.Implements, ref)
+		case *ir.DistilledInterface:
+			// A module is an interface in the IR, which has no Implements.
+			n.Extends = append(n.Extends, ref)
 		}
+	}
+}
+
+// processVisibilityCall handles `private :a, :b` (visibility of methods seen
+// so far, section unchanged) and `private def x ... end` (that method only,
+// section unchanged). A bare `private` is handled by the body loops.
+func (p *TreeSitterProcessor) processVisibilityCall(vis ir.Visibility, node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode, source []byte) {
+	args := node.ChildByFieldName("arguments")
+	if args == nil {
+		return
+	}
+	var names []string
+	for i := 0; i < int(args.ChildCount()); i++ {
+		arg := args.Child(i)
+		switch arg.Type() {
+		case "simple_symbol", "string":
+			names = append(names, strings.Trim(string(source[arg.StartByte():arg.EndByte()]), "\":' "))
+		case "method", "singleton_method":
+			p.processMethod(arg, source, file, parent)
+			if children := childrenOf(parent); children != nil && len(*children) > 0 {
+				if fn, ok := (*children)[len(*children)-1].(*ir.DistilledFunction); ok && arg.Type() == "method" {
+					fn.Visibility = vis
+				}
+			}
+		}
+	}
+	if len(names) == 0 {
+		return
+	}
+	if children := childrenOf(parent); children != nil {
+		for _, c := range *children {
+			if fn, ok := c.(*ir.DistilledFunction); ok && !isSingletonMethod(fn) {
+				for _, name := range names {
+					if fn.Name == name {
+						fn.Visibility = vis
+					}
+				}
+			}
+		}
+	}
+}
+
+func isSingletonMethod(fn *ir.DistilledFunction) bool {
+	for _, m := range fn.Modifiers {
+		if m == ir.ModifierStatic {
+			return true
+		}
+	}
+	return false
+}
+
+func childrenOf(parent ir.DistilledNode) *[]ir.DistilledNode {
+	switch n := parent.(type) {
+	case *ir.DistilledClass:
+		return &n.Children
+	case *ir.DistilledInterface:
+		return &n.Children
+	}
+	return nil
+}
+
+// processBody walks a class or module body with a fresh `public` section. A
+// bare `private`, `protected` or `public` (an identifier statement) switches
+// the section for the definitions that follow.
+func (p *TreeSitterProcessor) processBody(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
+	p.visibility = append(p.visibility, ir.VisibilityPublic)
+	defer func() { p.visibility = p.visibility[:len(p.visibility)-1] }()
+	for i := 0; i < int(node.ChildCount()); i++ {
+		child := node.Child(i)
+		if child.Type() == "identifier" {
+			switch name := string(source[child.StartByte():child.EndByte()]); name {
+			case "private", "protected", "public":
+				p.visibility[len(p.visibility)-1] = ir.Visibility(name)
+				continue
+			}
+		}
+		p.processNode(child, source, file, parent)
 	}
 }
 
@@ -439,18 +525,12 @@ func plainStringLiteral(node *sitter.Node, source []byte) (string, bool) {
 
 // processClassBody processes the body of a class
 func (p *TreeSitterProcessor) processClassBody(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		p.processNode(child, source, file, parent)
-	}
+	p.processBody(node, source, file, parent)
 }
 
 // processModuleBody processes the body of a module
 func (p *TreeSitterProcessor) processModuleBody(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		p.processNode(child, source, file, parent)
-	}
+	p.processBody(node, source, file, parent)
 }
 
 // Helper methods
@@ -558,8 +638,9 @@ func (p *TreeSitterProcessor) extractParameters(node *sitter.Node, source []byte
 
 // getCurrentVisibility determines the current visibility context
 func (p *TreeSitterProcessor) getCurrentVisibility(parent ir.DistilledNode) ir.Visibility {
-	// In Ruby, methods are public by default
-	// This is a simplified implementation
+	if n := len(p.visibility); n > 0 {
+		return p.visibility[n-1]
+	}
 	return ir.VisibilityPublic
 }
 

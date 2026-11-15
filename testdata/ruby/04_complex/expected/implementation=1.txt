@@ -174,11 +174,6 @@ class ConfigurationBuilder
         end
 
         result.compact
-    def validate_configuration
-        errors = []
-        errors << "Name is required" unless @name
-        errors << "Version is required" unless @version
-        errors
 
 class PluginConfiguration
     def initialize
