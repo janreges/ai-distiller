@@ -352,17 +352,20 @@ func (p *PerformanceProcessor) processFilesStreaming(
 
 // GetMetrics returns comprehensive performance metrics
 func (p *PerformanceProcessor) GetMetrics() *PerformanceMetrics {
-	metrics := &PerformanceMetrics{}
+	metrics := &PerformanceMetrics{
+		ConcurrentMetrics: &ProcessingMetrics{},
+		CacheMetrics:      &CacheMetrics{},
+	}
 
 	// Concurrent processor metrics
 	if concurrentMetrics := p.concurrentProcessor.GetMetrics(); concurrentMetrics != nil {
-		metrics.ConcurrentMetrics = *concurrentMetrics
+		metrics.ConcurrentMetrics = concurrentMetrics
 	}
 
 	// Cache metrics
 	if p.config.CacheEnabled {
 		if cacheStats := p.cachedProcessor.GetCache().Stats(); cacheStats != nil {
-			metrics.CacheMetrics = *cacheStats
+			metrics.CacheMetrics = cacheStats
 		}
 	}
 
@@ -371,8 +374,8 @@ func (p *PerformanceProcessor) GetMetrics() *PerformanceMetrics {
 
 // PerformanceMetrics combines all performance metrics
 type PerformanceMetrics struct {
-	ConcurrentMetrics ProcessingMetrics
-	CacheMetrics      CacheMetrics
+	ConcurrentMetrics *ProcessingMetrics
+	CacheMetrics      *CacheMetrics
 }
 
 // String returns formatted performance metrics

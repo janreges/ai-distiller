@@ -33,17 +33,16 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      # The integration tests (internal/testrunner) run the compiled binary if
-      # it exists at the project root, which is far faster than "go run" mode.
+      # The snapshot suite runs the binary named by AID_TEST_BINARY.
       # CGO is required for the tree-sitter language parsers.
-      - name: Build aid binary for integration tests
-        run: CGO_ENABLED=1 CGO_CFLAGS=-w go build -o aid ./cmd/aid
+      - name: Build aid
+        run: CGO_ENABLED=1 CGO_CFLAGS=-w go build -o "$RUNNER_TEMP/aid" ./cmd/aid
 
-      - name: Run tests
-        # cmd/aid-validate depends on a package that is intentionally not part of
-        # the build (see Makefile, which excludes it too). `go list -e` tolerates
-        # that broken package while still listing all others.
-        run: CGO_ENABLED=1 go test $(go list -e ./... | grep -vE '/tools/|/test_project/|/cmd/aid-validate')
+      - name: Test
+        env:
+          AID_TEST_BINARY: ${{ runner.temp }}/aid
+        # cmd/aid-validate is not part of the build; `go list -e` tolerates it.
+        run: CGO_ENABLED=1 CGO_CFLAGS=-w go test -count=1 $(go list -e ./... | grep -vE '/tools/|/test_project/|/cmd/aid-validate')
 
   # ---------------------------------------------------------------------------
   # Build CGO-enabled binaries for every platform and package them as the
