@@ -2,6 +2,7 @@ package formatter
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/janreges/ai-distiller/internal/ir"
@@ -416,4 +417,11 @@ func TestMarkdownFormatter_NestedStructures(t *testing.T) {
 	assert.Contains(t, output, "OuterClass")
 	assert.Contains(t, output, "InnerClass")
 	assert.Contains(t, output, "method")
+}
+
+func TestMarkdown_UnescapesFilePath(t *testing.T) {
+	var b strings.Builder
+	file := &ir.DistilledFile{Path: `a"b<c>.py`, Language: "python"}
+	require.NoError(t, NewMarkdownFormatter(Options{}).Format(&b, file))
+	assert.Contains(t, b.String(), `### a"b<c>.py`)
 }

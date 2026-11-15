@@ -214,8 +214,8 @@ func (f *XMLFormatter) formatNode(w io.Writer, node ir.DistilledNode, depth int)
 
 			// Write implementation
 			if n.Implementation != "" && !f.options.Compact {
-				fmt.Fprintf(w, "%s  <implementation><![CDATA[\n%s\n%s  ]]></implementation>\n",
-					indent, n.Implementation, indent)
+				fmt.Fprintf(w, "%s  <implementation>%s</implementation>\n",
+					indent, cdata("\n"+n.Implementation+"\n"+indent+"  "))
 			}
 
 			fmt.Fprintf(w, "%s</function>\n", indent)
@@ -265,7 +265,7 @@ func (f *XMLFormatter) formatNode(w io.Writer, node ir.DistilledNode, depth int)
 		fmt.Fprintf(w, "%s<comment", indent)
 		f.writeAttr(w, "format", n.Format)
 		f.writeNodeAttrs(w, n)
-		fmt.Fprintf(w, "><![CDATA[%s]]></comment>\n", n.Text)
+		fmt.Fprintf(w, ">%s</comment>\n", cdata(n.Text))
 
 	case *ir.DistilledError:
 		f.formatError(w, n, depth)
@@ -358,4 +358,11 @@ func (f *XMLFormatter) writeModifiers(w io.Writer, mods []ir.Modifier) {
 		}
 		f.writeAttr(w, "modifiers", strings.Join(modStrs, " "))
 	}
+}
+
+// cdata wraps s in a CDATA section. A literal "]]>" would end the section
+// early, so it is split across two sections: "]]" closes the first and ">"
+// opens the second.
+func cdata(s string) string {
+	return "<![CDATA[" + strings.ReplaceAll(s, "]]>", "]]]]><![CDATA[>") + "]]>"
 }

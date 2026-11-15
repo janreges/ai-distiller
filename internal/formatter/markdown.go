@@ -44,7 +44,7 @@ func (f *MarkdownFormatter) Format(w io.Writer, file *ir.DistilledFile) error {
 	
 	// Extract file content from <file> tags using simple string operations
 	// This preserves all formatting exactly as output by the text formatter
-	startTag := fmt.Sprintf(`<file path="%s">`, file.Path)
+	startTag := fmt.Sprintf(`<file path="%s">`, escapeFilePath(file.Path))
 	endTag := "</file>"
 	
 	startIdx := strings.Index(text, startTag)
@@ -110,7 +110,7 @@ func (f *MarkdownFormatter) FormatMultiple(w io.Writer, files []*ir.DistilledFil
 		if pathEnd == -1 {
 			break
 		}
-		path := text[pathStart : pathStart+pathEnd]
+		path := unescapeFilePath(text[pathStart : pathStart+pathEnd])
 		
 		// Find the closing tag
 		tagEnd := pathStart + pathEnd + 2

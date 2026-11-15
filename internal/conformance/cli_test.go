@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -303,4 +304,20 @@ func TestSummaryDoesNotAskToLoadPrintedOutput(t *testing.T) {
 	_, stderr, code = aidRun(t, dir, nil, "m.py", "-o", "out.txt")
 	require.Equal(t, 0, code)
 	assert.Contains(t, stderr, "load this ENTIRE file")
+}
+
+// An empty file whose name holds a quote prints an escaped <file path="...">
+// header; the CLI's empty-block cleanup must still drop it.
+func TestEmptyFileWithQuoteInNameIsDropped(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip(`"` + ` is not allowed in Windows file names`)
+	}
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, `q"x.py`), nil, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "real.py"), []byte("def real():\n    pass\n"), 0o644))
+	out, stderr, code := aidRun(t, dir, nil, ".", "--stdout")
+	require.Equal(t, 0, code, stderr)
+	assert.Contains(t, out, "real")
+	assert.NotContains(t, out, "<file path=\"q")
+	assert.NotContains(t, out, "q&quot;x.py")
 }

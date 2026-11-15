@@ -69,8 +69,8 @@ one the prompt AI actions distil to:
 6. Back in `runDistiller`, for `text` only: `--show-ai-agent-instructions`
    puts its paragraph in front (when at least one file was processed), and a
    regular expression deletes every `<file path="...">` block that holds only
-   whitespace. Then the output is written or printed and the summary goes to
-   stderr (`references/summary.md`).
+   whitespace (the path is escaped, so it never holds a raw `"`). Then the
+   output is written or printed and the summary goes to stderr (`references/summary.md`).
 
 Stdin (`internal/cli/root.go#processStdinWithContext`) formats the same way,
 import filter included, but keeps empty blocks and prints no summary.

@@ -210,7 +210,15 @@ Shape:
   attribute with an empty value is left out.
 - Comment text and bodies are in CDATA sections, the body as the IR holds it
   (with `--implementation=1` the Java bodies above keep the indentation of
-  the source after their first line).
+  the source after their first line). `cdata` in `internal/formatter/xml.go`
+  splits a literal `]]>` across two sections, so the XML stays well-formed.
+- In the text format the `<file path="...">` header escapes `&`, `"`, `<`, `>`
+  as `&amp;`, `&quot;`, `&lt;`, `&gt;` (`escapeFilePath`); paths without those
+  characters print as is. In Markdown, the single-file
+  `internal/formatter/markdown.go#MarkdownFormatter.Format` prints `file.Path`
+  as is in its `###` heading; only
+  `internal/formatter/markdown.go#MarkdownFormatter.FormatMultiple` reads the
+  path back from the text header with `unescapeFilePath`.
 
 ## What each format leaves out
 

@@ -67,7 +67,7 @@ func (f *LanguageAwareTextFormatter) Format(w io.Writer, file *ir.DistilledFile)
 // formatDirect writes directly to the writer without filtering
 func (f *LanguageAwareTextFormatter) formatDirect(w io.Writer, file *ir.DistilledFile) error {
 	// Write file header
-	fmt.Fprintf(w, "<file path=\"%s\">\n", file.Path)
+	fmt.Fprintf(w, "<file path=\"%s\">\n", escapeFilePath(file.Path))
 
 	// Get language-specific formatter
 	langFormatter := f.getLanguageFormatter(file.Language)
@@ -421,3 +421,16 @@ func (f *LanguageAwareTextFormatter) formatNodeGeneric(w io.Writer, node ir.Dist
 
 	return nil
 }
+
+var (
+	filePathEscaper   = strings.NewReplacer("&", "&amp;", `"`, "&quot;", "<", "&lt;", ">", "&gt;")
+	filePathUnescaper = strings.NewReplacer("&quot;", `"`, "&lt;", "<", "&gt;", ">", "&amp;", "&")
+)
+
+// escapeFilePath escapes a path for the path attribute of a <file> tag, so a
+// path with a quote or angle bracket cannot break the tag. Ordinary paths are
+// unchanged.
+func escapeFilePath(p string) string { return filePathEscaper.Replace(p) }
+
+// unescapeFilePath reverses escapeFilePath.
+func unescapeFilePath(p string) string { return filePathUnescaper.Replace(p) }

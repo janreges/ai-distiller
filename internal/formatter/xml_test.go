@@ -3,6 +3,7 @@ package formatter
 import (
 	"bytes"
 	"encoding/xml"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -499,4 +500,27 @@ func TestXMLFormatter_SpecialCharacters(t *testing.T) {
 
 	// Check escaping in text content
 	assert.Contains(t, output, `>Error with &lt;xml&gt; &amp; special chars</error>`)
+}
+
+func TestXML_CDATAEndSequenceInImplementation(t *testing.T) {
+	file := &ir.DistilledFile{Path: "a.js", Language: "javascript", Children: []ir.DistilledNode{
+		&ir.DistilledFunction{Name: "f", Visibility: ir.VisibilityPublic, Implementation: "{ return a[b[0]]>c; }"},
+		&ir.DistilledComment{Text: "x ]]> y", Format: "line"},
+	}}
+	var b strings.Builder
+	require.NoError(t, NewXMLFormatter(Options{}).Format(&b, file))
+	dec := xml.NewDecoder(strings.NewReader(b.String()))
+	var text strings.Builder
+	for {
+		tok, err := dec.Token()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err, "output is not well-formed XML:\n%s", b.String())
+		if cd, ok := tok.(xml.CharData); ok {
+			text.Write(cd)
+		}
+	}
+	assert.Contains(t, text.String(), "a[b[0]]>c")
+	assert.Contains(t, text.String(), "x ]]> y")
 }
