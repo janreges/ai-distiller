@@ -347,7 +347,7 @@ func createMockComment(text string) *ir.DistilledComment {
 			Location: ir.Location{StartLine: 1, EndLine: 1},
 		},
 		Text:   text,
-		Format: "line",
+		Format: ir.CommentLine,
 	}
 }
 

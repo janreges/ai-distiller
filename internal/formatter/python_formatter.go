@@ -31,7 +31,7 @@ func (f *PythonFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent 
 	case *ir.DistilledField:
 		return f.formatField(w, n, indent)
 	case *ir.DistilledFunction:
-		return f.formatFunction(w, n, indent)
+		return f.formatFunction(w, n, indent, nil)
 	case *ir.DistilledClass:
 		return f.formatClass(w, n, indent)
 	default:
@@ -41,35 +41,76 @@ func (f *PythonFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent 
 	}
 }
 
-func (f *PythonFormatter) formatComment(w io.Writer, comment *ir.DistilledComment, indent int) error {
-	text := comment.Text
-	indentStr := strings.Repeat("    ", indent)
+// FormatNodes formats sibling nodes in order. The IR keeps a function's
+// docstring as a doc comment right before the function; it is printed under
+// the signature, where Python has it, so it cannot pass for the docstring of
+// the enclosing class or module. Any other doc comment prints where it is.
+func (f *PythonFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, indent int) error {
+	var docs []*ir.DistilledComment // doc comments waiting for the next node
+	flush := func() error {
+		for _, doc := range docs {
+			if err := f.formatComment(w, doc, indent); err != nil {
+				return err
+			}
+		}
+		docs = nil
+		return nil
+	}
+	for _, node := range nodes {
+		switch n := node.(type) {
+		case *ir.DistilledComment:
+			if n.IsDoc() && !n.Inner {
+				docs = append(docs, n)
+				continue
+			}
+		case *ir.DistilledFunction:
+			if err := f.formatFunction(w, n, indent, docs); err != nil {
+				return err
+			}
+			docs = nil
+			continue
+		}
+		if err := flush(); err != nil {
+			return err
+		}
+		if err := f.FormatNode(w, node, indent); err != nil {
+			return err
+		}
+	}
+	return flush()
+}
 
-	// Special handling for module-level docstrings
-	if indent == 0 && comment.Format == "docstring" {
-		// Module docstrings should be wrapped in triple quotes
-		if !strings.HasPrefix(text, `"""`) && !strings.HasPrefix(text, "'''") {
-			fmt.Fprintf(w, `"""%s"""`, text)
-			fmt.Fprintln(w)
-		} else {
-			fmt.Fprintln(w, text)
+// formatComment writes a doc comment as a docstring and any other comment as
+// "# " lines, all at the comment's indentation. The shebang line is written
+// as it is in the source.
+func (f *PythonFormatter) formatComment(w io.Writer, comment *ir.DistilledComment, indent int) error {
+	indentStr := strings.Repeat("    ", indent)
+	lines := strings.Split(comment.Text, "\n")
+
+	if isShebang(comment) {
+		fmt.Fprintln(w, "#"+comment.Text)
+		return nil
+	}
+	if !comment.IsDoc() {
+		for _, line := range lines {
+			fmt.Fprintln(w, strings.TrimRight(indentStr+"# "+line, " "))
 		}
 		return nil
 	}
 
-	// If it's a // comment from the generic parser
-	if strings.HasPrefix(text, "//") {
-		text = strings.TrimPrefix(text, "//")
-		text = strings.TrimSpace(text)
+	if len(lines) == 1 {
+		fmt.Fprintf(w, "%s\"\"\"%s\"\"\"\n", indentStr, lines[0])
+		return nil
 	}
-
-	// For non-module level comments, format as single-line comments
-	if !strings.HasPrefix(text, "#") {
-		fmt.Fprintf(w, "%s# %s\n", indentStr, text)
-	} else {
-		fmt.Fprintf(w, "%s%s\n", indentStr, text)
+	fmt.Fprintf(w, "%s\"\"\"%s\n", indentStr, lines[0])
+	for _, line := range lines[1:] {
+		if line == "" {
+			fmt.Fprintln(w)
+		} else {
+			fmt.Fprintln(w, indentStr+line)
+		}
 	}
-
+	fmt.Fprintf(w, "%s\"\"\"\n", indentStr)
 	return nil
 }
 
@@ -122,7 +163,9 @@ func (f *PythonFormatter) formatField(w io.Writer, field *ir.DistilledField, ind
 	return nil
 }
 
-func (f *PythonFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, indent int) error {
+// formatFunction writes fn; docs, the doc comments that document it, go under
+// the signature, one level deeper, before the body.
+func (f *PythonFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, indent int, docs []*ir.DistilledComment) error {
 	indentStr := strings.Repeat("    ", indent)
 
 	// Format decorators
@@ -174,17 +217,24 @@ func (f *PythonFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, 
 		fmt.Fprintf(w, " -> %s", fn.Returns.Name)
 	}
 
-	// Handle implementation
+	// End the signature line; only a function with a body gets the colon
 	if fn.Implementation != "" {
 		fmt.Fprintln(w, ":")
+	} else {
+		fmt.Fprintln(w)
+	}
 
-		// Write implementation with proper indentation
+	for _, doc := range docs {
+		if err := f.formatComment(w, doc, indent+1); err != nil {
+			return err
+		}
+	}
+
+	// Write implementation with proper indentation
+	if fn.Implementation != "" {
 		for _, line := range dedentBody(fn.Implementation, indentStr+"    ") {
 			fmt.Fprintln(w, line)
 		}
-	} else {
-		// No implementation - just signature
-		fmt.Fprintln(w)
 	}
 
 	return nil
@@ -222,46 +272,57 @@ func (f *PythonFormatter) formatClass(w io.Writer, class *ir.DistilledClass, ind
 		wasInClass := f.inClass
 		f.inClass = true
 
-		// Group children by type for better formatting
-		var comments, fields, functions, classes []ir.DistilledNode
+		// Group children by type for better formatting. A doc comment that
+		// documents the next member (a method's docstring) stays with it, so
+		// FormatNodes can print it under the method's signature; the class
+		// docstring and other comments come first.
+		var comments, fields, functions, classes, docs []ir.DistilledNode
 
 		for _, child := range class.Children {
-			switch child.(type) {
+			switch c := child.(type) {
 			case *ir.DistilledComment:
+				if c.IsDoc() && !c.Inner {
+					docs = append(docs, child)
+					continue
+				}
 				comments = append(comments, child)
+				continue
 			case *ir.DistilledField:
-				fields = append(fields, child)
+				fields = append(append(fields, docs...), child)
 			case *ir.DistilledFunction:
-				functions = append(functions, child)
+				functions = append(append(functions, docs...), child)
 			case *ir.DistilledClass:
-				classes = append(classes, child)
+				classes = append(append(classes, docs...), child)
+			default:
+				continue
+			}
+			docs = nil
+		}
+		comments = append(comments, docs...)
+
+		// Write the class docstring and the comments, then the fields, the
+		// functions and the nested classes
+		var err error
+		for _, group := range [][]ir.DistilledNode{comments, fields, functions, classes} {
+			if err = f.FormatNodes(w, group, indent+1); err != nil {
+				break
 			}
 		}
 
-		// Write all comments (docstrings and regular comments)
-		for _, comment := range comments {
-			f.FormatNode(w, comment, indent+1)
-		}
-
-		// Write fields
-		for _, field := range fields {
-			f.FormatNode(w, field, indent+1)
-		}
-
-		// Write functions
-		for _, function := range functions {
-			f.FormatNode(w, function, indent+1)
-		}
-
-		// Write nested classes
-		for _, nestedClass := range classes {
-			f.FormatNode(w, nestedClass, indent+1)
-		}
-
 		f.inClass = wasInClass
+		if err != nil {
+			return err
+		}
 	} else {
 		fmt.Fprintf(w, "%s    pass\n", indentStr)
 	}
 
 	return nil
+}
+
+// isShebang reports whether c is a script's "#!" interpreter line: a line
+// comment on the first line of the file whose text (after the "#") starts
+// with "!". It prints as written, "#!/usr/bin/env python", not as "# !...".
+func isShebang(c *ir.DistilledComment) bool {
+	return c.Format == ir.CommentLine && c.Location.StartLine == 1 && strings.HasPrefix(c.Text, "!")
 }

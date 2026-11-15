@@ -1,4 +1,7 @@
 <file path="source.py">
+"""A singleton configuration manager with dynamic, validated properties,
+transactional updates, and async remote fetching. A torture test.
+"""
 import asyncio
 from typing import Type, TypeVar, Generic
 T = TypeVar('T')
@@ -28,6 +31,7 @@ class SingletonMeta(type):
         return cls._instances[cls]
 
 class AppConfig:
+    """Manages global application configuration."""
     timeout = ValidatedSetting(int, 30)
     retries = ValidatedSetting(int, 3)
     api_key = ValidatedSetting(str, "")

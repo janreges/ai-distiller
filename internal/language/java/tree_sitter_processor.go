@@ -1247,6 +1247,6 @@ func (p *TreeSitterProcessor) parseJavaDoc(text string) *ir.DistilledComment {
 
 	return &ir.DistilledComment{
 		Text:   strings.Join(cleanedLines, " "),
-		Format: "doc",
+		Format: ir.CommentDoc,
 	}
 }

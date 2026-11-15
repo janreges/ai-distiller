@@ -49,7 +49,10 @@ var fixtures = []fixture{
 		ExpandSym: "conf_public",
 	}), check{Cap: "body-indent", Flags: []string{"--implementation=1"},
 		Contains: []string{"        a = \"CONF_BODY_A\"\n        return a\n"}},
-		check{Cap: "dataclass-fields", Contains: []string{"conf_id: int", `conf_name: str = "x"`}, NotContains: []string{"conf_id = int"}})},
+		check{Cap: "dataclass-fields", Contains: []string{"conf_id: int", `conf_name: str = "x"`}, NotContains: []string{"conf_id = int"}},
+		check{Cap: "fn-doc-by-default", Contains: []string{"CONF_FN_DOC"}},
+		check{Cap: "fn-doc-once", Flags: []string{"--implementation=1"}, Once: []string{"CONF_FN_DOC"}},
+		check{Cap: "fn-doc-off", Flags: []string{"--implementation=1", "--docstrings=0"}, NotContains: []string{"CONF_FN_DOC"}})},
 	{Lang: "typescript", File: "typescript/sample.ts", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
 		Private:   []string{"confPrivate"},

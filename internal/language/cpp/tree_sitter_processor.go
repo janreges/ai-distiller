@@ -1392,7 +1392,7 @@ func (p *TreeSitterProcessor) processFriendDeclaration(node *sitter.Node, source
 			Location: p.nodeLocation(node),
 		},
 		Text:   "friend " + strings.TrimSpace(p.nodeText(node, source)),
-		Format: "line",
+		Format: ir.CommentLine,
 	}
 	p.addChild(file, parent, comment)
 }
@@ -1408,7 +1408,7 @@ func (p *TreeSitterProcessor) processConceptAsComment(node *sitter.Node, source 
 			Location: p.nodeLocation(node),
 		},
 		Text:   "C++20 Concept: " + conceptText,
-		Format: "doc",
+		Format: ir.CommentDoc,
 	}
 	p.addChild(file, parent, comment)
 }
@@ -1416,14 +1416,14 @@ func (p *TreeSitterProcessor) processConceptAsComment(node *sitter.Node, source 
 // processComment handles comments
 func (p *TreeSitterProcessor) processComment(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
 	text := p.nodeText(node, source)
-	format := "line"
+	format := ir.CommentLine
 	if strings.HasPrefix(text, "/*") {
-		format = "block"
+		format = ir.CommentBlock
 		if strings.HasPrefix(text, "/**") || strings.Contains(text, "*/") && strings.Contains(text, "@") {
-			format = "doc"
+			format = ir.CommentDoc
 		}
 	} else if strings.HasPrefix(text, "///") {
-		format = "doc"
+		format = ir.CommentDoc
 	}
 
 	comment := &ir.DistilledComment{

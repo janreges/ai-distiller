@@ -14,7 +14,6 @@ var knownGaps = map[string]string{
 	"cpp/comment-with-comments":        "H5: formatter has no comment case",
 	"cpp/doc-by-default":               "H5: formatter has no comment case",
 	"java/comment-with-comments":       "H5: comments do not reach the output",
-	"python/doc-by-default":            "H5: docstrings follow --comments",
 
 	// The fixture is detected as "typescript" before C# is scored, because the
 	// TypeScript pattern <\w+> matches <summary>; without that tag the detector

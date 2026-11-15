@@ -1,7 +1,11 @@
 <file path="source.py">
+"""A plugin manager that discovers, registers, and executes plugins.
+This demonstrates composition, custom decorators, and advanced typing.
+"""
 from typing import Protocol, List, Dict, Callable, Any
 
 class Plugin(Protocol):
+    """A protocol defining the interface for a valid plugin."""
     name: str
     def execute(self, data: Dict[str, Any]) -> None:
         ...
@@ -22,6 +26,7 @@ def create_data_plugin() -> Plugin:
     return DataProcessingPlugin()
 
 class PluginManager:
+    """Manages the lifecycle of plugins."""
     def __init__(self):
         self._instances: Dict[str, Plugin] = {}
     def activate(self, name: str) -> None:

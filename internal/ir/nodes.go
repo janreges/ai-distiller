@@ -265,7 +265,7 @@ func (n *DistilledField) Accept(visitor Visitor) DistilledNode {
 type DistilledComment struct {
 	BaseNode
 	Text   string `json:"text"`
-	Format string `json:"format"` // "line", "block", "doc"
+	Format string `json:"format"` // CommentLine, CommentBlock, CommentDoc (comment.go)
 	// Inner marks a doc comment that documents its enclosing container (the
 	// file, module or type it sits in, like Rust //! and /*!), not the
 	// declaration after it.

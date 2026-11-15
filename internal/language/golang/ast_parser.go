@@ -123,7 +123,7 @@ func (p *ASTParser) ProcessSource(ctx context.Context, source []byte, filename s
 								Location: p.getLocation(comment.Pos(), comment.End()),
 							},
 							Text:   text,
-							Format: "doc",
+							Format: ir.CommentDoc,
 						}
 						docComments = append(docComments, docComment)
 					}
@@ -382,7 +382,7 @@ func (p *ASTParser) processComments(file *ast.File, distilledFile *ir.DistilledF
 							Location: p.getLocation(c.Pos(), c.End()),
 						},
 						Text:   text,
-						Format: "inline", // Mark as regular/inline comment
+						Format: ir.CommentLine,
 					}
 					// Insert comment at the appropriate position based on line number
 					p.insertCommentAtPosition(distilledFile, distilledComment)
@@ -525,7 +525,7 @@ func (p *ASTParser) processGenDecl(decl *ast.GenDecl) []ir.DistilledNode {
 						Location: p.getLocation(comment.Pos(), comment.End()),
 					},
 					Text:   text,
-					Format: "doc",
+					Format: ir.CommentDoc,
 				}
 				nodes = append(nodes, docComment)
 			}
@@ -545,7 +545,7 @@ func (p *ASTParser) processGenDecl(decl *ast.GenDecl) []ir.DistilledNode {
 								Location: p.getLocation(comment.Pos(), comment.End()),
 							},
 							Text:   text,
-							Format: "doc",
+							Format: ir.CommentDoc,
 						}
 						nodes = append(nodes, docComment)
 					}
@@ -566,7 +566,7 @@ func (p *ASTParser) processGenDecl(decl *ast.GenDecl) []ir.DistilledNode {
 								Location: p.getLocation(comment.Pos(), comment.End()),
 							},
 							Text:   text,
-							Format: "doc",
+							Format: ir.CommentDoc,
 						}
 						nodes = append(nodes, docComment)
 					}

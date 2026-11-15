@@ -1,13 +1,20 @@
 <file path="source.py">
+"""Notification services for sending alerts to users.
+Demonstrates inheritance and use of properties.
+"""
 
 class BaseNotifier(ABC):
+    """Abstract base for all notifiers."""
     @abstractmethod
     send(self, message: str) -> None
 
 class EmailNotifier(BaseNotifier):
+    """Sends notifications via email."""
     from_address = from_address
     __init__(self, smtp_host: str, port: int, from_address: str)
     @property
     connection_info(self) -> str
+        """Returns a string with the current SMTP connection details."""
     send(self, message: str) -> None
+        """Connects and sends an email."""
 </file>

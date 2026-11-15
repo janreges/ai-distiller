@@ -1,4 +1,7 @@
 <file path="source.py">
+"""A singleton configuration manager with dynamic, validated properties,
+transactional updates, and async remote fetching. A torture test.
+"""
 T = TypeVar('T')
 
 class ValidatedSetting:
@@ -13,6 +16,7 @@ class SingletonMeta(type):
     __call__(cls)
 
 class AppConfig:
+    """Manages global application configuration."""
     timeout = ValidatedSetting(int, 30)
     retries = ValidatedSetting(int, 3)
     api_key = ValidatedSetting(str, "")
@@ -22,6 +26,9 @@ class AppConfig:
     api_key = self._temp_settings['api_key']
     __init__(self)
     load_from_remote(self, url: str) -> None
+        """Asynchronously loads a partial config from a remote URL."""
     __enter__(self)
+        """Enter a transactional context for settings changes."""
     __exit__(self, exc_type, exc_val, exc_tb)
+        """If an exception occurred, revert all changes."""
 </file>

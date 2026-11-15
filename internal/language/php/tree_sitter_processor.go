@@ -1412,7 +1412,7 @@ func (p *TreeSitterProcessor) processComment(node *sitter.Node, file *ir.Distill
 	text := p.getNodeText(node)
 
 	// Determine comment type
-	format := "line"
+	format := ir.CommentLine
 	if strings.HasPrefix(text, "/**") {
 		format = "docblock"
 		// Clean up docblock
@@ -1430,7 +1430,7 @@ func (p *TreeSitterProcessor) processComment(node *sitter.Node, file *ir.Distill
 			p.extractPHPDocTypes(text, parent)
 		}
 	} else if strings.HasPrefix(text, "/*") {
-		format = "block"
+		format = ir.CommentBlock
 		text = strings.TrimPrefix(text, "/*")
 		text = strings.TrimSuffix(text, "*/")
 	} else if strings.HasPrefix(text, "//") {

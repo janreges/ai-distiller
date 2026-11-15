@@ -106,7 +106,7 @@ func (p *LineParser) Parse() *ir.DistilledFile {
 						Location: ir.Location{StartLine: lineNum, EndLine: lineNum},
 					},
 					Text:   strings.TrimSpace(strings.TrimPrefix(trimmedLine, "///")),
-					Format: "doc",
+					Format: ir.CommentDoc,
 				}
 				p.addToParent(file, state, comment)
 			} else if strings.HasPrefix(trimmedLine, "// MARK:") || strings.HasPrefix(trimmedLine, "//MARK:") {
@@ -115,7 +115,7 @@ func (p *LineParser) Parse() *ir.DistilledFile {
 						Location: ir.Location{StartLine: lineNum, EndLine: lineNum},
 					},
 					Text:   strings.TrimPrefix(strings.TrimPrefix(trimmedLine, "// MARK:"), "//MARK:"),
-					Format: "line",
+					Format: ir.CommentLine,
 				}
 				p.addToParent(file, state, comment)
 			}

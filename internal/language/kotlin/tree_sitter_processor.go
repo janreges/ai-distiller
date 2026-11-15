@@ -1193,7 +1193,7 @@ func (p *TreeSitterProcessor) processEnumPrimaryConstructor(node *sitter.Node, s
 			Location: p.nodeLocation(node),
 		},
 		Text:   "Constructor: " + params,
-		Format: "doc",
+		Format: ir.CommentDoc,
 	})
 }
 

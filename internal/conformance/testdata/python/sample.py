@@ -8,6 +8,7 @@ class ConfWidget:
     conf_field = 1
 
     def conf_public(self):
+        """CONF_FN_DOC"""
         a = "CONF_BODY_A"
         return a
 

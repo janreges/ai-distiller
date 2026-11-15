@@ -17,6 +17,13 @@ type LanguageFormatter interface {
 	Reset()
 }
 
+// SiblingFormatter is implemented by a LanguageFormatter that formats a list
+// of sibling nodes itself, because where it prints a node depends on the node
+// after it.
+type SiblingFormatter interface {
+	FormatNodes(w io.Writer, nodes []ir.DistilledNode, indent int) error
+}
+
 // BaseLanguageFormatter provides common functionality for language formatters
 type BaseLanguageFormatter struct {
 	language string

@@ -102,11 +102,8 @@ func (s *Stripper) Visit(node ir.DistilledNode) ir.DistilledNode {
 			return n
 		}
 		
-		// Check if it's a docstring/docblock
-		isDocstring := n.Format == "docblock" || n.Format == "doc"
-		
-		// Handle docstrings vs regular comments separately
-		if isDocstring {
+		// Documentation follows --docstrings, other comments --comments
+		if n.IsDoc() {
 			// For docstrings, only remove if RemoveDocstrings is true
 			if s.options.RemoveDocstrings {
 				return nil
@@ -507,7 +504,7 @@ func isDocComment(node ir.DistilledNode) bool {
 	if !ok || c.Inner || (c.Extensions != nil && c.Extensions.PHP != nil && c.Extensions.PHP.IsAPIDocblock) {
 		return false
 	}
-	return c.Format == "doc" || c.Format == "docblock"
+	return c.IsDoc()
 }
 
 // isDeclaration reports whether a node is a declaration a doc comment can

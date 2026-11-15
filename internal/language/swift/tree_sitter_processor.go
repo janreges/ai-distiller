@@ -908,12 +908,12 @@ func (p *TreeSitterProcessor) getPropertyType(node *sitter.Node) *ir.TypeRef {
 func (p *TreeSitterProcessor) getCommentFormat(node *sitter.Node) string {
 	text := p.getNodeText(node)
 	if strings.HasPrefix(text, "///") || strings.HasPrefix(text, "/**") {
-		return "doc"
+		return ir.CommentDoc
 	}
 	if strings.Contains(text, "\n") {
-		return "block"
+		return ir.CommentBlock
 	}
-	return "line"
+	return ir.CommentLine
 }
 
 func (p *TreeSitterProcessor) addNode(file *ir.DistilledFile, parent ir.DistilledNode, node ir.DistilledNode) {

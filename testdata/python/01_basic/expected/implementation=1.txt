@@ -1,8 +1,10 @@
 <file path="source.py">
+"""A collection of simple, reusable validation functions for common data types
+in a web application context.
+"""
 PUBLIC_MIN_PASSWORD_LENGTH = 8
 def is_valid_email(email: str) -> bool:
-    """
-    Checks if a given string is a valid email address.
+    """Checks if a given string is a valid email address.
 
     Args:
         email: The string to validate.
@@ -14,8 +16,7 @@ def is_valid_email(email: str) -> bool:
         return False
     return _EMAIL_REGEX.match(email) is not None
 def is_strong_password(password: str, min_length: int = PUBLIC_MIN_PASSWORD_LENGTH) -> bool:
-    """
-    Validates password strength based on length and character types.
+    """Validates password strength based on length and character types.
     A strong password must contain at least one digit and one letter.
     """
     if not isinstance(password, str) or len(password) < min_length:

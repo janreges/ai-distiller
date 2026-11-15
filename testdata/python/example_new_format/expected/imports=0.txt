@@ -1,8 +1,12 @@
 <file path="source.py">
+"""Example Python module to demonstrate new test format"""
 
 class Calculator:
+    """A simple calculator class"""
     __init__(self)
     add(self, a: float, b: float) -> float
+        """Add two numbers"""
     @property
     history(self) -> list
+        """Get calculation history"""
 </file>

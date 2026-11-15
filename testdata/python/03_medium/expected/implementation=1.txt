@@ -1,12 +1,17 @@
 <file path="source.py">
+"""Notification services for sending alerts to users.
+Demonstrates inheritance and use of properties.
+"""
 from abc import ABC, abstractmethod
 
 class BaseNotifier(ABC):
+    """Abstract base for all notifiers."""
     @abstractmethod
     def send(self, message: str) -> None:
         raise NotImplementedError
 
 class EmailNotifier(BaseNotifier):
+    """Sends notifications via email."""
     from_address = from_address
     def __init__(self, smtp_host: str, port: int, from_address: str):
         self._smtp_host = smtp_host

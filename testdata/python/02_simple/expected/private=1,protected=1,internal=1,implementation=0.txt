@@ -1,7 +1,9 @@
 <file path="source.py">
+"""Represents a user account in the system."""
 from datetime import datetime
 
 class User:
+    """A simple representation of a user with basic attributes."""
     user_id = user_id
     username = username
     email = email
@@ -10,6 +12,8 @@ class User:
     -_is_active = False
     __init__(self, user_id: int, username: str, email: str)
     deactivate(self) -> None
+        """Marks the user as inactive."""
     get_status(self) -> str
+        """Returns the current status of the user."""
     __repr__(self) -> str
 </file>

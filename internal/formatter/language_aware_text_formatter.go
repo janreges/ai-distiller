@@ -78,15 +78,21 @@ func (f *LanguageAwareTextFormatter) formatDirect(w io.Writer, file *ir.Distille
 	}
 
 	// Write file contents
-	for _, child := range file.Children {
-		if langFormatter != nil {
-			if err := langFormatter.FormatNode(w, child, 0); err != nil {
-				return err
-			}
-		} else {
-			// Fallback to generic formatting
-			if err := f.formatNodeGeneric(w, child, 0); err != nil {
-				return err
+	if siblings, ok := langFormatter.(SiblingFormatter); ok {
+		if err := siblings.FormatNodes(w, file.Children, 0); err != nil {
+			return err
+		}
+	} else {
+		for _, child := range file.Children {
+			if langFormatter != nil {
+				if err := langFormatter.FormatNode(w, child, 0); err != nil {
+					return err
+				}
+			} else {
+				// Fallback to generic formatting
+				if err := f.formatNodeGeneric(w, child, 0); err != nil {
+					return err
+				}
 			}
 		}
 	}

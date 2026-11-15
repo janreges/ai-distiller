@@ -100,8 +100,14 @@ func (p *NativeTreeSitterProcessor) processNode(node *sitter.Node, file *ir.Dist
 
 	switch nodeType {
 	case "module":
-		// Process all children at module level
+		// Process all children at module level; the module docstring
+		// documents the module itself
+		doc := docstringIndex(node)
 		for i := 0; i < int(node.ChildCount()); i++ {
+			if i == doc {
+				p.addNode(file, parent, p.docstringComment(node.Child(i).NamedChild(0), true))
+				continue
+			}
 			p.processNode(node.Child(i), file, parent)
 		}
 
@@ -127,13 +133,13 @@ func (p *NativeTreeSitterProcessor) processNode(node *sitter.Node, file *ir.Dist
 		p.processAssignment(node, file, parent)
 
 	case "expression_statement":
-		// Check for docstrings and assignments
+		// Check for bare strings and assignments
 		if node.ChildCount() > 0 {
 			child := node.Child(0)
 			if child.Type() == "string" {
-				// Only process top-level docstrings (module-level), not function docstrings
+				// Only module-level strings, not those inside function bodies
 				if parent == nil { // parent == nil means it's at module level
-					p.processDocstring(child, file, parent)
+					p.processBareString(child, file, parent)
 				}
 			} else if child.Type() == "assignment" {
 				p.processAssignment(child, file, parent)
@@ -240,8 +246,8 @@ func (p *NativeTreeSitterProcessor) processFromImport(node *sitter.Node, file *i
 	p.addNode(file, parent, imp)
 }
 
-// processClass processes class definitions
-func (p *NativeTreeSitterProcessor) processClass(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) {
+// processClass processes class definitions and returns the class it added
+func (p *NativeTreeSitterProcessor) processClass(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) *ir.DistilledClass {
 	class := &ir.DistilledClass{
 		BaseNode:   p.nodeLocation(node),
 		Modifiers:  []ir.Modifier{},
@@ -284,12 +290,19 @@ func (p *NativeTreeSitterProcessor) processClass(node *sitter.Node, file *ir.Dis
 	}
 
 	p.addNode(file, parent, class)
+	return class
 }
 
 // processClassBody processes the body of a class
 func (p *NativeTreeSitterProcessor) processClassBody(node *sitter.Node, file *ir.DistilledFile, class *ir.DistilledClass) {
+	doc := docstringIndex(node)
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
+		if i == doc {
+			// The class docstring documents the class itself
+			p.addNode(file, class, p.docstringComment(child.NamedChild(0), true))
+			continue
+		}
 		switch child.Type() {
 		case "function_definition", "async_function_definition":
 			p.processFunction(child, file, class, child.Type() == "async_function_definition")
@@ -298,11 +311,11 @@ func (p *NativeTreeSitterProcessor) processClassBody(node *sitter.Node, file *ir
 			p.processDecoratedDefinition(child, file, class)
 
 		case "expression_statement":
-			// Check for docstrings or assignments
+			// Check for bare strings or assignments
 			if child.ChildCount() > 0 {
 				expr := child.Child(0)
 				if expr.Type() == "string" {
-					p.processDocstring(expr, file, class)
+					p.processBareString(expr, file, class)
 				} else if expr.Type() == "assignment" {
 					p.processAssignment(expr, file, class)
 				}
@@ -314,14 +327,17 @@ func (p *NativeTreeSitterProcessor) processClassBody(node *sitter.Node, file *ir
 	}
 }
 
-// processFunction processes function definitions
-func (p *NativeTreeSitterProcessor) processFunction(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode, isAsync bool) {
+// processFunction processes function definitions and returns the function it
+// added. A docstring becomes a doc comment placed right before the function
+// and is not part of its implementation.
+func (p *NativeTreeSitterProcessor) processFunction(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode, isAsync bool) *ir.DistilledFunction {
 	fn := &ir.DistilledFunction{
 		BaseNode:   p.nodeLocation(node),
 		Modifiers:  []ir.Modifier{},
 		Parameters: []ir.Parameter{},
 		Decorators: []string{},
 	}
+	var doc *ir.DistilledComment
 
 	if isAsync {
 		fn.Modifiers = append(fn.Modifiers, ir.ModifierAsync)
@@ -346,14 +362,23 @@ func (p *NativeTreeSitterProcessor) processFunction(node *sitter.Node, file *ir.
 			}
 
 		case "block":
-			// Function body
-			// Get implementation
+			// Function body; the implementation starts after the docstring
 			startByte := child.StartByte()
 			endByte := child.EndByte()
-			if int(startByte) < len(p.source) && int(endByte) <= len(p.source) {
+			if i := docstringIndex(child); i >= 0 {
+				doc = p.docstringComment(child.Child(i).NamedChild(0), false)
+				startByte = endByte
+				for j := i + 1; j < int(child.ChildCount()); j++ {
+					if next := child.Child(j); next.IsNamed() {
+						startByte = next.StartByte()
+						break
+					}
+				}
+			}
+			if int(startByte) <= len(p.source) && int(endByte) <= len(p.source) {
 				fn.Implementation = string(p.source[startByte:endByte])
 			}
-			
+
 			// Also process the contents of the block recursively
 			// This allows us to extract field assignments like self.field = value
 			// We pass a special context that includes both the function and its parent (class)
@@ -371,7 +396,13 @@ func (p *NativeTreeSitterProcessor) processFunction(node *sitter.Node, file *ir.
 		fn.Visibility = ir.VisibilityPublic
 	}
 
+	// The fields found in the body are already in place; the docstring goes
+	// directly before the function it documents
+	if doc != nil {
+		p.addNode(file, parent, doc)
+	}
 	p.addNode(file, parent, fn)
+	return fn
 }
 
 // processDecoratedDefinition processes decorated functions/classes
@@ -399,43 +430,15 @@ func (p *NativeTreeSitterProcessor) processDecoratedDefinition(node *sitter.Node
 		return
 	}
 
-	// Track current child count to find the newly added node
-	var childCount int
-	if parent != nil {
-		if class, ok := parent.(*ir.DistilledClass); ok {
-			childCount = len(class.Children)
-		}
-	} else {
-		childCount = len(file.Children)
-	}
-
-	// Process the definition
+	// Process the definition and give it the decorators. The node it adds is
+	// not necessarily the first new child: fields assigned in a method body
+	// and the docstring come before the method.
 	switch definition.Type() {
 	case "function_definition", "async_function_definition":
-		p.processFunction(definition, file, parent, definition.Type() == "async_function_definition")
+		p.processFunction(definition, file, parent, definition.Type() == "async_function_definition").Decorators = decorators
 
 	case "class_definition":
-		p.processClass(definition, file, parent)
-	}
-
-	// Add decorators to the newly created node
-	var nodes []ir.DistilledNode
-	if parent != nil {
-		if class, ok := parent.(*ir.DistilledClass); ok {
-			nodes = class.Children
-		}
-	} else {
-		nodes = file.Children
-	}
-
-	if childCount < len(nodes) {
-		newNode := nodes[childCount]
-		switch n := newNode.(type) {
-		case *ir.DistilledFunction:
-			n.Decorators = decorators
-		case *ir.DistilledClass:
-			n.Decorators = decorators
-		}
+		p.processClass(definition, file, parent).Decorators = decorators
 	}
 }
 
@@ -654,27 +657,95 @@ func (p *NativeTreeSitterProcessor) findClassContainingFunction(file *ir.Distill
 	return nil
 }
 
-// processDocstring processes docstring comments
-func (p *NativeTreeSitterProcessor) processDocstring(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) {
-	text := p.getNodeText(node)
-
-	// Remove quotes - handle triple quotes first
-	if strings.HasPrefix(text, `"""`) && strings.HasSuffix(text, `"""`) && len(text) >= 6 {
-		text = text[3 : len(text)-3]
-	} else if strings.HasPrefix(text, `'''`) && strings.HasSuffix(text, `'''`) && len(text) >= 6 {
-		text = text[3 : len(text)-3]
-	} else {
-		// Handle single quotes
-		text = strings.Trim(text, `"'`)
+// docstringIndex returns the index among body's children of body's docstring:
+// its first statement, when that is a bare string. Comments are not
+// statements. It returns -1 when body has no docstring. body is a module or
+// the block of a class or function.
+func docstringIndex(body *sitter.Node) int {
+	for i := 0; i < int(body.ChildCount()); i++ {
+		child := body.Child(i)
+		if !child.IsNamed() || child.Type() == "comment" {
+			continue
+		}
+		if child.Type() == "expression_statement" && child.NamedChildCount() == 1 && child.NamedChild(0).Type() == "string" {
+			return i
+		}
+		return -1
 	}
+	return -1
+}
 
-	comment := &ir.DistilledComment{
+// docstringComment returns the doc comment for a docstring (a string node).
+// inner marks the docstring of a module or class, which documents its
+// container rather than the declaration after it.
+func (p *NativeTreeSitterProcessor) docstringComment(node *sitter.Node, inner bool) *ir.DistilledComment {
+	return &ir.DistilledComment{
 		BaseNode: p.nodeLocation(node),
-		Text:     strings.TrimSpace(text),
-		Format:   "docstring",
+		Text:     cleanDocstring(p.stringContent(node)),
+		Format:   ir.CommentDoc,
+		Inner:    inner,
 	}
+}
 
-	p.addNode(file, parent, comment)
+// processBareString keeps a bare string that is not a docstring (one after
+// the first statement of a module or class) as a block comment, so it
+// follows --comments like the other comments.
+func (p *NativeTreeSitterProcessor) processBareString(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) {
+	p.addNode(file, parent, &ir.DistilledComment{
+		BaseNode: p.nodeLocation(node),
+		Text:     cleanDocstring(p.stringContent(node)),
+		Format:   ir.CommentBlock,
+	})
+}
+
+// stringContent returns the text of a string node between its quotes; a
+// prefix such as r or u belongs to the opening quotes.
+func (p *NativeTreeSitterProcessor) stringContent(node *sitter.Node) string {
+	start, end := node.StartByte(), node.EndByte()
+	for i := 0; i < int(node.ChildCount()); i++ {
+		switch child := node.Child(i); child.Type() {
+		case "string_start":
+			start = child.EndByte()
+		case "string_end":
+			end = child.StartByte()
+		}
+	}
+	if start > end || int(end) > len(p.source) {
+		return ""
+	}
+	return string(p.source[start:end])
+}
+
+// cleanDocstring trims a docstring the way Python's inspect.cleandoc does:
+// the first line loses its leading whitespace, the lines after it the
+// indentation they share, and blank lines at either end are dropped. Trailing
+// whitespace is removed from every line.
+func cleanDocstring(raw string) string {
+	lines := strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n")
+	margin := -1
+	for _, line := range lines[1:] {
+		if content := strings.TrimLeft(line, " \t"); content != "" {
+			if indent := len(line) - len(content); margin < 0 || indent < margin {
+				margin = indent
+			}
+		}
+	}
+	for i, line := range lines {
+		switch {
+		case i == 0 || strings.TrimSpace(line) == "":
+			line = strings.TrimLeft(line, " \t")
+		case margin > 0:
+			line = line[margin:]
+		}
+		lines[i] = strings.TrimRight(line, " \t")
+	}
+	for len(lines) > 0 && lines[0] == "" {
+		lines = lines[1:]
+	}
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return strings.Join(lines, "\n")
 }
 
 // processComment processes regular comments
@@ -688,7 +759,7 @@ func (p *NativeTreeSitterProcessor) processComment(node *sitter.Node, file *ir.D
 	comment := &ir.DistilledComment{
 		BaseNode: p.nodeLocation(node),
 		Text:     text,
-		Format:   "line",
+		Format:   ir.CommentLine,
 	}
 
 	p.addNode(file, parent, comment)
@@ -752,28 +823,6 @@ func (p *NativeTreeSitterProcessor) addNode(file *ir.DistilledFile, parent ir.Di
 	} else {
 		file.Children = append(file.Children, node)
 	}
-}
-
-func (p *NativeTreeSitterProcessor) extractDocstring(bodyNode *sitter.Node) string {
-	// Check if first statement is a string (docstring)
-	if bodyNode.ChildCount() > 0 {
-		firstStmt := bodyNode.Child(0)
-		if firstStmt != nil && firstStmt.Type() == "expression_statement" {
-			if firstStmt.ChildCount() > 0 {
-				expr := firstStmt.Child(0)
-				if expr != nil && expr.Type() == "string" {
-					docstring := p.getNodeText(expr)
-					// Clean up docstring
-					docstring = strings.Trim(docstring, `"'`)
-					if strings.HasPrefix(docstring, `"""`) || strings.HasPrefix(docstring, `'''`) {
-						docstring = docstring[3 : len(docstring)-3]
-					}
-					return strings.TrimSpace(docstring)
-				}
-			}
-		}
-	}
-	return ""
 }
 
 // analyzeProtocolSatisfaction analyzes protocol implementations using duck typing

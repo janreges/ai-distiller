@@ -419,7 +419,7 @@ func (p *TreeSitterProcessor) processExportClause(node *sitter.Node, file *ir.Di
 		comment := &ir.DistilledComment{
 			BaseNode: p.nodeLocation(node),
 			Text:     fmt.Sprintf("Exports: %s", strings.Join(exports, ", ")),
-			Format:   "export",
+			Format:   ir.CommentExport,
 		}
 		p.addNode(file, parent, comment)
 	}
@@ -500,7 +500,7 @@ func (p *TreeSitterProcessor) processClassBody(node *sitter.Node, file *ir.Disti
 			comment := &ir.DistilledComment{
 				BaseNode: p.nodeLocation(child),
 				Text:     "static initialization block",
-				Format:   "block",
+				Format:   ir.CommentBlock,
 			}
 			p.addNode(file, class, comment)
 		}
@@ -1004,7 +1004,7 @@ func (p *TreeSitterProcessor) processExpressionStatement(node *sitter.Node, file
 					comment := &ir.DistilledComment{
 						BaseNode: p.nodeLocation(node),
 						Text:     fmt.Sprintf("module.exports = %s", p.getNodeText(right)),
-						Format:   "export",
+						Format:   ir.CommentExport,
 					}
 					p.addNode(file, parent, comment)
 				}
@@ -1023,9 +1023,9 @@ func (p *TreeSitterProcessor) processComment(node *sitter.Node, file *ir.Distill
 	}
 
 	// Determine comment type
-	format := "line"
+	format := ir.CommentLine
 	if strings.HasPrefix(text, "/*") {
-		format = "block"
+		format = ir.CommentBlock
 		text = strings.TrimPrefix(text, "/*")
 		text = strings.TrimSuffix(text, "*/")
 	} else if strings.HasPrefix(text, "//") {
