@@ -8,6 +8,6 @@ class User:
     deactivate(self) -> None
     def get_status(self) -> str:
         """Returns the current status of the user."""
-                return "Active" if self._is_active else "Inactive"
+        return "Active" if self._is_active else "Inactive"
     __repr__(self) -> str
 </file>

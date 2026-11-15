@@ -143,9 +143,8 @@ func (f *RubyFormatter) formatMethod(w io.Writer, fn *ir.DistilledFunction, inde
 	// Implementation
 	if fn.Implementation != "" {
 		fmt.Fprintln(w)
-		impl := strings.TrimSpace(fn.Implementation)
-		for _, line := range strings.Split(impl, "\n") {
-			fmt.Fprintf(w, "%s    %s\n", indent, line)
+		for _, line := range dedentBody(fn.Implementation, indent+"    ") {
+			fmt.Fprintln(w, line)
 		}
 		// No 'end' in text format
 	} else {

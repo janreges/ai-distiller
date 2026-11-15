@@ -382,11 +382,8 @@ func (f *JavaFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, in
 	if fn.Implementation != "" {
 		// Regular method implementation
 		fmt.Fprintln(w, " {")
-		lines := strings.Split(strings.TrimSpace(fn.Implementation), "\n")
-		for _, line := range lines {
-			if line != "" {
-				fmt.Fprintf(w, "%s    %s\n", indentStr, line)
-			}
+		for _, line := range dedentBody(fn.Implementation, indentStr+"    ") {
+			fmt.Fprintln(w, line)
 		}
 		fmt.Fprintf(w, "%s}\n", indentStr)
 	} else if isAnnotationElement && defaultValue != "" {

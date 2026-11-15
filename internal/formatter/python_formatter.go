@@ -178,17 +178,9 @@ func (f *PythonFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, 
 	if fn.Implementation != "" {
 		fmt.Fprintln(w, ":")
 
-		// Check if implementation contains docstring
-		impl := strings.TrimSpace(fn.Implementation)
-		lines := strings.Split(impl, "\n")
-
 		// Write implementation with proper indentation
-		for _, line := range lines {
-			if line != "" {
-				fmt.Fprintf(w, "%s    %s\n", indentStr, line)
-			} else {
-				fmt.Fprintln(w)
-			}
+		for _, line := range dedentBody(fn.Implementation, indentStr+"    ") {
+			fmt.Fprintln(w, line)
 		}
 	} else {
 		// No implementation - just signature

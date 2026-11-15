@@ -7,10 +7,10 @@ public class UserStore extends BaseStore {
     @Override
     public Optional<User> findById(String id) {
         // Mock implementation
-                if ("1".equals(id)) {
-                    return Optional.of(new User("Admin"));
-                }
-                return Optional.empty();
+        if ("1".equals(id)) {
+            return Optional.of(new User("Admin"));
+        }
+        return Optional.empty();
     }
     @Override
     public List<User> findAll() {

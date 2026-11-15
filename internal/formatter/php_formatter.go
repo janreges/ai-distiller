@@ -355,6 +355,9 @@ func (f *PHPFormatter) formatFunction(fn *ir.DistilledFunction, indent int) stri
 		impl := strings.TrimSpace(fn.Implementation)
 		if impl == "{}" || impl == "{\n}" {
 			// Empty implementation - don't add anything
+		} else if strings.HasPrefix(impl, "{") && !strings.Contains(impl, "\n") {
+			// A body that opens and closes on the signature line stays there
+			signature += " " + impl
 		} else {
 			signature += " {\n"
 			// Strip leading and trailing braces from implementation if present
@@ -382,16 +385,9 @@ func (f *PHPFormatter) formatFunction(fn *ir.DistilledFunction, indent int) stri
 				}
 			}
 
-			// Join back and add
-			impl = strings.Join(lines, "\n")
-			impl = strings.TrimSpace(impl)
-
-			// Add implementation with proper closing
-			if impl != "" {
-				signature += impl
-				if !strings.HasSuffix(impl, "\n") {
-					signature += "\n"
-				}
+			// Re-indent the body relative to the method
+			for _, line := range dedentBody(strings.Join(lines, "\n"), indentStr+"    ") {
+				signature += line + "\n"
 			}
 			signature += indentStr + "}"
 		}

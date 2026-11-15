@@ -5,11 +5,11 @@ class Calculator:
         self._history = []
     def add(self, a: float, b: float) -> float:
         """Add two numbers"""
-                result = a + b
-                self._history.append(f"add({a}, {b}) = {result}")
-                return result
+        result = a + b
+        self._history.append(f"add({a}, {b}) = {result}")
+        return result
     @property
     def history(self) -> list:
         """Get calculation history"""
-                return self._history.copy()
+        return self._history.copy()
 </file>

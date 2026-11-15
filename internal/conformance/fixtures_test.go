@@ -41,11 +41,12 @@ func standard(m markers) []check {
 }
 
 var fixtures = []fixture{
-	{Lang: "python", File: "python/sample.py", Checks: standard(markers{
+	{Lang: "python", File: "python/sample.py", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "conf_field", "conf_public", "conf_other"},
 		Private:   []string{"_conf_private"},
 		ExpandSym: "conf_public",
-	})},
+	}), check{Cap: "body-indent", Flags: []string{"--implementation=1"},
+		Contains: []string{"        a = \"CONF_BODY_A\"\n        return a\n"}})},
 	{Lang: "typescript", File: "typescript/sample.ts", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
 		Private:   []string{"confPrivate"},
@@ -79,16 +80,19 @@ var fixtures = []fixture{
 		ExpandSym: "confPublic",
 	}), check{Cap: "body-indent", Flags: []string{"--implementation=1"},
 		Contains: []string{"        let a = \"CONF_BODY_A\"\n        return a\n    }\n"}})},
-	{Lang: "ruby", File: "ruby/sample.rb", Checks: standard(markers{
+	{Lang: "ruby", File: "ruby/sample.rb", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "conf_public", "conf_other"},
 		Private:   []string{"conf_private"},
 		ExpandSym: "conf_public",
-	})},
+	}), check{Cap: "body-indent", Flags: []string{"--implementation=1"},
+		Contains: []string{"        a = \"CONF_BODY_A\"\n        a\n"}})},
 	{Lang: "java", File: "java/ConfWidget.java", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
 		Private:   []string{"confPrivate"},
 		ExpandSym: "confPublic",
-	}), check{Cap: "throws-kept", Contains: []string{"confThrows() throws java.io.IOException"}})},
+	}), check{Cap: "throws-kept", Contains: []string{"confThrows() throws java.io.IOException"}},
+		check{Cap: "body-indent", Flags: []string{"--implementation=1"},
+			Contains: []string{"        String a = \"CONF_BODY_A\";\n        return a;\n"}})},
 	{Lang: "csharp", File: "csharp/ConfWidget.cs", Checks: standard(markers{
 		Public:    []string{"ConfWidget", "ConfField", "ConfPublic", "ConfOther"},
 		Private:   []string{"ConfPrivate"},
@@ -106,9 +110,10 @@ var fixtures = []fixture{
 		ExpandSym: "confPublic",
 	}), check{Cap: "body-indent", Flags: []string{"--implementation=1"},
 		Contains: []string{"        std::string a = \"CONF_BODY_A\";\n        return a;\n    }\n"}})},
-	{Lang: "php", File: "php/sample.php", Checks: standard(markers{
+	{Lang: "php", File: "php/sample.php", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "confField", "confPublic", "confOther"},
 		Private:   []string{"confPrivate"},
 		ExpandSym: "confPublic",
-	})},
+	}), check{Cap: "body-indent", Flags: []string{"--implementation=1"},
+		Contains: []string{"        $a = \"CONF_BODY_A\";\n        return $a;\n"}})},
 }

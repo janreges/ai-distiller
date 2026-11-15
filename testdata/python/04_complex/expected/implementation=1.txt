@@ -7,11 +7,11 @@ class Plugin(Protocol):
         ...
 def register_plugin(name: str) -> Callable[[Callable[[], Plugin]], None]:
     """A decorator to register a plugin creation function."""
-        def decorator(plugin_creator: Callable[[], Plugin]) -> None:
-            print(f"Registering plugin: {name}")
-            # We store the creator, not the instance, for lazy loading.
-            _registry[name] = plugin_creator
-        return decorator
+    def decorator(plugin_creator: Callable[[], Plugin]) -> None:
+        print(f"Registering plugin: {name}")
+        # We store the creator, not the instance, for lazy loading.
+        _registry[name] = plugin_creator
+    return decorator
 
 class DataProcessingPlugin:
     name = "data_processor"
@@ -26,13 +26,13 @@ class PluginManager:
         self._instances: Dict[str, Plugin] = {}
     def activate(self, name: str) -> None:
         if name in _registry and name not in self._instances:
-                    plugin_creator = _registry[name]
-                    self._instances[name] = plugin_creator()
+        plugin_creator = _registry[name]
+        self._instances[name] = plugin_creator()
     def run_all(self, data: Dict[str, Any]):
         if not self._instances:
-                    print("No active plugins to run.")
-                    return
-                for name, instance in self._instances.items():
-                    print(f"--- Running plugin: {name} ---")
-                    instance.execute(data)
+            print("No active plugins to run.")
+            return
+        for name, instance in self._instances.items():
+            print(f"--- Running plugin: {name} ---")
+            instance.execute(data)
 </file>

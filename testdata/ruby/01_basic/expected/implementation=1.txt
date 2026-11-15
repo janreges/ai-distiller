@@ -5,14 +5,14 @@ module UserUtils
     EMAIL_REGEX
     def self.valid_email?(email)
         return false unless email.is_a?(String)
-            email.match?(EMAIL_REGEX)
+        email.match?(EMAIL_REGEX)
     def self.strong_password?(password)
         return false unless password.is_a?(String)
-            return false if password.length < MIN_PASSWORD_LENGTH
-            
-            has_letter = password.match?(/[a-zA-Z]/)
-            has_digit = password.match?(/\d/)
-            has_letter && has_digit
+        return false if password.length < MIN_PASSWORD_LENGTH
+
+        has_letter = password.match?(/[a-zA-Z]/)
+        has_digit = password.match?(/\d/)
+        has_letter && has_digit
     def self.internal_helper
         "This is a private module method"
 
@@ -22,10 +22,10 @@ class User
         @@user_count
     def initialize(name, email)
         @id = generate_id
-            @name = name
-            @email = email
-            @created_at = Time.now
-            @@user_count += 1
+        @name = name
+        @email = email
+        @created_at = Time.now
+        @@user_count += 1
     def to_s
         "User(#{@id}): #{@name} <#{@email}>"
     def valid?
@@ -38,7 +38,7 @@ class User
 class AdminUser < User
     def initialize(name, email, permissions = ...)
         super(name, email)
-            @permissions = permissions || []
+        @permissions = permissions || []
     def to_s
         "#{super} [Admin]"
     def has_permission?(permission)

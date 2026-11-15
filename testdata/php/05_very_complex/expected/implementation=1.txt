@@ -26,15 +26,15 @@ class Memoize {
 }
 class DynamicProxyFactory {
     public createProxy(object $target): object Proxy object {
-$reflection = new ReflectionClass($target);
+        $reflection = new ReflectionClass($target);
         $proxyAttributes = $reflection->getAttributes(ProxyTarget::class);
-        
+
         if (empty($proxyAttributes)) {
             throw new \InvalidArgumentException('Target class must have ProxyTarget attribute');
         }
 
         $proxyConfig = $proxyAttributes[0]->newInstance();
-        
+
         // Check cache first
         if (isset($this->proxyCache[$target])) {
             return $this->proxyCache[$target];
@@ -42,19 +42,19 @@ $reflection = new ReflectionClass($target);
 
         $proxy = $this->generateProxy($target, $reflection, $proxyConfig);
         $this->proxyCache[$target] = $proxy;
-        
+
         return $proxy;
     }
     public interceptMethod(object $target, string $methodName, array<int, mixed> $arguments): mixed {
-$reflection = new ReflectionClass($target);
+        $reflection = new ReflectionClass($target);
         $method = $reflection->getMethod($methodName);
-        
+
         // Check for memoization
         $memoizeAttributes = $method->getAttributes(Memoize::class);
         if (!empty($memoizeAttributes)) {
             $memoConfig = $memoizeAttributes[0]->newInstance();
             $cacheKey = $this->generateCacheKey($target, $methodName, $arguments, $memoConfig);
-            
+
             if ($this->memoCache->contains($target) && isset($this->memoCache[$target][$cacheKey])) {
                 return $this->memoCache[$target][$cacheKey]['value'];
             }
@@ -98,11 +98,11 @@ interface ProxyInterface {
 }
 class AsyncOperationManager {
     public execute(string $id, Closure $operation): void {
-$this->fibers[$id] = new Fiber($operation);
+        $this->fibers[$id] = new Fiber($operation);
         $this->fibers[$id]->start();
     }
     public resume(string $id, mixed $value = null): void {
-if (isset($this->fibers[$id]) && $this->fibers[$id]->isSuspended()) {
+        if (isset($this->fibers[$id]) && $this->fibers[$id]->isSuspended()) {
             try {
                 $result = $this->fibers[$id]->resume($value);
                 if ($this->fibers[$id]->isTerminated()) {
@@ -116,20 +116,20 @@ if (isset($this->fibers[$id]) && $this->fibers[$id]->isSuspended()) {
         }
     }
     public getResult(string $id): mixed {
-return $this->results[$id] ?? null;
+        return $this->results[$id] ?? null;
     }
     public isComplete(string $id): bool {
-return isset($this->results[$id]);
+        return isset($this->results[$id]);
     }
     public waitAll(): Generator {
-while (!empty($this->fibers)) {
+        while (!empty($this->fibers)) {
             foreach (array_keys($this->fibers) as $id) {
                 $this->resume($id);
                 if ($this->isComplete($id)) {
                     yield $id => $this->getResult($id);
                 }
             }
-            
+
             // Yield control to prevent blocking
             Fiber::suspend();
         }
@@ -140,82 +140,82 @@ class OrderService {
     #[Memoize(ttl: 1800, keyGenerator: 'generatePriceKey')]
     #[Intercept(before: 'logPriceCalculation', after: 'validatePriceResult')]
     public calculatePrice(list<array{id: int, quantity: int, price: float}> $items, string $currency = 'USD'): float {
-$total = 0.0;
-        
+        $total = 0.0;
+
         foreach ($items as $item) {
             $total += $item['price'] * $item['quantity'];
         }
-        
+
         // Simulate complex calculation
         usleep(100000); // 100ms
-        
+
         return $total * $this->getCurrencyMultiplier($currency);
     }
     #[Intercept(before: 'validateOrder', after: 'notifyOrderProcessed')]
     public processOrder(array{customer_id: int, items: list<array{id: int, quantity: int}>, payment_method: string} $orderData): string Order ID {
-$orderId = uniqid('order_');
-        
+        $orderId = uniqid('order_');
+
         $this->asyncManager->execute($orderId, function() use ($orderData, $orderId) {
             // Simulate async processing
             Fiber::suspend();
-            
+
             // Process payment
             $this->processPayment($orderData['payment']);
             Fiber::suspend();
-            
+
             // Update inventory
             $this->updateInventory($orderData['items']);
             Fiber::suspend();
-            
+
             // Send confirmation
             $this->sendConfirmation($orderData['customer']);
-            
+
             return ['order_id' => $orderId, 'status' => 'completed'];
         });
-        
+
         return $orderId;
     }
     public generatePriceKey(string $methodName, array $arguments): string Cache key {
-[$items, $currency] = $arguments;
+        [$items, $currency] = $arguments;
         return md5($methodName . serialize($items) . $currency);
     }
     public getOrderStatus(string $orderId): array Status information {
-if ($this->asyncManager->isComplete($orderId)) {
+        if ($this->asyncManager->isComplete($orderId)) {
             return $this->asyncManager->getResult($orderId);
         }
-        
+
         return ['order_id' => $orderId, 'status' => 'processing'];
     }
 }
 class MetaProgrammingDemo {
     public createDynamicClass(string $className, array $properties, array $methods): string Generated class name {
-$classCode = "class {$className} {\n";
-        
+        $classCode = "class {$className} {\n";
+
         // Add properties
         foreach ($properties as $name => $type) {
             $classCode .= "    public {$type} \${$name};\n";
         }
-        
+
         // Add methods
         foreach ($methods as $methodName => $methodCode) {
             $classCode .= "\n    public function {$methodName}() {\n";
             $classCode .= "        {$methodCode}\n";
             $classCode .= "    }\n";
         }
-        
+
         $classCode .= "}\n";
-        
+
         eval($classCode);
-        
+
         return $className;
     }
     public addMethod(object $object, string $methodName, Closure $implementation): void {
-$boundClosure = $implementation->bindTo($object, $object);
+        $boundClosure = $implementation->bindTo($object, $object);
         $object->$methodName = $boundClosure;
     }
     public analyzeObject(object $object): array Analysis result {
-$reflection = new ReflectionClass($object);
-        
+        $reflection = new ReflectionClass($object);
+
         return [
             'class' => $reflection->getName(),
             'interfaces' => $reflection->getInterfaceNames(),

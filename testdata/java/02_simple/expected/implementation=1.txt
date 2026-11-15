@@ -6,9 +6,9 @@ public class SimpleOOP {
     public final String id;
     public SimpleOOP(String id, String name) {
         this.id = Objects.requireNonNull(id, "ID cannot be null");
-                this.name = name;
-                this.version = 1;
-                this.dirty = true;
+        this.name = name;
+        this.version = 1;
+        this.dirty = true;
     }
     public SimpleOOP(String id) {
         this(id, "Default Name");
@@ -18,16 +18,16 @@ public class SimpleOOP {
     }
     public void setName(String name) {
         this.name = name;
-                this.version++;
-                this.dirty = true;
+        this.version++;
+        this.dirty = true;
     }
     @Override
     public String toString() {
         return "SimpleOOP{" +
-                       "id='" + id + '\'' +
-                       ", name='" + name + '\'' +
-                       ", version=" + version +
-                       '}';
+        "id='" + id + '\'' +
+        ", name='" + name + '\'' +
+        ", version=" + version +
+        '}';
     }
 }
 </file>

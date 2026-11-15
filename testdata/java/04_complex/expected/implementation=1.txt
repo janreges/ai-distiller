@@ -7,35 +7,35 @@ import java.nio.file.Path
 public class Advanced<T extends Number & Runnable & Serializable> {
     public <U extends T> U process(@NotNull U input) throws Exception {
         input.run(); // Call method from Runnable interface
-                return input;
+        return input;
     }
     public Runnable createRunner(int value) {
         // 5. Local class inside a method
-                class LocalRunner implements Runnable {
-                    @Override
-                    public void run() {
-                        System.out.println("Local runner executing with value: " + value);
-                    }
+        class LocalRunner implements Runnable {
+            @Override
+            public void run() {
+                System.out.println("Local runner executing with value: " + value);
+            }
+        }
+
+        // Return an anonymous inner class instance
+        return new Runnable() {
+            private static final int MAX_ITERATIONS = 5;
+            @Override
+            public void run() {
+                for (int i = 0; i < MAX_ITERATIONS; i++) {
+                    System.out.println("Anonymous runner iteration " + i);
                 }
-                
-                // Return an anonymous inner class instance
-                return new Runnable() {
-                    private static final int MAX_ITERATIONS = 5;
-                    @Override
-                    public void run() {
-                        for (int i = 0; i < MAX_ITERATIONS; i++) {
-                            System.out.println("Anonymous runner iteration " + i);
-                        }
-                    }
-                };
+            }
+        };
     }
     public void readFile(String filePath) {
         try (var reader = Files.newBufferedReader(Path.of(filePath))) {
-                    // ...
-                } catch (java.io.IOException | SecurityException e) {
-                    // Multi-catch block
-                    throw new RuntimeException("Failed to read file", e);
-                }
+            // ...
+        } catch (java.io.IOException | SecurityException e) {
+            // Multi-catch block
+            throw new RuntimeException("Failed to read file", e);
+        }
     }
 }
 </file>

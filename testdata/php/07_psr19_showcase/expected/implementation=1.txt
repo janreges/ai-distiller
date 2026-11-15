@@ -36,16 +36,16 @@ class User {
     public hasRole(string $role): bool
     public sendNotification(string $message, array $options = $[]): void
     public __construct(string $email, string $name) {
-$this->validateEmail($email);
+        $this->validateEmail($email);
         $this->data['email'] = $email;
         $this->data['name'] = $name;
         $this->displayName = $name;
     }
     public getEmail(): string The user's email {
-return $this->data['email'];
+        return $this->data['email'];
     }
     public setEmail(string $email): void {
-$this->validateEmail($email);
+        $this->validateEmail($email);
         $this->checkEmailUniqueness($email);
         $this->data['email'] = $email;
     }
@@ -69,10 +69,10 @@ class UserRepository {
     public findBy(array $criteria, array $orderBy = $[]): User[]
     public count(array $criteria = $[]): int
     public find(int $id): ?User {
-return $this->users[$id] ?? null;
+        return $this->users[$id] ?? null;
     }
     public save(User $user): void {
-// Implementation
+        // Implementation
     }
 }
 /**
@@ -92,11 +92,11 @@ return $this->users[$id] ?? null;
  */
 class UserService {
     public getUser(int $id): ?User {
-// Implementation with caching
+        // Implementation with caching
         return null;
     }
     public createUser(array{email: string, name: string, roles?: list<string>} $data): User {
-// Implementation
+        // Implementation
         return new User($data['email'], $data['name']);
     }
 }

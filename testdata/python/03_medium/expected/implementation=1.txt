@@ -10,16 +10,16 @@ class EmailNotifier(BaseNotifier):
     from_address = from_address
     def __init__(self, smtp_host: str, port: int, from_address: str):
         self._smtp_host = smtp_host
-                self._port = port
-                self.from_address = from_address
-                self._connection = None # Represents a mock connection object
+        self._port = port
+        self.from_address = from_address
+        self._connection = None # Represents a mock connection object
     @property
     def connection_info(self) -> str:
         """Returns a string with the current SMTP connection details."""
-                return f"{self._smtp_host}:{self._port}"
+        return f"{self._smtp_host}:{self._port}"
     def send(self, message: str) -> None:
         """Connects and sends an email."""
-                if not self._connection:
-                    self._connect()
-                print(f"Sending email from {self.from_address}: '{message}'")
+        if not self._connection:
+            self._connect()
+        print(f"Sending email from {self.from_address}: '{message}'")
 </file>

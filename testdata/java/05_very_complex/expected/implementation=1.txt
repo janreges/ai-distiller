@@ -5,10 +5,11 @@ import java.util.stream.Stream
 public class ModernJava {
     public static void main(String[] args) {
         // 4. Using streams, lambdas, and method references
-                var shapes = Stream.of(new Circle(10), new Rectangle(4, 5));
-                shapes.map(Shape::area) // Method reference
-                      .filter(area -> area > 100.0) // Lambda expression
-                      .forEach(System.out::println); // Method reference
+        var shapes = Stream.of(new Circle(10), new Rectangle(4, 5));
+
+        shapes.map(Shape::area) // Method reference
+              .filter(area -> area > 100.0) // Lambda expression
+              .forEach(System.out::println); // Method reference
     }
 }
 </file>

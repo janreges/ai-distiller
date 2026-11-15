@@ -6,36 +6,36 @@ class User {
     public int $id;
     public string $name;
     public __construct(int $id, string $name, string $email) {
-$this->id = $id;
+        $this->id = $id;
         $this->name = $name;
         $this->setEmail($email);
         $this->createdAt = new DateTime();
     }
     public getEmail(): string {
-return $this->email;
+        return $this->email;
     }
     public setEmail(string $email): void {
-if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             throw new InvalidArgumentException("Invalid email format");
         }
         $this->email = $email;
     }
     public getPreference(string $key, mixed $default = null): mixed {
-return $this->preferences[$key] ?? $default;
+        return $this->preferences[$key] ?? $default;
     }
     public setPreference(string $key, mixed $value): void {
-$this->preferences[$key] = $value;
+        $this->preferences[$key] = $value;
     }
     public isActive(): bool {
-if ($this->createdAt === null) {
+        if ($this->createdAt === null) {
             return false;
         }
-        
+
         $thirtyDaysAgo = new DateTime('-30 days');
         return $this->createdAt > $thirtyDaysAgo;
     }
     public toArray(): array{id: int, name: string, email: string, created_at: string|null, is_active: bool} {
-return [
+        return [
             'id' => $this->id,
             'name' => $this->name,
             'email' => $this->email,
@@ -46,21 +46,21 @@ return [
 }
 class UserManager {
     public addUser(User $user): void {
-$this->users[$user->id] = $user;
+        $this->users[$user->id] = $user;
     }
     public findUser(int $id): ?User {
-return $this->users[$id] ?? null;
+        return $this->users[$id] ?? null;
     }
     public getActiveUsers(): User[] {
-return array_filter($this->users, fn(User $user) => $user->isActive());
+        return array_filter($this->users, fn(User $user) => $user->isActive());
     }
     public getUserCount(): int {
-return count($this->users);
+        return count($this->users);
     }
 }
 /** Utility functions for user operations */
 validateEmail(string $email): bool {
-return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+    return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
 }
 /**
  * Create user from array data
@@ -70,10 +70,10 @@ return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
  * @throws InvalidArgumentException
  */
 createUserFromArray(array{id: int, name: string, email: string} $data): User {
-if (!isset($data['id'], $data['name'], $data['email'])) {
+    if (!isset($data['id'], $data['name'], $data['email'])) {
         throw new InvalidArgumentException("Missing required user data");
     }
-    
+
     return new User($data['id'], $data['name'], $data['email']);
 }
 const USER_STATUS_ACTIVE = 'active'

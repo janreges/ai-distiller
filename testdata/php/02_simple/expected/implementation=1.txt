@@ -13,26 +13,26 @@ interface CacheableInterface {
 }
 abstract class BaseEntity implements PersistableInterface, JsonSerializable {
     public getId(): ?int {
-return $this->id;
+        return $this->id;
     }
     public setId(int $id): void {
-$this->id = $id;
+        $this->id = $id;
     }
     public getCreatedAt(): ?DateTimeInterface {
-return $this->createdAt;
+        return $this->createdAt;
     }
     public setCreatedAt(DateTimeInterface $createdAt): void {
-$this->createdAt = $createdAt;
+        $this->createdAt = $createdAt;
     }
     public getUpdatedAt(): ?DateTimeInterface {
-return $this->updatedAt;
+        return $this->updatedAt;
     }
     public setUpdatedAt(DateTimeInterface $updatedAt): void {
-$this->updatedAt = $updatedAt;
+        $this->updatedAt = $updatedAt;
     }
     public abstract getEntityName(): string
     public jsonSerialize(): array {
-return [
+        return [
             'id' => $this->id,
             'entity_name' => $this->getEntityName(),
             'created_at' => $this->createdAt?->format('c'),
@@ -46,52 +46,52 @@ trait TimestampableTrait {
 /** Trait for validation functionality */
 trait ValidatableTrait {
     public getValidationErrors(): array<string, string> {
-return $this->validationErrors;
+        return $this->validationErrors;
     }
     public hasValidationErrors(): bool {
-return !empty($this->validationErrors);
+        return !empty($this->validationErrors);
     }
 }
 class Product extends BaseEntity implements CacheableInterface {
     public const CACHE_TTL = 3600;
     public __construct(string $name, float $price, string $description = '') {
-$this->name = $name;
+        $this->name = $name;
         $this->price = $price;
         $this->description = $description;
         $this->updateTimestamps();
     }
     public getName(): string {
-return $this->name;
+        return $this->name;
     }
     public setName(string $name): void {
-$this->name = $name;
+        $this->name = $name;
         $this->updateTimestamps();
     }
     public getPrice(): float {
-return $this->price;
+        return $this->price;
     }
     public setPrice(float $price): void {
-$this->price = $price;
+        $this->price = $price;
         $this->updateTimestamps();
     }
     public getEntityName(): string {
-return 'product';
+        return 'product';
     }
     public getCacheKey(): string {
-return sprintf('product:%d', $this->id ?? 0);
+        return sprintf('product:%d', $this->id ?? 0);
     }
     public getCacheTtl(): int {
-return self::CACHE_TTL;
+        return self::CACHE_TTL;
     }
     public addCategory(string $category): void {
-if (!in_array($category, $this->categories)) {
+        if (!in_array($category, $this->categories)) {
             $this->categories[] = $category;
         }
     }
     public static createSaleProduct(string $name, float $originalPrice, float $discountPercent): self {
-$salePrice = $originalPrice * (1 - $discountPercent / 100);
+        $salePrice = $originalPrice * (1 - $discountPercent / 100);
         $description = sprintf("Sale item - %d%% off!", $discountPercent);
-        
+
         return new self($name, $salePrice, $description);
     }
 }
@@ -99,17 +99,17 @@ class Category extends BaseEntity {
     public readonly string $name;
     public readonly string $slug;
     public __construct(string $name, string $slug) {
-$this->name = $name;
+        $this->name = $name;
         $this->slug = $slug;
     }
     public getEntityName(): string {
-return 'category';
+        return 'category';
     }
     public setParent(?Category $parent): void {
-$this->parent = $parent;
+        $this->parent = $parent;
     }
     public getParent(): ?Category {
-return $this->parent;
+        return $this->parent;
     }
 }
 </file>
