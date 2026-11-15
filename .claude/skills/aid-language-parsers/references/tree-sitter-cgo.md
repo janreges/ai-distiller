@@ -37,6 +37,12 @@ of ABI 13 to 15. Code that uses it imports it as
   `a.Equals(*b)`. `Kind()` is the node type, `StartPosition()` and
   `EndPosition()` the points, and counts, indexes and byte offsets are `uint`.
 
+The binding points the C runtime's allocator at Go callbacks, which cost 13 to
+17 percent of parse CPU; `internal/language/tsparse/allocator.go` switches it
+back to libc in its `init`, so keep a `tsparse` import in every package that
+parses. That is safe only for go-tree-sitter v0.25.0: on every runtime upgrade
+re-read the binding's `allocator.go` and every place it frees memory.
+
 ## Grammar sources
 
 | Language | Go import | Where the C code comes from |

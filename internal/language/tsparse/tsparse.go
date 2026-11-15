@@ -43,7 +43,10 @@ func NewParser(lang *sitter.Language) (*sitter.Parser, error) {
 // never be cancelled (context.Background and contexts derived from it with
 // values only, which is what the CLI passes) takes the plain Parse path,
 // because ParseWithOptions registers its options with go-pointer and never
-// releases them (an allocation of about a hundred bytes per call).
+// releases them. For a cancellable context that registration keeps the
+// ParseOptions, its closure and the context (with everything the context
+// references) reachable for the life of the process, plus a one-byte C
+// allocation and a global map entry.
 func Parse(ctx context.Context, parser *sitter.Parser, src []byte) (*sitter.Tree, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
