@@ -16,16 +16,19 @@ type Dispatcher struct {
     JobChannel chan Job
 }
 
-func NewDispatcher(maxWorkers int) *Dispatcher
+func NewDispatcher(maxWorkers int) *Dispatcher {
     return &Dispatcher{
-    		JobChannel: make(chan Job, 100),
-    		maxWorkers: maxWorkers,
-    	}
-func (d *Dispatcher) Run(ctx context.Context)
+    	JobChannel: make(chan Job, 100),
+    	maxWorkers: maxWorkers,
+    }
+}
+func (d *Dispatcher) Run(ctx context.Context) {
     var wg sync.WaitGroup
-    for loop:
-    wg.Add(1)
-        worker := Worker{...}
-        go worker.start(ctx)
+    for i := 1; i <= d.maxWorkers; i++ {
+    	wg.Add(1)
+    	worker := Worker{id: i, jobChannel: d.JobChannel, wg: &wg}
+    	go worker.start(ctx) // The key goroutine spawn
+    }
     wg.Wait()
+}
 </file>

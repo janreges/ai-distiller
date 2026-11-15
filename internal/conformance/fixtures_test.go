@@ -61,11 +61,13 @@ var fixtures = []fixture{
 	}), check{Cap: "body-indent", Flags: []string{"--implementation=1"},
 		Contains: []string{"        const a = \"CONF_BODY_A\";\n        return a;\n    }\n"}},
 		check{Cap: "arrow-expression-body", Flags: []string{"--implementation=1"}, Contains: []string{"=> a + 1"}})},
-	{Lang: "go", File: "go/sample.go", Checks: standard(markers{
+	{Lang: "go", File: "go/sample.go", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "ConfField", "ConfPublic", "ConfOther"},
 		Private:   []string{"confPrivate"},
 		ExpandSym: "ConfPublic",
-	})},
+	}), check{Cap: "body-indent", Flags: []string{"--implementation=1"},
+		Contains: []string{"    a := \"CONF_BODY_A\"\n    return a\n}\n"}},
+		check{Cap: "body-nested-statement", Flags: []string{"--implementation=1"}, Contains: []string{"CONF_BODY_D"}})},
 	{Lang: "rust", File: "rust/sample.rs", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "conf_field", "conf_public", "conf_other"},
 		Private:   []string{"conf_private"},

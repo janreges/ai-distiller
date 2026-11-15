@@ -303,142 +303,6 @@ func (p *ASTParser) getMethodSignature(fn *ir.DistilledFunction) string {
 	return sig.String()
 }
 
-// extractImplementationWithConcurrency extracts function body highlighting concurrency constructs
-func (p *ASTParser) extractImplementationWithConcurrency(body *ast.BlockStmt) string {
-	var impl strings.Builder
-
-	for _, stmt := range body.List {
-		line := p.processStatement(stmt, 0)
-		if line != "" {
-			impl.WriteString(line)
-			impl.WriteString("\n")
-		}
-	}
-
-	return strings.TrimSpace(impl.String())
-}
-
-// processStatement processes a single statement, highlighting concurrency constructs
-func (p *ASTParser) processStatement(stmt ast.Stmt, indent int) string {
-	indentStr := strings.Repeat("    ", indent)
-
-	switch s := stmt.(type) {
-	case *ast.GoStmt:
-		// Highlight goroutine spawn
-		call := p.processCallExpr(s.Call)
-		return fmt.Sprintf("%sgo %s", indentStr, call)
-
-	case *ast.SelectStmt:
-		// Represent select statement
-		return p.processSelectStmt(s, indent)
-
-	case *ast.SendStmt:
-		// Channel send
-		channel := p.exprToString(s.Chan)
-		value := p.exprToString(s.Value)
-		return fmt.Sprintf("%s%s <- %s", indentStr, channel, value)
-
-	case *ast.ExprStmt:
-		// Regular expression statement
-		if callExpr, ok := s.X.(*ast.CallExpr); ok {
-			if p.isChannelReceive(callExpr) {
-				return fmt.Sprintf("%s<-%s", indentStr, p.exprToString(callExpr.Fun))
-			}
-		}
-		return fmt.Sprintf("%s%s", indentStr, p.exprToString(s.X))
-
-	case *ast.AssignStmt:
-		// Assignment, check for channel receives
-		var lhs, rhs []string
-		for _, expr := range s.Lhs {
-			lhs = append(lhs, p.exprToString(expr))
-		}
-		for _, expr := range s.Rhs {
-			rhs = append(rhs, p.exprToString(expr))
-		}
-		op := ":="
-		if s.Tok.String() != ":=" {
-			op = "="
-		}
-		return fmt.Sprintf("%s%s %s %s", indentStr, strings.Join(lhs, ", "), op, strings.Join(rhs, ", "))
-
-	case *ast.BlockStmt:
-		// Nested block
-		var result strings.Builder
-		for _, stmt := range s.List {
-			line := p.processStatement(stmt, indent)
-			if line != "" {
-				result.WriteString(line)
-				result.WriteString("\n")
-			}
-		}
-		return strings.TrimSpace(result.String())
-
-	case *ast.ForStmt:
-		// For loop - capture the body
-		var result strings.Builder
-		result.WriteString(fmt.Sprintf("%sfor loop:", indentStr))
-		if s.Body != nil {
-			result.WriteString("\n")
-			bodyStr := p.processStatement(s.Body, indent+1)
-			result.WriteString(bodyStr)
-		}
-		return result.String()
-
-	case *ast.IfStmt:
-		// If statement
-		cond := p.exprToString(s.Cond)
-		return fmt.Sprintf("%sif %s:", indentStr, cond)
-
-	default:
-		// Generic statement
-		start := p.fset.Position(stmt.Pos()).Offset
-		end := p.fset.Position(stmt.End()).Offset
-		if start >= 0 && end <= len(p.source) && start < end {
-			return indentStr + strings.TrimSpace(string(p.source[start:end]))
-		}
-		return ""
-	}
-}
-
-// processSelectStmt processes a select statement
-func (p *ASTParser) processSelectStmt(stmt *ast.SelectStmt, indent int) string {
-	indentStr := strings.Repeat("    ", indent)
-	var result strings.Builder
-
-	result.WriteString(fmt.Sprintf("%sselect:", indentStr))
-
-	for _, clause := range stmt.Body.List {
-		if commClause, ok := clause.(*ast.CommClause); ok {
-			result.WriteString("\n")
-			if commClause.Comm == nil {
-				result.WriteString(fmt.Sprintf("%s    default:", indentStr))
-			} else {
-				commStr := p.processStatement(commClause.Comm, 0)
-				result.WriteString(fmt.Sprintf("%s    case %s:", indentStr, strings.TrimSpace(commStr)))
-			}
-		}
-	}
-
-	return result.String()
-}
-
-// processCallExpr processes a function call expression
-func (p *ASTParser) processCallExpr(call *ast.CallExpr) string {
-	fun := p.exprToString(call.Fun)
-	var args []string
-	for _, arg := range call.Args {
-		args = append(args, p.exprToString(arg))
-	}
-	return fmt.Sprintf("%s(%s)", fun, strings.Join(args, ", "))
-}
-
-// isChannelReceive checks if a call expression is a channel receive
-func (p *ASTParser) isChannelReceive(call *ast.CallExpr) bool {
-	// This is a simplified check - in practice, we'd need more sophisticated analysis
-	return false
-}
-
 // processComments adds all comments to the distilled file in the correct positions
 func (p *ASTParser) processComments(file *ast.File, distilledFile *ir.DistilledFile) {
 	// This function is now called after all other processing is done,
@@ -988,8 +852,12 @@ func (p *ASTParser) processFunction(fn *ast.FuncDecl) *ir.DistilledFunction {
 
 	// Extract function body if exists and detect concurrency patterns
 	if fn.Body != nil {
-		// Parse the implementation to capture goroutines, channels, and select statements
-		distilledFn.Implementation = p.extractImplementationWithConcurrency(fn.Body)
+		// The body is kept verbatim, braces included ("{ ... }").
+		start := p.fset.Position(fn.Body.Lbrace).Offset
+		end := p.fset.Position(fn.Body.Rbrace).Offset + 1
+		if start >= 0 && end <= len(p.source) && start < end {
+			distilledFn.Implementation = string(p.source[start:end])
+		}
 
 		// Check for interesting constructs for modifiers
 		var goroutines, defers int

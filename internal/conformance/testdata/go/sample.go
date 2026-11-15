@@ -23,3 +23,10 @@ func (w *ConfWidget) ConfOther() string {
 	b := "CONF_BODY_B"
 	return b
 }
+
+func (w *ConfWidget) ConfBranch(n int) string {
+	if n > w.ConfField {
+		return "CONF_BODY_D"
+	}
+	return ""
+}
