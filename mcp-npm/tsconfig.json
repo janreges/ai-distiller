@@ -30,7 +30,9 @@
   },
   "include": [
     "mcp-server-sdk.ts",
-    "run-aid.ts"
+    "run-aid.ts",
+    "tool-text.ts",
+    "list-files.ts"
   ],
   "exclude": [
     "node_modules",

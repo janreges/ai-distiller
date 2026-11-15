@@ -109,13 +109,36 @@ AI Distiller (aid) **DOES NOT perform analysis** - it generates prompts with dis
 ### Core Analysis Engine
 - **aid_analyze** - Direct access to all AI actions for custom workflows
 - Supports 10 different AI analysis types
-- Outputs to `.aid/` directory for large analyses
+- Writes prompts to the `.aid/` directory; the response states the path aid reported
 
 ### Code Structure Tools
 - **distill_file** - Extract code structure from a single file
 - **distill_directory** - Extract structure from entire directories
 - Control visibility: public, protected, internal, private
 - Control detail: with or without implementation
+
+### All Registered Tools
+
+Required parameters are marked with `*`. `include_patterns` and `exclude_patterns` are comma-separated globs.
+
+| Tool | Parameters |
+|------|------------|
+| `distill_file` | `file_path`*, `include_private`, `include_protected`, `include_internal`, `include_implementation`, `include_comments`, `include_fields`, `include_methods`, `expand`, `output_format` |
+| `distill_directory` | `directory_path`*, `recursive`, `include_private`, `include_protected`, `include_internal`, `include_implementation`, `include_comments`, `include_fields`, `include_methods`, `include_patterns`, `exclude_patterns`, `expand`, `output_format` |
+| `distill_with_dependencies` (EXPERIMENTAL) | `file_path`*, `max_depth`, `include_private`, `include_protected`, `include_internal`, `include_implementation`, `include_comments`, `include_fields`, `include_methods`, `expand`, `output_format` |
+| `aid_hunt_bugs` | `target_path`*, `include_private`, `include_patterns`, `exclude_patterns` |
+| `aid_suggest_refactoring` | `target_path`*, `include_implementation`, `include_patterns`, `exclude_patterns` |
+| `aid_generate_diagram` | `target_path`*, `include_patterns`, `exclude_patterns` |
+| `aid_analyze_security` | `target_path`*, `include_private`, `include_implementation`, `include_patterns`, `exclude_patterns` |
+| `aid_generate_docs` | `target_path`*, `doc_type`, `include_patterns`, `exclude_patterns` |
+| `aid_deep_file_analysis` | `target_path`*, `include_private`, `include_implementation`, `include_patterns`, `exclude_patterns` |
+| `aid_multi_file_docs` | `target_path`*, `include_patterns`, `exclude_patterns` |
+| `aid_complex_analysis` | `target_path`*, `include_private`, `include_implementation`, `include_patterns`, `exclude_patterns` |
+| `aid_performance_analysis` | `target_path`*, `include_implementation`, `include_patterns`, `exclude_patterns` |
+| `aid_best_practices` | `target_path`*, `include_private`, `include_patterns`, `exclude_patterns` |
+| `aid_analyze` | `ai_action`*, `target_path`*, `output_format`, `include_private`, `include_protected`, `include_internal`, `include_implementation`, `include_comments`, `include_fields`, `include_methods`, `include_patterns`, `exclude_patterns` |
+| `list_files` | `path`, `pattern`, `recursive` (relative paths resolve against `AID_ROOT`; stops after 2000 entries and says so) |
+| `get_capabilities` | none |
 
 ## Configuration
 
@@ -155,10 +178,10 @@ For user-scoped installations, you MUST configure the project path:
 
 ### Visibility Levels
 Control what code elements are included:
-- `include_public: true/false` - Public members (default: true)
+- Public members are always included
 - `include_protected: true/false` - Protected members (default: false)
 - `include_internal: true/false` - Internal/package-private (default: false)
-- `include_private: true/false` - Private members (default: false)
+- `include_private: true/false` - Private members. Default: false for the distill tools and for `aid_analyze` (there it adds only private members); true for the other analysis tools that offer it, where it also includes protected and internal members
 
 ### Implementation Control
 - `include_implementation: false` - Only signatures (smallest output)
@@ -210,31 +233,27 @@ For large projects, aid's output may exceed AI context limits. Strategies:
 ```javascript
 // Example prompts:
 // 1. "Use aid to find bugs in my authentication module"
-// 2. "Run aid bug hunter on src/api/ focusing on input validation"
+// 2. "Run aid bug hunter on src/api/, public members only"
 // 3. "Check src/services/ for memory leaks with aid, include private methods"
 
 // Claude will call:
 aid_hunt_bugs({
   target_path: "src/auth/",
-  focus_area: "memory leaks and race conditions",
-  include_private: true,
-  include_implementation: true  // Include code bodies
+  include_private: true
 })
 // Returns: Bug-hunting PROMPT with distilled code (NOT bug list!)
-// Output: .aid/bug-hunting-2024-06-20.auth.md
+// Output: a file under .aid/ - the response states its path
 // Next step: AI agent reads this file and performs the actual bug analysis
 
 // More examples:
 aid_hunt_bugs({
   target_path: "src/api/",
-  focus_area: "input validation",
   include_private: false  // Public API only
 })
 
 aid_hunt_bugs({
   target_path: "src/components/",
-  include_patterns: "*.tsx",
-  focus_area: "React hooks usage"
+  include_patterns: "*.tsx"
 })
 ```
 
@@ -248,7 +267,6 @@ aid_hunt_bugs({
 // Claude will call:
 aid_suggest_refactoring({
   target_path: "src/auth/",
-  refactoring_goal: "improve testability",
   include_implementation: false  // Signatures only for overview
 })
 // Returns: Refactoring PROMPT with distilled code (NOT refactoring suggestions!)
@@ -257,14 +275,11 @@ aid_suggest_refactoring({
 // More examples:
 aid_suggest_refactoring({
   target_path: "src/components/",
-  refactoring_goal: "reduce complexity",
-  include_implementation: true,
-  include_private: true  // Include all methods
+  include_implementation: true
 })
 
 aid_suggest_refactoring({
   target_path: "src/database/",
-  refactoring_goal: "modernize code patterns",
   include_patterns: "*.js",
   exclude_patterns: "*test*"
 })
@@ -279,10 +294,7 @@ aid_suggest_refactoring({
 
 // Claude will call:
 aid_generate_diagram({
-  target_path: "src/",
-  diagram_focus: "authentication flow",
-  include_private: true,
-  include_implementation: false  // Structure only
+  target_path: "src/"
 })
 // Returns: Diagram generation PROMPT with distilled code (NOT diagrams!)
 // Next step: AI agent reads this and creates actual Mermaid diagrams
@@ -290,14 +302,11 @@ aid_generate_diagram({
 // More examples:
 aid_generate_diagram({
   target_path: "src/api/",
-  diagram_focus: "API endpoints",
-  include_private: false,  // Public API only
-  include_protected: true
+  exclude_patterns: "*test*"
 })
 
 aid_generate_diagram({
   target_path: "src/components/",
-  diagram_focus: "component hierarchy",
   include_patterns: "*.tsx,*.jsx"
 })
 ```
@@ -312,26 +321,21 @@ aid_generate_diagram({
 // Claude will call:
 aid_analyze_security({
   target_path: "src/api/",
-  security_focus: "input validation and SQL injection",
   include_private: true,
   include_implementation: true  // Need to see actual code
 })
 // Returns: Security audit PROMPT with distilled code (NOT vulnerabilities!)
-// Output: .aid/security-analysis-2024-06-20.api.md
+// Output: a file under .aid/ - the response states its path
 // Next step: AI agent analyzes code following the prompt instructions
 
 // More examples:
 aid_analyze_security({
   target_path: "src/auth/",
-  security_focus: "authentication bypass",
-  include_private: true,
-  include_protected: true,
-  include_internal: true  // Full visibility
+  include_private: true  // Includes private, protected and internal members
 })
 
 aid_analyze_security({
   target_path: "src/controllers/",
-  security_focus: "XSS vulnerabilities",
   include_patterns: "*.php",
   include_implementation: true
 })
@@ -347,21 +351,16 @@ aid_analyze_security({
 // Claude will call:
 aid_generate_docs({
   target_path: "src/core/",
-  doc_type: "api-reference",
-  audience: "external developers",
-  include_private: false  // Public API only
+  doc_type: "api-reference"
 })
 // Returns: Documentation generation PROMPT with distilled code (NOT docs!)
-// Output: .aid/docs-api-reference-2024-06-20.core.md
+// Output: a file under .aid/ - the response states its path
 // Next step: AI agent generates actual documentation from the prompt
 
 // More examples:
 aid_generate_docs({
   target_path: "src/components/",
-  doc_type: "single-file-docs",
-  audience: "internal team",
-  include_private: true,
-  include_protected: true
+  doc_type: "single-file-docs"
 })
 
 aid_generate_docs({
@@ -385,10 +384,9 @@ aid_generate_docs({
 aid_analyze({
   ai_action: "flow-for-deep-file-to-file-analysis",
   target_path: "src/",
-  user_query: "Focus on authentication and authorization patterns",
   include_patterns: "*.py,*.js"
 })
-// Output: .aid/flow-for-deep-file-to-file-analysis-2024-06-20.src.md
+// Output: a file under .aid/ - the response states its path
 
 // More examples:
 aid_analyze({
@@ -534,8 +532,8 @@ User: "Help me understand src/ architecture using aid diagrams"
 ### Refactoring Session
 ```
 User: "Apply aid refactoring analysis to src/services/ for complexity"
-1. Claude uses aid_suggest_refactoring(target_path="src/services/", refactoring_goal="reduce complexity")
-2. Reads .aid/refactoring-suggestion-*.md file
+1. Claude uses aid_suggest_refactoring(target_path="src/services/")
+2. Reads .aid/REFACTORING-SUGGESTION.*.md file
 3. Provides specific refactoring suggestions
 4. Shows before/after code examples
 ```
@@ -546,7 +544,6 @@ User: "Apply aid refactoring analysis to src/services/ for complexity"
 - **Visibility Control** - Include/exclude private, protected, internal members
 - **Implementation Details** - Optionally include function bodies
 - **Multi-format Output** - text, markdown, JSON formats
-- **Caching** - Intelligent caching for repeated analyses
 - **Direct CLI Integration** - Each tool directly calls the aid binary
 
 ## 📚 Supported Languages
@@ -557,7 +554,7 @@ Python, TypeScript, JavaScript, Go, Java, C#, Rust, Ruby, Swift, Kotlin, PHP, C+
 
 If you encounter issues:
 
-1. **Check aid binary**: Ensure `aid` is in your PATH or build directory
+1. **Check aid binary**: The server only uses the binary the install downloaded to its own `bin/` directory; it never looks in your PATH. If that file is missing or not executable, reinstall the package (`npm install @janreges/ai-distiller-mcp`) to download it again
 2. **Verify permissions**: The server needs read access to your project
 3. **Check logs**: Run with verbose logging to see detailed errors
 4. **File patterns**: Use comma-separated patterns like `*.go,*.py`

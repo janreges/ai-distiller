@@ -7,6 +7,8 @@ import * as path from "path";
 import * as os from "os";
 import * as fs from "fs";
 import { runAid, limitsFromEnv, AidRunError, SerialQueue } from "./run-aid.js";
+import { aiActionText, withIncompleteNotice, resolveBasePath, truncationNotice, spawnFailureMessage } from "./tool-text.js";
+import { listFiles, listFilesText, MAX_LIST_ENTRIES } from "./list-files.js";
 
 // Debug logging control
 const isDebug = process.env.DEBUG === 'true' || process.env.DEBUG === '1' || process.env.AID_MCP_DEBUG === 'true';
@@ -25,8 +27,9 @@ if (isDebug) {
   console.error(`[AID MCP] __dirname: ${__dirname}`);
 }
 
-// Check if binary exists
-if (!fs.existsSync(binaryPath)) {
+// Check if binary exists; the server cannot work without it
+function requireBinary(): void {
+  if (fs.existsSync(binaryPath)) return;
   console.error(`Error: AI Distiller binary not found at ${binaryPath}`);
   console.error('');
   console.error('This usually means the postinstall script failed to download the binary.');
@@ -43,6 +46,68 @@ if (!fs.existsSync(binaryPath)) {
   console.error('Platform info:', process.platform, process.arch);
   process.exit(1);
 }
+
+/**
+ * Input schemas of the tools that take few parameters, exported so tests can pin
+ * how the SDK treats unknown keys (a plain zod object drops them).
+ */
+export const TOOL_SCHEMAS: Record<string, z.ZodRawShape> = {
+  aid_hunt_bugs: {
+    target_path: z.string().describe("Path to file or directory to analyze for bugs"),
+    include_private: z.boolean().optional().describe("Include private members in analysis (default: true)"),
+    include_patterns: z.string().optional().describe("File patterns to include"),
+    exclude_patterns: z.string().optional().describe("File patterns to exclude")
+  },
+  aid_suggest_refactoring: {
+    target_path: z.string().describe("Path to file or directory to analyze"),
+    include_implementation: z.boolean().optional().describe("Include implementation details in analysis (default: true)"),
+    include_patterns: z.string().optional().describe("File patterns to include"),
+    exclude_patterns: z.string().optional().describe("File patterns to exclude")
+  },
+  aid_generate_diagram: {
+    target_path: z.string().describe("Path to file or directory to visualize"),
+    include_patterns: z.string().optional().describe("File patterns to include"),
+    exclude_patterns: z.string().optional().describe("File patterns to exclude")
+  },
+  aid_analyze_security: {
+    target_path: z.string().describe("Path to file or directory to analyze"),
+    include_private: z.boolean().optional().describe("Include private members in analysis (default: true)"),
+    include_implementation: z.boolean().optional().describe("Include implementation details (default: true)"),
+    include_patterns: z.string().optional().describe("File patterns to include"),
+    exclude_patterns: z.string().optional().describe("File patterns to exclude")
+  },
+  aid_generate_docs: {
+    target_path: z.string().describe("Path to file or directory to document"),
+    doc_type: z.enum(["single-file-docs", "multi-file-docs", "api-reference"]).optional().describe("Type of documentation to generate"),
+    include_patterns: z.string().optional().describe("File patterns to include"),
+    exclude_patterns: z.string().optional().describe("File patterns to exclude")
+  },
+  aid_analyze: {
+    ai_action: z.enum([
+      "flow-for-deep-file-to-file-analysis",
+      "flow-for-multi-file-docs",
+      "prompt-for-refactoring-suggestion",
+      "prompt-for-complex-codebase-analysis",
+      "prompt-for-security-analysis",
+      "prompt-for-performance-analysis",
+      "prompt-for-best-practices-analysis",
+      "prompt-for-bug-hunting",
+      "prompt-for-single-file-docs",
+      "prompt-for-diagrams"
+    ]).describe("AI action to perform"),
+    target_path: z.string().describe("Path to analyze"),
+    output_format: z.enum(["text", "md", "jsonl", "json-structured", "xml"]).optional().describe("Output format"),
+    include_private: z.boolean().optional().describe("Include private members"),
+    include_protected: z.boolean().optional().describe("Include protected members"),
+    include_internal: z.boolean().optional().describe("Include internal/package-private members"),
+    include_implementation: z.boolean().optional().describe("Include implementation"),
+    include_comments: z.boolean().optional().describe("Include comments"),
+    include_fields: z.boolean().optional().describe("Include fields/properties (default: true)"),
+    include_methods: z.boolean().optional().describe("Include methods/functions (default: true)"),
+    include_patterns: z.string().optional().describe("File patterns to include"),
+    exclude_patterns: z.string().optional().describe("File patterns to exclude")
+  },
+};
 
 /**
  * AI Distiller MCP Server
@@ -91,14 +156,12 @@ class AidDistillerServer {
       // Put stderr (progress/info) first, then the actual content
       let result = stderr.trim() ? stderr + '\n\n' : '';
       result += stdout;
-      if (truncated) {
-        result += `\n\n[Output incomplete: stopped at ${limits.maxOutputBytes} bytes. This is not the whole result. Narrow the request: pass a subdirectory or a single file, use include_patterns, or turn off include_implementation. The limit is set by AID_MCP_MAX_OUTPUT_BYTES.]`;
-      }
-      return result;
+      return truncated ? withIncompleteNotice(result, truncationNotice(limits.maxOutputBytes)) : result;
     } catch (error) {
       if (error instanceof AidRunError) {
         console.error(`[AID MCP] aid run failed (${error.kind}): ${error.message}`);
         if (error.kind === 'exit') throw new Error(error.stderr || error.message);
+        if (error.kind === 'spawn') throw new Error(spawnFailureMessage(binaryPath, cwd, error.message));
       }
       throw error;
     }
@@ -223,7 +286,7 @@ class AidDistillerServer {
       "distill_with_dependencies",
       {
         title: "Dependency-Aware Code Distillation",
-        description: "Analyzes call dependencies and returns distilled code of only relevant methods/classes up to specified depth. This advanced feature traces function/method calls across files and includes only the code that is actually called from the target file, creating focused distillations for deep code analysis.\n\nUSAGE: Perfect for understanding code execution flows, impact analysis, and creating focused context for AI assistants. Particularly useful for large codebases where you need to understand how specific functionality works across multiple files.",
+        description: "EXPERIMENTAL (regex-based, may miss or over-include calls): follows function/method calls across files up to the specified depth and returns distilled code of only what the target file appears to use.\n\nUSAGE: Perfect for understanding code execution flows, impact analysis, and creating focused context for AI assistants. Particularly useful for large codebases where you need to understand how specific functionality works across multiple files.",
         inputSchema: {
           file_path: z.string().describe("Target file to analyze"),
           max_depth: z.number().default(2).describe("Maximum depth to follow dependencies (default: 2)"),
@@ -285,13 +348,7 @@ class AidDistillerServer {
       {
         title: "Hunt for Bugs and Quality Issues",
         description: "Generates a bug hunting prompt with distilled code for AI agents to systematically identify potential bugs, logical errors, race conditions, and quality issues. Use when you need AI to analyze code for hidden bugs or perform a comprehensive code health check.\n\nOUTPUT: Generates a markdown file with bug hunting prompt and distilled code. The response includes the file path - AI agents should read this file and follow instructions to perform the actual bug analysis.",
-        inputSchema: {
-          target_path: z.string().describe("Path to file or directory to analyze for bugs"),
-          focus_area: z.string().optional().describe("Specific area to focus on (e.g., 'concurrency', 'memory leaks', 'error handling')"),
-          include_private: z.boolean().optional().describe("Include private members in analysis (default: true)"),
-          include_patterns: z.string().optional().describe("File patterns to include"),
-          exclude_patterns: z.string().optional().describe("File patterns to exclude")
-        }
+        inputSchema: TOOL_SCHEMAS.aid_hunt_bugs
       },
       async (params) => {
         const args = [
@@ -305,14 +362,10 @@ class AidDistillerServer {
         
         const result = await this.executeAidCommand(args);
         
-        // Extract file path from output
-        const filePathMatch = result.match(/📋 Bug Analysis Prompt: (.+)/);
-        const filePath = filePathMatch ? filePathMatch[1] : 'Check .aid/ directory';
-        
         return {
           content: [{
             type: "text",
-            text: `Bug hunting prompt generated successfully!\n\nPrompt file: ${filePath}\n\nAI agents should read this file and follow the instructions to perform bug analysis.\n\n${result}`
+            text: aiActionText('Bug hunting prompt requested.', 'AI agents should read this file and follow the instructions to perform bug analysis.', result, process.env.AID_ROOT || process.cwd())
           }]
         };
       }
@@ -323,13 +376,7 @@ class AidDistillerServer {
       {
         title: "Suggest Code Refactoring Opportunities",
         description: "Generates a refactoring analysis prompt with distilled code for AI agents to identify specific refactoring opportunities. Use when you need AI to suggest improvements for code quality, readability, maintainability, or performance.\n\nOUTPUT: Generates a markdown file with refactoring prompt and distilled code. The response includes the file path - AI agents should read this file and follow instructions to provide refactoring suggestions with before/after examples.",
-        inputSchema: {
-          target_path: z.string().describe("Path to file or directory to analyze"),
-          refactoring_goal: z.string().describe("Goal of refactoring (e.g., 'improve readability', 'reduce complexity', 'modernize code', 'extract common patterns')"),
-          include_implementation: z.boolean().optional().describe("Include implementation details in analysis (default: true)"),
-          include_patterns: z.string().optional().describe("File patterns to include"),
-          exclude_patterns: z.string().optional().describe("File patterns to exclude")
-        }
+        inputSchema: TOOL_SCHEMAS.aid_suggest_refactoring
       },
       async (params) => {
         const args = [
@@ -343,13 +390,10 @@ class AidDistillerServer {
         
         const result = await this.executeAidCommand(args);
         
-        const filePathMatch = result.match(/📋 Refactoring Analysis Prompt: (.+)/);
-        const filePath = filePathMatch ? filePathMatch[1] : 'Check .aid/ directory';
-        
         return {
           content: [{
             type: "text",
-            text: `Refactoring prompt generated for goal: "${params.refactoring_goal}"\n\nPrompt file: ${filePath}\n\nAI agents should read this file and follow the instructions to provide refactoring suggestions.\n\n${result}`
+            text: aiActionText('Refactoring prompt requested.', 'AI agents should read this file and follow the instructions to provide refactoring suggestions.', result, process.env.AID_ROOT || process.cwd())
           }]
         };
       }
@@ -360,12 +404,7 @@ class AidDistillerServer {
       {
         title: "Generate Architecture Diagrams",
         description: "Generates a diagram creation prompt with distilled code for AI agents to create architectural diagrams in Mermaid format. Use when you need AI to generate flowcharts, sequence diagrams, class diagrams, and architecture overviews.\n\nOUTPUT: Generates a markdown file with diagram generation prompt and distilled code. The response includes the file path - AI agents should read this file and follow instructions to create 10+ Mermaid diagrams.",
-        inputSchema: {
-          target_path: z.string().describe("Path to file or directory to visualize"),
-          diagram_focus: z.string().optional().describe("Specific diagram focus (e.g., 'data flow', 'class hierarchy', 'module dependencies', 'API endpoints')"),
-          include_patterns: z.string().optional().describe("File patterns to include"),
-          exclude_patterns: z.string().optional().describe("File patterns to exclude")
-        }
+        inputSchema: TOOL_SCHEMAS.aid_generate_diagram
       },
       async (params) => {
         const args = [
@@ -378,13 +417,10 @@ class AidDistillerServer {
         
         const result = await this.executeAidCommand(args);
         
-        const filePathMatch = result.match(/📋 Diagram Generation Prompt: (.+)/);
-        const filePath = filePathMatch ? filePathMatch[1] : 'Check .aid/ directory';
-        
         return {
           content: [{
             type: "text",
-            text: `Diagram generation prompt created!\n\nDiagram file: ${filePath}\n\nThe file contains prompts for generating 10 different architectural diagrams in Mermaid format.\n\n${result}`
+            text: aiActionText('Diagram generation prompt requested.', 'The file contains prompts for generating 10 different architectural diagrams in Mermaid format.', result, process.env.AID_ROOT || process.cwd())
           }]
         };
       }
@@ -395,14 +431,7 @@ class AidDistillerServer {
       {
         title: "Perform Security Analysis",
         description: "Generates a security analysis prompt with distilled code for AI agents to perform comprehensive security audits with OWASP Top 10 focus. Use when you need AI to identify vulnerabilities, security anti-patterns, and weak points.\n\nOUTPUT: Generates a markdown file with security audit prompt and distilled code. The response includes the file path - AI agents should read this file and follow instructions to analyze security vulnerabilities and suggest remediation.",
-        inputSchema: {
-          target_path: z.string().describe("Path to file or directory to analyze"),
-          security_focus: z.string().optional().describe("Specific security concern (e.g., 'SQL injection', 'XSS', 'authentication', 'authorization', 'crypto')"),
-          include_private: z.boolean().optional().describe("Include private members in analysis (default: true)"),
-          include_implementation: z.boolean().optional().describe("Include implementation details (default: true)"),
-          include_patterns: z.string().optional().describe("File patterns to include"),
-          exclude_patterns: z.string().optional().describe("File patterns to exclude")
-        }
+        inputSchema: TOOL_SCHEMAS.aid_analyze_security
       },
       async (params) => {
         const args = [
@@ -417,13 +446,10 @@ class AidDistillerServer {
         
         const result = await this.executeAidCommand(args);
         
-        const filePathMatch = result.match(/📋 Security Analysis Prompt: (.+)/);
-        const filePath = filePathMatch ? filePathMatch[1] : 'Check .aid/ directory';
-        
         return {
           content: [{
             type: "text",
-            text: `Security analysis prompt generated!\n\nPrompt file: ${filePath}\n\nAI agents should read this file and follow the instructions to perform security analysis with OWASP Top 10 focus.\n\n${result}`
+            text: aiActionText('Security analysis prompt requested.', 'AI agents should read this file and follow the instructions to perform security analysis with OWASP Top 10 focus.', result, process.env.AID_ROOT || process.cwd())
           }]
         };
       }
@@ -434,13 +460,7 @@ class AidDistillerServer {
       {
         title: "Generate Documentation",
         description: "Generates documentation creation prompts with distilled code for AI agents to create comprehensive documentation including API references, usage examples, and developer guides. Use when you need AI to generate technical documentation from code.\n\nOUTPUT: Generates markdown files with documentation prompts and distilled code. The response includes file paths - AI agents should read these files and follow instructions to create the actual documentation.",
-        inputSchema: {
-          target_path: z.string().describe("Path to file or directory to document"),
-          doc_type: z.enum(["single-file-docs", "multi-file-docs", "api-reference"]).optional().describe("Type of documentation to generate"),
-          audience: z.string().optional().describe("Target audience (e.g., 'developers', 'api-users', 'contributors', 'end-users')"),
-          include_patterns: z.string().optional().describe("File patterns to include"),
-          exclude_patterns: z.string().optional().describe("File patterns to exclude")
-        }
+        inputSchema: TOOL_SCHEMAS.aid_generate_docs
       },
       async (params) => {
         let aiAction = 'prompt-for-single-file-docs';
@@ -461,7 +481,7 @@ class AidDistillerServer {
         return {
           content: [{
             type: "text",
-            text: `Documentation generation prompt created!\n\nTarget audience: ${params.audience || 'general'}\n\n${result}`
+            text: aiActionText('Documentation generation prompt requested.', 'AI agents should read these files and follow the instructions to create the documentation.', result, process.env.AID_ROOT || process.cwd())
           }]
         };
       }
@@ -501,7 +521,7 @@ class AidDistillerServer {
         return {
           content: [{
             type: "text",
-            text: `Deep file-by-file analysis workflow generated!\n\n${result}\n\n💡 AI agents should read the Task List file and follow all instructions to systematically analyze each file.`
+            text: aiActionText('Deep file-by-file analysis workflow.', 'AI agents should read the task list and follow all instructions to systematically analyze each file.', result, process.env.AID_ROOT || process.cwd())
           }]
         };
       }
@@ -532,7 +552,7 @@ class AidDistillerServer {
         return {
           content: [{
             type: "text",
-            text: `Multi-file documentation workflow generated!\n\n${result}\n\n📚 The workflow includes prompts for creating interconnected documentation with proper cross-references.`
+            text: aiActionText('Multi-file documentation workflow.', 'The workflow includes prompts for creating interconnected documentation with proper cross-references.', result, process.env.AID_ROOT || process.cwd())
           }]
         };
       }
@@ -567,7 +587,7 @@ class AidDistillerServer {
         return {
           content: [{
             type: "text",
-            text: `Complex codebase analysis prompt generated!\n\n${result}\n\n🏗️ The prompt includes guidance for creating architecture diagrams and strategic recommendations.`
+            text: aiActionText('Complex codebase analysis prompt.', 'The prompt includes guidance for creating architecture diagrams and strategic recommendations.', result, process.env.AID_ROOT || process.cwd())
           }]
         };
       }
@@ -600,7 +620,7 @@ class AidDistillerServer {
         return {
           content: [{
             type: "text",
-            text: `Performance analysis prompt generated!\n\n${result}\n\n⚡ The analysis focuses on identifying bottlenecks and optimization opportunities.`
+            text: aiActionText('Performance analysis prompt.', 'The analysis focuses on identifying bottlenecks and optimization opportunities.', result, process.env.AID_ROOT || process.cwd())
           }]
         };
       }
@@ -633,7 +653,7 @@ class AidDistillerServer {
         return {
           content: [{
             type: "text",
-            text: `Best practices analysis prompt generated!\n\n${result}\n\n✨ The analysis covers code quality, design patterns, and clean code principles.`
+            text: aiActionText('Best practices analysis prompt.', 'The analysis covers code quality, design patterns, and clean code principles.', result, process.env.AID_ROOT || process.cwd())
           }]
         };
       }
@@ -649,32 +669,7 @@ class AidDistillerServer {
       {
         title: "Core AI Prompt Generation Engine",
         description: "Core AI Distiller prompt generation engine. Generates pre-configured prompts with distilled code for AI-driven analysis. Use specialized tools when available. This tool directly maps to aid --ai-action.\n\nIMPORTANT: This tool DOES NOT perform analysis - it generates prompt files that AI agents can then execute. The output includes file paths to the generated prompts. AI agents should read these files and follow the instructions within to perform the actual analysis.",
-        inputSchema: {
-          ai_action: z.enum([
-            "flow-for-deep-file-to-file-analysis",
-            "flow-for-multi-file-docs",
-            "prompt-for-refactoring-suggestion",
-            "prompt-for-complex-codebase-analysis",
-            "prompt-for-security-analysis",
-            "prompt-for-performance-analysis",
-            "prompt-for-best-practices-analysis",
-            "prompt-for-bug-hunting",
-            "prompt-for-single-file-docs",
-            "prompt-for-diagrams"
-          ]).describe("AI action to perform"),
-          target_path: z.string().describe("Path to analyze"),
-          user_query: z.string().optional().describe("Additional context or specific query"),
-          output_format: z.enum(["text", "md", "jsonl", "json-structured", "xml"]).optional().describe("Output format"),
-          include_private: z.boolean().optional().describe("Include private members"),
-          include_protected: z.boolean().optional().describe("Include protected members"),
-          include_internal: z.boolean().optional().describe("Include internal/package-private members"),
-          include_implementation: z.boolean().optional().describe("Include implementation"),
-          include_comments: z.boolean().optional().describe("Include comments"),
-          include_fields: z.boolean().optional().describe("Include fields/properties (default: true)"),
-          include_methods: z.boolean().optional().describe("Include methods/functions (default: true)"),
-          include_patterns: z.string().optional().describe("File patterns to include"),
-          exclude_patterns: z.string().optional().describe("File patterns to exclude")
-        }
+        inputSchema: TOOL_SCHEMAS.aid_analyze
       },
       async (params) => {
         const args = [
@@ -698,7 +693,7 @@ class AidDistillerServer {
         return {
           content: [{
             type: "text",
-            text: result
+            text: aiActionText('AI action ' + params.ai_action + '.', 'AI agents should read the file and follow the instructions within to perform the analysis.', result, process.env.AID_ROOT || process.cwd())
           }]
         };
       }
@@ -713,20 +708,21 @@ class AidDistillerServer {
       "list_files",
       {
         title: "List Project Files",
-        description: "Lists project files with language detection and statistics. Useful for exploring project structure before distillation.",
+        description: "Lists project files with language detection and statistics. Stops after 2000 entries and says so; pass a subdirectory or a pattern to narrow it. Useful for exploring project structure before distillation.",
         inputSchema: {
-          path: z.string().optional().describe("Path to list (default: current directory)"),
+          path: z.string().optional().describe("Path to list; relative paths resolve against the server root (default: the root)"),
           pattern: z.string().optional().describe("File pattern to match"),
           recursive: z.boolean().optional().describe("List recursively (default: true)")
         }
       },
       async (params) => {
-        const result = await this.listFiles(params);
+        const basePath = resolveBasePath(params.path, process.env.AID_ROOT || process.cwd());
+        const result = await listFiles(basePath, { pattern: params.pattern, recursive: params.recursive });
         
         return {
           content: [{
             type: "text",
-            text: JSON.stringify(result, null, 2)
+            text: listFilesText(result, MAX_LIST_ENTRIES)
           }]
         };
       }
@@ -745,12 +741,11 @@ class AidDistillerServer {
           server_version: pkg.version,
           protocol_version: "2025-03-26",
           root_path: process.env.AID_ROOT || process.cwd(),
-          cache_dir: path.join(process.env.AID_PROJECT_ROOT || process.cwd(), '.aid/cache/mcp'),
           tools: {
             core: [
               "distill_file - Extract structure from single files",
               "distill_directory - Extract structure from directories",
-              "distill_with_dependencies - Dependency-aware distillation with call graph analysis"
+              "distill_with_dependencies - EXPERIMENTAL regex-based dependency-aware distillation"
             ],
             specialized: [
               "aid_hunt_bugs - Systematic bug detection",
@@ -817,142 +812,6 @@ class AidDistillerServer {
   }
 
   /**
-   * List files implementation
-   */
-  private async listFiles(args: any): Promise<any> {
-    const fs = require('fs').promises;
-    const basePath = path.resolve(args.path || '.');
-    const pattern = args.pattern;
-    const recursive = args.recursive !== false;
-    
-    const results: any[] = [];
-    
-    function matchesPattern(filePath: string, patternStr?: string): boolean {
-      if (!patternStr) return true;
-      
-      const safePattern = patternStr
-        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-        .replace(/\*/g, '.*')
-        .replace(/\?/g, '.');
-      
-      try {
-        const regex = new RegExp(`^${safePattern}$`);
-        return regex.test(filePath);
-      } catch {
-        return false;
-      }
-    }
-    
-    const detectLanguage = (ext: string): string | null => {
-      return this.detectLanguage(ext);
-    };
-
-    async function scan(dir: string): Promise<void> {
-      try {
-        const items = await fs.readdir(dir, { withFileTypes: true });
-        
-        for (const item of items) {
-          const fullPath = path.join(dir, item.name);
-          const relativePath = path.relative(basePath, fullPath);
-          
-          if (item.isFile()) {
-            if (!pattern || matchesPattern(relativePath, pattern)) {
-              const stats = await fs.stat(fullPath);
-              
-              // Detect language
-              const ext = path.extname(item.name).toLowerCase();
-              const language = detectLanguage(ext);
-              
-              results.push({
-                path: relativePath,
-                size: stats.size,
-                modified: stats.mtime.toISOString(),
-                language: language || 'unknown',
-                extension: ext
-              });
-            }
-          } else if (item.isDirectory() && recursive && !item.name.startsWith('.')) {
-            await scan(fullPath);
-          }
-        }
-      } catch (err) {
-        // Skip directories we can't read
-      }
-    }
-    
-    await scan(basePath);
-    
-    return {
-      path: basePath,
-      file_count: results.length,
-      total_size: results.reduce((sum, f) => sum + f.size, 0),
-      languages: this.summarizeLanguages(results),
-      files: results
-    };
-  }
-
-  /**
-   * Detect language from file extension
-   */
-  private detectLanguage(ext: string): string | null {
-    const languageMap: Record<string, string> = {
-      '.py': 'python',
-      '.pyw': 'python',
-      '.pyi': 'python',
-      '.js': 'javascript',
-      '.mjs': 'javascript',
-      '.cjs': 'javascript',
-      '.jsx': 'javascript',
-      '.ts': 'typescript',
-      '.tsx': 'typescript',
-      '.d.ts': 'typescript',
-      '.go': 'go',
-      '.rs': 'rust',
-      '.rb': 'ruby',
-      '.rake': 'ruby',
-      '.gemspec': 'ruby',
-      '.java': 'java',
-      '.cs': 'csharp',
-      '.kt': 'kotlin',
-      '.kts': 'kotlin',
-      '.cpp': 'cpp',
-      '.cc': 'cpp',
-      '.cxx': 'cpp',
-      '.c++': 'cpp',
-      '.h': 'cpp',
-      '.hpp': 'cpp',
-      '.hh': 'cpp',
-      '.hxx': 'cpp',
-      '.h++': 'cpp',
-      '.php': 'php',
-      '.phtml': 'php',
-      '.php3': 'php',
-      '.php4': 'php',
-      '.php5': 'php',
-      '.php7': 'php',
-      '.phps': 'php',
-      '.inc': 'php',
-      '.swift': 'swift'
-    };
-    
-    return languageMap[ext] || null;
-  }
-
-  /**
-   * Summarize languages in file list
-   */
-  private summarizeLanguages(files: any[]): Record<string, number> {
-    const summary: Record<string, number> = {};
-    
-    for (const file of files) {
-      const lang = file.language || 'unknown';
-      summary[lang] = (summary[lang] || 0) + 1;
-    }
-    
-    return summary;
-  }
-
-  /**
    * Connect to transport and start server
    */
   async connect(): Promise<void> {
@@ -985,30 +844,39 @@ Protocol: 2025-03-26`);
   }
 }
 
-// Handle process termination gracefully
-process.on('SIGINT', () => {
-  if (isDebug) console.error('[AID MCP] Received SIGINT, shutting down gracefully');
-  process.exit(0);
-});
+/** Starts the stdio server. Called when this file is run directly, never on import. */
+export function startServer(): void {
+  requireBinary();
 
-process.on('SIGTERM', () => {
-  if (isDebug) console.error('[AID MCP] Received SIGTERM, shutting down gracefully');
-  process.exit(0);
-});
+  // Handle process termination gracefully
+  process.on('SIGINT', () => {
+    if (isDebug) console.error('[AID MCP] Received SIGINT, shutting down gracefully');
+    process.exit(0);
+  });
 
-process.on('uncaughtException', (error) => {
-  console.error('[AID MCP] Uncaught exception:', error);
-  process.exit(1);
-});
+  process.on('SIGTERM', () => {
+    if (isDebug) console.error('[AID MCP] Received SIGTERM, shutting down gracefully');
+    process.exit(0);
+  });
 
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('[AID MCP] Unhandled rejection at:', promise, 'reason:', reason);
-  process.exit(1);
-});
+  process.on('uncaughtException', (error) => {
+    console.error('[AID MCP] Uncaught exception:', error);
+    process.exit(1);
+  });
 
-// Start the server
-const server = new AidDistillerServer();
-server.connect().catch(error => {
-  console.error('[AID MCP] Failed to start server:', error);
-  process.exit(1);
-});
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('[AID MCP] Unhandled rejection at:', promise, 'reason:', reason);
+    process.exit(1);
+  });
+
+  // Start the server
+  const server = new AidDistillerServer();
+  server.connect().catch(error => {
+    console.error('[AID MCP] Failed to start server:', error);
+    process.exit(1);
+  });
+}
+
+if (require.main === module) {
+  startServer();
+}
