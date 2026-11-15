@@ -89,11 +89,13 @@ AI ACTIONS:
   flow-for-multi-file-docs             Generate structured documentation workflow for multiple files
 
 CORE OPTIONS:
-  -o, --output FILE           Output file (default: .aid/ folder or .aid.*.txt)
+  -o, --output FILE           Output file (default: .aid/aid.<name>[.<options>].<ext> in the project root);
+                              AI actions always write to --ai-output and reject -o
       --ai-action ACTION      AI analysis action (see list above)
       --ai-output FILE        Output path for AI action (default: action-specific directory/file)
       --format FORMAT         Output format: text|md|jsonl|json-structured|xml (default: text)
-      --stdout                Print to stdout (in addition to file output)
+      --stdout                Print to stdout; no file is written unless -o is also given;
+                              AI actions always write to --ai-output and reject -o
   -w, --workers NUM           Parallel workers (0=auto, 1=serial, default: 0)
       --file-path-type TYPE   Path format: relative|absolute (default: relative)
 
@@ -126,10 +128,12 @@ AVAILABLE COMMANDS:{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "he
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}
 
 OUTPUT FILE NAMING:
-  Default outputs use .aid/ folder or .aid.*.txt files for easy recognition in git status.
-  Use --stdout for direct output, but note: large codebases can generate MBs of text
-  that exceed AI tool context limits. Some actions (like flow-for-deep-file-to-file-analysis)
-  create multiple markdown files and directory structures.
+  By default the output is written to .aid/aid.<name>[.<options>].<ext> in the project root and nothing is printed.
+  With --stdout the output is printed and no file is written, unless -o FILE is also given (then both happen).
+  Input piped to stdin (or "aid -") is always printed; -o FILE also writes it to FILE.
+  AI actions always write to --ai-output and reject -o; with --stdout a prompt action also prints its prompt.
+  Large codebases can generate MBs of text that exceed AI tool context limits. Some actions
+  (like flow-for-deep-file-to-file-analysis) create multiple markdown files and directory structures.
 
 For complete documentation and examples: aid --help-extended
 
@@ -217,7 +221,7 @@ OPTIONS
 
 Primary Options:
     <path>                      Path to source file or directory [required]
-    -o, --output FILE           Write output to file (default: .aid/ folder or .aid.*.txt)
+    -o, --output FILE           Write output to file (default: .aid/aid.<name>[.<options>].<ext> in the project root)
     --ai-action ACTION          Use predefined AI action configuration
     --ai-output FILE            Custom output path for AI action
     --format FORMAT             Output format (text|md|jsonl|json-structured|xml)

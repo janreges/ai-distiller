@@ -113,7 +113,7 @@ mode and outputs formatted commit history instead of processing source files.
 
 BASIC OPTIONS:
   -o, --output <file>          Output file (default: auto-generated)
-  --stdout                     Print to stdout instead of file
+  --stdout                     Print to stdout; no file is written unless -o is also given
   --format <type>              Output format: text|md|jsonl|json-structured|xml
                               (default: text)
 
@@ -260,7 +260,7 @@ func Execute() error {
 		fmt.Fprintln(os.Stderr, "  aid --help-extended    # Show extended documentation")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Common flags:")
-		fmt.Fprintln(os.Stderr, "  --stdout               # Print to stdout instead of file")
+		fmt.Fprintln(os.Stderr, "  --stdout               # Print to stdout; no file is written unless -o is also given; AI actions always write to --ai-output and reject -o")
 		fmt.Fprintln(os.Stderr, "  --format md            # Output in Markdown format")
 		fmt.Fprintln(os.Stderr, "  --private=1            # Include private members")
 		fmt.Fprintln(os.Stderr, "  --implementation=1     # Include function bodies")
@@ -283,8 +283,8 @@ func init() {
 
 func initFlags() {
 	// Output flags
-	rootCmd.Flags().StringVarP(&outputFile, "output", "o", "", "Output file path (default: .aid.<dir>.[options].txt)")
-	rootCmd.Flags().BoolVar(&outputToStdout, "stdout", false, "Print to stdout (in addition to file)")
+	rootCmd.Flags().StringVarP(&outputFile, "output", "o", "", "Output file (default: .aid/aid.<name>[.<options>].<ext> in the project root); AI actions always write to --ai-output and reject -o")
+	rootCmd.Flags().BoolVar(&outputToStdout, "stdout", false, "Print to stdout; no file is written unless -o is also given; AI actions always write to --ai-output and reject -o")
 	rootCmd.Flags().StringVar(&outputFormat, "format", "text", "Output format: md|text|jsonl|json-structured|xml (default: text)")
 
 	// Legacy processing flags (deprecated)
@@ -476,6 +476,9 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 	
 	// Check if AI action is specified
 	if aiAction != "" {
+		if outputFile != "" {
+			return fmt.Errorf("-o/--output does not apply to --ai-action; use --ai-output to choose where the action writes")
+		}
 		return handleAIAction(ctx, absPath)
 	}
 
@@ -638,8 +641,9 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 		outputStr = cleanedStr
 	}
 
-	// Write to file if not stdout-only
-	if outputFile != "" && !outputToStdout {
+	// Write the file whenever an output file is set: the auto-generated name
+	// (only computed without --stdout) or an explicit -o, with or without --stdout.
+	if outputFile != "" {
 		if err := os.WriteFile(outputFile, []byte(outputStr), 0644); err != nil {
 			return fmt.Errorf("failed to write output file: %w", err)
 		}
@@ -881,9 +885,14 @@ func processStdinWithContext(ctx context.Context) error {
 		return fmt.Errorf("failed to format output: %w", err)
 	}
 	
-	// Always write to stdout for stdin input
+	// Stdin output is always printed; -o FILE also writes it to FILE
+	if outputFile != "" {
+		if err := os.WriteFile(outputFile, []byte(output.String()), 0644); err != nil {
+			return fmt.Errorf("failed to write output file: %w", err)
+		}
+	}
 	fmt.Print(output.String())
-	
+
 	return nil
 }
 

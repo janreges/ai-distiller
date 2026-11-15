@@ -181,3 +181,61 @@ func TestUnknownLangListsRegisteredNames(t *testing.T) {
 	assert.Contains(t, stderr, `unknown language "zig"; supported: `+
 		"cpp, csharp, go, java, javascript, kotlin, php, python, ruby, rust, swift, typescript")
 }
+
+// projectWithSample makes a temp project (marker file .aidrc) holding one Python file.
+func projectWithSample(t *testing.T) string {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".aidrc"), nil, 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "m.py"), []byte("def visible():\n    return 1\n"), 0o644))
+	return dir
+}
+
+func TestStdoutWithOutputWritesBoth(t *testing.T) {
+	dir := projectWithSample(t)
+	out, _, code := aidRun(t, dir, nil, "m.py", "--stdout", "-o", "out.txt", "--summary-type=off")
+	require.Equal(t, 0, code)
+	assert.Contains(t, out, "visible")
+	written, err := os.ReadFile(filepath.Join(dir, "out.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, out, string(written))
+}
+
+// Stdin output is always printed; -o FILE also writes it to FILE.
+func TestStdinWithOutputWritesFileAndPrints(t *testing.T) {
+	dir := projectWithSample(t)
+	out, stderr, code := aidRun(t, dir, strings.NewReader(stdinSnippet), "--lang", "python", "-o", "out.txt")
+	require.Equal(t, 0, code, stderr)
+	assert.Contains(t, out, "from_stdin")
+	written, err := os.ReadFile(filepath.Join(dir, "out.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, out, string(written))
+}
+
+// An AI action writes to --ai-output, so -o with --ai-action is an error, not ignored.
+func TestOutputWithAIActionFails(t *testing.T) {
+	dir := projectWithSample(t)
+	_, stderr, code := aidRun(t, dir, nil, ".", "--ai-action", "prompt-for-bug-hunting", "-o", "out.md")
+	assert.Equal(t, 1, code)
+	assert.Contains(t, stderr, "--ai-output")
+	_, err := os.Stat(filepath.Join(dir, ".aid"))
+	assert.True(t, os.IsNotExist(err), "the action must not run")
+}
+
+func TestStdoutAloneWritesNoFile(t *testing.T) {
+	dir := projectWithSample(t)
+	out, _, code := aidRun(t, dir, nil, "m.py", "--stdout", "--summary-type=off")
+	require.Equal(t, 0, code)
+	assert.Contains(t, out, "visible")
+	_, err := os.Stat(filepath.Join(dir, ".aid"))
+	assert.True(t, os.IsNotExist(err), ".aid must not be created by --stdout")
+}
+
+func TestDefaultWritesFileAndPrintsNothing(t *testing.T) {
+	dir := projectWithSample(t)
+	out, _, code := aidRun(t, dir, nil, "m.py", "--summary-type=off")
+	require.Equal(t, 0, code)
+	assert.Empty(t, out)
+	written, err := os.ReadFile(filepath.Join(dir, ".aid", "aid.m.py.txt"))
+	require.NoError(t, err)
+	assert.Contains(t, string(written), "visible")
+}
