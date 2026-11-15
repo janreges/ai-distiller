@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/janreges/ai-distiller/internal/debug"
 	"github.com/janreges/ai-distiller/internal/ignore"
@@ -339,7 +340,7 @@ func (p *Processor) processDirectory(dir string, opts ProcessOptions) (*ir.Disti
 		}
 
 		// Check include/exclude patterns
-		if !shouldIncludeFile(path, opts.IncludePatterns, opts.ExcludePatterns) {
+		if !MatchesPatterns(path, opts.IncludePatterns, opts.ExcludePatterns) {
 			return nil
 		}
 
@@ -412,10 +413,25 @@ func (p *Processor) GetLanguage(filename string) string {
 	return proc.Language()
 }
 
-// shouldIncludeFile checks if a file should be included based on include/exclude patterns
-func shouldIncludeFile(filePath string, includePatterns, excludePatterns []string) bool {
+// MatchesPatterns reports whether a file passes the include/exclude patterns; it is the single matcher used by --include/--exclude everywhere.
+// filePath is the path below the walk root (see matchPatterns).
+func MatchesPatterns(filePath string, includePatterns, excludePatterns []string) bool {
+	return matchPatterns(filePath, filePath, includePatterns, excludePatterns)
+}
+
+// matchPatterns applies the include/exclude patterns to one file. relPath is
+// the file's path below the walk root; fullPath is the path as walked, which
+// ends with relPath (pass relPath twice when there is nothing else).
+//
+// A pattern without "/" is matched against the segments of relPath (exclude)
+// or its base name (include), so the names of the walk root and of the
+// directories above it never match. A pattern with "/" is matched against the
+// end of fullPath, and a pattern that matches a directory below the walk root
+// covers every file in that directory.
+func matchPatterns(relPath, fullPath string, includePatterns, excludePatterns []string) bool {
 	// Normalize path separators for consistent matching
-	normalizedPath := filepath.ToSlash(filePath)
+	normalizedRel := filepath.ToSlash(relPath)
+	normalizedPath := filepath.ToSlash(fullPath)
 	
 	// Check exclude patterns first
 	for _, pattern := range excludePatterns {
@@ -428,27 +444,16 @@ func shouldIncludeFile(filePath string, includePatterns, excludePatterns []strin
 		
 		// Check for directory exclusion patterns (e.g., "vendor/**", "*/test/*")
 		if strings.Contains(normalizedPattern, "/") {
-			// For relative patterns, check if the path ends with the pattern
-			// This handles cases like "internal/parser/grammars/*" matching
-			// "/home/user/project/internal/parser/grammars/file.go"
-			if !strings.HasPrefix(normalizedPattern, "/") && !strings.HasPrefix(normalizedPattern, "**") {
-				// Check if any suffix of the path matches the pattern
-				pathParts := strings.Split(normalizedPath, "/")
-				for i := 0; i < len(pathParts); i++ {
-					subPath := strings.Join(pathParts[i:], "/")
-					if matchesPathPattern(subPath, normalizedPattern) {
-						return false
-					}
-				}
-			} else if matchesPathPattern(normalizedPath, normalizedPattern) {
+			if matchesSlashPattern(normalizedRel, normalizedPath, normalizedPattern) {
 				return false
 			}
 		} else {
 			// Simple pattern without a path separator. Match it against every
-			// path segment (the basename is the last segment) so that a pattern
-			// like "*migrations*" also excludes files inside a directory named
-			// "migrations", not only files whose basename matches (issue #9).
-			for _, segment := range strings.Split(normalizedPath, "/") {
+			// path segment below the walk root (the basename is the last
+			// segment) so that a pattern like "*migrations*" also excludes files
+			// inside a directory named "migrations", not only files whose
+			// basename matches (issue #9).
+			for _, segment := range strings.Split(normalizedRel, "/") {
 				if segment == "" {
 					continue
 				}
@@ -471,22 +476,12 @@ func shouldIncludeFile(filePath string, includePatterns, excludePatterns []strin
 			
 			// Check for path patterns
 			if strings.Contains(normalizedPattern, "/") {
-				// For relative patterns, check if the path ends with the pattern
-				if !strings.HasPrefix(normalizedPattern, "/") && !strings.HasPrefix(normalizedPattern, "**") {
-					// Check if any suffix of the path matches the pattern
-					pathParts := strings.Split(normalizedPath, "/")
-					for i := 0; i < len(pathParts); i++ {
-						subPath := strings.Join(pathParts[i:], "/")
-						if matchesPathPattern(subPath, normalizedPattern) {
-							return true
-						}
-					}
-				} else if matchesPathPattern(normalizedPath, normalizedPattern) {
+				if matchesSlashPattern(normalizedRel, normalizedPath, normalizedPattern) {
 					return true
 				}
 			} else {
 				// Simple filename pattern
-				if matched, _ := filepath.Match(pattern, filepath.Base(filePath)); matched {
+				if matched, _ := filepath.Match(pattern, filepath.Base(relPath)); matched {
 					return true
 				}
 			}
@@ -497,36 +492,47 @@ func shouldIncludeFile(filePath string, includePatterns, excludePatterns []strin
 	return true
 }
 
+// matchesSlashPattern reports whether a pattern containing "/" matches the file
+// (fullPath) or one of the directories it lies in below the walk root.
+func matchesSlashPattern(relPath, fullPath, pattern string) bool {
+	if matchesPathSuffix(fullPath, pattern) {
+		return true
+	}
+	base := len(fullPath) - len(relPath)
+	if base < 0 || fullPath[base:] != relPath || base > 0 && fullPath[base-1] != '/' {
+		fullPath, base = relPath, 0
+	}
+	for i := len(relPath) - 1; i > 0; i-- {
+		if relPath[i] == '/' && matchesPathSuffix(fullPath[:base+i], pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchesPathSuffix matches a pattern containing "/" against path. A relative
+// pattern may match any trailing part of the path that starts at a "/", so
+// "internal/parser/grammars/*" matches
+// "/home/user/project/internal/parser/grammars/file.go"; a pattern that starts
+// with "/" or "**" must match the whole path.
+func matchesPathSuffix(path, pattern string) bool {
+	if strings.HasPrefix(pattern, "/") || strings.HasPrefix(pattern, "**") {
+		return matchesPathPattern(path, pattern)
+	}
+	pathParts := strings.Split(path, "/")
+	for i := 0; i < len(pathParts); i++ {
+		if matchesPathPattern(strings.Join(pathParts[i:], "/"), pattern) {
+			return true
+		}
+	}
+	return false
+}
+
 // matchesPathPattern checks if a path matches a pattern that may contain directory components
 func matchesPathPattern(path, pattern string) bool {
 	// Handle ** for recursive directory matching
 	if strings.Contains(pattern, "**") {
-		// Convert ** to a regex pattern
-		regexPattern := strings.ReplaceAll(pattern, "**", ".*")
-		regexPattern = strings.ReplaceAll(regexPattern, "*", "[^/]*")
-		
-		// If pattern doesn't start with **, check if it's a relative path pattern
-		if !strings.HasPrefix(pattern, "**") && !strings.HasPrefix(pattern, "/") {
-			// For patterns like "internal/**/*.go", we need to match the path suffix
-			// Check if path contains the pattern as a suffix match
-			re, err := regexp.Compile(regexPattern)
-			if err == nil {
-				// Check if any suffix of the path matches
-				parts := strings.Split(path, "/")
-				for i := 0; i < len(parts); i++ {
-					subPath := strings.Join(parts[i:], "/")
-					if re.MatchString(subPath) {
-						return true
-					}
-				}
-			}
-			return false
-		}
-		
-		// For patterns starting with ** or /, do full path match
-		regexPattern = "^" + regexPattern + "$"
-		matched, _ := regexp.MatchString(regexPattern, path)
-		return matched
+		return globRegexp(pattern).MatchString(path)
 	}
 	
 	// Handle patterns with specific directory paths
@@ -544,6 +550,49 @@ func matchesPathPattern(path, pattern string) bool {
 	// Try standard glob matching on full path
 	matched, _ := filepath.Match(pattern, path)
 	return matched
+}
+
+// globRegexps caches the compiled "**" patterns: they are matched once per
+// walked file and directory level.
+var globRegexps sync.Map
+
+// globRegexp returns the anchored regular expression for a glob containing "**".
+func globRegexp(pattern string) *regexp.Regexp {
+	if re, ok := globRegexps.Load(pattern); ok {
+		return re.(*regexp.Regexp)
+	}
+	re := regexp.MustCompile("^" + globToRegexp(pattern) + "$")
+	globRegexps.Store(pattern, re)
+	return re
+}
+
+// globToRegexp converts a glob containing "**" into a regular expression body
+// (without anchors). "**/" matches zero or more directories, "**" matches any
+// characters including "/", "*" matches within one segment, "?" one character,
+// and every other character is matched literally.
+func globToRegexp(pattern string) string {
+	var sb strings.Builder
+	for i := 0; i < len(pattern); i++ {
+		switch c := pattern[i]; c {
+		case '*':
+			if i+1 < len(pattern) && pattern[i+1] == '*' {
+				if i+2 < len(pattern) && pattern[i+2] == '/' {
+					sb.WriteString("(?:.*/)?")
+					i += 2
+				} else {
+					sb.WriteString(".*")
+					i++
+				}
+			} else {
+				sb.WriteString("[^/]*")
+			}
+		case '?':
+			sb.WriteString("[^/]")
+		default:
+			sb.WriteString(regexp.QuoteMeta(string(c)))
+		}
+	}
+	return sb.String()
 }
 
 // isDefaultIgnoredDir checks if a directory should be ignored by default

@@ -2,7 +2,6 @@ package aiactions
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -42,7 +41,7 @@ func (a *MultiFileDocsFlowAction) ExecuteFlow(ctx *ai.ActionContext) (*ai.FlowRe
 		ctx.Timestamp.Year(), ctx.Timestamp.Month(), ctx.Timestamp.Day())
 
 	// Collect source files from the project
-	sourceFiles, err := a.collectSourceFiles(ctx.ProjectPath, ctx.IncludePatterns, ctx.ExcludePatterns)
+	sourceFiles, err := collectSourceFiles(ctx.ProjectPath, ctx.IncludePatterns, ctx.ExcludePatterns)
 	if err != nil {
 		return nil, fmt.Errorf("failed to collect source files: %w", err)
 	}
@@ -91,66 +90,6 @@ func (a *MultiFileDocsFlowAction) ExecuteFlow(ctx *ai.ActionContext) (*ai.FlowRe
 		Files:    files,
 		Messages: messages,
 	}, nil
-}
-
-func (a *MultiFileDocsFlowAction) collectSourceFiles(projectPath string, includePatterns, excludePatterns []string) ([]string, error) {
-	var files []string
-
-	err := filepath.Walk(projectPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if info.IsDir() {
-			// Skip .aid directories completely
-			if filepath.Base(path) == ".aid" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		// Skip files containing '.aid.' anywhere in filename
-		basename := filepath.Base(path)
-		if strings.Contains(basename, ".aid.") {
-			return nil
-		}
-
-		// Check if file matches include patterns (if any)
-		if len(includePatterns) > 0 {
-			matched := false
-			for _, pattern := range includePatterns {
-				if matched, _ := filepath.Match(pattern, filepath.Base(path)); matched {
-					matched = true
-					break
-				}
-			}
-			if !matched {
-				return nil
-			}
-		}
-
-		// Check if file matches exclude patterns
-		for _, pattern := range excludePatterns {
-			if matched, _ := filepath.Match(pattern, filepath.Base(path)); matched {
-				return nil
-			}
-		}
-
-		// Basic source file detection
-		ext := strings.ToLower(filepath.Ext(path))
-		sourceExts := []string{".go", ".py", ".js", ".ts", ".java", ".c", ".cpp", ".h", ".hpp", ".rs", ".rb", ".php", ".swift", ".kt", ".cs"}
-
-		for _, sourceExt := range sourceExts {
-			if ext == sourceExt {
-				files = append(files, path)
-				break
-			}
-		}
-
-		return nil
-	})
-
-	return files, err
 }
 
 func (a *MultiFileDocsFlowAction) generateDocsTaskList(basename, date string, sourceFiles []string, docsDir string, projectPath string) string {

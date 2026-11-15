@@ -2,7 +2,6 @@ package aiactions
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -42,7 +41,7 @@ func (a *DeepAnalysisFlowAction) ExecuteFlow(ctx *ai.ActionContext) (*ai.FlowRes
 		ctx.Timestamp.Year(), ctx.Timestamp.Month(), ctx.Timestamp.Day())
 
 	// Collect source files from the project
-	sourceFiles, err := a.collectSourceFiles(ctx.ProjectPath, ctx.IncludePatterns, ctx.ExcludePatterns)
+	sourceFiles, err := collectSourceFiles(ctx.ProjectPath, ctx.IncludePatterns, ctx.ExcludePatterns)
 	if err != nil {
 		return nil, fmt.Errorf("failed to collect source files: %w", err)
 	}
@@ -78,125 +77,6 @@ func (a *DeepAnalysisFlowAction) ExecuteFlow(ctx *ai.ActionContext) (*ai.FlowRes
 	}
 
 	return result, nil
-}
-
-// collectSourceFiles is similar to the existing implementation but adapted for the new structure
-func (a *DeepAnalysisFlowAction) collectSourceFiles(projectPath string, includePatterns, excludePatterns []string) ([]string, error) {
-	var sourceFiles []string
-
-	// Load git submodules to skip them
-	// gitSubmodules := make(map[string]bool) // TODO: Implement later
-
-	// Define source file extensions
-	sourceExtensions := map[string]bool{
-		".py": true, ".js": true, ".ts": true, ".tsx": true, ".jsx": true,
-		".go": true, ".java": true, ".kt": true, ".kts": true,
-		".rs": true, ".swift": true, ".rb": true, ".php": true,
-		".cpp": true, ".cc": true, ".cxx": true, ".c": true, ".h": true, ".hpp": true,
-		".cs": true, ".fs": true, ".vb": true,
-		".scala": true, ".clj": true, ".cljs": true,
-		".vue": true, ".svelte": true, ".astro": true,
-		".html": true, ".htm": true, ".css": true, ".scss": true, ".sass": true,
-		".json": true, ".yaml": true, ".yml": true, ".toml": true,
-		".md": true, ".mdx": true, ".rst": true, ".txt": true,
-		".sh": true, ".bash": true, ".sql": true, ".graphql": true,
-	}
-
-	// Skip these directories
-	skipDirs := map[string]bool{
-		"node_modules": true, ".git": true, ".svn": true, ".hg": true,
-		"__pycache__": true, ".pytest_cache": true,
-		"target": true, "build": true, "dist": true, "out": true,
-		".aid": true, "vendor": true, ".vscode": true, ".idea": true,
-		"coverage": true, ".coverage": true, ".nyc_output": true,
-		"grammars": true, "test-data": true, "testdata": true,
-		"docs": true, "examples": true, "assets": true, "static": true,
-	}
-
-	err := filepath.Walk(projectPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if info.IsDir() {
-			dirName := filepath.Base(path)
-
-			// Skip directories
-			if skipDirs[dirName] || strings.HasPrefix(dirName, ".") && dirName != "." {
-				return filepath.SkipDir
-			}
-
-			// Check for tree-sitter related content
-			relPath, _ := filepath.Rel(projectPath, path)
-			if strings.Contains(relPath, "grammars") || strings.Contains(relPath, "tree-sitter") {
-				return filepath.SkipDir
-			}
-
-			return nil
-		}
-
-		// Check if it's a source file
-		ext := strings.ToLower(filepath.Ext(path))
-		if sourceExtensions[ext] {
-			relPath, err := filepath.Rel(projectPath, path)
-			if err == nil {
-				// Skip generated files
-				fileName := filepath.Base(relPath)
-				if strings.HasPrefix(fileName, ".aid.") ||
-					strings.HasPrefix(fileName, ".") ||
-					strings.Contains(fileName, "generated") {
-					return nil
-				}
-
-				// Apply include/exclude filters
-				if a.shouldIncludeFile(relPath, includePatterns, excludePatterns) {
-					sourceFiles = append(sourceFiles, relPath)
-				}
-			}
-		}
-
-		return nil
-	})
-
-	return sourceFiles, err
-}
-
-// shouldIncludeFile checks if a file should be included based on patterns
-func (a *DeepAnalysisFlowAction) shouldIncludeFile(filePath string, includePatterns, excludePatterns []string) bool {
-	// Check exclude patterns first
-	for _, excludePattern := range excludePatterns {
-		if excludePattern != "" {
-			matched, _ := filepath.Match(excludePattern, filePath)
-			if matched {
-				return false
-			}
-			// Also check filename only
-			matched, _ = filepath.Match(excludePattern, filepath.Base(filePath))
-			if matched {
-				return false
-			}
-		}
-	}
-
-	// If include patterns specified, file must match one
-	if len(includePatterns) > 0 {
-		for _, includePattern := range includePatterns {
-			if includePattern != "" {
-				matched, _ := filepath.Match(includePattern, filePath)
-				if matched {
-					return true
-				}
-				// Also check filename only
-				matched, _ = filepath.Match(includePattern, filepath.Base(filePath))
-				if matched {
-					return true
-				}
-			}
-		}
-		return false
-	}
-
-	return true
 }
 
 // generateTaskList creates the task list content

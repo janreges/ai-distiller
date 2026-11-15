@@ -105,7 +105,7 @@ func (p *Processor) processDirectoryConcurrent(dir string, opts ProcessOptions) 
 		}
 
 		// Check include/exclude patterns
-		if !shouldIncludeFile(path, opts.IncludePatterns, opts.ExcludePatterns) {
+		if !MatchesPatterns(path, opts.IncludePatterns, opts.ExcludePatterns) {
 			return nil
 		}
 
