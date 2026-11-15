@@ -439,29 +439,20 @@ func (f *JavaFormatter) formatField(w io.Writer, field *ir.DistilledField, inden
 	return nil
 }
 
+// formatComment writes a doc comment in the Javadoc layout and a line or
+// block comment as written (writeCStyleComment).
 func (f *JavaFormatter) formatComment(w io.Writer, comment *ir.DistilledComment, indent string) error {
-	lines := strings.Split(comment.Text, "\n")
-	if comment.Format == "doc" || strings.HasPrefix(comment.Text, "/**") {
-		// Javadoc comment
-		fmt.Fprintf(w, "%s/**\n", indent)
-		for _, line := range lines {
-			if !strings.HasPrefix(line, "/**") && !strings.HasSuffix(line, "*/") {
-				fmt.Fprintf(w, "%s * %s\n", indent, line)
-			}
-		}
-		fmt.Fprintf(w, "%s */\n", indent)
-	} else if len(lines) > 1 {
-		// Multi-line comment
-		fmt.Fprintf(w, "%s/*\n", indent)
-		for _, line := range lines {
+	if !comment.IsDoc() {
+		writeCStyleComment(w, comment, indent)
+		return nil
+	}
+	fmt.Fprintf(w, "%s/**\n", indent)
+	for _, line := range strings.Split(comment.Text, "\n") {
+		if !strings.HasPrefix(line, "/**") && !strings.HasSuffix(line, "*/") {
 			fmt.Fprintf(w, "%s * %s\n", indent, line)
 		}
-		fmt.Fprintf(w, "%s */\n", indent)
-	} else {
-		// Single line comment
-		fmt.Fprintf(w, "%s// %s\n", indent, comment.Text)
 	}
-
+	fmt.Fprintf(w, "%s */\n", indent)
 	return nil
 }
 

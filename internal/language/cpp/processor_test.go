@@ -313,3 +313,131 @@ func TestCpp_OutOfClassDefinitionVisibilityLayouts(t *testing.T) {
 		})
 	}
 }
+
+// commentsOf returns the format and text of every comment among nodes.
+func commentsOf(nodes []ir.DistilledNode) [][2]string {
+	var got [][2]string
+	for _, c := range nodes {
+		if cm, ok := c.(*ir.DistilledComment); ok {
+			got = append(got, [2]string{cm.Format, cm.Text})
+		}
+	}
+	return got
+}
+
+func TestCpp_Comments(t *testing.T) {
+	file := parseCpp(t, "// line c\n\n/** Doc c */\nint f();\n")
+	assert.Equal(t, [][2]string{{ir.CommentLine, "line c"}, {ir.CommentDoc, "Doc c"}}, commentsOf(file.Children))
+}
+
+// labels names every node: "doc:<text>" (with "inner " for an inner doc),
+// "line:<text>" and "block:<text>" for comments, the name for the rest.
+func labels(nodes []ir.DistilledNode) []string {
+	var out []string
+	for _, n := range nodes {
+		switch n := n.(type) {
+		case *ir.DistilledComment:
+			prefix := n.Format + ":"
+			if n.Inner {
+				prefix = "inner " + prefix
+			}
+			out = append(out, prefix+n.Text)
+		case *ir.DistilledFunction:
+			out = append(out, n.Name)
+		case *ir.DistilledField:
+			out = append(out, n.Name)
+		case *ir.DistilledClass:
+			out = append(out, n.Name)
+		case *ir.DistilledStruct:
+			out = append(out, n.Name)
+		case *ir.DistilledImport:
+			out = append(out, "import "+n.Module)
+		case *ir.DistilledPackage:
+			out = append(out, "namespace "+n.Name)
+		}
+	}
+	return out
+}
+
+// Doxygen reads ///, //!, /** */ and /*! */ as the doc of the next
+// declaration; a run of /// lines is one doc.
+func TestCpp_DoxygenDocs(t *testing.T) {
+	file := parseCpp(t, "//! Qt line doc\nint a();\n/*! Qt block doc */\nint b();\n/// first\n/// second\nint c();\n/// alone\n\n/// apart\nint d();\n")
+	assert.Equal(t, []string{"doc:Qt line doc", "a", "doc:Qt block doc", "b", "doc:first\nsecond", "c", "doc:alone", "doc:apart", "d"}, labels(file.Children))
+}
+
+func TestCpp_ClassBodyComments(t *testing.T) {
+	file := parseCpp(t, "class K {\npublic:\n    /// member doc\n    int g();\n    // body line\n    /* body block */\n    int h();\n};\nstruct S {\n    /** s doc */\n    int f() { return 1; }\n    // s line\n    int n;\n};\n")
+	k := file.Children[0].(*ir.DistilledClass)
+	assert.Equal(t, []string{"doc:member doc", "g", "line:body line", "block:body block", "h"}, labels(k.Children))
+	s := file.Children[1].(*ir.DistilledStruct)
+	assert.Equal(t, []string{"doc:s doc", "f", "line:s line", "n"}, labels(s.Children))
+}
+
+// A trailing member doc (///<, //!<, /**<, /*!<) documents the member before
+// it, so it is placed in front of that member.
+func TestCpp_TrailingMemberDoc(t *testing.T) {
+	file := parseCpp(t, "class P {\n    /** x doc */\n    double x_;  ///< X coordinate\n    double y_;  /**< Y coordinate */\n    int f(); //!< f doc\n};\nint top; ///< top doc\nstruct E {\n    ///< documents nothing\n    int a;\n};\n")
+	p := file.Children[0].(*ir.DistilledClass)
+	assert.Equal(t, []string{"doc:x doc", "doc:X coordinate", "x_", "doc:Y coordinate", "y_", "doc:f doc", "f"}, labels(p.Children))
+	assert.Equal(t, []string{"P", "doc:top doc", "top", "E"}, labels(file.Children))
+	e := file.Children[3].(*ir.DistilledStruct)
+	assert.Equal(t, []string{"line:documents nothing", "a"}, labels(e.Children))
+}
+
+// A trailing doc after a member that adds no declaration (here a pointer
+// field, which the parser leaves out) goes with that member; it does not
+// document the member before.
+func TestCpp_TrailingDocOfMemberWithoutDeclaration(t *testing.T) {
+	file := parseCpp(t, "class R {\n    int get();\n    int* p_; ///< pointer\n};\n")
+	assert.Equal(t, []string{"get"}, labels(file.Children[0].(*ir.DistilledClass).Children))
+}
+
+// The docs before a statement that adds no declaration (a concept, a macro, a
+// static_assert, a using declaration in a namespace, a friend) are dropped, so
+// they do not document the next declaration; line comments keep their place.
+func TestCpp_DocOfStatementWithoutDeclarationIsDropped(t *testing.T) {
+	file := parseCpp(t, "/** concept doc */\ntemplate<typename T>\nconcept C = true;\n/** macro doc */\n#define MAX 10\n// kept line\n/** f doc */\nint f();\nnamespace n {\n/** using doc */\nusing std::string;\n/** g doc */\nint g();\n}\nclass K {\n    /** assert doc */\n    static_assert(true, \"x\");\n    /** friend doc */\n    friend class F;\n    /** h doc */\n    int h();\n};\n")
+	assert.Equal(t, []string{"line:kept line", "doc:f doc", "f", "import std::string", "namespace n", "K"}, labels(file.Children))
+	assert.Equal(t, []string{"doc:g doc", "g"}, labels(file.Children[4].(*ir.DistilledPackage).Children))
+	assert.Equal(t, []string{"doc:h doc", "h"}, labels(file.Children[5].(*ir.DistilledClass).Children))
+}
+
+// A friend is not a member and not a comment: it adds nothing, and the body
+// of a friend function never reaches the output.
+func TestCpp_FriendAddsNothing(t *testing.T) {
+	file := parseCpp(t, "class V {\n    /** out doc */\n    friend std::ostream& operator<<(std::ostream& os, const V& v) {\n        os << v.n;\n        return os;\n    }\n    friend bool operator==(const V&, const V&);\n    friend class W;\npublic:\n    int n;\n};\nstruct S {\n    friend class W;\n    int m;\n};\n")
+	assert.Equal(t, []string{"n"}, labels(file.Children[0].(*ir.DistilledClass).Children))
+	assert.Equal(t, []string{"m"}, labels(file.Children[1].(*ir.DistilledStruct).Children))
+}
+
+// Include guards, #ifdef/#else branches and extern "C" blocks hold
+// declarations of the file: the docs of a #define inside them are dropped as
+// at file level, the docs of real declarations (also prototypes inside
+// extern "C") stay, and a @file doc before the include guard stays the
+// file's doc.
+func TestCpp_DocsInsidePreprocessorAndExternCBlocks(t *testing.T) {
+	src := "/** @file w.h */\n#ifndef W_H\n#define W_H\n/** Max size */\n#define MAX 10\n/** W doc */\nclass W {};\n" +
+		"#ifdef A\n/** a doc */\nint a();\n/** a macro */\n#define AM 1\n#else\n/** b macro */\n#define BM 1\n/** b doc */\nint b();\n#endif\n" +
+		"#if defined(X) && X > 1\n/** x macro */\n#define XM 1\n/** x doc */\nint x();\n#elif defined(Y)\n/** y macro */\n#define YM 1\n/** y doc */\nint y();\n#endif\n" +
+		"#ifdef __cplusplus\nextern \"C\" {\n#endif\n/** c doc */\nint c(void);\n/** d macro */\n#define D 1\n/** e doc */\nint e(void);\n#ifdef __cplusplus\n}\n#endif\n" +
+		"extern \"C\" {\n/** m macro */\n#define M 1\n/** g doc */\nint g(void);\n}\n#endif\n"
+	file := parseCpp(t, src)
+	assert.Equal(t, []string{"inner doc:@file w.h", "doc:W doc", "W", "doc:a doc", "a", "doc:b doc", "b",
+		"doc:x doc", "x", "doc:y doc", "y", "doc:c doc", "c", "doc:e doc", "e", "doc:g doc", "g"}, labels(file.Children))
+}
+
+// A doc with @file or \file documents the file, also when a #pragma comes
+// next; it is not the doc of the first declaration.
+func TestCpp_FileDocIsInner(t *testing.T) {
+	file := parseCpp(t, "/**\n * @file widget.h\n * Widget API.\n */\n#pragma once\n/** W doc */\nclass W {};\n")
+	assert.Equal(t, []string{"inner doc:@file widget.h\nWidget API.", "doc:W doc", "W"}, labels(file.Children))
+	file = parseCpp(t, "/*! \\file widget.h */\nclass W {};\n")
+	assert.Equal(t, []string{"inner doc:\\file widget.h", "W"}, labels(file.Children))
+	// A header of macros only: the file doc does not wait for a declaration,
+	// so a statement that adds none (a #define, the guard) does not drop it.
+	file = parseCpp(t, "/** @file m.h */\n#define M 1\n")
+	assert.Equal(t, []string{"inner doc:@file m.h"}, labels(file.Children))
+	file = parseCpp(t, "/** @file m.h */\n#ifndef M_H\n#define M_H\n/** M doc */\n#define M 1\n#endif\n")
+	assert.Equal(t, []string{"inner doc:@file m.h"}, labels(file.Children))
+}

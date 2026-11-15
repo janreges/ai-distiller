@@ -35,13 +35,39 @@ func StripCStyle(raw string) (text string, format string) {
 
 // StripJSStyle is StripCStyle for JavaScript and TypeScript, whose only doc
 // comment is /** */: there "/// x" is a line comment (a triple-slash directive
-// such as /// <reference types="node" />, or plain text).
+// such as /// <reference types="node" />, or plain text). Kotlin follows the
+// same rule: KDoc is /** */ only.
 func StripJSStyle(raw string) (text string, format string) {
 	text, format = StripCStyle(raw)
 	if format == ir.CommentDoc && strings.HasPrefix(strings.TrimSpace(raw), "///") {
 		format = ir.CommentLine
 	}
 	return text, format
+}
+
+// StripDoxygen is StripCStyle for C and C++, where Doxygen reads "/*! x */"
+// and "//! x" as the doc of the next declaration, like "/** x */" and "/// x".
+//
+// trailing reports a member doc written after the declaration it documents
+// ("int x; ///< x", also "//!<", "/**<" and "/*!<"); its text is returned
+// without the "<" and with the doc format; the caller places it in front of
+// that declaration.
+func StripDoxygen(raw string) (text, format string, trailing bool) {
+	raw = strings.TrimSpace(raw)
+	switch {
+	case strings.HasPrefix(raw, "///<"), strings.HasPrefix(raw, "//!<"):
+		return strings.TrimSpace(raw[4:]), ir.CommentDoc, true
+	case strings.HasPrefix(raw, "/**<"), strings.HasPrefix(raw, "/*!<"):
+		text, _ = StripCStyle("/*" + raw[4:])
+		return text, ir.CommentDoc, true
+	case strings.HasPrefix(raw, "//!"):
+		return strings.TrimSpace(raw[3:]), ir.CommentDoc, false
+	case strings.HasPrefix(raw, "/*!"):
+		text, _ = StripCStyle("/*" + raw[3:])
+		return text, ir.CommentDoc, false
+	}
+	text, format = StripCStyle(raw)
+	return text, format, false
 }
 
 // AppendStatement appends to list the nodes parsed from one statement that is

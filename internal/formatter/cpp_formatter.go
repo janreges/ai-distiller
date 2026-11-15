@@ -41,17 +41,50 @@ func (f *CppFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent int
 	case *ir.DistilledField:
 		_, err := fmt.Fprintln(w, f.formatField(n, indent))
 		return err
+	case *ir.DistilledComment:
+		writeCStyleComment(w, n, strings.Repeat("    ", indent))
+		return nil
 	default:
 		// Report the node, then process any children recursively
 		reportUnhandled("cpp", node)
-		children := node.GetChildren()
-		for _, child := range children {
-			if err := f.FormatNode(w, child, indent); err != nil {
-				return err
-			}
-		}
-		return nil
+		return f.FormatNodes(w, node.GetChildren(), indent)
 	}
+}
+
+// FormatNodes formats sibling nodes. The doc comments of a node the formatter
+// does not print (a namespace, whose line is left out while its members are
+// printed) are dropped with it.
+func (f *CppFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, indent int) error {
+	parts := formatCStyleNodes(nodes, strings.Repeat("    ", indent), func(node ir.DistilledNode) (string, bool) {
+		var b strings.Builder
+		_ = f.FormatNode(&b, node, indent) // a strings.Builder does not fail
+		switch node.(type) {
+		case *ir.DistilledImport, *ir.DistilledClass, *ir.DistilledStruct, *ir.DistilledEnum,
+			*ir.DistilledFunction, *ir.DistilledField:
+			return strings.TrimSuffix(b.String(), "\n"), true
+		}
+		return strings.TrimSuffix(b.String(), "\n"), false
+	})
+	for _, part := range parts {
+		if _, err := fmt.Fprintln(w, part); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// formatMembers formats the members of a class or struct body: methods,
+// fields and comments.
+func (f *CppFormatter) formatMembers(members []ir.DistilledNode, indent int) []string {
+	return formatCStyleNodes(members, strings.Repeat("    ", indent), func(node ir.DistilledNode) (string, bool) {
+		switch n := node.(type) {
+		case *ir.DistilledFunction:
+			return f.formatFunction(n, indent), true
+		case *ir.DistilledField:
+			return f.formatField(n, indent), true
+		}
+		return "", false
+	})
 }
 
 func (f *CppFormatter) formatImport(imp *ir.DistilledImport) string {
@@ -108,15 +141,8 @@ func (f *CppFormatter) formatClass(class *ir.DistilledClass, indent int) string 
 
 	parts = append(parts, indentStr+classDecl+" {")
 
-	// Format children (methods, fields, etc.)
-	for _, child := range class.Children {
-		switch n := child.(type) {
-		case *ir.DistilledFunction:
-			parts = append(parts, f.formatFunction(n, indent+1))
-		case *ir.DistilledField:
-			parts = append(parts, f.formatField(n, indent+1))
-		}
-	}
+	// Format children (methods, fields, comments)
+	parts = append(parts, f.formatMembers(class.Children, indent+1)...)
 
 	// Closing brace
 	parts = append(parts, indentStr+"};")
@@ -147,15 +173,8 @@ func (f *CppFormatter) formatStruct(strct *ir.DistilledStruct, indent int) strin
 
 	parts = append(parts, indentStr+structDecl+" {")
 
-	// Format children (methods, fields, etc.)
-	for _, child := range strct.Children {
-		switch n := child.(type) {
-		case *ir.DistilledFunction:
-			parts = append(parts, f.formatFunction(n, indent+1))
-		case *ir.DistilledField:
-			parts = append(parts, f.formatField(n, indent+1))
-		}
-	}
+	// Format children (methods, fields, comments)
+	parts = append(parts, f.formatMembers(strct.Children, indent+1)...)
 
 	// Closing brace
 	parts = append(parts, indentStr+"};")

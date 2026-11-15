@@ -59,7 +59,6 @@ func TestNoUnhandledNodesInTestdata(t *testing.T) {
 // knownUnhandled lists "<lang>/<node kind>" pairs that a text formatter
 // silently drops today, each with the reason.
 var knownUnhandled = map[string]string{
-	"cpp/comment":       "the C++ formatter has no DistilledComment case, so comments are dropped",
 	"cpp/package":       "the C++ formatter has no DistilledPackage case, so the namespace line is dropped (its children are still rendered)",
 	"csharp/type_alias": "the C# formatter has no DistilledTypeAlias case (using aliases are not rendered)",
 	"kotlin/package":    "the Kotlin formatter has no DistilledPackage case (package declaration is not rendered)",

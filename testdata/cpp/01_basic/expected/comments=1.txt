@@ -2,32 +2,122 @@
 #include "iostream"
 #include "string"
 #include "vector"
+/**
+ * @brief A basic Point class demonstrating fundamental C++ concepts
+ *
+ * This class showcases basic C++ features like constructors, destructors,
+ * public/private members, and basic inheritance.
+ */
 class Point {
+    /** @brief Default constructor */
     Point()
+    /**
+     * @brief Parameterized constructor
+     * @param x The x coordinate
+     * @param y The y coordinate
+     */
     Point(double x, double y)
+    /**
+     * @brief Copy constructor
+     * @param other The point to copy from
+     */
     Point(const Point& other)
+    /** @brief Virtual destructor for proper inheritance */
     virtual ~Point()
+    /**
+     * @brief Get the x coordinate
+     * @return The x coordinate
+     */
     double getX() const
+    /**
+     * @brief Get the y coordinate
+     * @return The y coordinate
+     */
     double getY() const
+    /**
+     * @brief Set the x coordinate
+     * @param x The new x coordinate
+     */
     void setX(double x)
+    /**
+     * @brief Set the y coordinate
+     * @param y The new y coordinate
+     */
     void setY(double y)
+    /**
+     * @brief Calculate distance from origin
+     * @return Distance from origin
+     */
     virtual double distanceFromOrigin() const
 };
+/** @brief A 3D point class extending Point */
 class Point3D : public Point {
+    /**
+     * @brief Constructor for 3D point
+     * @param x X coordinate
+     * @param y Y coordinate
+     * @param z Z coordinate
+     */
     Point3D(double x, double y, double z)
+    /**
+     * @brief Get the z coordinate
+     * @return The z coordinate
+     */
     double getZ() const
+    /**
+     * @brief Set the z coordinate
+     * @param z The new z coordinate
+     */
     void setZ(double z)
+    /**
+     * @brief Override distance calculation for 3D
+     * @return Distance from origin in 3D space
+     */
     double distanceFromOrigin() const
 };
+/**
+ * @brief Basic template class for demonstration
+ * @tparam T The type to store
+ */
 template<typename T>
 class Container {
+    /**
+     * @brief Constructor
+     * @param value Initial value
+     */
     Container(const T& value)
+    /**
+     * @brief Get the stored value
+     * @return Reference to the stored value
+     */
     const T& getValue() const
+    /**
+     * @brief Set the stored value
+     * @param value New value to store
+     */
     void setValue(const T& value)
 };
+/**
+ * @brief Calculate the maximum of two values
+ * @tparam T Type of values to compare
+ * @param a First value
+ * @param b Second value
+ * @return The maximum value
+ */
 template<typename T>
 T max(const T& a, const T& b);
+/**
+ * @brief Calculate the minimum of two values
+ * @tparam T Type of values to compare
+ * @param a First value
+ * @param b Second value
+ * @return The minimum value
+ */
 template<typename T>
 T min(const T& a, const T& b);
+/**
+ * @brief Main function demonstrating basic usage
+ * @return Exit code
+ */
 int main();
 </file>

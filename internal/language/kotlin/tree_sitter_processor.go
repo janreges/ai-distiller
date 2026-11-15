@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/janreges/ai-distiller/internal/ir"
+	"github.com/janreges/ai-distiller/internal/language/commentutil"
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/kotlin"
 )
@@ -63,9 +64,10 @@ func (p *TreeSitterProcessor) processNode(node *sitter.Node, source []byte, file
 	case "source_file":
 		// Root node - process all children
 		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
-			p.processNode(child, source, file, parent)
+			p.processStatement(node.Child(i), source, file, parent)
 		}
+	case "file_annotation":
+		p.processTrailingComments(node, source, file)
 	case "package_header":
 		p.processPackageHeader(node, source, file)
 	case "import_list", "import_header":
@@ -91,6 +93,8 @@ func (p *TreeSitterProcessor) processNode(node *sitter.Node, source []byte, file
 	case "primary_constructor":
 		// Primary constructors are handled as part of class declaration
 		// since they're integral to the class definition
+	case "anonymous_initializer":
+		// An init block is implementation: its local declarations are not members.
 	default:
 		// Recursively process children
 		for i := 0; i < int(node.ChildCount()); i++ {
@@ -119,6 +123,7 @@ func (p *TreeSitterProcessor) processPackageHeader(node *sitter.Node, source []b
 	if pkg.Name != "" {
 		file.Children = append(file.Children, pkg)
 	}
+	p.processTrailingComments(node, source, file)
 }
 
 // processImport handles import statements
@@ -129,6 +134,8 @@ func (p *TreeSitterProcessor) processImport(node *sitter.Node, source []byte, fi
 			child := node.Child(i)
 			if child.Type() == "import_header" {
 				p.processImport(child, source, file)
+			} else if isComment(child) {
+				p.processComment(child, source, file, nil)
 			}
 		}
 		return
@@ -188,6 +195,7 @@ func (p *TreeSitterProcessor) processImport(node *sitter.Node, source []byte, fi
 	}
 
 	file.Children = append(file.Children, imp)
+	p.processTrailingComments(node, source, file)
 }
 
 // processClassDeclaration handles class declarations (including data classes and sealed classes)
@@ -1124,17 +1132,64 @@ func (p *TreeSitterProcessor) extractFunctionBody(node *sitter.Node, source []by
 // processClassBody processes the body of a class
 func (p *TreeSitterProcessor) processClassBody(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		p.processNode(child, source, file, parent)
+		p.processStatement(node.Child(i), source, file, parent)
 	}
 }
 
 // processInterfaceBody processes the body of an interface
 func (p *TreeSitterProcessor) processInterfaceBody(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		p.processNode(child, source, file, parent)
+		p.processStatement(node.Child(i), source, file, parent)
 	}
+}
+
+// processStatement processes node, one statement of the file or of a class,
+// object or interface body. Comments are added where they are. The doc
+// comments right before a statement that adds no declaration (an init block,
+// a script statement) are dropped, so they do not document the next
+// declaration (commentutil.AppendStatement).
+func (p *TreeSitterProcessor) processStatement(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
+	if isComment(node) {
+		p.processComment(node, source, file, parent)
+		return
+	}
+	if !node.IsNamed() {
+		return
+	}
+	list := p.childList(file, parent)
+	before := len(*list)
+	p.processNode(node, source, file, parent)
+	added := append([]ir.DistilledNode(nil), (*list)[before:]...)
+	*list = commentutil.AppendStatement((*list)[:before], added)
+}
+
+// processComment adds a comment. KDoc is /** */ only, so "/// x" is a line
+// comment (commentutil.StripJSStyle).
+func (p *TreeSitterProcessor) processComment(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
+	text, format := commentutil.StripJSStyle(string(source[node.StartByte():node.EndByte()]))
+	p.addToParent(file, parent, &ir.DistilledComment{
+		BaseNode: ir.BaseNode{
+			Location: p.nodeLocation(node),
+		},
+		Text:   text,
+		Format: format,
+	})
+}
+
+// processTrailingComments adds the comments that the grammar places at the
+// end of a file annotation, the package header or an import, because they
+// follow it in the file, as file-level comments after it.
+func (p *TreeSitterProcessor) processTrailingComments(node *sitter.Node, source []byte, file *ir.DistilledFile) {
+	for i := 0; i < int(node.ChildCount()); i++ {
+		if child := node.Child(i); isComment(child) {
+			p.processComment(child, source, file, nil)
+		}
+	}
+}
+
+// isComment reports whether node is a Kotlin comment.
+func isComment(node *sitter.Node) bool {
+	return node.Type() == "line_comment" || node.Type() == "multiline_comment"
 }
 
 // processEnumBody processes the body of an enum
@@ -1205,6 +1260,19 @@ func (p *TreeSitterProcessor) nodeLocation(node *sitter.Node) ir.Location {
 		EndLine:     int(node.EndPoint().Row) + 1,
 		EndColumn:   int(node.EndPoint().Column) + 1,
 	}
+}
+
+// childList returns the children list that addToParent appends to for parent.
+func (p *TreeSitterProcessor) childList(file *ir.DistilledFile, parent ir.DistilledNode) *[]ir.DistilledNode {
+	switch n := parent.(type) {
+	case *ir.DistilledClass:
+		return &n.Children
+	case *ir.DistilledInterface:
+		return &n.Children
+	case *ir.DistilledEnum:
+		return &n.Children
+	}
+	return &file.Children
 }
 
 // addToParent adds a node to its parent or to the file

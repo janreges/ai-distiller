@@ -1,69 +1,276 @@
 <file path="source.cpp">
+/**
+ * @brief Complex C++ features including template metaprogramming, CRTP,
+ *        variadic templates, perfect forwarding, and C++17 features
+ */
+/**
+ * @brief Compile-time computation using constexpr
+ * @param n Input number
+ * @return Factorial of n
+ */
 factorial(int n) const;
+/** @brief Helper variable template for is_callable */
 bool is_callable_v;
+/**
+ * @brief CRTP base class for adding comparison operators
+ * @tparam Derived The derived class type
+ */
 template<typename Derived>
 class Comparable {
+    /**
+     * @brief Inequality operator
+     * @param other Other object to compare
+     * @return true if not equal
+     */
     bool operator!=(const Derived& other) const
+    /**
+     * @brief Greater than operator
+     * @param other Other object to compare
+     * @return true if this > other
+     */
     bool operator>(const Derived& other) const
+    /**
+     * @brief Less than or equal operator
+     * @param other Other object to compare
+     * @return true if this <= other
+     */
     bool operator<=(const Derived& other) const
+    /**
+     * @brief Greater than or equal operator
+     * @param other Other object to compare
+     * @return true if this >= other
+     */
     bool operator>=(const Derived& other) const
 };
+/** @brief Example class using CRTP */
 class Point {
+    /**
+     * @brief Constructor
+     * @param x X coordinate
+     * @param y Y coordinate
+     */
     Point(double x, double y)
+    /**
+     * @brief Equality operator
+     * @param other Other point
+     * @return true if points are equal
+     */
     bool operator==(const Point& other) const
+    /**
+     * @brief Less than operator
+     * @param other Other point
+     * @return true if this point is "less" than other
+     */
     bool operator<(const Point& other) const
+    /**
+     * @brief Get distance from origin
+     * @return Distance value
+     */
     double distance() const
 };
+/**
+ * @brief Variadic template for tuple-like operations
+ * @tparam Args Types of arguments
+ */
 class VariadicProcessor {
+    /**
+     * @brief Constructor
+     * @param args Values to store
+     */
     VariadicProcessor()
+    /**
+     * @brief Get element at index
+     * @tparam Index Index to get
+     * @return Reference to element
+     */
     get()
+    /**
+     * @brief Apply function to all elements
+     * @tparam F Function type
+     * @param f Function to apply
+     */
     template<typename F>
     void forEach(F& f)
+    /**
+     * @brief Get size of stored tuple
+     * @return Number of elements
+     */
     static size_t size()
+    /**
+     * @brief Implementation of forEach
+     * @tparam F Function type
+     * @tparam Indices Index sequence
+     * @param f Function to apply
+     * @param indices Index sequence
+     */
     template<typename F>
     void forEachImpl(F& f, auto )
 };
+/**
+ * @brief Advanced SFINAE for perfect forwarding
+ * @tparam Container Container type
+ * @tparam T Element type
+ */
 template<typename Container, typename T>
 insert_if_possible(Container& container, T& value);
+/**
+ * @brief Fallback for containers without insert
+ * @tparam Container Container type
+ * @tparam T Element type
+ */
 template<typename Container, typename T>
 insert_if_possible(Container& container, T& value);
+/** @brief Template deduction guide for CompileTimeString */
 CompileTimeString(const char );
+/**
+ * @brief Factory with variadic templates and perfect forwarding
+ * @tparam T Type to create
+ */
 template<typename T>
 class Factory {
+    /**
+     * @brief Create instance with perfect forwarding
+     * @tparam Args Constructor argument types
+     * @param args Constructor arguments
+     * @return Unique pointer to created instance
+     */
     static create()
+    /**
+     * @brief Create instance with initialization from tuple
+     * @tparam Tuple Tuple type
+     * @param tuple Tuple of constructor arguments
+     * @return Unique pointer to created instance
+     */
     template<typename Tuple>
     static createFromTuple(Tuple& tuple)
+    /**
+     * @brief Implementation of createFromTuple
+     * @tparam Tuple Tuple type
+     * @tparam Indices Index sequence
+     * @param tuple Tuple of arguments
+     * @param indices Index sequence
+     * @return Unique pointer to created instance
+     */
     template<typename Tuple>
     static createFromTupleImpl(Tuple& tuple, auto )
 };
+/** @brief Generic visitor for DataVariant */
 struct DataVisitor {
+    /**
+     * @brief Visit int
+     * @param value Integer value
+     * @return Processed string
+     */
     operator()(int value) const
+    /**
+     * @brief Visit double
+     * @param value Double value
+     * @return Processed string
+     */
     operator()(double value) const
+    /**
+     * @brief Visit string
+     * @param value String value
+     * @return Processed string
+     */
     operator()(const & value) const
 };
+/**
+ * @brief Advanced template class with multiple template parameters
+ * @tparam T Primary type
+ * @tparam Allocator Allocator type
+ * @tparam Compare Comparison function type
+ */
 template<typename T>
 class AdvancedContainer {
+    /**
+     * @brief Constructor
+     * @param comp Comparison function
+     * @param alloc Allocator
+     */
     AdvancedContainer(const Compare& comp, const Allocator& alloc)
+    /**
+     * @brief Insert element
+     * @param value Value to insert
+     */
     void insert(const T& value)
+    /**
+     * @brief Insert element with perfect forwarding
+     * @tparam Args Argument types
+     * @param args Arguments to forward to constructor
+     */
     void emplace()
+    /**
+     * @brief Find element
+     * @param value Value to find
+     * @return Iterator to found element or end()
+     */
     find(const T& value) const
+    /**
+     * @brief Get size
+     * @return Number of elements
+     */
     size_t size() const
+    /**
+     * @brief Begin iterator
+     * @return Iterator to beginning
+     */
     begin() const
+    /**
+     * @brief End iterator
+     * @return Iterator to end
+     */
     end() const
 };
+/**
+ * @brief Template specialization for pointer types
+ * @tparam T Pointed-to type
+ * @tparam Allocator Allocator type
+ * @tparam Compare Comparison type
+ */
 template<typename T, typename Allocator, typename Compare>
 class  {
+    /** @brief Constructor for pointer specialization */
     AdvancedContainer()
+    /**
+     * @brief Insert pointer
+     * @param ptr Pointer to insert
+     */
     void insert(T* ptr)
+    /**
+     * @brief Get size
+     * @return Number of pointers
+     */
     size_t size() const
 };
+/** @brief Complex example with async operations and futures */
 class AsyncProcessor {
+    /**
+     * @brief Process data asynchronously with timeout
+     * @tparam T Data type
+     * @param data Data to process
+     * @param timeoutMs Timeout in milliseconds
+     * @return Optional result
+     */
     template<typename T>
     processWithTimeout(const T& data, int timeoutMs)
+    /**
+     * @brief Process multiple items in parallel
+     * @tparam Container Container type
+     * @param items Items to process
+     * @return Vector of results
+     */
     template<typename Container>
     processParallel(const Container& items)
+    /**
+     * @brief Process single data item
+     * @tparam T Data type
+     * @param data Data to process
+     * @return Processed result
+     */
     template<typename T>
     static processData(const T& data)
 };
+/** @brief Demonstration of complex features */
 void demonstrateComplexFeatures();
 </file>

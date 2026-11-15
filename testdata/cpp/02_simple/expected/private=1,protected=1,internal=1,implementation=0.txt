@@ -8,67 +8,217 @@
 #include "functional"
 #include "map"
 #include "set"
+/** @brief Forward declaration of Employee class */
 class Employee {
 };
+/** @brief Abstract base class for library items */
 class LibraryItem {
+    /**
+     * @brief Constructor
+     * @param id Unique identifier
+     * @param title Item title
+     */
     LibraryItem(const & id, const & title)
+    /** @brief Virtual destructor for proper inheritance */
     virtual ~LibraryItem()
+    /**
+     * @brief Get item ID
+     * @return The unique identifier
+     */
     const & getId() const
+    /**
+     * @brief Get item title
+     * @return The title
+     */
     const & getTitle() const
+    /**
+     * @brief Check if item is available
+     * @return true if available, false otherwise
+     */
     bool isAvailable() const
+    /**
+     * @brief Borrow the item
+     * @return true if successfully borrowed
+     */
     virtual bool borrow()
+    /** @brief Return the item */
     virtual void returnItem()
+    /**
+     * @brief Pure virtual function for item details
+     * @return String representation of item details
+     */
     virtual getDetails() const = 0
+    /**
+     * @brief Protected method for subclass use
+     * @param status New availability status
+     */
     void setAvailability(bool status)
+    /** Unique identifier */
     auto id_;
+    /** Item title */
     auto title_;
+    /** Availability status */
     bool isAvailable_;
 };
+/** @brief Book class extending LibraryItem */
 class Book : public LibraryItem {
+    /**
+     * @brief Constructor for Book
+     * @param id Book ID
+     * @param title Book title
+     * @param author Book author
+     * @param isbn ISBN number
+     */
     Book(const & id, const & title, const & author, const & isbn)
+    /**
+     * @brief Get book author
+     * @return The author name
+     */
     const & getAuthor() const
+    /**
+     * @brief Get ISBN
+     * @return The ISBN number
+     */
     const & getISBN() const
+    /**
+     * @brief Implementation of getDetails for Book
+     * @return Book details as string
+     */
     getDetails() const
+    /** Book author */
     auto author_;
+    /** ISBN number */
     auto isbn_;
 };
+/** @brief Magazine class extending LibraryItem */
 class Magazine : public LibraryItem {
+    /**
+     * @brief Constructor for Magazine
+     * @param id Magazine ID
+     * @param title Magazine title
+     * @param issueNumber Issue number
+     * @param publisher Publisher name
+     */
     Magazine(const & id, const & title, int issueNumber, const & publisher)
+    /**
+     * @brief Get issue number
+     * @return The issue number
+     */
     int getIssueNumber() const
+    /**
+     * @brief Get publisher
+     * @return The publisher name
+     */
     const & getPublisher() const
+    /**
+     * @brief Implementation of getDetails for Magazine
+     * @return Magazine details as string
+     */
     getDetails() const
+    /** Issue number */
     int issueNumber_;
+    /** Publisher name */
     auto publisher_;
 };
+/** @brief Library catalog management class */
 class LibraryCatalog {
+    /**
+     * @brief Add an item to the catalog
+     * @param item Unique pointer to library item
+     */
     void addItem(auto item)
+    /**
+     * @brief Find item by ID
+     * @param id Item identifier
+     * @return Raw pointer to item or nullptr if not found
+     */
     LibraryItem* findItem(const & id)
+    /**
+     * @brief Get available items
+     * @return Vector of pointers to available items
+     */
     getAvailableItems() const
+    /**
+     * @brief Search items by title (case-insensitive)
+     * @param searchTerm Search term
+     * @return Vector of matching items
+     */
     searchByTitle(const & searchTerm) const
+    /**
+     * @brief Get total count of items
+     * @return Number of items in catalog
+     */
     size_t getItemCount() const
+    /** Map of item ID to unique pointer */
     auto items_;
 };
+/** @brief Function object for sorting items by title */
 struct TitleComparator {
+    /**
+     * @brief Comparison operator
+     * @param a First item
+     * @param b Second item
+     * @return true if a's title comes before b's title
+     */
     bool operator()(const LibraryItem* a, const LibraryItem* b) const
 };
+/** @brief Utility class for library operations */
 class LibraryUtils {
+    /**
+     * @brief Sort items by title
+     * @param items Vector of item pointers to sort
+     */
     static void sortByTitle(& items)
+    /**
+     * @brief Filter items using a predicate
+     * @tparam Predicate Function object type
+     * @param items Input items
+     * @param pred Predicate function
+     * @return Filtered items
+     */
     template<typename Predicate>
     static filterItems(const & items, Predicate pred)
+    /**
+     * @brief Count items by type
+     * @tparam ItemType Specific item type
+     * @param items Items to count
+     * @return Count of items of specified type
+     */
     template<typename ItemType>
     static size_t countItemsByType(const & items)
+    /** @brief Private constructor - utility class */
     LibraryUtils()
 };
+/** @brief RAII wrapper for file operations */
 class FileManager {
+    /**
+     * @brief Constructor
+     * @param filename File to manage
+     */
     FileManager(const & filename)
+    /** @brief Destructor - automatically closes file */
     ~FileManager()
+    /** @brief Copy constructor deleted for RAII */
     FileManager(const FileManager )
+    /** @brief Assignment operator deleted for RAII */
     FileManager& operator=(const FileManager )
+    /**
+     * @brief Open the file
+     * @return true if successfully opened
+     */
     bool open()
+    /** @brief Close the file */
     void close()
+    /**
+     * @brief Check if file is open
+     * @return true if file is open
+     */
     bool isOpen() const
+    /** Managed filename */
     auto filename_;
+    /** File open status */
     bool isOpen_;
 };
+/** @brief Demonstration function */
 void demonstrateLibrarySystem();
 </file>

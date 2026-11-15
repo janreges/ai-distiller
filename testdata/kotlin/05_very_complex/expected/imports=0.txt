@@ -1,10 +1,17 @@
 <file path="source.kt">
+/**
+ * Very complex Kotlin demonstration showcasing multiplatform patterns,
+ * advanced metaprogramming, compiler plugin simulation, complex generic constraints,
+ * advanced reflection, and cutting-edge Kotlin features
+ */
+/** Annotation for compile-time code generation simulation */
 annotation class AutoGenerate {
     val strategy: GenerationStrategy
     val includeMethods: Array
     val excludeMethods: Array
     fun constructor(strategy: GenerationStrategy, includeMethods: Array, excludeMethods: Array)
 }
+/** Enum for code generation strategies */
 enum class GenerationStrategy {
     DEFAULT
     BUILDER
@@ -12,62 +19,81 @@ enum class GenerationStrategy {
     OBSERVER
     PROXY
 }
+/** Advanced type-safe builder with complex constraints */
 annotation class ConfigurationDsl {
 }
+/** Context receiver simulation for scoped functions */
 interface DatabaseContext {
     suspend fun <T> withTransaction(block: TransactionScope.() -> T): T
 }
+/** Transaction scope with advanced resource management */
 interface TransactionScope {
     suspend fun <T> execute(query: String, params: Any): T
     suspend fun rollback()
     suspend fun commit()
 }
+/** Connection pool with advanced lifecycle management */
 interface ConnectionPool {
     suspend fun borrowConnection(): DatabaseConnection
     suspend fun returnConnection(connection: DatabaseConnection)
     fun getStatistics(): PoolStatistics
 }
+/** Advanced generic repository with complex type constraints */
 abstract class AdvancedGenericRepository {
+    /** Complex generic method with multiple bounds and variance */
     abstract suspend fun <T> findWithProjection(query: Q, projector: (E) -> T): Flow<T>
+    /** Method with complex generic constraints */
     abstract suspend fun <K, V> aggregateBy(query: Q, keySelector: (E) -> K, valueSelector: (E) -> V, aggregator: (K, List<V>) -> V): Map<K, V>
+    /** Generic method with reified types and complex bounds */
     inline fun <T, U> transformAndValidate(entities: List, transformer: (E) -> T, validator: (T) -> U): List<U>
 }
+/** Advanced entity interface with complex inheritance */
 interface Entity {
 }
+/** Auditable interface with temporal aspects */
 interface Auditable {
     fun updateAuditInfo(actor: String, action: String)
 }
+/** Validatable interface with context-aware validation */
 interface Validatable {
     suspend fun validate(context: ValidationContext): ValidationResult
 }
+/** Complex validation context with dependency injection */
 data class ValidationContext(val rules: List, val services: ServiceLocator, val currentUser: UserContext?, val environment: Environment) {
 }
+/** Service locator pattern implementation */
 interface ServiceLocator {
     suspend fun <T> resolve(type: KClass): T
     suspend fun <T> resolveOptional(type: KClass): T?
     suspend fun <T> resolveAll(type: KClass): List<T>
 }
+/** Advanced property delegation with complex lifecycle */
 class ManagedProperty {
     fun constructor(factory, lifecycle: PropertyLifecycle)
     override fun provideDelegate(thisRef: Any?, property: KProperty): ReadOnlyProperty<Any?, T>
 }
+/** Property lifecycle management */
 interface PropertyLifecycle {
     suspend fun onCreate(name: String, value: T): T
     suspend fun onAccess(name: String, value: T): T
     suspend fun onDestroy(name: String, value: T)
 }
+/** Default property lifecycle implementation */
 class DefaultPropertyLifecycle {
     override suspend fun onCreate(name: String, value: T): T
     override suspend fun onAccess(name: String, value: T): T
     override suspend fun onDestroy(name: String, value: T)
 }
+/** Advanced multiplatform expect/actual simulation */
 class PlatformSpecificRepository {
     fun constructor()
     suspend fun performNativeOperation(): String
     fun getPlatformCapabilities(): PlatformCapabilities
 }
+/** Platform capabilities interface */
 interface PlatformCapabilities {
 }
+/** Complex sealed class hierarchy with nested types */
 sealed class ProcessingState {
     object Idle {
     }
@@ -79,6 +105,7 @@ sealed class ProcessingState {
     }
     data class PartialSuccess(val partialResult: T, val errors: List, val completionPercentage: Float) {
     }
+    /** Nested sealed class for processing metadata */
     sealed class ProcessingMetadata {
         data class TimingInfo(val startTime: Long, val endTime: Long) {
         }
@@ -88,53 +115,73 @@ sealed class ProcessingState {
         }
     }
 }
+/** Advanced coroutine scope with custom context elements */
 class AdvancedCoroutineScope {
     fun constructor(context: CoroutineContext)
     var coroutineContext: CoroutineContext
+    /** Advanced async builder with timeout and error handling */
     fun <T> asyncWithTimeout(timeout: kotlin.time.Duration, block: CoroutineScope.() -> T): Deferred<Result<T>>
 }
+/** Complex DSL for building processing pipelines */
 class ProcessingPipelineBuilder {
+    /** Add a transformation stage */
     inline fun <R> transform(transformer: (T) -> R): ProcessingPipelineBuilder<R>
+    /** Add a filtering stage */
     fun filter(predicate: (T) -> Boolean): ProcessingPipelineBuilder<T>
+    /** Add a validation stage */
     fun validate(validator: (T) -> ValidationResult): ProcessingPipelineBuilder<T>
+    /** Build the pipeline */
     fun build(): ProcessingPipeline<T>
 }
+/** Processing stage abstraction */
 sealed class ProcessingStage {
     abstract suspend fun process(input: I): O
 }
+/** Transformation stage implementation */
 class TransformationStage {
     fun constructor(transformer)
     override suspend fun process(input: I): O
 }
+/** Filter stage implementation */
 class FilterStage {
     fun constructor(predicate)
     override suspend fun process(input: T): T?
 }
+/** Validation stage implementation */
 class ValidationStage {
     fun constructor(validator)
     override suspend fun process(input: T): T
 }
+/** Processing pipeline implementation */
 class ProcessingPipeline {
     fun constructor(stages: List)
+    /** Execute the pipeline */
     suspend fun execute(input: T): ProcessingState<T, Exception>
 }
+/** Advanced reflection-based entity processor */
 class MetaEntityProcessor {
+    /** Process entity using reflection and annotations */
     suspend fun <T> processEntity(entity: T): ProcessedEntity<T>
 }
+/** Processed entity result */
 data class ProcessedEntity(val original: T, val properties: List, val generatedMethods: Map) {
 }
+/** Processed property information */
 data class ProcessedProperty(val name: String, val type: KType, val value: Any?, val annotations: List) {
 }
+/** Advanced event-driven architecture with complex event types */
 sealed class DomainEvent {
     var eventId: String
     var timestamp: Long
     var source: String
+    /** User-related events */
     sealed class UserEvent {
         data class UserCreated(val eventId: String, val timestamp: Long, val source: String, val userId: String, val userData: Map) {
         }
         data class UserUpdated(val eventId: String, val timestamp: Long, val source: String, val userId: String, val changes: Map) {
         }
     }
+    /** System-related events */
     sealed class SystemEvent {
         data class ServiceStarted(val eventId: String, val timestamp: Long, val source: String, val serviceName: String, val configuration: Map) {
         }
@@ -142,12 +189,14 @@ sealed class DomainEvent {
         }
     }
 }
+/** Advanced event store with CQRS pattern */
 interface EventStore {
     suspend fun append(events: List): EventAppendResult
     suspend fun getEvents(streamId: String, fromVersion: Long): Flow<DomainEvent>
     suspend fun getEventsByType(eventType: KClass): Flow<DomainEvent>
     suspend fun createSnapshot(aggregateId: String, snapshot: AggregateSnapshot): SnapshotResult
 }
+/** Supporting classes and interfaces */
 sealed class EventAppendResult {
     data class Success(val nextVersion: Long) {
     }
@@ -164,13 +213,17 @@ sealed class SnapshotResult {
     data class Error(val message: String) {
     }
 }
+/** Main demonstration function */
 fun main()
+/** Sample entity for demonstration */
 data class SampleEntity(val name: String, val value: Int) {
 }
+/** Configuration class with managed properties */
 class ConfigurationWithManagedProperties {
     var databaseUrl: String
     var serviceEndpoint: String
 }
+/** Supporting classes for the examples */
 sealed class ValidationResult {
     object Valid {
     }

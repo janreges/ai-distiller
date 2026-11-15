@@ -1,7 +1,12 @@
 <file path="source.java">
+// Level 3: GenericsAndInterfaces.java
 package com.aidi.test.inheritance
 import java.util.List
 import java.util.Optional
+// 1. A generic interface
+// 2. A custom annotation
+// 3. An abstract class implementing the interface
+// 4. A concrete implementation
 
 public class UserStore extends BaseStore {
     @Override
@@ -9,4 +14,5 @@ public class UserStore extends BaseStore {
     @Override
     public List<User> findAll();
 }
+// 5. A simple class used as the generic type
 </file>

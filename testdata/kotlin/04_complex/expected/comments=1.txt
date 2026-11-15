@@ -9,24 +9,43 @@ import kotlin.properties.ReadOnlyProperty
 import kotlin.properties.ReadWriteProperty
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+/**
+ * Complex demonstration with advanced coroutines, channels, flows,
+ * DSL builders, delegation patterns, reflection, and advanced generics
+ */
+/** DSL marker annotation for type-safe builders */
 annotation class DatabaseDsl {
 }
+/** Query DSL builder for creating complex database queries */
 class QueryBuilder {
     fun constructor(entityClass: KClass)
+    /** Add a WHERE condition using DSL */
     fun where(condition: ConditionBuilder<T>.() -> Unit)
+    /** Add ORDER BY clause */
     fun orderBy(column: KProperty, direction: SortDirection)
+    /** Set LIMIT */
     fun limit(count: Int)
+    /** Set OFFSET */
     fun offset(count: Int)
 }
+/** Condition builder for WHERE clauses */
 class ConditionBuilder {
+    /** Equals condition */
     fun <V> KProperty<V>.eq(value: V)
+    /** Not equals condition */
     fun <V> KProperty<V>.ne(value: V)
+    /** Greater than condition */
     fun <V> KProperty<V>.gt(value: V)
+    /** Less than condition */
     fun <V> KProperty<V>.lt(value: V)
+    /** IN condition */
     fun <V> KProperty<V>.isIn(values: Collection)
+    /** AND operation */
     fun ConditionBuilder<T>.and(other: ConditionBuilder<T>.() -> Unit)
+    /** OR operation */
     fun ConditionBuilder<T>.or(other: ConditionBuilder<T>.() -> Unit)
 }
+/** Sealed class for query conditions */
 sealed class Condition {
     data class Equals(val column: String, val value: Any?) {
     }
@@ -43,27 +62,37 @@ sealed class Condition {
     data class Or(val left: List, val right: List) {
     }
 }
+/** Order by clause */
 data class OrderBy(val column: String, val direction: SortDirection) {
 }
+/** Sort direction enum */
 enum class SortDirection {
     ASC
     DESC
 }
+/** Query representation */
 data class Query(val entityClass: KClass, val conditions: List, val orderBy: List, val limit: Int?, val offset: Int?) {
 }
+/** Repository interface with advanced query support */
 interface AdvancedRepository {
     suspend fun findByQuery(query: Query): Flow<T>
     suspend fun executeQuery(builder: QueryBuilder<T>.() -> Unit): Flow<T>
 }
+/** Entity for demonstration */
 data class Product(val id: String, val name: String, val price: Double, val category: String, val inStock: Boolean, val rating: Double) {
 }
+/** Advanced coroutine-based product repository */
 class ProductRepository {
+    /** Product updates flow */
     var productUpdates: SharedFlow
     override suspend fun findByQuery(query: Query): Flow<Product>
     override suspend fun executeQuery(builder: QueryBuilder<Product>.() -> Unit): Flow<Product>
+    /** Add product with real-time updates */
     suspend fun addProduct(product: Product)
+    /** Update product with optimistic locking simulation */
     suspend fun updateProduct(id: String, updater: (Product) -> Product): Product?
 }
+/** Sealed class for product updates */
 sealed class ProductUpdate {
     data class Added(val product: Product) {
     }
@@ -72,13 +101,19 @@ sealed class ProductUpdate {
     data class Removed(val product: Product) {
     }
 }
+/** Advanced service with channels and select statements */
 class ProductNotificationService {
     fun constructor(repository: ProductRepository)
+    /** Start the notification service */
     fun start(): Job
+    /** Subscribe to notifications */
     suspend fun subscribe(subscriberId: String): ReceiveChannel<Notification>
+    /** Unsubscribe from notifications */
     suspend fun unsubscribe(subscriberId: String)
+    /** Send custom notification */
     suspend fun sendNotification(notification: Notification)
 }
+/** Sealed class for notifications */
 sealed class Notification {
     data class ProductAdded(val productName: String) {
     }
@@ -89,23 +124,33 @@ sealed class Notification {
     data class CustomMessage(val message: String) {
     }
 }
+/** Advanced property delegation with caching and validation */
 class CachedProperty {
     fun constructor(initialValue: T, validator, ttl: Duration)
     override fun getValue(thisRef: Any?, property: KProperty): T
     override fun setValue(thisRef: Any?, property: KProperty, value: T)
 }
+/** Lazy async property delegate */
 class AsyncLazy {
     fun constructor(initializer)
     override fun getValue(thisRef: Any?, property: KProperty): Deferred<T>
 }
+/** Configuration class using advanced property delegation */
 class ServiceConfiguration {
+    /** Cached property with validation */
     var maxConcurrentRequests: Int
+    /** Async lazy property */
     var databaseConnection: Deferred
+    /** Observable property with custom setter */
     var isEnabled: Boolean
 }
+/** Complex coroutine orchestration with select statements */
 class DataProcessingOrchestrator {
+    /** Start processing with multiple workers and error handling */
     fun startProcessing(workerCount: Int): Job
+    /** Add item for processing */
     suspend fun addItem(item: DataItem)
+    /** Data classes for processing */
     data class DataItem(val id: String, val data: String) {
     }
     data class ProcessingResult(val workerId: Int, val result: String) {
@@ -113,12 +158,22 @@ class DataProcessingOrchestrator {
     data class ProcessingError(val workerId: Int, val message: String) {
     }
 }
+/** Main function demonstrating complex features */
 fun main()
+// Notification service example
 var notificationService
 var serviceJob
 var subscription
+// Listen to notifications in background
+// Add a new product to trigger notification
+// Update a product to trigger notification
+// Configuration with advanced delegation
 var config
+// Access async property
 var connection
+// Data processing orchestrator
 var orchestrator
 var processingJob
+// Add some items for processing
+// Cleanup
 </file>

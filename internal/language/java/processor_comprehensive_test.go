@@ -252,3 +252,81 @@ public record Point(int x, int y) {
 		assert.True(t, foundRecord.Extensions.Java.IsRecord, "IsRecord flag should be true")
 	})
 }
+
+func parseJava(t *testing.T, src string) *ir.DistilledFile {
+	t.Helper()
+	file, err := NewProcessor().Process(context.Background(), strings.NewReader(src), "Test.java")
+	require.NoError(t, err)
+	require.NotNil(t, file)
+	return file
+}
+
+// commentsOf returns the format and text of every comment among nodes.
+func commentsOf(nodes []ir.DistilledNode) [][2]string {
+	var got [][2]string
+	for _, c := range nodes {
+		if cm, ok := c.(*ir.DistilledComment); ok {
+			got = append(got, [2]string{cm.Format, cm.Text})
+		}
+	}
+	return got
+}
+
+func TestJava_Comments(t *testing.T) {
+	file := parseJava(t, "// line c\n\n/** Doc c */\npublic class A {\n    public int f() { return 1; }\n}\n")
+	assert.Equal(t, [][2]string{{ir.CommentLine, "line c"}, {ir.CommentDoc, "Doc c"}}, commentsOf(file.Children))
+}
+
+// labels names every node: "doc:<text>", "line:<text>" and "block:<text>" for
+// comments, the name for the rest.
+func labels(nodes []ir.DistilledNode) []string {
+	var out []string
+	for _, n := range nodes {
+		switch n := n.(type) {
+		case *ir.DistilledComment:
+			out = append(out, n.Format+":"+n.Text)
+		case *ir.DistilledFunction:
+			out = append(out, n.Name)
+		case *ir.DistilledField:
+			out = append(out, n.Name)
+		case *ir.DistilledClass:
+			out = append(out, n.Name)
+		case *ir.DistilledPackage:
+			out = append(out, "package "+n.Name)
+		}
+	}
+	return out
+}
+
+func TestJava_ClassBodyComments(t *testing.T) {
+	file := parseJava(t, "package p;\n// after package\npublic class A {\n    // in body\n    /* block\n       two lines */\n    /** m doc */\n    public int f() { return 1; }\n    /*** banner ***/\n    public int x;\n}\n")
+	assert.Equal(t, []string{"package p", "line:after package", "A"}, labels(file.Children))
+	assert.Equal(t, []string{"line:in body", "block:block\ntwo lines", "doc:m doc", "f", "block:banner", "x"},
+		labels(file.Children[2].(*ir.DistilledClass).Children))
+}
+
+// Java 23 Markdown doc comments: a run of "///" lines is one doc.
+func TestJava_TripleSlashDocLines(t *testing.T) {
+	file := parseJava(t, "/// First.\n/// Second.\npublic class A {}\n")
+	assert.Equal(t, []string{"doc:First.\nSecond.", "A"}, labels(file.Children))
+}
+
+// Comments inside initializer blocks are implementation.
+func TestJava_CommentsInsideInitializersStayOut(t *testing.T) {
+	file := parseJava(t, "public class A {\n    static {\n        // in static\n    }\n    {\n        // in instance initializer\n    }\n    public int x;\n}\n")
+	assert.Equal(t, []string{"x"}, labels(file.Children[0].(*ir.DistilledClass).Children))
+}
+
+// A doc before a member that adds no declaration (a static or instance
+// initializer block, a record's compact constructor, an interface constant)
+// is dropped with it: it must not document the next member.
+func TestJava_DocOfInitializerDoesNotMoveToNextMember(t *testing.T) {
+	file := parseJava(t, "public class A {\n    /** static init doc */\n    static { }\n    public void bar() {}\n    /** instance init doc */\n    { }\n    public void baz() {}\n}\n")
+	assert.Equal(t, []string{"bar", "baz"}, labels(file.Children[0].(*ir.DistilledClass).Children))
+
+	file = parseJava(t, "public record R(int x) {\n    /** compact doc */\n    public R { }\n    public int twice() { return x * 2; }\n}\n")
+	assert.Equal(t, []string{"twice"}, labels(file.Children[0].(*ir.DistilledClass).Children))
+
+	file = parseJava(t, "public interface I {\n    /** constant doc */\n    int X = 1;\n    void m();\n}\n")
+	assert.Equal(t, []string{"m"}, labels(file.Children[0].(*ir.DistilledInterface).Children))
+}

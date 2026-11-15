@@ -572,3 +572,73 @@ func TestKotlin_FunctionBodies(t *testing.T) {
 	assert.Equal(t, "{\n        val x = load(id)\n        return x\n    }", fns["find"].Implementation)
 	assert.Equal(t, "= load(id)", fns["quick"].Implementation)
 }
+
+// commentsOf returns the format and text of every comment among nodes.
+func commentsOf(nodes []ir.DistilledNode) [][2]string {
+	var got [][2]string
+	for _, c := range nodes {
+		if cm, ok := c.(*ir.DistilledComment); ok {
+			got = append(got, [2]string{cm.Format, cm.Text})
+		}
+	}
+	return got
+}
+
+func TestKotlin_Comments(t *testing.T) {
+	file := parseKotlin(t, "// line c\n\n/** Doc c */\nfun f(): Int = 1\n")
+	assert.Equal(t, [][2]string{{ir.CommentLine, "line c"}, {ir.CommentDoc, "Doc c"}}, commentsOf(file.Children))
+}
+
+// labels names every node: "doc:<text>", "line:<text>" and "block:<text>" for
+// comments, the name for the rest.
+func labels(nodes []ir.DistilledNode) []string {
+	var out []string
+	for _, n := range nodes {
+		switch n := n.(type) {
+		case *ir.DistilledComment:
+			out = append(out, n.Format+":"+n.Text)
+		case *ir.DistilledFunction:
+			out = append(out, n.Name)
+		case *ir.DistilledField:
+			out = append(out, n.Name)
+		case *ir.DistilledClass:
+			out = append(out, n.Name)
+		case *ir.DistilledInterface:
+			out = append(out, n.Name)
+		case *ir.DistilledImport:
+			out = append(out, "import "+n.Module)
+		case *ir.DistilledPackage:
+			out = append(out, "package "+n.Name)
+		}
+	}
+	return out
+}
+
+// The grammar puts the comments after the package header or an import inside
+// that node; they still come out in source order at file level.
+func TestKotlin_CommentsAroundHeader(t *testing.T) {
+	file := parseKotlin(t, "/** pkg doc */\npackage a.b\n// before imports\nimport x.Y\n// between\nimport x.Z\n\n/** file doc */\n\n/** class doc */\nclass C {\n    // body line\n    /* body block */\n    /** g doc */\n    fun g() {}\n}\n")
+	assert.Equal(t, []string{"doc:pkg doc", "package a.b", "line:before imports", "import x.Y", "line:between", "import x.Z",
+		"doc:file doc", "doc:class doc", "C"}, labels(file.Children))
+	assert.Equal(t, []string{"line:body line", "block:body block", "doc:g doc", "g"}, labels(file.Children[len(file.Children)-1].(*ir.DistilledClass).Children))
+}
+
+func TestKotlin_InterfaceAndObjectComments(t *testing.T) {
+	file := parseKotlin(t, "interface I {\n    /** h doc */\n    fun h()\n}\nobject O {\n    // o line\n    /** x doc */\n    const val X = 1\n}\n")
+	assert.Equal(t, []string{"doc:h doc", "h"}, labels(file.Children[0].(*ir.DistilledInterface).Children))
+	assert.Equal(t, []string{"line:o line", "doc:x doc", "X"}, labels(file.Children[1].(*ir.DistilledClass).Children))
+}
+
+// KDoc is /** */ only: "///" is a plain line comment.
+func TestKotlin_TripleSlashIsALineComment(t *testing.T) {
+	file := parseKotlin(t, "/// not KDoc\nfun f() {}\n")
+	assert.Equal(t, []string{"line:not KDoc", "f"}, labels(file.Children))
+}
+
+// An init block or a function body is implementation: its comments and local
+// declarations are not members, and the doc of an init block (which adds no
+// declaration) does not document anything.
+func TestKotlin_CommentsInsideBodiesStayOut(t *testing.T) {
+	file := parseKotlin(t, "class K {\n    /** init doc */\n    init {\n        // inside init\n        val local = 1\n    }\n    fun f() {\n        // inside body\n    }\n}\n")
+	assert.Equal(t, []string{"f"}, labels(file.Children[0].(*ir.DistilledClass).Children))
+}

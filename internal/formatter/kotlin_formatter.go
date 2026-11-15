@@ -41,17 +41,35 @@ func (f *KotlinFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent 
 	case *ir.DistilledField:
 		_, err := fmt.Fprintln(w, f.formatField(n, indent))
 		return err
+	case *ir.DistilledComment:
+		writeCStyleComment(w, n, strings.Repeat("    ", indent))
+		return nil
 	default:
 		// Report the node, then process any children recursively
 		reportUnhandled("kotlin", node)
-		children := node.GetChildren()
-		for _, child := range children {
-			if err := f.FormatNode(w, child, indent); err != nil {
-				return err
-			}
-		}
-		return nil
+		return f.FormatNodes(w, node.GetChildren(), indent)
 	}
+}
+
+// FormatNodes formats sibling nodes. The doc comments of a node the formatter
+// does not print (the package declaration) are dropped with it.
+func (f *KotlinFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, indent int) error {
+	parts := formatCStyleNodes(nodes, strings.Repeat("    ", indent), func(node ir.DistilledNode) (string, bool) {
+		var b strings.Builder
+		_ = f.FormatNode(&b, node, indent) // a strings.Builder does not fail
+		switch node.(type) {
+		case *ir.DistilledImport, *ir.DistilledClass, *ir.DistilledInterface, *ir.DistilledEnum,
+			*ir.DistilledFunction, *ir.DistilledField:
+			return strings.TrimSuffix(b.String(), "\n"), true
+		}
+		return strings.TrimSuffix(b.String(), "\n"), false
+	})
+	for _, part := range parts {
+		if _, err := fmt.Fprintln(w, part); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (f *KotlinFormatter) formatImport(imp *ir.DistilledImport) string {
@@ -188,36 +206,33 @@ func (f *KotlinFormatter) formatClass(class *ir.DistilledClass, indent int) stri
 
 	parts = append(parts, indentStr+classDecl+" {")
 
-	// Format children
-	for _, child := range class.Children {
+	// Format children; the docs of a member that is not printed go with it
+	parts = append(parts, formatCStyleNodes(class.Children, indentStr+"    ", func(child ir.DistilledNode) (string, bool) {
 		switch n := child.(type) {
 		case *ir.DistilledFunction:
 			// Skip primary constructors for data classes as they're shown in class declaration
 			if isDataClass && n.Name == "constructor" {
 				// Check if it has @Primary decorator
-				isPrimary := false
 				for _, dec := range n.Decorators {
 					if dec == "@Primary" {
-						isPrimary = true
-						break
+						return "", false
 					}
-				}
-				if isPrimary {
-					continue
 				}
 			}
 			// Show all other functions
-			parts = append(parts, f.formatFunction(n, indent+1))
+			return f.formatFunction(n, indent+1), true
 		case *ir.DistilledField:
 			// For data classes, fields are already in constructor params, skip them
-			if !isDataClass {
-				parts = append(parts, f.formatField(n, indent+1))
+			if isDataClass {
+				return "", false
 			}
+			return f.formatField(n, indent+1), true
 		case *ir.DistilledClass:
 			// Handle nested classes (e.g., sealed class variants, companion objects)
-			parts = append(parts, f.formatClass(n, indent+1))
+			return f.formatClass(n, indent+1), true
 		}
-	}
+		return "", false
+	})...)
 
 	// Add closing brace
 	parts = append(parts, indentStr+"}")
@@ -269,12 +284,13 @@ func (f *KotlinFormatter) formatInterface(intf *ir.DistilledInterface, indent in
 	var parts []string
 	parts = append(parts, indentStr+intfDecl+" {")
 
-	// Format children (methods)
-	for _, child := range intf.Children {
+	// Format children (methods and comments)
+	parts = append(parts, formatCStyleNodes(intf.Children, indentStr+"    ", func(child ir.DistilledNode) (string, bool) {
 		if fn, ok := child.(*ir.DistilledFunction); ok {
-			parts = append(parts, f.formatFunction(fn, indent+1))
+			return f.formatFunction(fn, indent+1), true
 		}
-	}
+		return "", false
+	})...)
 
 	// Add closing brace
 	parts = append(parts, indentStr+"}")

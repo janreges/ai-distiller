@@ -11,11 +11,31 @@
 #include "chrono"
 #include "exception"
 #include "utility"
+/** @brief Helper variable template for has_process_method */
 bool has_process_method_v;
+/**
+ * @brief Generic resource manager with RAII and move semantics
+ * @tparam Resource The type of resource to manage
+ * @tparam Deleter Function object for resource cleanup
+ */
 template<typename Resource>
 class ResourceManager {
+    /**
+     * @brief Constructor taking ownership of resource
+     * @param resource Pointer to resource
+     * @param deleter Custom deleter (optional)
+     */
     ResourceManager(Resource* resource, Deleter deleter) {}
+    /**
+     * @brief Move constructor
+     * @param other Source object
+     */
     ResourceManager(ResourceManager& other) {}
+    /**
+     * @brief Move assignment operator
+     * @param other Source object
+     * @return Reference to this object
+     */
     ResourceManager& operator=(ResourceManager& other) {
         if (this != &other) {
             reset();
@@ -24,88 +44,209 @@ class ResourceManager {
         }
         return *this;
     }
+    /** @brief Destructor */
     ~ResourceManager() {
         reset();
     }
+    /** @brief Deleted copy constructor */
     ResourceManager(const ResourceManager ) = delete
+    /** @brief Deleted copy assignment */
     ResourceManager& operator=(const ResourceManager ) = delete
+    /**
+     * @brief Get raw pointer to resource
+     * @return Raw pointer
+     */
     Resource* get() const { return resource_; }
+    /**
+     * @brief Release ownership of resource
+     * @return Raw pointer to released resource
+     */
     Resource* release() {
         return std::exchange(resource_, nullptr);
     }
+    /**
+     * @brief Reset with new resource
+     * @param resource New resource pointer
+     */
     void reset(Resource* resource) {
         if (resource_) {
             deleter_(resource_);
         }
         resource_ = resource;
     }
+    /**
+     * @brief Boolean conversion operator
+     * @return true if managing a resource
+     */
     () {
         return resource_ != nullptr;
     }
+    /**
+     * @brief Dereference operator
+     * @return Reference to resource
+     */
     Resource& operator*() const {
         return *resource_;
     }
+    /**
+     * @brief Arrow operator
+     * @return Pointer to resource
+     */
     Resource* operator->() const {
         return resource_;
     }
 };
+/** @brief Base processor interface */
 class IProcessor {
+    /** @brief Virtual destructor */
     virtual ~IProcessor() = default
+    /**
+     * @brief Process data
+     * @param data Input data
+     * @return Processed result
+     */
     virtual process(const & data) = 0
+    /**
+     * @brief Get processor name
+     * @return Processor identifier
+     */
     virtual getName() const = 0
 };
+/** @brief Concrete text processor */
 class TextProcessor : public IProcessor {
+    /**
+     * @brief Constructor
+     * @param name Processor name
+     */
     TextProcessor(const & name) {}
+    /**
+     * @brief Process text data
+     * @param data Input text
+     * @return Processed text
+     */
     process(const & data) {
         return "[" + name_ + "] " + data;
     }
+    /**
+     * @brief Get processor name
+     * @return Name string
+     */
     getName() const {
         return name_;
     }
 };
+/**
+ * @brief Template specialization example for different numeric types
+ * @tparam T Numeric type
+ */
 template<typename T>
 class Calculator {
+    /**
+     * @brief Add two values
+     * @param a First value
+     * @param b Second value
+     * @return Sum
+     */
     static T add(const T& a, const T& b) {
         return a + b;
     }
+    /**
+     * @brief Multiply two values
+     * @param a First value
+     * @param b Second value
+     * @return Product
+     */
     static T multiply(const T& a, const T& b) {
         return a * b;
     }
+    /**
+     * @brief Get type information
+     * @return Type name string
+     */
     static getTypeName() {
         return "generic";
     }
 };
+/** @brief Specialization for double */
 class  {
+    /**
+     * @brief Add two doubles with precision handling
+     * @param a First value
+     * @param b Second value
+     * @return Sum
+     */
     static double add(const double& a, const double& b) {
         return a + b;
     }
+    /**
+     * @brief Multiply two doubles
+     * @param a First value
+     * @param b Second value
+     * @return Product
+     */
     static double multiply(const double& a, const double& b) {
         return a * b;
     }
+    /**
+     * @brief Divide two doubles with zero check
+     * @param a Dividend
+     * @param b Divisor
+     * @return Quotient
+     * @throws std::invalid_argument if divisor is zero
+     */
     static double divide(const double& a, const double& b) {
         if (std::abs(b) < 1e-10) {
             throw std::invalid_argument("Division by zero");
         }
         return a / b;
     }
+    /**
+     * @brief Get type information
+     * @return Type name string
+     */
     static getTypeName() {
         return "double";
     }
 };
+/**
+ * @brief Partial specialization for pointer types
+ * @tparam T Pointed-to type
+ */
 template<typename T>
 class  {
+    /**
+     * @brief Add offset to pointer
+     * @param ptr Base pointer
+     * @param offset Offset to add
+     * @return New pointer
+     */
     static T* add(T* ptr, auto offset) {
         return ptr + offset;
     }
+    /**
+     * @brief Get type information
+     * @return Type name string
+     */
     static getTypeName() {
         return "pointer";
     }
 };
+/** @brief Advanced processing pipeline with async operations */
 class ProcessingPipeline {
+    /** @brief Constructor */
     ProcessingPipeline() = default
+    /**
+     * @brief Add processor to pipeline
+     * @param processor Unique pointer to processor
+     */
     void addProcessor(auto processor) {
         processors_.push_back(std::move(processor));
     }
+    /**
+     * @brief Process data through pipeline synchronously
+     * @param input Input data
+     * @return Processed result
+     */
     process(const & input) const {
         std::string result = input;
         for (const auto& processor : processors_) {
@@ -113,11 +254,21 @@ class ProcessingPipeline {
         }
         return result;
     }
+    /**
+     * @brief Process data asynchronously
+     * @param input Input data
+     * @return Future containing the result
+     */
     processAsync(const & input) const {
         return std::async(std::launch::async, [this, input]() {
             return this->process(input);
         });
     }
+    /**
+     * @brief Process multiple inputs in parallel
+     * @param inputs Vector of input strings
+     * @return Vector of futures
+     */
     processMultiple(const & inputs) const {
         std::vector<std::future<std::string>> futures;
         futures.reserve(inputs.size());
@@ -128,28 +279,63 @@ class ProcessingPipeline {
 
         return futures;
     }
+    /**
+     * @brief Get number of processors
+     * @return Processor count
+     */
     size_t getProcessorCount() const {
         return processors_.size();
     }
 };
+/**
+ * @brief Template function with SFINAE
+ * @tparam T Type to process
+ * @param obj Object to process
+ * @param data Data to pass to process method
+ * @return Processed result if T has process method, empty string otherwise
+ */
 template<typename T>
 safeProcess(T& obj, const & data) {
     return obj.process(data);
 }
+/**
+ * @brief SFINAE overload for types without process method
+ * @tparam T Type to process
+ * @param obj Object (unused)
+ * @param data Data (unused)
+ * @return Empty string
+ */
 template<typename T>
 safeProcess(T& obj, const & data) {
     return "";
 }
+/**
+ * @brief Factory function with perfect forwarding
+ * @tparam T Type to create
+ * @tparam Args Constructor argument types
+ * @param args Constructor arguments
+ * @return Unique pointer to created object
+ */
 template<typename T>
 makeUnique() {
     return std::make_unique<T>(std::forward<Args>(args)...);
 }
+/** @brief Exception class for processing errors */
 class ProcessingException : public std::exception {
+    /**
+     * @brief Constructor
+     * @param message Error message
+     */
     ProcessingException(const & message) {}
+    /**
+     * @brief Get error message
+     * @return Error message C-string
+     */
     const char* what() const {
         return message_.c_str();
     }
 };
+/** @brief Demonstration function for advanced features */
 void demonstrateAdvancedFeatures() {
     // Resource management with custom deleter
     auto customDeleter = [](TextProcessor* p) {

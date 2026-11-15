@@ -1,46 +1,72 @@
 <file path="source.kt">
 import kotlin.collections.List
 import java.time.LocalDateTime
+/**
+ * Basic Kotlin features demonstration including data classes, sealed classes,
+ * null safety, extension functions, and when expressions
+ */
+/** Data class showcasing Kotlin's concise syntax and automatic methods */
 data class User(val id: Long, val name: String, val email: String?, val createdAt: LocalDateTime) {
+    /** Public method to get display name */
     fun getDisplayName(): String
+    /** Private validation method */
     private fun isValidEmail(): Boolean
     object Companion {
+        /** Factory method for creating users */
         fun createUser(name: String, email: String?): User
     }
 }
+/** Sealed class hierarchy for representing different user states */
 sealed class UserState {
+    /** Active user state */
     data class Active(val lastLoginAt: LocalDateTime) {
     }
+    /** Suspended user with reason */
     data class Suspended(val reason: String, val until: LocalDateTime?) {
     }
+    /** Permanently banned user */
     object Banned {
     }
+    /** Pending verification */
     object PendingVerification {
     }
 }
+/** Extension function on String for email validation */
 fun String.isValidEmail(): Boolean
+/** Extension property on List */
 var secondOrNull: T?
+/** Basic service class demonstrating various Kotlin features */
 class UserService {
     private var users: MutableList
     internal var isInitialized: Boolean
+    /** Public method to add a user */
     fun addUser(user: User): Boolean
+    /** Find user by ID with null safety */
     fun findUserById(id: Long): User?
+    /** Get user state using when expression with sealed classes */
     fun getUserState(userId: Long): String
+    /** Private method to determine user state */
     private fun determineUserState(user: User): UserState
+    /** Protected method for subclasses */
     protected fun validateUserData(user: User): Boolean
 }
+/** Enum class with methods */
 enum class UserRole {
     ADMIN("Administrator", setOf("read", "write", "delete", "manage"))
     MODERATOR("Moderator", setOf("read", "write", "moderate"))
     USER("User", setOf("read", "write_own"))
     fun hasPermission(permission: String): Boolean
 }
+/** Object declaration for constants and utilities */
 object UserConstants {
     const val MAX_USERNAME_LENGTH
     const val MIN_PASSWORD_LENGTH
     var ALLOWED_EMAIL_DOMAINS
+    /** Utility function to check if email domain is allowed */
     fun isAllowedEmailDomain(email: String): Boolean
 }
+/** Simple inline function */
 inline fun <T> T.applyIf(condition: Boolean, block: T.() -> T): T
+/** Main function demonstrating usage */
 fun main()
 </file>

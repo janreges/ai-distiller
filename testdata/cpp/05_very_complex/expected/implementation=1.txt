@@ -18,14 +18,29 @@
 #include "coroutine"
 #include "ranges"
 #include "span"
+/** @brief Simple coroutine return type */
 struct SimpleTask {
+    /**
+     * @brief Constructor
+     * @param h Coroutine handle
+     */
     SimpleTask(auto h) {}
+    /** @brief Destructor */
     ~SimpleTask() {
         if (handle_) {
             handle_.destroy();
         }
     }
+    /**
+     * @brief Move constructor
+     * @param other Other task
+     */
     SimpleTask(SimpleTask& other) {}
+    /**
+     * @brief Move assignment
+     * @param other Other task
+     * @return Reference to this
+     */
     SimpleTask& operator=(SimpleTask& other) {
         if (this != &other) {
             if (handle_) {
@@ -35,9 +50,14 @@ struct SimpleTask {
         }
         return *this;
     }
+    /** @brief Deleted copy operations */
     SimpleTask(const SimpleTask )
     SimpleTask& operator=(const SimpleTask )
 };
+/**
+ * @brief Advanced SFINAE for method detection
+ * @tparam T Type to check
+ */
 template<typename T>
 class HasAdvancedMethods {
     static test_serialize(int )
@@ -51,14 +71,33 @@ class HasAdvancedMethods {
     static bool has_validate;
     static bool is_serializable;
 };
+/**
+ * @brief Advanced processor using concepts and coroutines
+ * @tparam T Data type (must satisfy AdvancedNumeric concept)
+ */
 template<typename AdvancedNumeric>
 class AdvancedProcessor {
+    /**
+     * @brief Constructor
+     * @param name Processor name
+     */
     AdvancedProcessor(const & name) {}
+    /**
+     * @brief Process data using concepts
+     * @param data Input data
+     * @return Processed result
+     */
     T process(const T& data) {
         T result = data;
         ++result;
         return result * static_cast<T>(2);
     }
+    /**
+     * @brief Process container of data
+     * @tparam Container Container type
+     * @param container Input container
+     * @return Processed results
+     */
     template<typename Container>
     processContainer(const Container& container) {
 
@@ -71,11 +110,22 @@ class AdvancedProcessor {
 
         return results;
     }
+    /**
+     * @brief Generate sequence using coroutine
+     * @param start Starting value
+     * @param count Number of values to generate
+     * @return Generator coroutine
+     */
     generateSequence(T start, size_t count) {
         for (size_t i = 0; i < count; ++i) {
             co_yield start + static_cast<T>(i);
         }
     }
+    /**
+     * @brief Process data asynchronously
+     * @param data Input data
+     * @return SimpleTask coroutine
+     */
     SimpleTask processAsync(const T& data) {
         // Simulate async work
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -84,18 +134,34 @@ class AdvancedProcessor {
         co_return;
     }
 };
+/** @brief Sophisticated type-erased container */
 class TypeErasedContainer {
+    /**
+     * @brief Store any type that satisfies the concept
+     * @tparam T Type to store
+     * @param value Value to store
+     */
     template<typename T>
     void store(T& value) {
         using DecayedT = std::decay_t<T>;
 
         data_.emplace_back(std::make_unique<Wrapper<DecayedT>>(std::forward<T>(value)));
     }
+    /**
+     * @brief Process all stored values
+     * @tparam F Function type
+     * @param f Processing function
+     */
     void processAll(F& f) const {
         for (const auto& wrapper : data_) {
             f(wrapper->getValue());
         }
     }
+    /**
+     * @brief Get stored value by type
+     * @tparam T Type to retrieve
+     * @return Optional value
+     */
     template<typename T>
     get() const {
         for (const auto& wrapper : data_) {
@@ -105,8 +171,17 @@ class TypeErasedContainer {
         }
         return std::nullopt;
     }
+    /**
+     * @brief Get size
+     * @return Number of stored items
+     */
     size_t size() const { return data_.size(); }
 };
+/**
+ * @brief Consteval function for compile-time string processing
+ * @param str Input string
+ * @return Processed string length
+ */
 size_t processString(const char* str) {
     size_t len = 0;
     while (str[len] != '\0') {
@@ -114,6 +189,12 @@ size_t processString(const char* str) {
     }
     return len;
 }
+/**
+ * @brief Constexpr function with complex logic
+ * @tparam T Numeric type
+ * @param value Input value
+ * @return Processed result
+ */
 template<typename AdvancedNumeric>
 T complexCalculation(T value) const {
     T result = value;
@@ -122,6 +203,12 @@ T complexCalculation(T value) const {
     }
     return result;
 }
+/**
+ * @brief Use ranges and views (C++20)
+ * @tparam Range Range type
+ * @param range Input range
+ * @return Transformed results
+ */
 processRange(Range& range) {
     namespace views = std::views;
 
@@ -129,6 +216,7 @@ processRange(Range& range) {
                 | views::transform([](const auto& x) { return x * 2; })
                 | views::take(10);
 }
+/** @brief Demonstration of very complex features */
 void demonstrateVeryComplexFeatures() {
     // Concepts demonstration
     AdvancedProcessor<int> intProcessor("IntProcessor");

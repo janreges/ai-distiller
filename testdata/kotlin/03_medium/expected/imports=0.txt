@@ -1,42 +1,60 @@
 <file path="source.kt">
+/**
+ * Medium complexity demonstration with generics, higher-order functions,
+ * coroutines, inline functions, reified types, and contracts
+ */
+/** Generic repository interface with covariant type parameter */
 interface Repository {
     suspend fun findById(id: String): T?
     suspend fun findAll(): List<T>
     suspend fun count(): Long
 }
+/** Generic mutable repository with contravariant and invariant type parameters */
 interface MutableRepository {
     suspend fun save(entity: T): T
     suspend fun update(entity: T): T
     suspend fun delete(id: String): Boolean
     suspend fun saveAll(entities: List): List<T>
 }
+/** Generic service class with multiple type parameters and constraints */
 abstract class BaseService {
     fun constructor(repository: R)
+    /** Generic method with reified type parameter */
     inline fun <U> findByType(): Flow<U>
+    /** Higher-order function with generic parameters */
     suspend fun <K> processEntities(transformer: (T) -> K, filter: (K) -> Boolean): List<K>
+    /** Method with generic constraints */
     suspend fun <U> findAndMap(id: String, mapper: (T) -> U): U?
+    /** Abstract method for subclasses */
     abstract suspend fun validateEntity(entity: T): ValidationResult
 }
+/** Entity interface with comparable constraint */
 interface Entity {
     override fun compareTo(other: Entity): Int
 }
+/** Concrete entity implementation */
 data class User(val id: String, val version: Long, val name: String, val email: String, val role: UserRole) {
+    /** Custom comparison based on name */
     fun compareByName(other: User): Int
 }
+/** Enum class for user roles */
 enum class UserRole {
     ADMIN
     MODERATOR
     USER
     GUEST
 }
+/** Sealed class for validation results */
 sealed class ValidationResult {
     object Valid {
     }
     data class Invalid(val errors: List) {
     }
+    /** Helper methods using when expressions */
     fun isValid(): Boolean
     fun getErrors(): List<String>
 }
+/** User repository implementation with coroutines */
 class UserRepository {
     override suspend fun findById(id: String): User?
     override suspend fun findAll(): List<User>
@@ -45,15 +63,21 @@ class UserRepository {
     override suspend fun update(entity: User): User
     override suspend fun delete(id: String): Boolean
     override suspend fun saveAll(entities: List): List<User>
+    /** Repository-specific method with Flow */
     fun findByRoleFlow(role: UserRole): Flow<User>
 }
+/** User service extending generic base service */
 class UserService {
     fun constructor(repository: UserRepository)
     override suspend fun validateEntity(entity: User): ValidationResult
+    /** Method using inline function with reified type */
     inline fun <T> getEventsOfType(): Flow<T>
+    /** Method with higher-order function parameter */
     suspend fun processUsersInBatches(batchSize: Int, processor: (List<User>) -> Unit)
+    /** Coroutine-based method with structured concurrency */
     suspend fun createUsersAsync(userDtos: List): List<User>
 }
+/** Sealed class for user events */
 sealed class UserEvent {
     data class Created(val userId: String) {
     }
@@ -62,17 +86,26 @@ sealed class UserEvent {
     data class Deleted(val userId: String) {
     }
 }
+/** Data transfer object */
 data class UserDto(val name: String, val email: String, val role: UserRole) {
 }
+/** Generic cache class with type parameters */
 class Cache {
     fun constructor(maxSize: Int)
+    /** Generic method with nullable return */
     fun get(key: K): V?
+    /** Put method with eviction logic */
     fun put(key: K, value: V, ttlMillis: Long)
+    /** Clear expired entries */
     fun clearExpired()
 }
 inline fun <T> T?.requireNotNull(message: () -> String): T
+/** Higher-order function with multiple generic parameters */
 inline fun <T, R, S> combineAndTransform(first: T, second: R, transformer: (T, R) -> S): S
+/** Extension function with reified type parameter */
 inline fun <T> Any.safeCast(): T?
+/** Coroutine builder extension */
 suspend fun <T> List<T>.forEachAsync(dispatcher: CoroutineDispatcher, action: (T) -> Unit)
+/** Main function demonstrating the medium complexity features */
 fun main()
 </file>

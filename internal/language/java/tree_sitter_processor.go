@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/janreges/ai-distiller/internal/ir"
+	"github.com/janreges/ai-distiller/internal/language/commentutil"
 	sitter "github.com/smacker/go-tree-sitter"
 	tree_sitter_java "github.com/tree-sitter/tree-sitter-java/bindings/go"
 )
@@ -83,8 +84,7 @@ func (p *TreeSitterProcessor) processNode(node *sitter.Node, source []byte, file
 	case "program":
 		// Process all children of the program node (top-level declarations)
 		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
-			p.processNode(child, source, file, parent)
+			p.processStatement(node.Child(i), source, file, parent)
 		}
 	case "ERROR":
 		file.Errors = append(file.Errors, ir.DistilledError{
@@ -96,8 +96,10 @@ func (p *TreeSitterProcessor) processNode(node *sitter.Node, source []byte, file
 		})
 		// Do not recurse into ERROR nodes, as their children are unstructured tokens.
 		return // Use return to stop processing this branch
-	case "block_comment":
-		p.processJavaDocComment(node, source, file, parent)
+	case "line_comment", "block_comment":
+		p.processComment(node, source, file, parent)
+	case "static_initializer", "block":
+		// Initializer blocks are implementation: nothing in them is a member.
 	default:
 		// Recursively process children
 		for i := 0; i < int(node.ChildCount()); i++ {
@@ -309,12 +311,7 @@ func (p *TreeSitterProcessor) processAnnotationTypeDeclaration(node *sitter.Node
 // processAnnotationTypeBody processes the body of an annotation type
 func (p *TreeSitterProcessor) processAnnotationTypeBody(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		if child.Type() == "annotation_type_element_declaration" {
-			p.processAnnotationElement(child, source, file, parent)
-		} else {
-			p.processNode(child, source, file, parent)
-		}
+		p.processStatement(node.Child(i), source, file, parent)
 	}
 }
 
@@ -1004,17 +1001,40 @@ func (p *TreeSitterProcessor) extractThrows(node *sitter.Node, source []byte, me
 // processClassBody processes the body of a class
 func (p *TreeSitterProcessor) processClassBody(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		p.processNode(child, source, file, parent)
+		p.processStatement(node.Child(i), source, file, parent)
 	}
 }
 
 // processInterfaceBody processes the body of an interface
 func (p *TreeSitterProcessor) processInterfaceBody(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
 	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-		p.processNode(child, source, file, parent)
+		p.processStatement(node.Child(i), source, file, parent)
 	}
+}
+
+// processStatement processes node, one statement of the file or of a class,
+// interface, enum or annotation type body. Comments are added where they
+// are. The doc comments right before a statement that adds no declaration (a
+// static or instance initializer block, a record's compact constructor, an
+// interface constant) are dropped, so they do not document the next
+// declaration (commentutil.AppendStatement).
+func (p *TreeSitterProcessor) processStatement(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
+	if node.Type() == "line_comment" || node.Type() == "block_comment" {
+		p.processComment(node, source, file, parent)
+		return
+	}
+	if !node.IsNamed() {
+		return
+	}
+	list := p.childList(file, parent)
+	before := len(*list)
+	if node.Type() == "annotation_type_element_declaration" {
+		p.processAnnotationElement(node, source, file, parent)
+	} else {
+		p.processNode(node, source, file, parent)
+	}
+	added := append([]ir.DistilledNode(nil), (*list)[before:]...)
+	*list = commentutil.AppendStatement((*list)[:before], added)
 }
 
 // processEnumBody processes the body of an enum
@@ -1026,8 +1046,7 @@ func (p *TreeSitterProcessor) processEnumBody(node *sitter.Node, source []byte, 
 		} else if child.Type() == "enum_body_declarations" {
 			// Process methods and fields in enum
 			for j := 0; j < int(child.ChildCount()); j++ {
-				decl := child.Child(j)
-				p.processNode(decl, source, file, parent)
+				p.processStatement(child.Child(j), source, file, parent)
 			}
 		}
 	}
@@ -1070,6 +1089,19 @@ func (p *TreeSitterProcessor) nodeLocation(node *sitter.Node) ir.Location {
 		EndLine:     int(node.EndPoint().Row) + 1,
 		EndColumn:   int(node.EndPoint().Column) + 1,
 	}
+}
+
+// childList returns the children list that addToParent appends to for parent.
+func (p *TreeSitterProcessor) childList(file *ir.DistilledFile, parent ir.DistilledNode) *[]ir.DistilledNode {
+	switch n := parent.(type) {
+	case *ir.DistilledClass:
+		return &n.Children
+	case *ir.DistilledInterface:
+		return &n.Children
+	case *ir.DistilledEnum:
+		return &n.Children
+	}
+	return &file.Children
 }
 
 // addToParent adds a node to its parent or to the file
@@ -1201,19 +1233,51 @@ func (p *TreeSitterProcessor) extractElementValuePair(node *sitter.Node, source 
 	return ""
 }
 
-// processJavaDocComment processes JavaDoc comments (/** ... */)
-func (p *TreeSitterProcessor) processJavaDocComment(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
-	text := string(source[node.StartByte():node.EndByte()])
-
-	// Only process JavaDoc comments (start with /**)
-	if !strings.HasPrefix(text, "/**") {
+// processComment adds a comment. A /** */ comment is a Javadoc (parseJavaDoc);
+// any other comment is classified by commentutil.StripCStyle, where "///"
+// starts a Java 23 Markdown doc comment and a run of "///" lines is one doc.
+func (p *TreeSitterProcessor) processComment(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
+	raw := string(source[node.StartByte():node.EndByte()])
+	text, format := commentutil.StripCStyle(raw)
+	if format == ir.CommentDoc && strings.HasPrefix(raw, "/**") {
+		if javaDoc := p.parseJavaDoc(raw); javaDoc != nil {
+			p.addToParent(file, parent, javaDoc)
+		}
 		return
 	}
 
-	javaDoc := p.parseJavaDoc(text)
-	if javaDoc != nil {
-		p.addToParent(file, parent, javaDoc)
+	comment := &ir.DistilledComment{
+		BaseNode: ir.BaseNode{
+			Location: p.nodeLocation(node),
+		},
+		Text:   text,
+		Format: format,
 	}
+	if list := p.childList(file, parent); len(*list) > 0 && p.continuesLineDoc(node, source) {
+		if prev, ok := (*list)[len(*list)-1].(*ir.DistilledComment); ok && prev.IsDoc() {
+			prev.Text += "\n" + text
+			prev.Location.EndLine = comment.Location.EndLine
+			prev.Location.EndColumn = comment.Location.EndColumn
+			return
+		}
+	}
+	p.addToParent(file, parent, comment)
+}
+
+// continuesLineDoc reports whether the comment node is a "///" doc line
+// directly below another one.
+func (p *TreeSitterProcessor) continuesLineDoc(node *sitter.Node, source []byte) bool {
+	prev := node.PrevSibling()
+	return prev != nil && prev.Type() == "line_comment" &&
+		prev.EndPoint().Row+1 == node.StartPoint().Row &&
+		isLineDoc(string(source[node.StartByte():node.EndByte()])) &&
+		isLineDoc(string(source[prev.StartByte():prev.EndByte()]))
+}
+
+// isLineDoc reports whether a raw comment is a "///" doc line.
+func isLineDoc(raw string) bool {
+	_, format := commentutil.StripCStyle(raw)
+	return format == ir.CommentDoc && strings.HasPrefix(raw, "///")
 }
 
 // parseJavaDoc parses a JavaDoc comment and extracts structured information

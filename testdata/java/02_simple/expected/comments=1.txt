@@ -1,9 +1,12 @@
 <file path="source.java">
+// Level 2: SimpleOOP.java
 package com.aidi.test.oop
 
 public class SimpleOOP {
     public final String id;
+    // Test for volatile keyword
     public SimpleOOP(String id, String name);
+    // Overloaded constructor
     public SimpleOOP(String id);
     public String getName();
     public void setName(String name);

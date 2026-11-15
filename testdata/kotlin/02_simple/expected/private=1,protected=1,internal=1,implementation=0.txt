@@ -1,22 +1,37 @@
 <file path="source.kt">
 import kotlin.properties.Delegates
 import kotlin.random.Random
+/**
+ * Advanced OOP demonstration with interfaces, inheritance, delegation,
+ * property delegates, and companion objects
+ */
+/** Base interface for all entities */
 interface Entity {
+    /** Default implementation of a method */
     fun getAge(): Long
+    /** Abstract method to be implemented */
     fun getEntityType(): String
 }
+/** Auditable interface for tracking changes */
 interface Auditable {
+    /** Method to mark entity as modified */
     fun markModified(by: String)
 }
+/** Abstract base class for all persistent entities */
 abstract class BaseEntity {
     val id: String
     val createdAt: Long
     fun constructor(id: String, createdAt: Long)
+    /** Protected property for subclasses */
     protected var isActive: Boolean
+    /** Public method to activate/deactivate */
     fun setActive(active: Boolean)
+    /** Abstract method for validation */
     abstract fun validate(): Boolean
+    /** Open method that can be overridden */
     fun getStatusMessage(): String
 }
+/** Product class extending BaseEntity */
 class Product {
     val name: String
     val category: String
@@ -24,63 +39,93 @@ class Product {
     fun constructor(id: String, name: String, category: String, _price: Double)
     var lastModified: Long
     var modifiedBy: String?
+    /** Property with custom getter and setter */
     var price: Double
+    /** Lazy property */
     var description: String
+    /** Observable property */
     var stock: Int
+    /** Vetoable property */
     var discount: Double
     override fun getEntityType(): String
     override fun validate(): Boolean
     override fun getStatusMessage(): String
+    /** Product-specific method */
     fun applyDiscount(discountPercent: Double): Double
     object Companion {
         private var nextId
+        /** Factory method for creating products */
         fun create(name: String, category: String, price: Double): Product
+        /** Validation constants */
         const val MAX_NAME_LENGTH
         const val MIN_PRICE
     }
 }
+/** Category class with delegation */
 class Category {
     val name: String
     private val auditDelegate: Auditable
     fun constructor(id: String, name: String, auditDelegate: Auditable)
 }
+/** Audit implementation for delegation */
 class AuditImpl {
     var lastModified: Long
     var modifiedBy: String?
 }
+/** Service class demonstrating composition over inheritance */
 class ProductService {
     private val auditService: AuditService
     fun constructor(auditService: AuditService)
     private var products
     private var categories
+    /** Public method to add product */
     fun addProduct(product: Product): Result<Unit>
+    /** Find product by ID */
     fun findProduct(id: String): Product?
+    /** Get all products in category */
     fun getProductsInCategory(categoryName: String): List<Product>
+    /** Private helper method */
     private fun validateProductData(product: Product): Boolean
 }
+/** Audit service for logging actions */
 class AuditService {
     private var auditLog
+    /** Log an action */
     fun logAction(action: String, entityId: String)
+    /** Get audit log */
     fun getAuditLog(): List<AuditEntry>
+    /** Internal audit entry class */
     data class AuditEntry(val action: String, val entityId: String, val timestamp: Long) {
     }
 }
+/** Singleton object for managing configuration */
 object ConfigManager {
     private var config
+    /** Set configuration value */
     fun setConfig(key: String, value: String)
+    /** Get configuration value */
     fun getConfig(key: String): String?
+    /** Get configuration with default */
     fun getConfigOrDefault(key: String, default: String): String
 }
+/** Demonstration of class with multiple constructors */
 class ShoppingCart {
     private var items
     private var _customerId: String?
+    /** Primary constructor */
     fun constructor()
+    /** Secondary constructor with customer ID */
     fun constructor(customerId: String)
+    /** Property for customer ID */
     var customerId: String?
+    /** Add item to cart */
     fun addItem(product: Product, quantity: Int)
+    /** Calculate total price */
     fun calculateTotal(): Double
+    /** Nested data class for cart items */
     data class CartItem(val product: Product, var quantity: Int) {
     }
 }
+/** Main function demonstrating the functionality */
 fun main()
 </file>

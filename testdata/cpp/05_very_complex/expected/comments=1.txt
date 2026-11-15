@@ -18,14 +18,43 @@
 #include "coroutine"
 #include "ranges"
 #include "span"
+// ============================================================================
+// C++20 CONCEPTS SECTION
+// ============================================================================
+// ============================================================================
+// COROUTINES SECTION (C++20)
+// ============================================================================
+/** @brief Simple coroutine return type */
 struct SimpleTask {
+    /**
+     * @brief Constructor
+     * @param h Coroutine handle
+     */
     SimpleTask(auto h)
+    /** @brief Destructor */
     ~SimpleTask()
+    /**
+     * @brief Move constructor
+     * @param other Other task
+     */
     SimpleTask(SimpleTask& other)
+    /**
+     * @brief Move assignment
+     * @param other Other task
+     * @return Reference to this
+     */
     SimpleTask& operator=(SimpleTask& other)
+    /** @brief Deleted copy operations */
     SimpleTask(const SimpleTask )
     SimpleTask& operator=(const SimpleTask )
 };
+// ============================================================================
+// ADVANCED TEMPLATE METAPROGRAMMING
+// ============================================================================
+/**
+ * @brief Advanced SFINAE for method detection
+ * @tparam T Type to check
+ */
 template<typename T>
 class HasAdvancedMethods {
     static test_serialize(int )
@@ -39,26 +68,97 @@ class HasAdvancedMethods {
     static bool has_validate;
     static bool is_serializable;
 };
+// ============================================================================
+// ADVANCED CLASSES WITH C++20 FEATURES
+// ============================================================================
+/**
+ * @brief Advanced processor using concepts and coroutines
+ * @tparam T Data type (must satisfy AdvancedNumeric concept)
+ */
 template<typename AdvancedNumeric>
 class AdvancedProcessor {
+    /**
+     * @brief Constructor
+     * @param name Processor name
+     */
     AdvancedProcessor(const & name)
+    /**
+     * @brief Process data using concepts
+     * @param data Input data
+     * @return Processed result
+     */
     T process(const T& data)
+    /**
+     * @brief Process container of data
+     * @tparam Container Container type
+     * @param container Input container
+     * @return Processed results
+     */
     template<typename Container>
     processContainer(const Container& container)
+    /**
+     * @brief Generate sequence using coroutine
+     * @param start Starting value
+     * @param count Number of values to generate
+     * @return Generator coroutine
+     */
     generateSequence(T start, size_t count)
+    /**
+     * @brief Process data asynchronously
+     * @param data Input data
+     * @return SimpleTask coroutine
+     */
     SimpleTask processAsync(const T& data)
 };
+/** @brief Sophisticated type-erased container */
 class TypeErasedContainer {
+    /**
+     * @brief Store any type that satisfies the concept
+     * @tparam T Type to store
+     * @param value Value to store
+     */
     template<typename T>
     void store(T& value)
+    /**
+     * @brief Process all stored values
+     * @tparam F Function type
+     * @param f Processing function
+     */
     void processAll(F& f) const
+    /**
+     * @brief Get stored value by type
+     * @tparam T Type to retrieve
+     * @return Optional value
+     */
     template<typename T>
     get() const
+    /**
+     * @brief Get size
+     * @return Number of stored items
+     */
     size_t size() const
 };
+/**
+ * @brief Consteval function for compile-time string processing
+ * @param str Input string
+ * @return Processed string length
+ */
 size_t processString(const char* str);
+/**
+ * @brief Constexpr function with complex logic
+ * @tparam T Numeric type
+ * @param value Input value
+ * @return Processed result
+ */
 template<typename AdvancedNumeric>
 T complexCalculation(T value) const;
+/**
+ * @brief Use ranges and views (C++20)
+ * @tparam Range Range type
+ * @param range Input range
+ * @return Transformed results
+ */
 processRange(Range& range);
+/** @brief Demonstration of very complex features */
 void demonstrateVeryComplexFeatures();
 </file>

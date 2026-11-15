@@ -60,6 +60,33 @@ func TestStripJSStyle(t *testing.T) {
 	assert.Equal(t, ir.CommentBlock, format)
 }
 
+func TestStripDoxygen(t *testing.T) {
+	cases := []struct {
+		raw, text, format string
+		trailing          bool
+	}{
+		{"// line", "line", ir.CommentLine, false},
+		{"/* block */", "block", ir.CommentBlock, false},
+		{"/** Doc. */", "Doc.", ir.CommentDoc, false},
+		{"/// Doc.", "Doc.", ir.CommentDoc, false},
+		{"//! Qt doc.", "Qt doc.", ir.CommentDoc, false},
+		{"/*! Qt doc. */", "Qt doc.", ir.CommentDoc, false},
+		{"/*!\n * First.\n * Second.\n */", "First.\nSecond.", ir.CommentDoc, false},
+		{"///< X coordinate", "X coordinate", ir.CommentDoc, true},
+		{"//!< X coordinate", "X coordinate", ir.CommentDoc, true},
+		{"/**< X coordinate */", "X coordinate", ir.CommentDoc, true},
+		{"/*!< X coordinate */", "X coordinate", ir.CommentDoc, true},
+		{"//// banner", "banner", ir.CommentLine, false},
+		{"/*** banner ***/", "banner", ir.CommentBlock, false},
+	}
+	for _, c := range cases {
+		text, format, trailing := commentutil.StripDoxygen(c.raw)
+		assert.Equal(t, c.text, text, c.raw)
+		assert.Equal(t, c.format, format, c.raw)
+		assert.Equal(t, c.trailing, trailing, c.raw)
+	}
+}
+
 func TestDocumentsFile(t *testing.T) {
 	assert.True(t, commentutil.DocumentsFile("@file app.js\n@description The app."))
 	assert.True(t, commentutil.DocumentsFile("Utilities.\n@module utils"))

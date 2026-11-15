@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/janreges/ai-distiller/internal/ir"
+	"github.com/janreges/ai-distiller/internal/language/commentutil"
 	sitter "github.com/smacker/go-tree-sitter"
 	tree_sitter_cpp "github.com/tree-sitter/tree-sitter-cpp/bindings/go"
 )
@@ -265,12 +266,13 @@ func (p *TreeSitterProcessor) processNode(node *sitter.Node, source []byte, file
 	nodeType := node.Type()
 
 	switch nodeType {
-	case "translation_unit":
-		// Process all children of the translation unit
-		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(i)
+	case "translation_unit", "preproc_if", "preproc_ifdef", "preproc_else", "preproc_elif", "preproc_elifdef",
+		"linkage_specification", "declaration_list":
+		// The file, an #if/#ifdef branch (include guards) and an extern "C"
+		// block hold declarations of the enclosing scope.
+		p.processStatements(node, p.childList(file, parent), func(child *sitter.Node) {
 			p.processNode(child, source, file, parent)
-		}
+		})
 	case "preproc_include":
 		p.processInclude(node, source, file)
 	case "using_declaration":
@@ -292,7 +294,7 @@ func (p *TreeSitterProcessor) processNode(node *sitter.Node, source []byte, file
 	case "template_declaration":
 		p.processTemplateDeclaration(node, source, file, parent)
 	case "friend_declaration":
-		p.processFriendDeclaration(node, source, file, parent)
+		// A friend is not a member of the class and adds no declaration.
 	case "comment":
 		p.processComment(node, source, file, parent)
 	case "concept_definition":
@@ -375,9 +377,7 @@ func (p *TreeSitterProcessor) processNamespace(node *sitter.Node, source []byte,
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(i)
 		if child.Type() == "declaration_list" {
-			for j := 0; j < int(child.ChildCount()); j++ {
-				p.processNode(child.Child(j), source, file, namespace)
-			}
+			p.processNode(child, source, file, namespace)
 		}
 	}
 
@@ -531,9 +531,7 @@ func (p *TreeSitterProcessor) processEnum(node *sitter.Node, source []byte, file
 func (p *TreeSitterProcessor) processClassBody(node *sitter.Node, source []byte, file *ir.DistilledFile, class *ir.DistilledClass) {
 	currentVisibility := ir.VisibilityPrivate // Default for class
 
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-
+	p.processStatements(node, &class.Children, func(child *sitter.Node) {
 		switch child.Type() {
 		case "access_specifier":
 			// Update current access level
@@ -555,21 +553,19 @@ func (p *TreeSitterProcessor) processClassBody(node *sitter.Node, source []byte,
 		case "template_declaration":
 			p.processTemplateDeclaration(child, source, file, class)
 		case "friend_declaration":
-			p.processFriendDeclaration(child, source, file, class)
+			// A friend is not a member and adds no declaration.
 		default:
 			// Process other nodes recursively
 			p.processNode(child, source, file, class)
 		}
-	}
+	})
 }
 
 // processStructBody processes the body of a struct
 func (p *TreeSitterProcessor) processStructBody(node *sitter.Node, source []byte, file *ir.DistilledFile, structNode *ir.DistilledStruct) {
 	currentVisibility := ir.VisibilityPublic // Default for struct
 
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(i)
-
+	p.processStatements(node, &structNode.Children, func(child *sitter.Node) {
 		switch child.Type() {
 		case "access_specifier":
 			// Update current access level
@@ -591,12 +587,12 @@ func (p *TreeSitterProcessor) processStructBody(node *sitter.Node, source []byte
 		case "template_declaration":
 			p.processTemplateDeclaration(child, source, file, structNode)
 		case "friend_declaration":
-			p.processFriendDeclaration(child, source, file, structNode)
+			// A friend is not a member and adds no declaration.
 		default:
 			// Process other nodes recursively
 			p.processNode(child, source, file, structNode)
 		}
-	}
+	})
 }
 
 // processMethodDefinition handles method definitions inside a class
@@ -1384,19 +1380,6 @@ func (p *TreeSitterProcessor) extractTemplateParameters(node *sitter.Node, sourc
 	return params
 }
 
-// processFriendDeclaration handles friend declarations
-func (p *TreeSitterProcessor) processFriendDeclaration(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
-	// For now, we'll add a comment indicating a friend declaration
-	comment := &ir.DistilledComment{
-		BaseNode: ir.BaseNode{
-			Location: p.nodeLocation(node),
-		},
-		Text:   "friend " + strings.TrimSpace(p.nodeText(node, source)),
-		Format: ir.CommentLine,
-	}
-	p.addChild(file, parent, comment)
-}
-
 // processConceptAsComment handles C++20 concepts as special comments
 func (p *TreeSitterProcessor) processConceptAsComment(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
 	// Extract the full concept definition
@@ -1413,19 +1396,16 @@ func (p *TreeSitterProcessor) processConceptAsComment(node *sitter.Node, source 
 	p.addChild(file, parent, comment)
 }
 
-// processComment handles comments
+// processComment adds a comment. Doxygen reads "/** */", "/*! */", "///" and
+// "//!" as the doc of the next declaration (commentutil.StripDoxygen); a run of
+// "///" or "//!" lines is one doc. A trailing member doc ("int x; ///< x") is
+// placed in front of the declaration it documents, so it stays and goes with
+// it; when the parser leaves that member out, the doc is left out too, and
+// with no statement before it, it is kept as a plain comment. A file-level
+// doc with @file or \file documents the file (Inner).
 func (p *TreeSitterProcessor) processComment(node *sitter.Node, source []byte, file *ir.DistilledFile, parent ir.DistilledNode) {
-	text := p.nodeText(node, source)
-	format := ir.CommentLine
-	if strings.HasPrefix(text, "/*") {
-		format = ir.CommentBlock
-		if strings.HasPrefix(text, "/**") || strings.Contains(text, "*/") && strings.Contains(text, "@") {
-			format = ir.CommentDoc
-		}
-	} else if strings.HasPrefix(text, "///") {
-		format = ir.CommentDoc
-	}
-
+	raw := p.nodeText(node, source)
+	text, format, trailing := commentutil.StripDoxygen(raw)
 	comment := &ir.DistilledComment{
 		BaseNode: ir.BaseNode{
 			Location: p.nodeLocation(node),
@@ -1433,7 +1413,150 @@ func (p *TreeSitterProcessor) processComment(node *sitter.Node, source []byte, f
 		Text:   text,
 		Format: format,
 	}
+	list := p.childList(file, parent)
+
+	if trailing {
+		stmt := prevStatement(node)
+		if list != nil && stmt != nil {
+			if i := lastDeclaration(*list); i >= 0 && declaredBy((*list)[i], stmt) {
+				*list = append((*list)[:i], append([]ir.DistilledNode{comment}, (*list)[i:]...)...)
+			}
+			// Otherwise the member it documents is left out: it goes too.
+			return
+		}
+		comment.Format = ir.CommentBlock
+		if strings.HasPrefix(strings.TrimSpace(raw), "//") {
+			comment.Format = ir.CommentLine
+		}
+	}
+
+	if list != nil && len(*list) > 0 && p.continuesLineDoc(node, source) {
+		if prev, ok := (*list)[len(*list)-1].(*ir.DistilledComment); ok && prev.IsDoc() {
+			prev.Text += "\n" + text
+			prev.Location.EndLine = comment.Location.EndLine
+			prev.Location.EndColumn = comment.Location.EndColumn
+			prev.Inner = prev.Inner || parent == nil && documentsFile(prev.Text)
+			return
+		}
+	}
+
+	if parent == nil && format == ir.CommentDoc && documentsFile(text) {
+		comment.Inner = true
+	}
 	p.addChild(file, parent, comment)
+}
+
+// isLineDoc reports whether a raw comment is a "///" or "//!" doc line that
+// documents the next declaration.
+func isLineDoc(raw string) bool {
+	_, format, trailing := commentutil.StripDoxygen(raw)
+	return format == ir.CommentDoc && !trailing && strings.HasPrefix(raw, "//")
+}
+
+// continuesLineDoc reports whether the comment node is a doc line directly
+// below another doc line.
+func (p *TreeSitterProcessor) continuesLineDoc(node *sitter.Node, source []byte) bool {
+	prev := node.PrevSibling()
+	return prev != nil && prev.Type() == "comment" &&
+		prev.EndPoint().Row+1 == node.StartPoint().Row &&
+		isLineDoc(p.nodeText(node, source)) && isLineDoc(p.nodeText(prev, source))
+}
+
+// documentsFile reports whether a doc's text has a Doxygen @file or \file
+// command, which makes it the doc of the file.
+func documentsFile(text string) bool {
+	for _, line := range strings.Split(text, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) > 0 && (fields[0] == "@file" || fields[0] == "\\file") {
+			return true
+		}
+	}
+	return false
+}
+
+// prevStatement returns the sibling before node that is not a comment: the
+// statement a trailing member doc documents, or nil.
+func prevStatement(node *sitter.Node) *sitter.Node {
+	stmt := node.PrevNamedSibling()
+	for stmt != nil && stmt.Type() == "comment" {
+		stmt = stmt.PrevNamedSibling()
+	}
+	return stmt
+}
+
+// declaredBy reports whether decl starts within the lines of stmt.
+func declaredBy(decl ir.DistilledNode, stmt *sitter.Node) bool {
+	line := decl.GetLocation().StartLine
+	return line >= int(stmt.StartPoint().Row)+1 && line <= int(stmt.EndPoint().Row)+1
+}
+
+// lastDeclaration returns the index of the last node in nodes that is not a
+// comment, or -1.
+func lastDeclaration(nodes []ir.DistilledNode) int {
+	for i := len(nodes) - 1; i >= 0; i-- {
+		if _, ok := nodes[i].(*ir.DistilledComment); !ok {
+			return i
+		}
+	}
+	return -1
+}
+
+// processStatements runs process on each child of node, a block whose
+// statements add their nodes to list: the file, a namespace, class or struct
+// body, an #if/#ifdef branch or an extern "C" block. The doc comments right
+// before a statement that adds no declaration (a concept, a #define, a
+// static_assert, a using declaration in a namespace, a friend) are dropped,
+// so they do not document the next declaration (commentutil.AppendStatement).
+// Only the comments inside the block are its own to drop: a doc before an
+// include guard is not dropped by the guard's #define. A file doc (Inner)
+// documents the file, not the next statement, so no statement drops it, nor
+// the comments before it. Comments, access
+// specifiers ("public:") and #pragma lines are not statements of their own,
+// and the name or condition of an #if/#ifdef and the "C" of extern "C" are
+// not statements at all.
+func (p *TreeSitterProcessor) processStatements(node *sitter.Node, list *[]ir.DistilledNode, process func(*sitter.Node)) {
+	floor := 0
+	if list != nil {
+		floor = len(*list)
+	}
+	for i := 0; i < int(node.ChildCount()); i++ {
+		child := node.Child(i)
+		switch {
+		case isBlockHeader(node, child):
+			continue
+		case list == nil, !child.IsNamed(), child.Type() == "comment",
+			child.Type() == "access_specifier", child.Type() == "preproc_call":
+			process(child)
+			continue
+		}
+		before := len(*list)
+		process(child)
+		start := before
+		for start > floor && isWaitingComment((*list)[start-1]) {
+			start--
+		}
+		waiting := append([]ir.DistilledNode(nil), (*list)[start:before]...)
+		added := append([]ir.DistilledNode(nil), (*list)[before:]...)
+		*list = append((*list)[:start], commentutil.AppendStatement(waiting, added)...)
+	}
+}
+
+// isBlockHeader reports whether child is the name or condition of an
+// #if/#ifdef/#elif (node) or the linkage string of extern "C".
+func isBlockHeader(node, child *sitter.Node) bool {
+	for _, field := range []string{"name", "condition", "value"} {
+		if h := node.ChildByFieldName(field); h != nil && h.StartByte() == child.StartByte() && h.EndByte() == child.EndByte() {
+			return true
+		}
+	}
+	return false
+}
+
+// isWaitingComment reports whether node is a comment that waits for the next
+// declaration: any comment but a file doc.
+func isWaitingComment(node ir.DistilledNode) bool {
+	c, ok := node.(*ir.DistilledComment)
+	return ok && !c.Inner
 }
 
 // extractBaseClasses extracts base class names from inheritance clause
@@ -1512,6 +1635,24 @@ func (p *TreeSitterProcessor) addChild(file *ir.DistilledFile, parent ir.Distill
 			p.onAdd(child)
 		}
 	}
+}
+
+// childList returns the children list that addChild appends to for parent,
+// or nil for a capture node.
+func (p *TreeSitterProcessor) childList(file *ir.DistilledFile, parent ir.DistilledNode) *[]ir.DistilledNode {
+	switch n := parent.(type) {
+	case nil:
+		return &file.Children
+	case *ir.DistilledClass:
+		return &n.Children
+	case *ir.DistilledStruct:
+		return &n.Children
+	case *ir.DistilledPackage:
+		return &n.Children
+	case *ir.DistilledEnum:
+		return &n.Children
+	}
+	return nil
 }
 
 // captureNode is a helper type for capturing nodes during processing
