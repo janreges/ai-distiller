@@ -54,8 +54,22 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+      - name: gofmt
+        run: |
+          files=$(git ls-files 'cmd/*.go' 'internal/*.go' | grep -vE '/testdata/|^internal/parser/grammars/')
+          out=$(gofmt -s -l $files)
+          test -z "$out" || { echo "$out"; exit 1; }
       - name: go vet
         run: CGO_ENABLED=1 CGO_CFLAGS=-w go vet $(go list -e ./... | grep -vE '/tools/|/test_project/|/cmd/aid-validate')
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        env:
+          CGO_ENABLED: '1'
+          CGO_CFLAGS: -w
+        with:
+          version: v2.12.2
+          only-new-issues: true
+          args: ./cmd/... ./internal/...
       - name: go mod tidy is clean
         run: go mod tidy && git diff --exit-code go.mod go.sum
       - name: No pinned versions

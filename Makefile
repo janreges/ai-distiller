@@ -1,4 +1,4 @@
-.PHONY: all build test bench lint clean install aid
+.PHONY: all build test bench lint fmt fmt-check clean install aid
 
 # Variables
 BINARY_NAME = aid
@@ -28,6 +28,8 @@ GOGET = $(GOCMD) get
 GOMOD = $(GOCMD) mod
 GOFMT = gofmt
 GOLINT = golangci-lint
+# Go files that are ours: not test input under testdata, not vendored grammar code
+GO_FILES = $(shell git ls-files 'cmd/*.go' 'internal/*.go' | grep -vE '/testdata/|^internal/parser/grammars/')
 
 all: build
 
@@ -178,12 +180,16 @@ bench:
 # Run linter
 lint:
 	@echo "==> Running linter"
-	$(GOLINT) run ./...
+	CGO_ENABLED=1 CGO_CFLAGS=-w $(GOLINT) run ./cmd/... ./internal/...
 
 # Format code
 fmt:
 	@echo "==> Formatting code"
-	$(GOFMT) -s -w cmd internal
+	$(GOFMT) -s -w $(GO_FILES)
+
+# Fail when a Go file is not gofmt -s clean (same check as CI)
+fmt-check:
+	@out=$$($(GOFMT) -s -l $(GO_FILES)); test -z "$$out" || { echo "$$out"; exit 1; }
 
 # Install binary
 install: build
@@ -204,7 +210,7 @@ deps:
 # Development setup
 setup:
 	@echo "==> Setting up development environment"
-	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
 	@$(GOMOD) download
 
 # Initialize development environment with all dependencies
@@ -215,7 +221,7 @@ dev-init:
 	@echo "  - Installing testing dependencies"
 	@go get -t ./...
 	@echo "  - Installing development tools"
-	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
 	@go install golang.org/x/tools/cmd/goimports@latest
 	@go install github.com/segmentio/golines@latest
 	@go install github.com/air-verse/air@latest
@@ -267,6 +273,7 @@ help:
 	@echo "  bench           - Run benchmarks"
 	@echo "  lint            - Run linter"
 	@echo "  fmt             - Format code"
+	@echo "  fmt-check       - Fail if code is not gofmt -s clean"
 	@echo "  install         - Install binary to system"
 	@echo "  clean           - Remove build artifacts"
 	@echo "  deps            - Download dependencies"

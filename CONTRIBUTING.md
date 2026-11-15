@@ -32,8 +32,12 @@ formatter and binary.
 ## Before you commit
 
 1. `git status` and `git diff`: nothing unexpected, no binaries (`aid`, `build/`) and no `.aid/` output.
-2. The full suite is green.
-3. `sh scripts/check-skill-anchors.sh` passes.
+2. `make fmt-check` passes: CI fails on Go code in `cmd/` and `internal/` that
+   is not `gofmt -s` clean (`make fmt` rewrites it).
+3. `make lint` (golangci-lint; `make setup` installs it) reports nothing new in
+   the code you changed: CI fails on new findings.
+4. The full suite is green.
+5. `sh scripts/check-skill-anchors.sh` passes.
 
 Code, comments, commit messages and docs are in English. Use conventional
 commit messages (`feat:`, `fix:`, `docs:`).
