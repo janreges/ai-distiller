@@ -18,5 +18,4 @@ type Dispatcher struct {
 
 func NewDispatcher(maxWorkers int) *Dispatcher
 func (d *Dispatcher) Run(ctx context.Context)
-// The key goroutine spawn
 </file>

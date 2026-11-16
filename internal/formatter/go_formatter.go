@@ -14,16 +14,12 @@ type GoFormatter struct {
 	BaseLanguageFormatter
 	isFirstImport bool
 	lastWasImport bool
-	// printedBody is the source span of the last function printed with its
-	// body; comments inside it are already part of that body.
-	printedBody ir.Location
 }
 
 // Reset resets the formatter state for a new file
 func (f *GoFormatter) Reset() {
 	f.isFirstImport = true
 	f.lastWasImport = false
-	f.printedBody = ir.Location{}
 }
 
 // NewGoFormatter creates a new Go formatter
@@ -67,9 +63,8 @@ func (f *GoFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent int)
 		f.lastWasImport = true
 		return f.formatImport(w, n, indentStr)
 	case *ir.DistilledComment:
-		if f.insidePrintedBody(n.Location) {
-			return nil // printed verbatim as part of the body
-		}
+		// The comments inside a function body are not nodes: the body
+		// prints them verbatim (ASTParser.claimDeclComments)
 		return f.formatComment(w, n, indentStr)
 	case *ir.DistilledField:
 		return f.formatField(w, n, indentStr)
@@ -379,7 +374,6 @@ func (f *GoFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, inde
 	// Implementation: the verbatim body, braces included
 	if fn.Implementation != "" {
 		fmt.Fprint(w, renderBodyVerbatim(fn.Implementation, indent))
-		f.printedBody = fn.Location
 	} else {
 		fmt.Fprintln(w)
 	}
@@ -430,27 +424,11 @@ func (f *GoFormatter) formatMethod(w io.Writer, fn *ir.DistilledFunction, receiv
 	// Implementation: the verbatim body, braces included
 	if fn.Implementation != "" {
 		fmt.Fprint(w, renderBodyVerbatim(fn.Implementation, indent))
-		f.printedBody = fn.Location
 	} else {
 		fmt.Fprintln(w)
 	}
 
 	return nil
-}
-
-// insidePrintedBody reports whether a comment starting at loc lies inside
-// the last function printed with its body (after the function's start and
-// before the position just past its closing brace).
-func (f *GoFormatter) insidePrintedBody(loc ir.Location) bool {
-	body := f.printedBody
-	if body.EndLine == 0 {
-		return false
-	}
-	afterStart := loc.StartLine > body.StartLine ||
-		loc.StartLine == body.StartLine && loc.StartColumn > body.StartColumn
-	beforeEnd := loc.StartLine < body.EndLine ||
-		loc.StartLine == body.EndLine && loc.StartColumn < body.EndColumn
-	return afterStart && beforeEnd
 }
 
 // formatTypeAlias prints a type declaration that is neither a struct nor an

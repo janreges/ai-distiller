@@ -19,6 +19,7 @@ func (w *ConfWidget) ConfPublic() string {
 
 // CONF_PRIVATE_DOC
 func (w *ConfWidget) confPrivate() string {
+	// CONF_HIDDEN_BODY_NOTE
 	return strings.Repeat("-", w.ConfField)
 }
 
@@ -28,6 +29,7 @@ func (w *ConfWidget) ConfOther() string {
 }
 
 func (w *ConfWidget) ConfBranch(n int) string {
+	// CONF_BODY_NOTE
 	if n > w.ConfField {
 		return "CONF_BODY_D"
 	}

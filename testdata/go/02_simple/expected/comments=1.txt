@@ -14,10 +14,8 @@ type PostgresStorer struct {
 }
 // Get retrieves a value from Postgres.
 func (ps *PostgresStorer) Get(key string) ([]byte, error)
-// db logic...
 // Set saves a value to Postgres.
 func (ps *PostgresStorer) Set(key string, value []byte) error
-// db logic...
 // MemoryStorer is an in-memory implementation for testing.
 
 type MemoryStorer struct {}

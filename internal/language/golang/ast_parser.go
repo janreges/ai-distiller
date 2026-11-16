@@ -167,6 +167,7 @@ func (p *ASTParser) ProcessSource(ctx context.Context, source []byte, filename s
 	p.analyzeInterfaceSatisfaction(typeMap)
 
 	// Fourth pass: process remaining comments
+	p.claimDeclComments(file)
 	p.processComments(file, distilledFile)
 
 	// Log summary at detailed level
@@ -339,6 +340,37 @@ func (p *ASTParser) processComments(file *ast.File, distilledFile *ir.DistilledF
 					// Insert comment at the appropriate position based on line number
 					p.insertCommentAtPosition(distilledFile, distilledComment)
 				}
+			}
+		}
+	}
+}
+
+// claimDeclComments claims the comments inside a declaration, so that
+// processComments does not add them at file level, where they would read as
+// comments on the next declaration and stay when theirs is removed: those in
+// a function's parameters and body (the body keeps them verbatim and prints
+// them with --implementation=1) and those in a const, var or type spec (in a
+// function literal or a function type). The doc above a declaration and the
+// comment at the end of a spec's line lie outside these spans.
+func (p *ASTParser) claimDeclComments(file *ast.File) {
+	for _, decl := range file.Decls {
+		switch d := decl.(type) {
+		case *ast.FuncDecl:
+			p.claimWithin(d.Pos(), d.End())
+		case *ast.GenDecl:
+			for _, spec := range d.Specs {
+				p.claimWithin(spec.Pos(), spec.End())
+			}
+		}
+	}
+}
+
+// claimWithin claims the comment groups that start between start and end.
+func (p *ASTParser) claimWithin(start, end token.Pos) {
+	for _, group := range p.comments {
+		if start < group.Pos() && group.Pos() < end {
+			for _, c := range group.List {
+				p.claimed[c] = true
 			}
 		}
 	}

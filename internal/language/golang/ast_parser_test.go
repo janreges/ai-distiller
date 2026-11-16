@@ -200,6 +200,32 @@ func TestASTParser_MemberCommentsStayInTheirType(t *testing.T) {
 	assert.LessOrEqual(t, end.EndLine, a.EndLine)
 }
 
+func TestASTParser_CommentsInsideADeclarationStayInIt(t *testing.T) {
+	src := "package p\n\n" +
+		"// Get doc\n" +
+		"func Get(id int, // the id\n" +
+		"\tname string) int {\n" +
+		"\t// in the body\n" +
+		"\treturn id /* inline */\n" +
+		"} // after Get\n\n" +
+		"var handler = func() {\n\t// in a literal\n}\n\n" +
+		"type Fn func(\n\ta int, // in a type\n)\n\n" +
+		"// free\n"
+	file, err := NewASTParser().ProcessSource(context.Background(), []byte(src), "p.go")
+	require.NoError(t, err)
+
+	var texts []string
+	for _, node := range file.Children {
+		if c, ok := node.(*ir.DistilledComment); ok {
+			texts = append(texts, c.Text)
+		}
+	}
+	// Only the doc and the comments outside every declaration are nodes; the
+	// body keeps its comments verbatim.
+	assert.Equal(t, []string{"Get doc", "after Get", "free"}, texts)
+	assert.Contains(t, parseGoFunctions(t, src)["Get"].Implementation, "// in the body")
+}
+
 func TestASTParser_PackageDocText(t *testing.T) {
 	src := "// Package p does things.\n" +
 		"//\n" +

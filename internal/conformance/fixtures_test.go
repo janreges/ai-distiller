@@ -169,6 +169,12 @@ var fixtures = []fixture{
 		check{Cap: "member-comments-hidden-by-default", NotContains: []string{"CONF_FIELD_DOC", "CONF_METHOD_TRAILING"}},
 		check{Cap: "hidden-field-comment-shown", Flags: []string{"--comments=1", "--internal=1"},
 			Contains: []string{"\tconfSecret int // CONF_HIDDEN_FIELD_NOTE\n}\n"}},
+		// A comment in a function body is part of the body: it prints with
+		// the body, once, and goes with a hidden function.
+		check{Cap: "body-comments-in-body", Flags: []string{"--comments=1"},
+			NotContains: []string{"CONF_BODY_NOTE", "CONF_HIDDEN_BODY_NOTE"}},
+		check{Cap: "body-comment-printed-once", Flags: []string{"--comments=1", "--implementation=1"},
+			Once: []string{"\t// CONF_BODY_NOTE\n"}, NotContains: []string{"CONF_HIDDEN_BODY_NOTE"}},
 		// Only confPrivate and confSecret print, and neither names io or
 		// strings: the import filter drops both, and the block with them.
 		check{Cap: "no-empty-import-block", Flags: []string{"--public=0", "--internal=1"},
