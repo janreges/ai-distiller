@@ -43,20 +43,24 @@ func unwrap(node *sitter.Node) *sitter.Node {
 	return node
 }
 
-// TakesFunction reports whether node is a call that passes a function as an
-// argument, directly or in a call it is chained to: `forwardRef((p, r) =>
-// ...)`, `memo(function List() {...})`, `connect(map)(function X() {...})`,
-// `useCallback(() => ..., [])`. A call written in parentheses or with `as`,
+// TakesFunction reports whether node is a call or `new` that passes a
+// function as an argument, directly or in a call it is chained to:
+// `forwardRef((p, r) => ...)`, `memo(function List() {...})`,
+// `connect(map)(function X() {...})`, `useCallback(() => ..., [])`,
+// `new Pool(() => ...)`. A call written in parentheses or with `as`,
 // `satisfies` or `!` counts too.
 func TakesFunction(node *sitter.Node) bool {
 	node = unwrap(node)
-	for node != nil && node.Kind() == "call_expression" {
+	for node != nil && (node.Kind() == "call_expression" || node.Kind() == "new_expression") {
 		if args := node.ChildByFieldName("arguments"); args != nil {
 			for i := uint(0); i < args.NamedChildCount(); i++ {
 				if IsFunction(unwrap(args.NamedChild(i))) {
 					return true
 				}
 			}
+		}
+		if node.Kind() == "new_expression" {
+			return false
 		}
 		node = unwrap(node.ChildByFieldName("function"))
 	}

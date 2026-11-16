@@ -155,7 +155,11 @@ func (f *JavaScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 		if indent == 0 && isConst {
 			// Top-level const arrow function
 			isArrow = true
-			fmt.Fprintf(w, "%s%sconst %s = (%s)", indentStr, esExportPrefix(fn.Modifiers), functionName, f.formatParameters(fn.Parameters))
+			async := ""
+			if isAsync {
+				async = "async "
+			}
+			fmt.Fprintf(w, "%s%sconst %s = %s(%s)", indentStr, esExportPrefix(fn.Modifiers), functionName, async, f.formatParameters(fn.Parameters))
 		} else if indent == 0 {
 			// Top-level function declaration: `export async function* name(...)`
 			prefix := esExportPrefix(fn.Modifiers)
@@ -239,12 +243,7 @@ func (f *JavaScriptFormatter) formatField(w io.Writer, field *ir.DistilledField,
 			fmt.Fprintf(w, ": %s", field.Type.Name)
 		}
 
-		// Add default value
-		if field.DefaultValue != "" {
-			fmt.Fprintf(w, " = %s", field.DefaultValue)
-		}
-
-		fmt.Fprintln(w)
+		writeInitializer(w, field)
 	} else {
 		// Class field
 		prefixParts := []string{}

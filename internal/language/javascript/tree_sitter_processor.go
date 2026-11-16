@@ -931,6 +931,12 @@ func (p *TreeSitterProcessor) processVariableDeclarator(node *sitter.Node, file 
 
 					p.addNode(file, parent, fn)
 					return
+				} else if esutil.TakesFunction(child) {
+					// forwardRef((props, ref) => ...): the call with the
+					// signatures of its function arguments; the whole
+					// initializer is the implementation.
+					field.DefaultValue = esutil.Signature(child, p.source)
+					field.Implementation = p.getNodeText(child)
 				} else if child.Kind() == "object" {
 					// Simple object literal analysis
 					field.DefaultValue = p.processObjectLiteral(child)

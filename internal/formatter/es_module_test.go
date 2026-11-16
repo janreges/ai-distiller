@@ -118,3 +118,33 @@ func TestESImportFormatters(t *testing.T) {
 	assert.Equal(t, "import React, { memo } from 'react'\n", tsFormat(t, imp, 0))
 	assert.Equal(t, "import React, { memo } from 'react'\n", jsFormat(t, imp, 0))
 }
+
+// A top-level variable prints its signature value by default and its whole
+// initializer when it keeps its Implementation; an async arrow const keeps
+// its async.
+func TestESVariableInitializers(t *testing.T) {
+	mods := []ir.Modifier{ir.ModifierFinal, ir.ModifierExport}
+	field := &ir.DistilledField{Name: "B", Modifiers: mods, DefaultValue: "forwardRef((p, r))"}
+	assert.Equal(t, "export const B = forwardRef((p, r))\n", tsFormat(t, field, 0))
+	assert.Equal(t, "export const B = forwardRef((p, r))\n", jsFormat(t, field, 0))
+	field.Implementation = "forwardRef((p, r) => {\n  return p;\n})"
+	assert.Equal(t, "export const B = forwardRef((p, r) => {\n    return p;\n})\n", tsFormat(t, field, 0))
+	assert.Equal(t, "export const B = forwardRef((p, r) => {\n    return p;\n})\n", jsFormat(t, field, 0))
+	fn := &ir.DistilledFunction{Name: "f", Modifiers: []ir.Modifier{ir.ModifierAsync, ir.ModifierFinal, ir.ModifierExport},
+		TypeParams: []ir.TypeParam{{Name: "T"}}, Parameters: []ir.Parameter{{Name: "x", Type: ir.TypeRef{Name: "T"}}}}
+	assert.Equal(t, "export const f = async <T>(x: T)\n", tsFormat(t, fn, 0))
+	fn.TypeParams = nil
+	fn.Parameters = []ir.Parameter{{Name: "x"}}
+	assert.Equal(t, "export const f = async (x)\n", jsFormat(t, fn, 0))
+}
+
+// Every structured format shows a variable's implementation.
+func TestStructuredFormatsShowFieldImplementation(t *testing.T) {
+	file := &ir.DistilledFile{Path: "t.ts", Language: "typescript", Children: []ir.DistilledNode{
+		&ir.DistilledField{Name: "B", Visibility: ir.VisibilityPublic, DefaultValue: "memo(function L())", Implementation: "memo(function L() { return 1; })"},
+	}}
+	out := structuredOutputs(t, file)
+	for _, format := range []string{"jsonl", "json-structured", "xml"} {
+		assert.Contains(t, out[format], "memo(function L() { return 1; })", format)
+	}
+}

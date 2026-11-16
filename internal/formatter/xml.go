@@ -242,7 +242,14 @@ func (f *XMLFormatter) formatNode(w io.Writer, node ir.DistilledNode, depth int)
 			f.writeAttr(w, "default", n.DefaultValue)
 		}
 		f.writeNodeAttrs(w, n)
-		fmt.Fprintln(w, "/>")
+		if n.Implementation != "" && !f.options.Compact {
+			fmt.Fprintln(w, ">")
+			fmt.Fprintf(w, "%s  <implementation>%s</implementation>\n",
+				indent, cdata("\n"+n.Implementation+"\n"+indent+"  "))
+			fmt.Fprintf(w, "%s</field>\n", indent)
+		} else {
+			fmt.Fprintln(w, "/>")
+		}
 
 	case *ir.DistilledStruct:
 		fmt.Fprintf(w, "%s<struct", indent)

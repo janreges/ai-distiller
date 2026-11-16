@@ -451,3 +451,16 @@ func TestJS_ParameterDefaults(t *testing.T) {
 		{Name: "n", DefaultValue: "1"},
 	}, f.Children[0].(*ir.DistilledFunction).Parameters)
 }
+
+// A const initialised with a call that takes a function keeps the call with
+// the function's signature as its value and the whole initializer as its
+// implementation.
+func TestJS_WrapperConst(t *testing.T) {
+	f := parseJS(t, "const Button = forwardRef(({ variant = 'a', ...props }, ref) => {\n  return props;\n});\nconst Plain = make(1);\n")
+	b := f.Children[0].(*ir.DistilledField)
+	assert.Equal(t, "forwardRef(({ variant = 'a', ...props }, ref))", b.DefaultValue)
+	assert.Equal(t, "forwardRef(({ variant = 'a', ...props }, ref) => {\n  return props;\n})", b.Implementation)
+	p := f.Children[1].(*ir.DistilledField)
+	assert.Equal(t, "make(1)", p.DefaultValue)
+	assert.Equal(t, "", p.Implementation)
+}

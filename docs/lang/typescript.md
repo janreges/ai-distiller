@@ -332,7 +332,7 @@ AI Distiller recognizes common TypeScript framework patterns:
 1. **Decorators**: Class decorators (`@Component({...})`) and property decorators (`@Input()`) are dropped; method decorators are printed with their arguments
 2. **Index Signatures**: `[key: string]: T` members of interfaces are not printed
 3. **Triple-slash Directives**: Reference comments are ignored
-4. **Const Arrow Functions**: Displayed like a function signature (`export const handler(req: Request): Response`); the `=>` form is printed only with `--implementation=1`
+4. **Generic arrow functions**: The trailing comma of `<T,>` is not kept (`export const fn = <T>(x: T): T`); a `let` or `var` initialised with an arrow function prints as `function name(...)`
 5. **`const enum`**: Printed as a plain `enum`
 6. **Optional and readonly markers on members**: The `?` of optional properties and methods and the `readonly` of interface members are dropped (`email?: string` prints as `property email: string`); class members keep `readonly` (`public readonly limit: number = 3`) and parameters keep their `?`
 7. **`const` type parameters**: The `const` of `<const T>` is dropped (`<T>`)
@@ -435,6 +435,7 @@ class Service {
 3. **Generic and qualified bases** (✅ Fixed): `interface A extends B<string>`, `class X extends React.Component<P>` and `extends ns.Base<T>` lost their base
 4. **Parameters** (✅ Fixed): destructured parameters (`{ a }: P`, `[x, y]: T`) and rest parameters were dropped, defaults and the `?` of optional parameters were not shown, and parameter properties lost `readonly`
 5. **Accessors, generators, generic defaults** (✅ Fixed): `get size()` and `set size(v)` printed as two plain `size` methods, the `*` of generators was lost and `function* gen()` was missing, and a type parameter's default (`<T extends object = {}>`) was dropped
+6. **Arrow-function and wrapped constants** (✅ Fixed): `export const handler = async <T>(req: Request): Response => ...` printed as `export const handler(req: Request): Response`, without `=`, `async` and the type parameters; it prints `export const handler = async <T>(req: Request): Response`. A constant initialised with a call that takes a function printed bare (`export const Button`) or with its body; it prints `export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({ variant = "a", ...props }, ref))` and the whole initializer with `--implementation=1`. A typed arrow constant keeps its type: `const Inner: React.FC<P> = ({ a })`
 
 ### Current Limitations
 

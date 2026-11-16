@@ -77,3 +77,8 @@ export class ConfAccessors<T extends object = {}> {
     async *confIter(): AsyncGenerator<T> {}
 }
 export function* confGen(): Generator<number> {}
+export const confWrapped = confWrap<string>((confP: string) => {
+    return "CONF_WRAPPED_BODY";
+});
+export const confGeneric = async <T,>(confV: T): Promise<T> => confV;
+export const confTypedArrow: ConfHandler = (confReq) => confReq;

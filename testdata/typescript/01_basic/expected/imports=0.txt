@@ -5,11 +5,11 @@ export type UserID = string | number
  * @param email The string to validate.
  * @returns True if the email is valid, false otherwise.
  */
-export const isValidEmail(email: string): boolean
+export const isValidEmail = (email: string): boolean
 /**
  * Formats a user ID into a canonical string.
  * @param id The UserID to format.
  * @returns A formatted string.
  */
-export const formatUserID(id: UserID): string
+export const formatUserID = (id: UserID): string
 </file>

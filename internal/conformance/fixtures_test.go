@@ -67,7 +67,7 @@ var fixtures = []fixture{
 		check{Cap: "hash-private-hidden", NotContains: []string{"confSecret"}},
 		check{Cap: "hash-method-hidden", NotContains: []string{"confHashMethod"}},
 		check{Cap: "hash-private-named", Flags: []string{"--private=1"}, Contains: []string{"#confSecret"}},
-		check{Cap: "arrow-expression-body", Flags: []string{"--implementation=1"}, Contains: []string{"confArrow(n: number) => n"}},
+		check{Cap: "arrow-expression-body", Flags: []string{"--implementation=1"}, Contains: []string{"export const confArrow = (n: number) => n"}},
 		check{Cap: "type-guard-return", Contains: []string{"confIsNum(x: unknown): x is number"}},
 		check{Cap: "enum-computed-init", Contains: []string{"ConfShift = 1 << 2", "ConfNeg = -1"}},
 		check{Cap: "import-forms", Contains: []string{
@@ -88,6 +88,16 @@ var fixtures = []fixture{
 			"export function confParams({ confA, confB = 1 }: ConfOpts, [confX]: [number], confOpt?: string, confDef: number = 0, ...confRest: string[]): void",
 			"public readonly confRo: number",
 			"public constructor(confRo: number, confHid: string)"}},
+		check{Cap: "wrapper-const-signature", Contains: []string{
+			"export const confWrapped = confWrap<string>((confP: string))",
+			"export const confGeneric = async <T>(confV: T): Promise<T>",
+			"export const confTypedArrow: ConfHandler = (confReq)"},
+			NotContains: []string{"CONF_WRAPPED_BODY"}},
+		check{Cap: "wrapper-const-implementation", Flags: []string{"--implementation=1"}, Contains: []string{
+			"export const confWrapped = confWrap<string>((confP: string) => {",
+			`return "CONF_WRAPPED_BODY";`,
+			"export const confGeneric = async <T>(confV: T): Promise<T> => confV",
+			"export const confTypedArrow: ConfHandler = (confReq) => confReq"}},
 		check{Cap: "accessors-generators-type-defaults", Contains: []string{
 			"export class ConfAccessors<T extends object = {}> {",
 			"public get confSize(): number",
@@ -111,6 +121,13 @@ var fixtures = []fixture{
 		check{Cap: "import-default-and-named", Flags: []string{"--filter-imports=false"},
 			Contains: []string{"import ConfReact, { confHook as confUseHook } from 'conf-react'"}},
 		check{Cap: "import-alias-used", Contains: []string{"import ConfReact, { confHook as confUseHook } from 'conf-react'"}},
+		check{Cap: "wrapper-const-signature", Contains: []string{
+			"export const confWrapped = confWrap((confP))",
+			"export const confAsyncArrow = async (confU)"},
+			NotContains: []string{"CONF_WRAPPED_BODY"}},
+		check{Cap: "wrapper-const-implementation", Flags: []string{"--implementation=1"}, Contains: []string{
+			"export const confWrapped = confWrap((confP) => {",
+			`return "CONF_WRAPPED_BODY";`}},
 		check{Cap: "export-keyword", Contains: []string{
 			"export class ConfWidget:",
 			"export function confWithHook(hook = confUseHook)",

@@ -24,7 +24,7 @@ declaration, so a parser has to fill them.
 | `DistilledEnum` | yes | `Name`, `Visibility`, `Type` |
 | `DistilledTypeAlias` | no | `Name`, `Visibility`, `Modifiers`, `TypeParams`, `Type` |
 | `DistilledFunction` | no | `Name`, `Visibility`, `Modifiers`, `Decorators`, `TypeParams`, `Parameters`, `Returns`, `Throws`, `Implementation`, `Deprecated`, `Description` |
-| `DistilledField` | no | `Name`, `Visibility`, `Modifiers`, `Type`, `DefaultValue`, `Decorators`, `IsProperty`, `HasGetter`, `HasSetter`, `GetterVisibility`, `SetterVisibility` |
+| `DistilledField` | no | `Name`, `Visibility`, `Modifiers`, `Type`, `DefaultValue`, `Decorators`, `IsProperty`, `HasGetter`, `HasSetter`, `GetterVisibility`, `SetterVisibility`; `Implementation` (JavaScript and TypeScript only): the whole initializer when `DefaultValue` is its signature with function bodies left out |
 | `DistilledComment` | no | `Text` (without delimiters), `Format`, `Inner` |
 | `DistilledRawContent` | no | `Content`, printed as is |
 

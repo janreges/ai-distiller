@@ -673,6 +673,22 @@ func TestExportsFollowPublicNotImports(t *testing.T) {
 	assert.Equal(t, []string{"import"}, childLabels(got.Children))
 }
 
+// The full initializer of a JavaScript or TypeScript variable is
+// implementation: kept only when implementations are, or the name is
+// expanded.
+func TestFieldImplementationFollowsImplementation(t *testing.T) {
+	field := func() *ir.DistilledField {
+		return &ir.DistilledField{Name: "Button", Visibility: ir.VisibilityPublic, DefaultValue: "forwardRef((p, r))", Implementation: "forwardRef((p, r) => {\n  return p;\n})"}
+	}
+	got := New(Options{RemoveImplementations: true}).Visit(field()).(*ir.DistilledField)
+	assert.Equal(t, "", got.Implementation)
+	assert.Equal(t, "forwardRef((p, r))", got.DefaultValue)
+	got = New(Options{}).Visit(field()).(*ir.DistilledField)
+	assert.Equal(t, field().Implementation, got.Implementation)
+	got = New(Options{RemoveImplementations: true, ExpandSymbols: []string{"Button"}}).Visit(field()).(*ir.DistilledField)
+	assert.Equal(t, field().Implementation, got.Implementation)
+}
+
 func TestDocCommentBeforeTypeAliasIsKept(t *testing.T) {
 	file := &ir.DistilledFile{Children: []ir.DistilledNode{doc("A"), &ir.DistilledTypeAlias{Name: "A", Visibility: ir.VisibilityPublic}}}
 	got := New(Options{RemoveComments: true}).Visit(file).(*ir.DistilledFile)

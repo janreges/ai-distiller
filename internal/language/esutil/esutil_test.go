@@ -68,6 +68,8 @@ func TestTakesFunction(t *testing.T) {
 		"const a = connect(m)(function X() {});":        true,
 		"const a = (memo((x) => x) as Typed);":          true,
 		"const a = useMemo(() => 1, []);":               true,
+		"const a = new Pool(() => ({ data: null }));":   true,
+		"const a = new Map();":                          false,
 		"const a = configure({ reducer: (s) => s });":   false,
 		"const a = (x) => x;":                           false,
 		"const a = compose(a, b);":                      false,

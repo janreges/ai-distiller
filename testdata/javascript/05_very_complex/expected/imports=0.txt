@@ -78,5 +78,5 @@ function* counterTask()
 function* dataFetcherTask(task)
 function* complexIteratorTask()
 const scheduler = new CooperativeScheduler()
-const objectPool = new MemoryPool(() => ({ data: null, reset() { this.data = null; } }))
+const objectPool = new MemoryPool(())
 </file>

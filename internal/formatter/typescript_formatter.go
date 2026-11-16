@@ -233,9 +233,14 @@ func (f *TypeScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 	if indent == 0 {
 		indentStr = ""
 		exportPrefix := esExportPrefix(fn.Modifiers)
-		// Top-level const arrow functions should be formatted as "const Name"
+		// A top-level const arrow function prints as written without its
+		// body: `const name = async <T>(params): R`.
 		if isConst {
-			fmt.Fprintf(w, "%s%sconst %s", indentStr, exportPrefix, fn.Name)
+			async := ""
+			if hasModifier(fn.Modifiers, ir.ModifierAsync) {
+				async = "async "
+			}
+			fmt.Fprintf(w, "%s%sconst %s = %s", indentStr, exportPrefix, fn.Name, async)
 		} else {
 			keyword, name := "function ", fn.Name
 			if strings.HasPrefix(name, "*") {
@@ -333,10 +338,7 @@ func (f *TypeScriptFormatter) formatField(w io.Writer, field *ir.DistilledField,
 		if field.Type != nil && field.Type.Name != "" {
 			fmt.Fprintf(w, ": %s", field.Type.Name)
 		}
-		if field.DefaultValue != "" {
-			fmt.Fprintf(w, " = %s", field.DefaultValue)
-		}
-		fmt.Fprintln(w)
+		writeInitializer(w, field)
 	} else {
 		// Class field - use visibility keywords
 		visKeyword := f.getTypeScriptVisibilityKeyword(field.Visibility)

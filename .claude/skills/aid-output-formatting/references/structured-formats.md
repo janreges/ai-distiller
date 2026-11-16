@@ -77,7 +77,7 @@ Fields per kind (`internal/formatter/jsonl.go#JSONLFormatter.nodeToJSON`):
 | `class` | `visibility`, `modifiers`, `extends`, `implements` |
 | `interface` | `visibility`, `extends` |
 | `function` | `visibility`, `modifiers`, `parameters` (always, `[]` when empty; each `name`, `type`, `default`, `optional`, `variadic`, `reference`), `returns`, `implementation` |
-| `field` | `visibility`, `modifiers`, `field_type`, `default` |
+| `field` | `visibility`, `modifiers`, `field_type`, `default`, `implementation` (a JavaScript or TypeScript variable's whole initializer, with `--implementation=1`) |
 | `type_alias` | `visibility`, `alias_type` |
 | `comment` | `format`, `text` |
 | `package`, `enum`, `struct`, `raw_content` | nothing beyond the four common keys; an enum has no `visibility` |
@@ -169,7 +169,7 @@ Shape:
   `interfaces` (`name`, `visibility`, `extends`, `members`), `functions`
   (`name`, `visibility`, `modifiers`, `parameters` when there are any,
   `returns`, `implementation`), `variables` (top-level fields: `name`,
-  `visibility`, `modifiers`, `type`, `default`) and `types` (type aliases:
+  `visibility`, `modifiers`, `type`, `default`, `implementation`) and `types` (type aliases:
   `name`, `visibility`, `type`). Empty groups are left out.
 - `members` of a class or interface holds only `fields` and `methods`
   (`internal/formatter/json_structured.go#JSONStructuredFormatter.structureClassMembers`).
@@ -207,7 +207,8 @@ Shape:
   `<class name visibility modifiers>`, `<interface name visibility>`,
   `<struct>`, `<enum>`, `<function name visibility modifiers returns>` with
   `<parameters>` (`<parameter name type default optional variadic reference>`) and
-  `<implementation>`, `<field name visibility modifiers type default>`,
+  `<implementation>`, `<field name visibility modifiers type default>` (with
+  an `<implementation>` child when the field has one),
   `<type_alias name visibility type>`, `<comment format>`; any other kind is
   `<node kind="..."/>`. Modifiers are one space-separated attribute; an
   attribute with an empty value is left out.

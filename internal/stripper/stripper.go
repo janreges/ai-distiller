@@ -368,9 +368,13 @@ func (s *Stripper) visitField(n *ir.DistilledField) ir.DistilledNode {
 
 	// Copy every field, then change only what the options require.
 	// Enum case values are always kept: they are API, not implementation.
+	// The full initializer of a variable is implementation.
 	result := *n
 	if s.options.RemoveAnnotations {
 		result.Decorators = nil
+	}
+	if s.options.RemoveImplementations && !s.options.shouldExpand(n.Name) && !s.inExpandedScope {
+		result.Implementation = ""
 	}
 	return &result
 }

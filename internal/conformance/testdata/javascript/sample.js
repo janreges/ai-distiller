@@ -41,3 +41,7 @@ export { confArrow };
 export default ConfWidget;
 export async function* confGen(n) {}
 export const confExported = 3;
+export const confWrapped = confWrap((confP) => {
+    return "CONF_WRAPPED_BODY";
+});
+export const confAsyncArrow = async (confU) => confU;

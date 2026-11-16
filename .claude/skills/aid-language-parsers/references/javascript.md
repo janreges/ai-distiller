@@ -36,7 +36,11 @@
   become modifiers.
 - A variable whose value is an arrow function, a `function` expression or a
   generator function becomes a `DistilledFunction`; other variables become
-  `DistilledField`s. `const` adds the modifier `final`.
+  `DistilledField`s. `const` adds the modifier `final`. A field whose value is
+  a call that takes a function (`forwardRef((props, ref) => ...)`) has the
+  call with the function bodies left out as `DefaultValue` and the whole
+  initializer as `Implementation`, as in TypeScript
+  (`internal/language/esutil/esutil.go#TakesFunction`).
 - `export class/function/const ...` is parsed as the declaration itself and
   gets the modifier `export`, and `default` after `export default`
   (`internal/language/javascript/tree_sitter_processor.go#TreeSitterProcessor.processExport`);

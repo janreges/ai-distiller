@@ -201,6 +201,11 @@ func (f *JSONLFormatter) nodeToJSON(filePath string, node ir.DistilledNode, path
 		if n.DefaultValue != "" {
 			obj["default"] = n.DefaultValue
 		}
+		if n.Implementation != "" && f.options.Compact {
+			obj["has_implementation"] = true
+		} else if n.Implementation != "" {
+			obj["implementation"] = n.Implementation
+		}
 
 	case *ir.DistilledTypeAlias:
 		obj["visibility"] = n.Visibility

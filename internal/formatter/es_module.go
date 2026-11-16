@@ -2,6 +2,7 @@ package formatter
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/janreges/ai-distiller/internal/ir"
@@ -127,4 +128,19 @@ func esSpecifier(sym ir.ImportedSymbol) string {
 		s = "type " + s
 	}
 	return s
+}
+
+// writeInitializer ends the line of a top-level JavaScript or TypeScript
+// variable: ` = <initializer as written>` when the field keeps its
+// Implementation (--implementation=1), else ` = <DefaultValue>`, else
+// nothing.
+func writeInitializer(w io.Writer, field *ir.DistilledField) {
+	switch {
+	case field.Implementation != "":
+		fmt.Fprint(w, " =", renderBody(field.Implementation, ""))
+	case field.DefaultValue != "":
+		fmt.Fprintf(w, " = %s\n", field.DefaultValue)
+	default:
+		fmt.Fprintln(w)
+	}
 }

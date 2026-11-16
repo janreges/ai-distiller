@@ -83,6 +83,6 @@ function* complexIteratorTask()
 const scheduler = new CooperativeScheduler()
 // After some time, we can register another task dynamically.
 // Create memory pool example
-const objectPool = new MemoryPool(() => ({ data: null, reset() { this.data = null; } }))
+const objectPool = new MemoryPool(())
 // module.exports = { CooperativeScheduler, TaskPrototype, MemoryPool }
 </file>

@@ -280,6 +280,13 @@ type DistilledField struct {
 	Type         *TypeRef   `json:"type,omitempty"`
 	DefaultValue string     `json:"default_value,omitempty"`
 	Decorators   []string   `json:"decorators,omitempty"`
+	// Implementation is the whole initializer of a JavaScript or TypeScript
+	// variable whose DefaultValue is that initializer's signature with the
+	// function bodies left out (`forwardRef((props, ref))`). Like a
+	// function's Implementation, the stripper keeps it only with
+	// --implementation=1, and the text formatters then print it instead of
+	// DefaultValue.
+	Implementation string `json:"implementation,omitempty"`
 	// Property-specific fields (mainly for C#)
 	IsProperty       bool        `json:"is_property,omitempty"`
 	HasGetter        bool        `json:"has_getter,omitempty"`

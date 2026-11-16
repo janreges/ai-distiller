@@ -24,11 +24,11 @@ func TestTypeScriptFormatter_FunctionBody(t *testing.T) {
 	})
 	t.Run("arrow block", func(t *testing.T) {
 		fn := &ir.DistilledFunction{Name: "f", Parameters: params, Returns: ret, Modifiers: []ir.Modifier{ir.ModifierFinal}, Implementation: "{\n  return a + 1;\n}"}
-		assert.Equal(t, "const f(a: number): number => {\n    return a + 1;\n}\n", tsFormat(t, fn, 0))
+		assert.Equal(t, "const f = (a: number): number => {\n    return a + 1;\n}\n", tsFormat(t, fn, 0))
 	})
 	t.Run("expression", func(t *testing.T) {
 		fn := &ir.DistilledFunction{Name: "f", Parameters: params, Returns: ret, Modifiers: []ir.Modifier{ir.ModifierFinal}, Implementation: "a + 1"}
-		assert.Equal(t, "const f(a: number): number => a + 1\n", tsFormat(t, fn, 0))
+		assert.Equal(t, "const f = (a: number): number => a + 1\n", tsFormat(t, fn, 0))
 	})
 	t.Run("no body", func(t *testing.T) {
 		fn := &ir.DistilledFunction{Name: "f", Parameters: params, Returns: ret}

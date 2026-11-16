@@ -44,7 +44,7 @@ takes all its members with it.
 | `RemoveInternalOnly` | `--internal=0`, same branch | `internal`, `package` |
 | (C# combined) | `protected internal`, `private protected` | removed only when the `Remove*Only` options of both words are set (`protected internal`: `RemoveProtectedOnly` and `RemoveInternalOnly`; `private protected`: `RemovePrivateOnly` and `RemoveProtectedOnly`); the legacy `RemovePrivate` option above removes both on its own. CLI rule: `docs/user/COMMAND-LINE-OPTIONS.md` (visibility section), implemented in `shouldRemoveByVisibility` |
 | `RemovePublic` | `--public=0` | public and open functions, fields and type aliases, except inside a class, interface, struct or enum whose visibility is set and is neither public nor open; then every public container left without members (below) |
-| `RemoveImplementations` | `--implementation=0` | a function's `Implementation`, unless `--expand` keeps it |
+| `RemoveImplementations` | `--implementation=0` | a function's `Implementation` and a field's (the whole initializer of a JavaScript or TypeScript variable), unless `--expand` keeps it |
 | `RemoveComments` | `--comments=0` | comments whose format is not doc (`internal/ir/comment.go#DistilledComment.IsDoc`) |
 | `RemoveDocstrings` | `--docstrings=0` | doc comments |
 | `RemoveImports` | `--imports=0` | `DistilledImport` nodes |

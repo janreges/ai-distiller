@@ -432,3 +432,27 @@ func TestTS_ParameterProperties(t *testing.T) {
 	assert.Equal(t, ir.VisibilityProtected, fields["p"].Visibility)
 	assert.Empty(t, fields["p"].Modifiers)
 }
+
+// A const initialised with an untyped arrow function is a function with its
+// type parameters; a typed arrow function, a function expression and a call
+// that takes a function are fields whose DefaultValue is the signature and
+// whose Implementation is the initializer as written.
+func TestTS_FunctionValuedVariables(t *testing.T) {
+	f := parseTS(t, "export const fn = <T,>(x: T): T => x;\n"+
+		"const h: H = (req) => req;\n"+
+		"const fe = function (a: number) { return a; };\n"+
+		"export const B = forwardRef<E, P>(({ v = 1 }, ref) => {\n  return v;\n});\n"+
+		"const plain = compose(a, b);\n")
+	fn := f.Children[0].(*ir.DistilledFunction)
+	assert.Equal(t, "fn", fn.Name)
+	assert.Equal(t, []ir.TypeParam{{Name: "T"}}, fn.TypeParams)
+	field := func(i int) *ir.DistilledField { return f.Children[i].(*ir.DistilledField) }
+	assert.Equal(t, "H", field(1).Type.Name)
+	assert.Equal(t, "(req)", field(1).DefaultValue)
+	assert.Equal(t, "(req) => req", field(1).Implementation)
+	assert.Equal(t, "function (a: number)", field(2).DefaultValue)
+	assert.Equal(t, "forwardRef<E, P>(({ v = 1 }, ref))", field(3).DefaultValue)
+	assert.Equal(t, "forwardRef<E, P>(({ v = 1 }, ref) => {\n  return v;\n})", field(3).Implementation)
+	assert.Equal(t, "compose(a, b)", field(4).DefaultValue)
+	assert.Equal(t, "", field(4).Implementation)
+}

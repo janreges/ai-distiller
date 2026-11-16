@@ -1162,7 +1162,13 @@ func (p *ASTParser) typeFromAnnotation(node *sitter.Node) *ir.TypeRef {
 // maxConstValueLen is the longest single-line initialiser printed for a constant.
 const maxConstValueLen = 80
 
-// parseVariableDeclaration parses variable declarations
+// parseVariableDeclaration parses variable declarations. A const or variable
+// initialised with an arrow function and without a type annotation is a
+// function. Any other variable is a field; when its initializer is a function
+// expression, a typed arrow function or a call that takes a function
+// (`forwardRef((props, ref) => ...)`), the field's DefaultValue is the
+// initializer's signature (esutil.Signature) and its Implementation the
+// initializer as written.
 func (p *ASTParser) parseVariableDeclaration(node *sitter.Node, isExported bool) []ir.DistilledNode {
 	var nodes []ir.DistilledNode
 
@@ -1173,8 +1179,11 @@ func (p *ASTParser) parseVariableDeclaration(node *sitter.Node, isExported bool)
 			continue
 		}
 
-		// Check if this variable declarator contains an arrow function
-		arrowFunc := p.findChild(child, "arrow_function")
+		value := child.ChildByFieldName("value")
+		arrowFunc := value
+		if arrowFunc != nil && (arrowFunc.Kind() != "arrow_function" || child.ChildByFieldName("type") != nil) {
+			arrowFunc = nil
+		}
 		if arrowFunc != nil {
 			// This is a function, not a field
 			fn := p.parseArrowFunction(arrowFunc, isExported)
@@ -1237,13 +1246,17 @@ func (p *ASTParser) parseVariableDeclaration(node *sitter.Node, isExported bool)
 				field.Type = p.typeFromAnnotation(typeAnnotation)
 			}
 
-			// Keep short single-line initialisers; large literals would bloat the output.
-			for j := 0; j+1 < int(child.ChildCount()); j++ {
-				if c := child.Child(uint(j)); c != nil && c.Kind() == "=" {
-					if v := p.nodeText(child.Child(uint(j + 1))); !strings.Contains(v, "\n") && len(v) <= maxConstValueLen {
-						field.DefaultValue = v
-					}
-					break
+			// A function, or a call that takes one, keeps its signature and
+			// its full text; otherwise keep short single-line initialisers,
+			// as large literals would bloat the output.
+			switch {
+			case value == nil:
+			case esutil.IsFunction(value) || esutil.TakesFunction(value):
+				field.DefaultValue = esutil.Signature(value, p.source)
+				field.Implementation = p.nodeText(value)
+			default:
+				if v := p.nodeText(value); !strings.Contains(v, "\n") && len(v) <= maxConstValueLen {
+					field.DefaultValue = v
 				}
 			}
 
@@ -1284,6 +1297,8 @@ func (p *ASTParser) parseArrowFunction(node *sitter.Node, isExported bool) *ir.D
 		switch child.Kind() {
 		case "async":
 			fn.Modifiers = append(fn.Modifiers, ir.ModifierAsync)
+		case "type_parameters":
+			fn.TypeParams = p.parseTypeParameters(child)
 		case "formal_parameters":
 			fn.Parameters = p.parseParameters(child)
 		case "identifier":

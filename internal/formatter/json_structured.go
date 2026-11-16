@@ -364,6 +364,14 @@ func (f *JSONStructuredFormatter) fieldToStructured(n *ir.DistilledField) map[st
 		field["default"] = n.DefaultValue
 	}
 
+	if n.Implementation != "" {
+		if f.options.Compact {
+			field["has_implementation"] = true
+		} else {
+			field["implementation"] = n.Implementation
+		}
+	}
+
 	f.addCommonFields(field, n)
 	return field
 }
