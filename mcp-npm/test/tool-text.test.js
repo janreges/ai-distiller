@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const os = require('node:os');
 const {
-  extractSavedPath, resolveBasePath, savedPathLine, truncationNotice, spawnFailureMessage,
+  extractSavedPath, savedPathLine, truncationNotice, spawnFailureMessage,
   aiActionText, withIncompleteNotice,
 } = require('../dist/tool-text.js');
 
@@ -33,12 +33,6 @@ test('savedPathLine resolves a relative flow path against the root', () => {
 
 test('savedPathLine says plainly when aid reported no file', () => {
   assert.equal(savedPathLine('nothing here', '/proj'), 'aid did not report an output file');
-});
-
-test('resolveBasePath resolves against the root, not the process cwd', () => {
-  assert.equal(resolveBasePath('src', '/proj'), path.resolve('/proj', 'src'));
-  assert.equal(resolveBasePath(undefined, '/proj'), path.resolve('/proj'));
-  assert.equal(resolveBasePath('/abs/x', '/proj'), path.resolve('/abs/x'));
 });
 
 test('truncation notice names no parameter that a tool might lack, and never says retry', () => {

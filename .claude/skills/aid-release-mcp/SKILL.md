@@ -181,20 +181,20 @@ the postinstall, not the binary. Start-up chain:
    with repair hints when the bin directory has no `aid` (`aid.exe` on
    Windows); the server never looks at `PATH`. It registers the tools, serves
    MCP on stdio, and exits 0 when stdin closes.
-4. A tool call builds an argument list for
-   `mcp-npm/mcp-server-sdk.ts#AidDistillerServer.executeAidCommand`, which
-   queues it on a `mcp-npm/run-aid.ts#SerialQueue`: one `aid` at a time, and a
-   failing run does not block the next. `mcp-npm/run-aid.ts#runAid` spawns the
-   binary without a shell, stdin ignored, in `AID_ROOT`. The result is aid's
-   stderr (if any), a blank line, its stdout; AI-action tools put the path of
-   aid's file in front (`mcp-npm/tool-text.ts#aiActionText`). A non-zero exit
-   is a tool error carrying aid's stderr.
+4. A tool call confines its path parameter to `AID_ROOT` (table below), then
+   `mcp-npm/mcp-server-sdk.ts#AidDistillerServer.executeAidCommand` queues
+   aid's argument list on a `mcp-npm/run-aid.ts#SerialQueue`: one `aid` at a
+   time, and a failing run does not block the next. `mcp-npm/run-aid.ts#runAid`
+   spawns the binary without a shell, stdin ignored, in `AID_ROOT`. The result
+   is aid's stderr (if any), a blank line, its stdout; AI-action tools put the
+   path of aid's file in front (`mcp-npm/tool-text.ts#aiActionText`). A
+   non-zero exit is a tool error carrying aid's stderr.
 
 The server's environment:
 
 | Variable | Default | Effect |
 |---|---|---|
-| `AID_ROOT` | the server's working directory | working directory of every `aid` run; base for `list_files` and for the output paths the AI-action tools report |
+| `AID_ROOT` | the server's working directory | working directory of every `aid` run; base for `list_files` and for the output paths the AI-action tools report. Every path parameter (`file_path`, `directory_path`, `target_path`, `path` of `list_files`) must lie inside it with symlinks resolved, else the call fails before `aid` runs with an error that names `AID_ROOT` and how to widen it; no opt-out (`mcp-npm/confine.ts#confinePath`; `aid` gets the real path relative to the real `AID_ROOT`) |
 | `AID_MCP_TIMEOUT_MS` | `120000` | wall-clock limit of one run, counted from its start, not while it waits in the queue; on expiry the child is killed and the tool fails with a message naming this variable |
 | `AID_MCP_MAX_OUTPUT_BYTES` | `1000000` | cap on one run's stdout; at the cap the child is killed and the result comes back with an "[Output incomplete: ...]" notice first and last (`mcp-npm/tool-text.ts#truncationNotice`) |
 | `AID_MCP_DEBUG=true` (or `DEBUG=true`/`1`) | off | logs the binary path, each command line and the limits to stderr |
@@ -294,7 +294,7 @@ Installers: `references/installers.md`.
 - **The server exits at start** with "AI Distiller binary not found": the
   package was installed without its postinstall (for example
   `--ignore-scripts`) or the binary was removed. Reinstall.
-- **A tool fails or returns too little.** Check `AID_ROOT` (a missing
-  directory gives "Could not start aid: the working directory ... does not
-  exist"), then the timeout and the output cap (section 5). Restart the
-  server with `AID_MCP_DEBUG=true` to see each command line.
+- **A tool fails or returns too little.** Check `AID_ROOT` (a missing one
+  gives "Could not start aid: the working directory ... does not exist", a
+  path outside it "... is outside AID_ROOT ..."), then the timeout and the
+  output cap (section 5). `AID_MCP_DEBUG=true` logs each command line.

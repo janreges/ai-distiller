@@ -613,6 +613,8 @@ claude mcp add aid -- npx -y @janreges/ai-distiller-mcp
 
 The server registers 16 tools. Parameters per tool are in [`mcp-npm/README.md`](mcp-npm/README.md) and [`mcp-tools.md`](.claude/skills/aid-release-mcp/references/mcp-tools.md).
 
+The tools read and list only files under `AID_ROOT` (the server's environment; default: its working directory). A path parameter outside it, also one that leaves it through a symlink, fails the call with an error that names `AID_ROOT`; to work with files elsewhere, start the server with `AID_ROOT` set to a directory that contains them.
+
 **Code structure tools:**
 - `distill_file` - Extract structure from a single file
 - `distill_directory` - Extract structure from entire directories

@@ -11,8 +11,15 @@ Registered Tools", parameters per tool) and the root `README.md` (section
 
 ## Rules shared by all tools that run `aid`
 
-- The first argument is the path parameter as given; `aid` resolves a
-  relative path against its working directory, `AID_ROOT` (SKILL.md section 5).
+- The path parameter (`file_path`, `directory_path` or `target_path`) must
+  lie inside `AID_ROOT`, checked by `mcp-npm/confine.ts#confinePath` with
+  symlinks resolved (the real path of its longest existing prefix, the rest
+  appended; SKILL.md section 5, the `AID_ROOT` row). A path outside fails
+  the call with an `OutsideRootError` before `aid` runs; its text names the
+  parameter, `AID_ROOT` and how to widen it. There is no opt-out. The first argument is the checked real path relative to the
+  real `AID_ROOT` (`.` for the root, `./-x` for a name that starts with
+  `-`), and `aid` runs with `AID_ROOT` as its working directory. In the
+  tables below `<file_path>` and `<target_path>` stand for that argument.
 - The arguments are passed to `spawn` as a list, without a shell: a value
   such as `--include=*.go,*.py` reaches `aid` unchanged.
 - An optional flag is added only when the parameter differs from the CLI
@@ -106,7 +113,7 @@ In `registerLegacyTools` (schema in `TOOL_SCHEMAS`):
 
 | Tool | Parameters | What it returns |
 |---|---|---|
-| `list_files` | `path` (relative to `AID_ROOT`, default `AID_ROOT`), `pattern` (`*` and `?` globs matched against the whole path relative to `path`; `*` also matches `/`), `recursive` (default true) | compact JSON from `mcp-npm/list-files.ts#listFiles`: `path`, `file_count`, `total_size`, `languages`, and per file `path`, `size`, `modified`, `language`, `extension`. It skips subdirectories whose name starts with `.`, stops at `MAX_LIST_ENTRIES` (2000) with a notice first and last, and fails for a path that is not a directory. Languages come from `mcp-npm/list-files.ts#LANGUAGE_BY_EXTENSION`. |
+| `list_files` | `path` (default `AID_ROOT`; must lie inside `AID_ROOT`, checked like the path of the tools that run `aid`, and a relative path is resolved against it), `pattern` (`*` and `?` globs matched against the whole path relative to `path`; `*` also matches `/`), `recursive` (default true) | compact JSON from `mcp-npm/list-files.ts#listFiles`: `path` (the real absolute path listed), `file_count`, `total_size`, `languages`, and per file `path`, `size`, `modified`, `language`, `extension`. It skips subdirectories whose name starts with `.`, stops at `MAX_LIST_ENTRIES` (2000) with a notice first and last, and fails for a path that is not a directory. Languages come from `mcp-npm/list-files.ts#LANGUAGE_BY_EXTENSION`. |
 | `get_capabilities` | none | static JSON: server name and version (the package version), `protocol_version`, `root_path` (`AID_ROOT` or the working directory), the tool names by group, the 12 languages, the formats, the AI actions and a feature list |
 
 ## Calling a tool by hand

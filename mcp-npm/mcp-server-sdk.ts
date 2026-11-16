@@ -7,8 +7,9 @@ import * as path from "path";
 import * as os from "os";
 import * as fs from "fs";
 import { runAid, limitsFromEnv, AidRunError, SerialQueue } from "./run-aid.js";
-import { aiActionText, withIncompleteNotice, resolveBasePath, truncationNotice, spawnFailureMessage } from "./tool-text.js";
+import { aiActionText, withIncompleteNotice, truncationNotice, spawnFailureMessage } from "./tool-text.js";
 import { listFiles, listFilesText, MAX_LIST_ENTRIES } from "./list-files.js";
+import { confinePath } from "./confine.js";
 
 // Debug logging control
 const isDebug = process.env.DEBUG === 'true' || process.env.DEBUG === '1' || process.env.AID_MCP_DEBUG === 'true';
@@ -47,6 +48,9 @@ function requireBinary(): void {
   process.exit(1);
 }
 
+/** Ends the description of every path parameter: the server reads only under AID_ROOT (confinePath). */
+const IN_ROOT = " (inside the server root AID_ROOT; a relative path is resolved against it)";
+
 /**
  * Input schemas of the specialized tools and aid_analyze, exported for the tests.
  * Like every tool schema in this file they are strict objects: an unknown or
@@ -55,31 +59,31 @@ function requireBinary(): void {
  */
 export const TOOL_SCHEMAS = {
   aid_hunt_bugs: z.strictObject({
-    target_path: z.string().describe("Path to file or directory to analyze for bugs"),
+    target_path: z.string().describe("Path to file or directory to analyze for bugs" + IN_ROOT),
     include_private: z.boolean().optional().describe("Include private members in analysis (default: true)"),
     include_patterns: z.string().optional().describe("File patterns to include"),
     exclude_patterns: z.string().optional().describe("File patterns to exclude")
   }),
   aid_suggest_refactoring: z.strictObject({
-    target_path: z.string().describe("Path to file or directory to analyze"),
+    target_path: z.string().describe("Path to file or directory to analyze" + IN_ROOT),
     include_implementation: z.boolean().optional().describe("Include implementation details in analysis (default: true)"),
     include_patterns: z.string().optional().describe("File patterns to include"),
     exclude_patterns: z.string().optional().describe("File patterns to exclude")
   }),
   aid_generate_diagram: z.strictObject({
-    target_path: z.string().describe("Path to file or directory to visualize"),
+    target_path: z.string().describe("Path to file or directory to visualize" + IN_ROOT),
     include_patterns: z.string().optional().describe("File patterns to include"),
     exclude_patterns: z.string().optional().describe("File patterns to exclude")
   }),
   aid_analyze_security: z.strictObject({
-    target_path: z.string().describe("Path to file or directory to analyze"),
+    target_path: z.string().describe("Path to file or directory to analyze" + IN_ROOT),
     include_private: z.boolean().optional().describe("Include private members in analysis (default: true)"),
     include_implementation: z.boolean().optional().describe("Include implementation details (default: true)"),
     include_patterns: z.string().optional().describe("File patterns to include"),
     exclude_patterns: z.string().optional().describe("File patterns to exclude")
   }),
   aid_generate_docs: z.strictObject({
-    target_path: z.string().describe("Path to file or directory to document"),
+    target_path: z.string().describe("Path to file or directory to document" + IN_ROOT),
     doc_type: z.enum(["single-file-docs", "multi-file-docs", "api-reference"]).optional().describe("Type of documentation to generate"),
     include_patterns: z.string().optional().describe("File patterns to include"),
     exclude_patterns: z.string().optional().describe("File patterns to exclude")
@@ -97,7 +101,7 @@ export const TOOL_SCHEMAS = {
       "prompt-for-single-file-docs",
       "prompt-for-diagrams"
     ]).describe("AI action to perform"),
-    target_path: z.string().describe("Path to analyze"),
+    target_path: z.string().describe("Path to analyze" + IN_ROOT),
     output_format: z.enum(["text", "md", "jsonl", "json-structured", "xml"]).optional().describe("Output format"),
     include_private: z.boolean().optional().describe("Include private members"),
     include_protected: z.boolean().optional().describe("Include protected members"),
@@ -133,6 +137,20 @@ export class AidDistillerServer {
     this.registerMetaTools();
   }
 
+
+  /** AID_ROOT, or the server's working directory when it is not set. */
+  private root(): string {
+    return process.env.AID_ROOT || process.cwd();
+  }
+
+  /**
+   * The aid argument for the path parameter param: value resolved against AID_ROOT with
+   * symlinks resolved, relative to the real root. A path outside AID_ROOT fails the call
+   * with an error that names AID_ROOT (confinePath), before aid runs.
+   */
+  private pathArg(param: string, value: string): string {
+    return confinePath(value, this.root(), param, Boolean(process.env.AID_ROOT)).arg;
+  }
 
   /**
    * Executes aid command with queuing to handle concurrency
@@ -181,7 +199,7 @@ export class AidDistillerServer {
         title: "Extract Code Structure from File",
         description: "Extracts essential code structure from a single file - the core functionality of AI Distiller. Returns clean, structured code signatures optimized for AI context windows.\n\nUSAGE: Essential for providing accurate code context to AI assistants. Automatically detects language and extracts API signatures, types, and structure while removing unnecessary implementation details.",
         inputSchema: z.strictObject({
-          file_path: z.string().describe("Path to the file to distill"),
+          file_path: z.string().describe("Path to the file to distill" + IN_ROOT),
           include_private: z.boolean().optional().describe("Include private members (default: false)"),
           include_protected: z.boolean().optional().describe("Include protected members (default: false)"),
           include_internal: z.boolean().optional().describe("Include internal/package-private members (default: false)"),
@@ -195,7 +213,7 @@ export class AidDistillerServer {
       },
       async (params) => {
         if (isDebug) console.error(`[AID MCP] distill_file called with params: ${JSON.stringify(params)}`);
-        const args = [params.file_path, '--stdout', '--show-ai-agent-instructions'];
+        const args = [this.pathArg('file_path', params.file_path), '--stdout', '--show-ai-agent-instructions'];
         
         if (params.output_format) args.push(`--format=${params.output_format}`);
         if (params.include_private) args.push('--private=1');
@@ -233,7 +251,7 @@ export class AidDistillerServer {
         title: "Extract Code Structure from Directory",
         description: "Extracts essential code structure from entire directories - the core functionality of AI Distiller. Processes all supported programming languages and returns structured API/code signatures optimized for AI context windows.\n\nUSAGE: Perfect for understanding codebases, API discovery, and providing accurate code context to AI assistants. Supports filtering by visibility levels, file patterns, and content types.",
         inputSchema: z.strictObject({
-          directory_path: z.string().describe("Path to the directory to distill"),
+          directory_path: z.string().describe("Path to the directory to distill" + IN_ROOT),
           recursive: z.boolean().optional().describe("Process subdirectories recursively (default: true)"),
           include_private: z.boolean().optional().describe("Include private members (default: false)"),
           include_protected: z.boolean().optional().describe("Include protected members (default: false)"),
@@ -250,7 +268,7 @@ export class AidDistillerServer {
       },
       async (params) => {
         if (isDebug) console.error(`[AID MCP] distill_directory called with params: ${JSON.stringify(params)}`);
-        const args = [params.directory_path, '--stdout', '--show-ai-agent-instructions'];
+        const args = [this.pathArg('directory_path', params.directory_path), '--stdout', '--show-ai-agent-instructions'];
         
         if (params.output_format) args.push(`--format=${params.output_format}`);
         if (params.recursive === false) args.push('--recursive=0');
@@ -291,7 +309,7 @@ export class AidDistillerServer {
         title: "Dependency-Aware Code Distillation",
         description: "EXPERIMENTAL (regex-based, may miss or over-include calls): follows function/method calls across files up to the specified depth and returns distilled code of only what the target file appears to use.\n\nUSAGE: Perfect for understanding code execution flows, impact analysis, and creating focused context for AI assistants. Particularly useful for large codebases where you need to understand how specific functionality works across multiple files.",
         inputSchema: z.strictObject({
-          file_path: z.string().describe("Target file to analyze"),
+          file_path: z.string().describe("Target file to analyze" + IN_ROOT),
           max_depth: z.number().default(2).describe("Maximum depth to follow dependencies (default: 2)"),
           include_private: z.boolean().optional().describe("Include private members (default: false)"),
           include_protected: z.boolean().optional().describe("Include protected members (default: false)"),
@@ -306,7 +324,7 @@ export class AidDistillerServer {
       },
       async (params) => {
         if (isDebug) console.error(`[AID MCP] distill_with_dependencies called with params: ${JSON.stringify(params)}`);
-        const args = [params.file_path, '--dependency-aware', '--stdout', '--show-ai-agent-instructions'];
+        const args = [this.pathArg('file_path', params.file_path), '--dependency-aware', '--stdout', '--show-ai-agent-instructions'];
         
         // Add max-depth parameter
         args.push(`--max-depth=${params.max_depth || 2}`);
@@ -355,7 +373,7 @@ export class AidDistillerServer {
       },
       async (params) => {
         const args = [
-          params.target_path,
+          this.pathArg('target_path', params.target_path),
           '--ai-action=prompt-for-bug-hunting'
         ];
         
@@ -383,7 +401,7 @@ export class AidDistillerServer {
       },
       async (params) => {
         const args = [
-          params.target_path,
+          this.pathArg('target_path', params.target_path),
           '--ai-action=prompt-for-refactoring-suggestion'
         ];
         
@@ -411,7 +429,7 @@ export class AidDistillerServer {
       },
       async (params) => {
         const args = [
-          params.target_path,
+          this.pathArg('target_path', params.target_path),
           '--ai-action=prompt-for-diagrams'
         ];
         
@@ -438,7 +456,7 @@ export class AidDistillerServer {
       },
       async (params) => {
         const args = [
-          params.target_path,
+          this.pathArg('target_path', params.target_path),
           '--ai-action=prompt-for-security-analysis'
         ];
         
@@ -472,7 +490,7 @@ export class AidDistillerServer {
         }
         
         const args = [
-          params.target_path,
+          this.pathArg('target_path', params.target_path),
           `--ai-action=${aiAction}`
         ];
         
@@ -501,7 +519,7 @@ export class AidDistillerServer {
         title: "Deep File-by-File Analysis Workflow",
         description: "Generates task lists and prompts for systematic file-by-file analysis. Creates a structured workflow where AI agents analyze each file across multiple dimensions (Security, Performance, Maintainability, Readability). Perfect for comprehensive codebase reviews.\n\nOUTPUT: Generates task list, summary template, and directory structure for organizing analysis results. AI agents should read the task list and follow instructions systematically.",
         inputSchema: z.strictObject({
-          target_path: z.string().describe("Path to analyze"),
+          target_path: z.string().describe("Path to analyze" + IN_ROOT),
           include_private: z.boolean().optional().describe("Include all visibility levels (default: true)"),
           include_implementation: z.boolean().optional().describe("Include implementation details (default: true)"),
           include_patterns: z.string().optional().describe("File patterns to include"),
@@ -510,7 +528,7 @@ export class AidDistillerServer {
       },
       async (params) => {
         const args = [
-          params.target_path,
+          this.pathArg('target_path', params.target_path),
           '--ai-action=flow-for-deep-file-to-file-analysis'
         ];
         
@@ -536,14 +554,14 @@ export class AidDistillerServer {
         title: "Multi-File Documentation Workflow",
         description: "Creates documentation workflow prompts with file relationships. Generates structured prompts that guide AI agents to create interconnected documentation covering multiple files, their relationships, and overall system architecture.\n\nOUTPUT: Generates workflow files that AI agents can follow to create comprehensive documentation with proper cross-references.",
         inputSchema: z.strictObject({
-          target_path: z.string().describe("Path to document"),
+          target_path: z.string().describe("Path to document" + IN_ROOT),
           include_patterns: z.string().optional().describe("File patterns to include"),
           exclude_patterns: z.string().optional().describe("File patterns to exclude")
         })
       },
       async (params) => {
         const args = [
-          params.target_path,
+          this.pathArg('target_path', params.target_path),
           '--ai-action=flow-for-multi-file-docs'
         ];
         
@@ -567,7 +585,7 @@ export class AidDistillerServer {
         title: "Complex Codebase Analysis",
         description: "Enterprise-grade analysis prompt with full codebase context. Generates comprehensive prompts for architecture analysis, compliance checks, and detailed findings. Best suited for large codebases requiring deep architectural insights.\n\nOUTPUT: Generates analysis prompt with distilled code that AI agents can use to create architecture diagrams, identify patterns, and provide strategic recommendations.",
         inputSchema: z.strictObject({
-          target_path: z.string().describe("Path to analyze"),
+          target_path: z.string().describe("Path to analyze" + IN_ROOT),
           include_private: z.boolean().optional().describe("Include all visibility levels (default: true)"),
           include_implementation: z.boolean().optional().describe("Include implementation details (default: true)"),
           include_patterns: z.string().optional().describe("File patterns to include"),
@@ -576,7 +594,7 @@ export class AidDistillerServer {
       },
       async (params) => {
         const args = [
-          params.target_path,
+          this.pathArg('target_path', params.target_path),
           '--ai-action=prompt-for-complex-codebase-analysis'
         ];
         
@@ -602,7 +620,7 @@ export class AidDistillerServer {
         title: "Performance Analysis",
         description: "Performance optimization prompt with complexity focus. Generates analysis prompts that guide AI agents to identify performance bottlenecks, analyze algorithmic complexity, and suggest optimization strategies.\n\nOUTPUT: Generates performance analysis prompt focusing on scalability issues, resource usage, and optimization opportunities.",
         inputSchema: z.strictObject({
-          target_path: z.string().describe("Path to analyze"),
+          target_path: z.string().describe("Path to analyze" + IN_ROOT),
           include_implementation: z.boolean().optional().describe("Include implementation details (default: true)"),
           include_patterns: z.string().optional().describe("File patterns to include"),
           exclude_patterns: z.string().optional().describe("File patterns to exclude")
@@ -610,7 +628,7 @@ export class AidDistillerServer {
       },
       async (params) => {
         const args = [
-          params.target_path,
+          this.pathArg('target_path', params.target_path),
           '--ai-action=prompt-for-performance-analysis'
         ];
         
@@ -635,7 +653,7 @@ export class AidDistillerServer {
         title: "Best Practices Analysis",
         description: "Code quality prompt with industry standards. Generates analysis prompts that guide AI agents to assess code against best practices, design patterns, and clean code principles.\n\nOUTPUT: Generates best practices analysis prompt covering code quality metrics, pattern usage, and improvement suggestions.",
         inputSchema: z.strictObject({
-          target_path: z.string().describe("Path to analyze"),
+          target_path: z.string().describe("Path to analyze" + IN_ROOT),
           include_private: z.boolean().optional().describe("Include all visibility levels (default: true)"),
           include_patterns: z.string().optional().describe("File patterns to include"),
           exclude_patterns: z.string().optional().describe("File patterns to exclude")
@@ -643,7 +661,7 @@ export class AidDistillerServer {
       },
       async (params) => {
         const args = [
-          params.target_path,
+          this.pathArg('target_path', params.target_path),
           '--ai-action=prompt-for-best-practices-analysis'
         ];
         
@@ -676,7 +694,7 @@ export class AidDistillerServer {
       },
       async (params) => {
         const args = [
-          params.target_path,
+          this.pathArg('target_path', params.target_path),
           `--ai-action=${params.ai_action}`
         ];
         
@@ -713,13 +731,13 @@ export class AidDistillerServer {
         title: "List Project Files",
         description: "Lists project files with language detection and statistics. Stops after 2000 entries and says so; pass a subdirectory or a pattern to narrow it. Useful for exploring project structure before distillation.",
         inputSchema: z.strictObject({
-          path: z.string().optional().describe("Path to list; relative paths resolve against the server root (default: the root)"),
+          path: z.string().optional().describe("Directory to list (default: the server root AID_ROOT); it must lie inside AID_ROOT, and a relative path is resolved against it"),
           pattern: z.string().optional().describe("File pattern to match"),
           recursive: z.boolean().optional().describe("List recursively (default: true)")
         })
       },
       async (params) => {
-        const basePath = resolveBasePath(params.path, process.env.AID_ROOT || process.cwd());
+        const basePath = confinePath(params.path || ".", this.root(), 'path', Boolean(process.env.AID_ROOT)).real;
         const result = await listFiles(basePath, { pattern: params.pattern, recursive: params.recursive });
         
         return {

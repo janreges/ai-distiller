@@ -13,11 +13,6 @@ export function extractSavedPath(output: string): string | null {
   return match ? match[1] : null;
 }
 
-/** Absolute directory for list_files: relative paths resolve against root. */
-export function resolveBasePath(requested: string | undefined, root: string): string {
-  return path.resolve(root, requested || ".");
-}
-
 const TASK_LIST = /^📋 (?:Documentation )?Task List: (.+?)\s*$/mu;
 
 /** Absolute path of the task list a flow action reports (a bare name lives in the reported output directory). */

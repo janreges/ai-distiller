@@ -32,7 +32,8 @@
     "mcp-server-sdk.ts",
     "run-aid.ts",
     "tool-text.ts",
-    "list-files.ts"
+    "list-files.ts",
+    "confine.ts"
   ],
   "exclude": [
     "node_modules",

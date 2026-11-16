@@ -125,6 +125,8 @@ AI Distiller (aid) **DOES NOT perform analysis** - it generates prompts with dis
 
 Required parameters are marked with `*`. `include_patterns` and `exclude_patterns` are comma-separated globs. A parameter that is not in this table fails the call with an error that names it (`Unrecognized key: "include_privat"`).
 
+Every path parameter (`file_path`, `directory_path`, `target_path`, and `path` of `list_files`) must lie inside `AID_ROOT`. A relative path is resolved against `AID_ROOT`; symlinks are resolved before the check, so a symlink inside the project that points outside it is refused too. A path outside fails the call before `aid` runs, with an error that names `AID_ROOT`; to work with files elsewhere, start the server with `AID_ROOT` set to a directory that contains them. There is no switch to turn the check off.
+
 | Tool | Parameters |
 |------|------------|
 | `distill_file` | `file_path`*, `include_private`, `include_protected`, `include_internal`, `include_implementation`, `include_comments`, `include_fields`, `include_methods`, `expand`, `output_format` |
@@ -141,7 +143,7 @@ Required parameters are marked with `*`. `include_patterns` and `exclude_pattern
 | `aid_performance_analysis` | `target_path`*, `include_implementation`, `include_patterns`, `exclude_patterns` |
 | `aid_best_practices` | `target_path`*, `include_private`, `include_patterns`, `exclude_patterns` |
 | `aid_analyze` | `ai_action`*, `target_path`*, `output_format`, `include_private`, `include_protected`, `include_internal`, `include_implementation`, `include_comments`, `include_fields`, `include_methods`, `include_patterns`, `exclude_patterns` |
-| `list_files` | `path`, `pattern`, `recursive` (relative paths resolve against `AID_ROOT`; stops after 2000 entries and says so) |
+| `list_files` | `path`, `pattern`, `recursive` (`path` inside `AID_ROOT`, default `AID_ROOT`; stops after 2000 entries and says so) |
 | `get_capabilities` | none |
 
 `output_format` of `aid_analyze` is passed to `aid`, but AI actions always distil as `text`, so it has no effect there.
@@ -150,7 +152,7 @@ Required parameters are marked with `*`. `include_patterns` and `exclude_pattern
 
 ### Environment Variables
 
-- `AID_ROOT` - **REQUIRED for user-scoped installation**: Root directory for analysis. Without this, the tool cannot determine which project to analyze.
+- `AID_ROOT` - **REQUIRED for user-scoped installation**: Root directory for analysis. Without this, the tool cannot determine which project to analyze. The tools read and list only files under it (default: the server's working directory); a path parameter outside it, also through a symlink, fails the call.
 - `AID_MCP_TIMEOUT_MS` - Time limit for one `aid` run, in milliseconds (default: `120000`). When it is hit, `aid` is stopped and the tool returns an error saying the run did not finish; narrow the request or raise the limit.
 - `AID_MCP_MAX_OUTPUT_BYTES` - Cap on the stdout of one `aid` run, in bytes (default: `1000000`). When it is hit, `aid` is stopped and the result is returned marked incomplete, with the notice first and last.
 - `AID_MCP_DEBUG=true` (or `DEBUG=true`) - Debug logging of every tool call and the `aid` arguments, written to stderr.
