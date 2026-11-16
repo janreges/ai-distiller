@@ -19,7 +19,7 @@ TypeScript support in AI Distiller is designed to capture the rich type informat
 | **Type System** | ✅ Full | Union, intersection, conditional, mapped types |
 | **Generics** | ✅ Full | With constraints, defaults, inference |
 | **Type Aliases** | ✅ Full | Including complex utility types |
-| **Imports/Exports** | ✅ Full | Imports as written (`import D, { A, B as C } from './m'`, `import type`, `import * as ns`); re-exports and export lists (`export * from './a'`, `export { x as y } from './c'`, `export { q }`, `export default Inner`); `export` and `export default` on declarations; import aliases (`import G = ns.H`, `export import G = ns.H`) and `export as namespace Lib` |
+| **Imports/Exports** | ✅ Full | Imports as written (`import D, { A, B as C } from './m'`, `import type`, `import * as ns`); re-exports and export lists (`export * from './a'`, `export { x as y } from './c'`, `export { q }`, `export default Inner`); `export` and `export default` on declarations; import aliases (`import G = ns.H`, `export import G = ns.H`), `import x = require('m')`, `export import x = require('m')` and `export as namespace Lib` |
 | **Enums** | ✅ Full | Members with their initialisers; `const enum` prints as `enum` |
 | **Decorators** | ⚠️ Partial | Method decorators are printed with their arguments; class and property decorators are dropped |
 | **Namespaces** | ✅ Full | `namespace X {}` and `declare module "x" {}` with their members |
@@ -450,6 +450,7 @@ class Service {
 10. **React import in `.tsx` files** (✅ Fixed): the unused-import filter dropped `import React from 'react'` from a component file, because the distilled text never names `React`; the classic JSX transform needs it, so a `.tsx` file (or one whose source has JSX) keeps the import that binds `React`
 11. **Used imports removed by the filter** (✅ Fixed): an import whose names start or end with `$` (`import type { $ZodType }`, `import { obs$ }`) was always removed, and so was every import used only above a later import-looking line (an `import G = ns.H` in a namespace, an import in a `declare module`, a `require(...)` in a printed body) or between two imports. The filter now looks in every line outside the imports, matches a name as a whole identifier with `$` in it, and keeps the namespace an import alias names (`import * as Geometry` for `import Polygon = Geometry.Polygon`)
 12. **`--expand` on accessors and generators** (✅ Fixed): `--expand size` no longer matched `get size()` and `set size(v)`, nor `--expand items` the generator `*items()`, once they printed with their keyword and star; they match by their bare name again (the JavaScript processor names them the same way)
+13. **`export import fs = require('fs')`** (✅ Fixed): printed `export import fs = require`, with the module `require` in jsonl; it prints as written, with the module `fs`
 
 ### Current Limitations
 

@@ -16,7 +16,7 @@ declaration, so a parser has to fill them.
 |---|---|---|
 | `DistilledFile` | yes (`Children`, JSON `nodes`) | `Path`, `Language`, `Version`, `Errors` (`DistilledError`: `Message`, `Severity`) |
 | `DistilledPackage` | yes | `Name` |
-| `DistilledImport` | no | `ImportType` (`import`, `from`, `require`, `alias`, `use`, `include`, `namespace`, ...), `Module`, `Symbols` (`Name`, `Alias`, `IsType`; in JavaScript and TypeScript a default import is `Name` `default` with the local name as `Alias`, a namespace import `*` with its alias), `IsType`, `IsExport` (TypeScript `export import G = ns.H`) |
+| `DistilledImport` | no | `ImportType` (`import`, `from`, `require`, `alias`, `use`, `include`, `namespace`, ...), `Module`, `Symbols` (`Name`, `Alias`, `IsType`; in JavaScript and TypeScript a default import is `Name` `default` with the local name as `Alias`, a namespace import `*` with its alias), `IsType`, `IsExport` (TypeScript `export import G = ns.H` and `export import x = require('m')`) |
 | `DistilledExport` | no | JavaScript and TypeScript only: an export statement that declares nothing. `Module` (empty for names of the file), `Symbols` (as an import's; `*` re-exports everything), `Value` (the expression of `export default` or `export =`, function bodies left out), `IsDefault`, `IsType`, `Namespace` (TypeScript `export as namespace Lib`). Public API: `--imports=0` keeps it, `--public=0` removes it |
 | `DistilledClass` | yes | `Name`, `Visibility`, `Modifiers`, `Decorators`, `TypeParams`, `Extends`, `Implements`, `Mixins`, `Deprecated`, `Description`, `APIDocblock` |
 | `DistilledInterface` | yes | `Name`, `Visibility`, `Modifiers`, `TypeParams`, `Extends`, `Permits` |

@@ -35,7 +35,7 @@ type DistilledImport struct {
 	Module     string           `json:"module"`
 	Symbols    []ImportedSymbol `json:"symbols,omitempty"`
 	IsType     bool             `json:"is_type,omitempty"`   // TypeScript `import type ...`
-	IsExport   bool             `json:"is_export,omitempty"` // TypeScript `export import G = ns.H`
+	IsExport   bool             `json:"is_export,omitempty"` // TypeScript `export import G = ns.H`, `export import x = require('m')`
 }
 
 // ImportedSymbol represents an imported symbol. Alias, when set, is the name

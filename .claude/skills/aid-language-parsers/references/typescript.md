@@ -72,7 +72,11 @@
   (`internal/language/esutil/esutil.go#Export`). An import alias, `import G =
   ns.H`, is a `DistilledImport` with the import type `alias`, the entity name as
   `Module` and the symbol `*` aliased `G`; `export import G = ns.H` sets
-  `IsExport` (`internal/language/typescript/ast_parser.go#ASTParser.parseImportAlias`). A declaration that an export
+  `IsExport` (`internal/language/typescript/ast_parser.go#ASTParser.parseImportAlias`).
+  The grammar reads `export import fs = require('fs')` as an alias of the
+  entity `require` with a missing `;`, followed by the statement `('fs');`;
+  the parser makes it the import type `require` of module `fs` with
+  `IsExport` (`internal/language/typescript/ast_parser.go#ASTParser.requireArgument`). A declaration that an export
   list or `export default <name>` of the same file or namespace names is
   `public`, without an `export` modifier
   (`internal/language/typescript/ast_parser.go#publishExportedNames`). A variable whose value

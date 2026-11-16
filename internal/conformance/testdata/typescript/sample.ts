@@ -10,6 +10,7 @@ import { confObs$ } from "./conf-obs";
 import { ConfAbove } from "./conf-above";
 import * as confGeo from "./conf-geo";
 import ConfPoly = confGeo.ConfPoly;
+export import confReq = require("conf-req");
 
 // CONF_LINE_COMMENT
 

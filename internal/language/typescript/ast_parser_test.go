@@ -381,6 +381,22 @@ func TestTS_ImportAliasAndExportAsNamespace(t *testing.T) {
 	assert.Equal(t, "Lib", f.Children[2].(*ir.DistilledExport).Namespace)
 }
 
+// `export import x = require('m')`, which the grammar reads as an alias of
+// `require` and a statement `('m')`, is an exported require import of m. An
+// alias that names `require` and ends with its `;` stays an alias.
+func TestTS_ExportImportRequire(t *testing.T) {
+	f := parseTS(t, "export import fs = require('fs');\nexport import p = require(\"node:path\")\nexport import q = require;\n('x');\n")
+	require.Len(t, f.Children, 3)
+	assert.Equal(t, &ir.DistilledImport{BaseNode: f.Children[0].(*ir.DistilledImport).BaseNode, ImportType: "require", Module: "fs",
+		IsExport: true, Symbols: []ir.ImportedSymbol{{Name: "*", Alias: "fs"}}}, f.Children[0])
+	p := f.Children[1].(*ir.DistilledImport)
+	assert.Equal(t, "require", p.ImportType)
+	assert.Equal(t, "node:path", p.Module)
+	q := f.Children[2].(*ir.DistilledImport)
+	assert.Equal(t, "alias", q.ImportType)
+	assert.Equal(t, "require", q.Module)
+}
+
 // typeNames returns the names of refs.
 func typeNames(refs []ir.TypeRef) []string {
 	var out []string

@@ -80,6 +80,7 @@ var fixtures = []fixture{
 		check{Cap: "import-equals-alias-unfiltered", Flags: []string{"--filter-imports=false"},
 			Contains: []string{"import ConfAliasGone = confNs.ConfUnused"}},
 		check{Cap: "export-as-namespace", Contains: []string{"export as namespace ConfLib"}},
+		check{Cap: "export-import-require", Contains: []string{"export import confReq = require('conf-req')"}},
 		check{Cap: "import-names-with-dollar", Contains: []string{
 			"import type { $ConfDollar } from './conf-dollar'", "import { confObs$ } from './conf-obs'"}},
 		check{Cap: "import-used-above-later-import", Contains: []string{"import { ConfAbove } from './conf-above'",

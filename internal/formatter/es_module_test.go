@@ -29,6 +29,7 @@ func TestESImportLine(t *testing.T) {
 		{ir.DistilledImport{ImportType: "require", Module: "f", Symbols: []ir.ImportedSymbol{sym("*", "F")}}, "import F = require('f')"},
 		{ir.DistilledImport{ImportType: "alias", Module: "ns.H", Symbols: []ir.ImportedSymbol{sym("*", "G")}}, "import G = ns.H"},
 		{ir.DistilledImport{ImportType: "alias", Module: "ns.E", IsExport: true, Symbols: []ir.ImportedSymbol{sym("*", "E")}}, "export import E = ns.E"},
+		{ir.DistilledImport{ImportType: "require", Module: "fs", IsExport: true, Symbols: []ir.ImportedSymbol{sym("*", "fs")}}, "export import fs = require('fs')"},
 	} {
 		t.Run(tc.want, func(t *testing.T) {
 			imp := tc.imp

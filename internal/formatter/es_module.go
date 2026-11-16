@@ -29,12 +29,12 @@ func esImportLine(imp *ir.DistilledImport) string {
 		if len(imp.Symbols) > 0 {
 			local = imp.Symbols[0].Alias
 		}
-		if imp.ImportType == "require" {
-			return fmt.Sprintf("import %s = require('%s')", local, imp.Module)
-		}
 		export := ""
 		if imp.IsExport {
 			export = "export "
+		}
+		if imp.ImportType == "require" {
+			return fmt.Sprintf("%simport %s = require('%s')", export, local, imp.Module)
 		}
 		return fmt.Sprintf("%simport %s = %s", export, local, imp.Module)
 	}

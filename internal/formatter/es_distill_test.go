@@ -154,6 +154,13 @@ func TestESImportFilterKeepsUsedImports(t *testing.T) {
 	}
 }
 
+// `export import fs = require('fs')` prints as written, with module fs.
+func TestESExportImportRequire(t *testing.T) {
+	src := "export import fs = require('fs');\nimport path = require('path');\nexport function f(p: typeof path): void {}\n"
+	assert.Equal(t, []string{"export import fs = require('fs')", "import path = require('path')", "export function f(p: typeof path): void"},
+		distillES(t, "req.ts", src, esDefault))
+}
+
 // --expand NAME keeps the body of a getter, setter or generator called NAME.
 func TestESExpandMatchesAccessorsAndGenerators(t *testing.T) {
 	expand := func(patterns ...string) processor.ProcessOptions {

@@ -288,6 +288,11 @@ func (p *ASTParser) parseImport(node *sitter.Node) *ir.DistilledImport {
 // parseImportAlias parses `import G = ns.H` (`export import G = ns.H` when
 // isExported): the import type "alias" with the entity name as written as
 // its module and the symbol "*" aliased G.
+//
+// The grammar has no `export import x = require('m')`: it reads an alias of
+// the entity `require`, with a missing `;`, and then the statement `('m');`.
+// That is the import type "require" of module m, as `import x =
+// require('m')` is.
 func (p *ASTParser) parseImportAlias(node *sitter.Node, isExported bool) *ir.DistilledImport {
 	imp := &ir.DistilledImport{
 		BaseNode:   ir.BaseNode{Location: p.nodeToLocation(node)},
@@ -295,19 +300,48 @@ func (p *ASTParser) parseImportAlias(node *sitter.Node, isExported bool) *ir.Dis
 		IsExport:   isExported,
 		Symbols:    []ir.ImportedSymbol{},
 	}
-	afterEquals := false
+	afterEquals, terminated := false, false
 	for i := uint(0); i < node.ChildCount(); i++ {
 		child := node.Child(i)
 		switch {
 		case child.Kind() == "=":
 			afterEquals = true
+		case child.Kind() == ";":
+			terminated = !child.IsMissing()
 		case !afterEquals && child.Kind() == "identifier":
 			imp.Symbols = append(imp.Symbols, ir.ImportedSymbol{Name: "*", Alias: p.nodeText(child)})
 		case afterEquals && child.IsNamed() && child.Kind() != "comment" && imp.Module == "":
 			imp.Module = esutil.Signature(child, p.source)
 		}
 	}
+	if imp.Module == "require" && !terminated {
+		if module, ok := p.requireArgument(node); ok {
+			imp.ImportType = "require"
+			imp.Module = module
+		}
+	}
 	return imp
+}
+
+// requireArgument returns the module of `('m')`, the statement the grammar
+// reads after the import alias node of `export import x = require('m')`.
+func (p *ASTParser) requireArgument(node *sitter.Node) (string, bool) {
+	statement := node
+	if parent := node.Parent(); parent != nil && parent.Kind() == "export_statement" {
+		statement = parent
+	}
+	next := statement.NextNamedSibling()
+	if next == nil || next.Kind() != "expression_statement" {
+		return "", false
+	}
+	paren := next.NamedChild(0)
+	if paren == nil || paren.Kind() != "parenthesized_expression" || paren.NamedChildCount() != 1 {
+		return "", false
+	}
+	if str := paren.NamedChild(0); str != nil && str.Kind() == "string" {
+		return p.moduleName(str), true
+	}
+	return "", false
 }
 
 // moduleName returns the text of a module string without its quotes.
