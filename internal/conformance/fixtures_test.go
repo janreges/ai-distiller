@@ -179,6 +179,13 @@ var fixtures = []fixture{
 			Contains:    []string{"const ConfLimit = 10 // CONF_CONST_TRAILING\n", "type ConfKind int // CONF_TYPE_TRAILING\n"},
 			NotContains: []string{"CONF_HIDDEN_CONST_NOTE"}},
 		check{Cap: "spec-comments-hidden-by-default", NotContains: []string{"CONF_CONST_TRAILING", "CONF_TYPE_TRAILING"}},
+		// One blank line between declarations, a method's included, above
+		// the doc; none between a doc and its declaration.
+		check{Cap: "doc-on-its-declaration", Contains: []string{
+			")\n\n// CONF_DOC_COMMENT\ntype ConfWidget struct {\n",
+			"}\n\nfunc (w *ConfWidget) ConfPublic() string\n\nfunc (w *ConfWidget) ConfOther() string\n"}},
+		check{Cap: "free-comment-set-off", Flags: []string{"--comments=1"},
+			Contains: []string{")\n\n// CONF_LINE_COMMENT\n\n// CONF_DOC_COMMENT\ntype ConfWidget struct {\n"}},
 		// strings is used only in confPrivate's body: the import filter
 		// drops it in the public output, and its comments with it.
 		check{Cap: "import-comments-in-block", Flags: []string{"--comments=1", "--implementation=1", "--internal=1"},

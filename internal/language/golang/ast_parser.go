@@ -70,10 +70,15 @@ func (p *ASTParser) ProcessSource(ctx context.Context, source []byte, filename s
 	// Extract build constraints from comments
 	buildConstraints := p.extractBuildConstraints(file.Comments)
 	if len(buildConstraints) > 0 {
-		// Add build constraints as a comment at the top
+		// Add build constraints as a comment at the top, where the first
+		// constraint line is (file.Pos() is the package clause)
+		at := file.Pos()
+		if c := firstBuildConstraint(file.Comments); c != nil {
+			at = c.Pos()
+		}
 		constraintComment := &ir.DistilledComment{
 			BaseNode: ir.BaseNode{
-				Location: p.getLocation(file.Pos(), file.Pos()),
+				Location: p.getLocation(at, at),
 			},
 			Text: fmt.Sprintf("@build_constraint(%s)", strings.Join(buildConstraints, ", ")),
 		}
@@ -397,6 +402,19 @@ func (p *ASTParser) insertCommentAtPosition(file *ir.DistilledFile, comment *ir.
 		file.Children = append(file.Children[:insertIndex+1], file.Children[insertIndex:]...)
 		file.Children[insertIndex] = comment
 	}
+}
+
+// firstBuildConstraint returns the first "//go:build" or "// +build" line
+// comment, or nil.
+func firstBuildConstraint(comments []*ast.CommentGroup) *ast.Comment {
+	for _, group := range comments {
+		for _, c := range group.List {
+			if strings.HasPrefix(c.Text, "//go:build ") || strings.HasPrefix(c.Text, "// +build ") {
+				return c
+			}
+		}
+	}
+	return nil
 }
 
 // extractBuildConstraints extracts build constraints from comments

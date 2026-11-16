@@ -80,6 +80,7 @@ type Logger struct {
 func NewLogger(prefix string) *Logger {
 	return &Logger{prefix: prefix}
 }
+
 func (l *Logger) Log(message string) {
 	fmt.Printf("[%s] %s %f\n", l.prefix, message, m.Pi)
 }
@@ -180,18 +181,17 @@ func Add(x int, y int) int { // Line comment on the function signature
 package basic
 
 // Global constant Pi, a fundamental value.
-
 const Pi = 3.14159
+
 // var block for multiple declarations.
 // IsEnabled controls a feature. Doc comments for vars are important.
-
 var IsEnabled = true
-// UserCount is a package-level counter.
 
+// UserCount is a package-level counter.
 var UserCount int64 = 100
+
 // Add sums two integers. A trivial function.
 // It tests basic function declaration and parameter parsing.
-
 func Add(x int, y int) int
 </file>
 ```
@@ -209,18 +209,17 @@ import (
 )
 
 // Global constant Pi, a fundamental value.
-
 const Pi = 3.14159
+
 // var block for multiple declarations.
 // IsEnabled controls a feature. Doc comments for vars are important.
-
 var IsEnabled = true
-// UserCount is a package-level counter.
 
+// UserCount is a package-level counter.
 var UserCount int64 = 100
+
 // Add sums two integers. A trivial function.
 // It tests basic function declaration and parameter parsing.
-
 func Add(x int, y int) int { // Line comment on the function signature
 	// A comment inside the function body.
 	z := x + y // Short variable declaration
@@ -287,20 +286,21 @@ func (cw *customWriter) Write(p []byte) (n int, err error) { return 0, nil }
 package simple
 
 // Writer defines a simple interface for writing data.
-
 type Writer interface {
 	Write(p []byte) (n int, err error)
 }
+
 // Data represents a container for a piece of data.
 // It demonstrates a basic struct with a single field.
-
 type Data struct {}
-// NewData is a constructor-like function, a common Go idiom.
 
+// NewData is a constructor-like function, a common Go idiom.
 func NewData(v string) *Data
+
 // ReadValue returns the current value. This is a value receiver method.
 // It can be called on both Data and *Data types.
 func (d Data) ReadValue() string
+
 // UpdateValue modifies the value. This is a pointer receiver method.
 // It can only be called on a *Data type.
 func (d *Data) UpdateValue(v string)
@@ -319,37 +319,39 @@ import (
 )
 
 // Writer defines a simple interface for writing data.
-
 type Writer interface {
 	Write(p []byte) (n int, err error)
 }
+
 // Data represents a container for a piece of data.
 // It demonstrates a basic struct with a single field.
-
 type Data struct {
 	value string
 }
-// NewData is a constructor-like function, a common Go idiom.
 
+// NewData is a constructor-like function, a common Go idiom.
 func NewData(v string) *Data {
 	return &Data{value: v}
 }
+
 // ReadValue returns the current value. This is a value receiver method.
 // It can be called on both Data and *Data types.
 func (d Data) ReadValue() string {
 	return d.value
 }
+
 // UpdateValue modifies the value. This is a pointer receiver method.
 // It can only be called on a *Data type.
 func (d *Data) UpdateValue(v string) {
 	d.value = v
 }
+
 // Ensure Data does not satisfy the io.Writer interface, but we use it
 // to test how the distiller handles imported interfaces.
-
 var _ io.Writer = (*customWriter)(nil)
 
 type customWriter struct {}
+
 func (cw *customWriter) Write(p []byte) (n int, err error) { return 0, nil }
 </file>
 ```
@@ -405,24 +407,24 @@ func ProcessNumericChan[T Number](ch <-chan *Node[T]) T {
 ```
 <file path="construct_4_complex.go">
 package complex
-// Number is a constraint that permits any integer or floating-point type.
 
+// Number is a constraint that permits any integer or floating-point type.
 type Number interface {
 	~int | ~int64 | ~float32 | ~float64
 }
-// Node is a generic struct representing a node in a linked list.
 
+// Node is a generic struct representing a node in a linked list.
 type Node[T any] struct {
 	Value T
 	Next *Node[T]
 }
+
 // Map applies a function to each element of a slice, returning a new slice.
 // This is a generic function with a closure.
-
 func Map[T any, V any](input []T, f func(T) V) []V
+
 // ProcessNumericChan processes a channel of generic Nodes.
 // It uses a type constraint.
-
 func ProcessNumericChan[T Number](ch <-chan *Node[T]) T
 </file>
 ```
@@ -475,6 +477,6 @@ The Go processor uses:
 - **Visibility**: Detection based on naming conventions
 - **Formatter**: Custom text formatter with Go-specific syntax rules
 
-A file with a syntax error produces no output: in a directory run `aid` prints `Warning: failed to process ...` on stderr and goes on with the other files; a single Go file or Go stdin with a syntax error makes `aid` exit 1. Declarations are emitted in source order; doc comments of functions and types are documentation (`--docstrings`), the package comment and other comments follow `--comments`. The comments of struct fields and interface methods also follow `--comments`; they print inside their type, above their field or at the end of its line, and go with the field when it is hidden. So does the comment at the end of a `const`, `var` or `type` line: it prints at the end of that line. The comments of the imports print in the import block, indented, the one at the end of an import's line on that line; when the import filter drops an import, the comments directly above it and at the end of its line go with it. A comment inside a function (its parameters or body) or inside a `const`, `var` or `type` declaration is part of that declaration: a function body prints it with `--implementation=1`, and it never prints on its own.
+A file with a syntax error produces no output: in a directory run `aid` prints `Warning: failed to process ...` on stderr and goes on with the other files; a single Go file or Go stdin with a syntax error makes `aid` exit 1. Declarations are emitted in source order, one blank line between two of them (a method included), above the doc of the second; a doc comment stands directly on its declaration. Doc comments of functions and types are documentation (`--docstrings`), the package comment and other comments follow `--comments`. The comments of struct fields and interface methods also follow `--comments`; they print inside their type, above their field or at the end of its line, and go with the field when it is hidden. So does the comment at the end of a `const`, `var` or `type` line: it prints at the end of that line. The comments of the imports print in the import block, indented, the one at the end of an import's line on that line; when the import filter drops an import, the comments directly above it and at the end of its line go with it. A comment inside a function (its parameters or body) or inside a `const`, `var` or `type` declaration is part of that declaration: a function body prints it with `--implementation=1`, and it never prints on its own.
 
 For more details, see the implementation in `internal/language/golang/`.

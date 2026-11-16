@@ -22,6 +22,7 @@ func NewDispatcher(maxWorkers int) *Dispatcher {
 		maxWorkers: maxWorkers,
 	}
 }
+
 func (d *Dispatcher) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 	for i := 1; i <= d.maxWorkers; i++ {

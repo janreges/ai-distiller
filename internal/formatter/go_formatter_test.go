@@ -26,7 +26,7 @@ func TestGoFormatter_FunctionBody(t *testing.T) {
 		Returns:        &ir.TypeRef{Name: "int"},
 		Parameters:     []ir.Parameter{{Name: "w", Type: ir.TypeRef{Name: "*W"}}},
 		Implementation: "{ return 1 }"}
-	assert.Equal(t, "func (w *W) One() int { return 1 }\n", format(method))
+	assert.Equal(t, "\nfunc (w *W) One() int { return 1 }\n", format(method))
 
 	decl := &ir.DistilledFunction{Name: "Get", Returns: ret}
 	assert.Equal(t, "\nfunc Get() *int\n", format(decl))
@@ -165,10 +165,11 @@ func TestGoFormatter_ImportComments(t *testing.T) {
 	var b strings.Builder
 	require.NoError(t, NewGoFormatter().(SiblingFormatter).FormatNodes(&b, nodes, 0))
 	// The comments directly above an import and those between imports go in
-	// the block, the one at the end of an import's line stays there; a
-	// comment away from the imports stays out of the block.
-	assert.Equal(t, "package p\n// decl doc\n"+
-		"\nimport (\n\t// doc of fmt\n\t\"fmt\" // printing\n\t// free\n\t\"os\"\n)\n"+
+	// the block, the one at the end of an import's line stays there; the
+	// declaration's doc sits on the block, and a comment away from the
+	// imports stays out of it.
+	assert.Equal(t, "package p\n\n// decl doc\n"+
+		"import (\n\t// doc of fmt\n\t\"fmt\" // printing\n\t// free\n\t\"os\"\n)\n"+
 		"\n// after\n\nvar V int\n", b.String())
 
 	// A file that ends with its imports closes the block.
@@ -186,21 +187,56 @@ func TestGoFormatter_SpecLineComments(t *testing.T) {
 	}
 
 	// const Max = 10 // the limit     line 1
-	// // free                         line 2
-	// type S struct {                 line 3
+	//
+	// // free                         line 3
+	//
+	// type S struct {                 line 5
 	// 	X int
-	// } // after S                    line 5
+	// } // after S                    line 7
 	nodes := []ir.DistilledNode{
 		comment(1, 16, "the limit"),
 		&ir.DistilledField{BaseNode: span(1, 1, 7), Name: "Max", DefaultValue: "10", Modifiers: []ir.Modifier{ir.ModifierFinal}},
-		comment(2, 1, "free"),
-		comment(5, 3, "after S"),
-		&ir.DistilledClass{BaseNode: span(3, 5, 8), Name: "S", Children: []ir.DistilledNode{
+		comment(3, 1, "free"),
+		comment(7, 3, "after S"),
+		&ir.DistilledClass{BaseNode: span(5, 7, 8), Name: "S", Children: []ir.DistilledNode{
 			&ir.DistilledField{Name: "X", Type: &ir.TypeRef{Name: "int"}}}},
 	}
 	var b strings.Builder
 	require.NoError(t, NewGoFormatter().(SiblingFormatter).FormatNodes(&b, nodes, 0))
-	assert.Equal(t, "\nconst Max = 10 // the limit\n// free\n\ntype S struct {\n\tX int\n} // after S\n", b.String())
+	assert.Equal(t, "\nconst Max = 10 // the limit\n\n// free\n\ntype S struct {\n\tX int\n} // after S\n", b.String())
+}
+
+func TestGoFormatter_DocSitsOnItsDeclaration(t *testing.T) {
+	at := func(line int) ir.BaseNode {
+		return ir.BaseNode{Location: ir.Location{StartLine: line, StartColumn: 1, EndLine: line, EndColumn: 10}}
+	}
+	doc := func(line int, text string) *ir.DistilledComment {
+		return &ir.DistilledComment{BaseNode: at(line), Text: text, Format: ir.CommentDoc}
+	}
+	free := &ir.DistilledComment{BaseNode: at(9), Text: "free", Format: ir.CommentLine}
+	method := &ir.DistilledFunction{BaseNode: at(7), Name: "M", Modifiers: []ir.Modifier{ir.ModifierAbstract},
+		Parameters: []ir.Parameter{{Name: "r", Type: ir.TypeRef{Name: "*R"}}}}
+
+	// package p            line 1
+	// // F doc             line 3
+	// func F()             line 4
+	// // M doc             line 6
+	// func (r *R) M()      line 7
+	// // free              line 9
+	// // T doc             line 11
+	// type T int           line 12
+	nodes := []ir.DistilledNode{
+		&ir.DistilledPackage{BaseNode: at(1), Name: "p"},
+		doc(3, "F doc"), &ir.DistilledFunction{BaseNode: at(4), Name: "F"},
+		doc(6, "M doc"), method,
+		free,
+		doc(11, "T doc"), &ir.DistilledTypeAlias{BaseNode: at(12), Name: "T", Type: ir.TypeRef{Name: "int"}},
+	}
+	var b strings.Builder
+	require.NoError(t, NewGoFormatter().(SiblingFormatter).FormatNodes(&b, nodes, 0))
+	// One blank line between declarations, a method included, above the doc;
+	// none between a doc and its declaration.
+	assert.Equal(t, "package p\n\n// F doc\nfunc F()\n\n// M doc\nfunc (r *R) M()\n\n// free\n\n// T doc\ntype T int\n", b.String())
 }
 
 func TestGoFormatter_DefinedTypeAndAlias(t *testing.T) {

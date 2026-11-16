@@ -42,9 +42,28 @@ func goIndent(n int) string {
 //     right before that node) is written at the end of the node's last line;
 //   - a comment between two imports, or directly above an import (its doc),
 //     goes in the import block, indented, so that the import filter drops it
-//     with its import; any other node closes the block.
+//     with its import; any other node closes the block;
+//   - the comments that sit on a declaration or on the import block
+//     (sitsOn) are held until it is written, and the blank line that sets it
+//     off from the node before goes above them, so that a doc stands
+//     directly on its declaration;
+//   - any other comment is set off by a blank line from a node before it, or
+//     from a comment it is apart from in the source.
 func (f *GoFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, indent int) error {
-	var trailing []string
+	var held, trailing []string
+	write := func(text string) error {
+		if len(held) > 0 {
+			blank := ""
+			if strings.HasPrefix(text, "\n") {
+				blank, text = "\n", text[1:]
+			}
+			text = blank + strings.Join(held, "") + text
+			held = nil
+		}
+		_, err := io.WriteString(w, text)
+		return err
+	}
+	var prev ir.DistilledNode // the last node written
 	for i, node := range nodes {
 		c, isComment := node.(*ir.DistilledComment)
 		if isComment && i+1 < len(nodes) && endsLineOf(c, nodes[i+1]) {
@@ -53,25 +72,100 @@ func (f *GoFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, indent 
 		}
 		_, isImport := node.(*ir.DistilledImport)
 		inBlock := isImport || isComment && f.inImportBlock(nodes, i)
+		if !inBlock && f.inImports {
+			if err := write(goIndent(indent) + ")\n"); err != nil {
+				return err
+			}
+			f.inImports = false
+		}
 		if inBlock && !f.inImports {
-			fmt.Fprintf(w, "\n%simport (\n", goIndent(indent))
+			if err := write("\n" + goIndent(indent) + "import (\n"); err != nil {
+				return err
+			}
 			f.inImports = true
-		} else if !inBlock && f.inImports {
-			f.closeImports(w, indent, isComment)
 		}
 		nodeIndent := indent
 		if inBlock {
 			nodeIndent++
 		}
-		if err := f.formatWithTrailing(w, node, nodeIndent, trailing); err != nil {
+		var b strings.Builder
+		if err := f.formatWithTrailing(&b, node, nodeIndent, trailing); err != nil {
 			return err
 		}
 		trailing = nil
+		text := b.String()
+		switch {
+		case isComment && !inBlock && sitsOn(nodes, i):
+			held = append(held, text)
+			continue
+		case isComment && !inBlock && prev != nil && apart(prev, c):
+			text = "\n" + text
+		}
+		if err := write(text); err != nil {
+			return err
+		}
+		prev = node
 	}
 	if f.inImports {
-		f.closeImports(w, indent, false)
+		if err := write(goIndent(indent) + ")\n"); err != nil {
+			return err
+		}
+		f.inImports = false
 	}
-	return nil
+	return write("")
+}
+
+// sitsOn reports whether the comment nodes[i] sits on the node after the
+// comments that follow it: on the import block, or on a declaration (the
+// package clause included) as one of the comments right above it, each a doc
+// comment or ending on the line above the next one. The comment at the end of
+// the declaration's line is skipped.
+func sitsOn(nodes []ir.DistilledNode, i int) bool {
+	j := i + 1
+	for j < len(nodes) && nodes[j].GetNodeKind() == ir.KindComment {
+		j++
+	}
+	if j == len(nodes) {
+		return false
+	}
+	switch nodes[j].(type) {
+	case *ir.DistilledImport:
+		return true
+	case *ir.DistilledPackage, *ir.DistilledField, *ir.DistilledClass, *ir.DistilledInterface,
+		*ir.DistilledFunction, *ir.DistilledTypeAlias:
+	default:
+		return false
+	}
+	decl := nodes[j]
+	below := decl.GetLocation().StartLine
+	for k := j - 1; k >= i; k-- {
+		c, ok := nodes[k].(*ir.DistilledComment)
+		if !ok {
+			return false
+		}
+		if endsLineOf(c, decl) {
+			continue
+		}
+		loc := c.Location
+		if !c.IsDoc() && (loc.StartLine <= 0 || loc.EndLine+1 != below) {
+			return false
+		}
+		if loc.StartLine > 0 {
+			below = loc.StartLine
+		}
+	}
+	return true
+}
+
+// apart reports whether comment c is set off by a blank line from prev, the
+// node written before it: always after a node that is not a comment, after a
+// comment only when a line lies between them in the source.
+func apart(prev ir.DistilledNode, c *ir.DistilledComment) bool {
+	if prev.GetNodeKind() != ir.KindComment {
+		return true
+	}
+	end := prev.GetLocation().EndLine
+	return end > 0 && c.Location.StartLine > end+1
 }
 
 // inImportBlock reports whether the comment nodes[i] goes in the import
@@ -104,16 +198,6 @@ func (f *GoFormatter) inImportBlock(nodes []ir.DistilledNode, i int) bool {
 		below = loc.StartLine
 	}
 	return true
-}
-
-// closeImports writes the ")" that closes the import block, and a blank line
-// when a comment comes next (a declaration writes its own).
-func (f *GoFormatter) closeImports(w io.Writer, indent int, beforeComment bool) {
-	fmt.Fprintf(w, "%s)\n", goIndent(indent))
-	if beforeComment {
-		fmt.Fprintln(w)
-	}
-	f.inImports = false
 }
 
 // formatWithTrailing writes node with the comments in trailing at the end of
@@ -483,8 +567,8 @@ func (f *GoFormatter) formatMethod(w io.Writer, fn *ir.DistilledFunction, receiv
 		startParam = 1
 	}
 
-	// Format method signature
-	fmt.Fprintf(w, "%sfunc %s%s(", indent, receiverStr, fn.Name)
+	// Format method signature, set off by a blank line like a function
+	fmt.Fprintf(w, "\n%sfunc %s%s(", indent, receiverStr, fn.Name)
 
 	// Parameters (skip receiver)
 	params := fn.Parameters[startParam:]

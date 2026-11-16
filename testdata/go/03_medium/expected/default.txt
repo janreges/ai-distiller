@@ -2,26 +2,28 @@
 package server
 
 // Config holds server configuration.
-
 type Config struct {
 	Port int
 	Host string
 }
+
 // Validate checks the configuration.
 func (c *Config) Validate() error
-// ConfigError is a custom error for configuration issues.
 
+// ConfigError is a custom error for configuration issues.
 type ConfigError struct {
 	Field string
 	Reason string
 }
+
 func (e *ConfigError) Error() string
+
 // Server represents a network server.
 // It embeds Config, promoting its fields.
-
 type Server struct {
 	Config
 }
+
 // Start validates config and starts the server.
 func (s *Server) Start() error
 </file>

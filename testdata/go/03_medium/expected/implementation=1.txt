@@ -6,11 +6,11 @@ import (
 )
 
 // Config holds server configuration.
-
 type Config struct {
 	Port int
 	Host string
 }
+
 // Validate checks the configuration.
 func (c *Config) Validate() error {
 	if c.Port <= 0 {
@@ -18,21 +18,23 @@ func (c *Config) Validate() error {
 	}
 	return nil
 }
-// ConfigError is a custom error for configuration issues.
 
+// ConfigError is a custom error for configuration issues.
 type ConfigError struct {
 	Field string
 	Reason string
 }
+
 func (e *ConfigError) Error() string {
 	return fmt.Sprintf("config error on field '%s': %s", e.Field, e.Reason)
 }
+
 // Server represents a network server.
 // It embeds Config, promoting its fields.
-
 type Server struct {
 	Config
 }
+
 // Start validates config and starts the server.
 func (s *Server) Start() error {
 	// The AI should understand that s.Validate() is a promoted method from Config.

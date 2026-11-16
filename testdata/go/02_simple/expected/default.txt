@@ -1,25 +1,29 @@
 <file path="source.go">
 package storage
-// Storer defines a generic interface for key-value storage.
 
+// Storer defines a generic interface for key-value storage.
 type Storer interface {
 	Get(key string) ([]byte, error)
 	Set(key string, value []byte) error
 }
-// PostgresStorer is a production implementation using a database.
 
+// PostgresStorer is a production implementation using a database.
 type PostgresStorer struct {
 	ConnectionString string
 }
+
 // Get retrieves a value from Postgres.
 func (ps *PostgresStorer) Get(key string) ([]byte, error)
+
 // Set saves a value to Postgres.
 func (ps *PostgresStorer) Set(key string, value []byte) error
-// MemoryStorer is an in-memory implementation for testing.
 
+// MemoryStorer is an in-memory implementation for testing.
 type MemoryStorer struct {}
+
 // Get retrieves a value from memory.
 func (ms MemoryStorer) Get(key string) ([]byte, error)
+
 // Set saves a value to memory.
 func (ms MemoryStorer) Set(key string, value []byte) error
 </file>

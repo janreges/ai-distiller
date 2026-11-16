@@ -1,18 +1,19 @@
 <file path="source.go">
-// go:build linux
 //go:build linux
+// go:build linux
 // cache_linux.go
 package cache
 
 // Cache is a generic, thread-safe key-value store.
 // This implementation is specific to Linux.
-
 type Cache[K comparable, V any] struct {}
-// New creates a new Cache.
 
+// New creates a new Cache.
 func New[K comparable, V any]() *Cache[K, V]
+
 // Set adds or updates a value in the cache.
 func (c *Cache[K, V]) Set(key K, value V)
+
 // Get retrieves a value from the cache.
 func (c *Cache[K, V]) Get(key K) (V, bool)
 </file>
