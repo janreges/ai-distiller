@@ -407,8 +407,9 @@ func (f *TypeScriptFormatter) getTypeScriptVisibilityKeyword(visibility ir.Visib
 	}
 }
 
-// formatEnum prints a TypeScript enum with one member per line. A
-// DistilledEnum has no modifiers, so "export" follows its visibility.
+// formatEnum prints a TypeScript enum with one member per line, with
+// `export` when its modifiers hold it (esExportPrefix), as written in the
+// source.
 func (f *TypeScriptFormatter) formatEnum(w io.Writer, enum *ir.DistilledEnum, indent int) error {
 	pad := strings.Repeat("    ", indent)
 	fmt.Fprintf(w, "%s%senum %s {\n", pad, esExportPrefix(enum.Modifiers), enum.Name)

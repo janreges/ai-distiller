@@ -474,7 +474,6 @@ TypeScript parsing performance with tree-sitter:
 TypeScript support is actively maintained. Key areas for contribution:
 
 1. **Decorator Support**: Class and property decorators in `internal/language/typescript/ast_parser.go`
-2. **Index Signatures**: Print them in interfaces
-3. **Performance**: Optimize tree-sitter grammar loading
+2. **Performance**: Optimize tree-sitter grammar loading
 
 See [CONTRIBUTING.md](../../CONTRIBUTING.md) for development setup.
