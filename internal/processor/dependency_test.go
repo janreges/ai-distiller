@@ -43,6 +43,24 @@ func TestPhpImportedClasses(t *testing.T) {
 	assert.Equal(t, []string{`Other\Model`}, phpCandidates(`\Other\Model`, `App\Models`, aliases))
 }
 
+// Go imports come from go/parser: every formatting of the import
+// declarations, and never a string literal after them.
+func TestGoImportPaths(t *testing.T) {
+	cases := map[string][]string{
+		"package main\n\nimport (\"fmt\"; \"m/a\")\n\nvar names = []string{\n\t\"m/b\",\n}\n":                                                   {"fmt", "m/a"},
+		"package main\nimport \"m/a\"\nimport x \"m/b\"\n":                                                                                      {"m/a", "m/b"},
+		"package main\n\nimport (\n\t// a comment\n\t. \"m/dot\"\n\t_ \"m/blank\"\n\talias \"m/alias\" // trailing\n\t/* block */ \"m/c\"\n)\n": {"m/dot", "m/blank", "m/alias", "m/c"},
+		"package main\n\nimport `m/raw`\n":                                                                                                      {"m/raw"},
+		"package main\n\nimport \"m/a\"\n\nfunc f() { _ = \"import (\\\"m/x\\\")\" }\n":                                                         {"m/a"},
+		"package main\n\nfunc main() {}\n":                                                                                                      nil,
+		"// import \"m/comment\"\npackage main\n":                                                                                               nil,
+		"package main\n\nimport (\n\t\"m/a\"\n\t\"m/b\n)\n":                                                                                     {"m/a"},
+	}
+	for src, want := range cases {
+		assert.Equal(t, want, goImportPaths([]byte(src)), src)
+	}
+}
+
 func TestStripJSONC(t *testing.T) {
 	in := "{\n  // a comment\n  \"a\": \"http://x/*y*/\", /* block */\n  \"b\": [1, 2,],\n  \"c\": {\"d\": 1, // last\n  },\n}\n"
 	assert.JSONEq(t, `{"a": "http://x/*y*/", "b": [1, 2], "c": {"d": 1}}`, string(stripJSONC([]byte(in))))

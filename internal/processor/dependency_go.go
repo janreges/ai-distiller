@@ -2,10 +2,13 @@ package processor
 
 import (
 	"context"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/janreges/ai-distiller/internal/debug"
@@ -25,11 +28,9 @@ type goFile struct {
 }
 
 var (
-	goModuleLine   = regexp.MustCompile(`(?m)^\s*module\s+"?([^"\s]+)"?`)
-	goReplaceSpec  = regexp.MustCompile(`^(\S+)(?:\s+\S+)?\s+=>\s+(\S+)(?:\s+\S+)?$`)
-	goPackageLine  = regexp.MustCompile(`(?m)^package\s+([A-Za-z_]\w*)`)
-	goImportSingle = regexp.MustCompile(`^import\s+(?:[\w.]+\s+)?"([^"]+)"`)
-	goImportSpec   = regexp.MustCompile(`^(?:[\w.]+\s+)?"([^"]+)"`)
+	goModuleLine  = regexp.MustCompile(`(?m)^\s*module\s+"?([^"\s]+)"?`)
+	goReplaceSpec = regexp.MustCompile(`^(\S+)(?:\s+\S+)?\s+=>\s+(\S+)(?:\s+\S+)?$`)
+	goPackageLine = regexp.MustCompile(`(?m)^package\s+([A-Za-z_]\w*)`)
 )
 
 // extractGoImports returns the files a Go file depends on: the other non-test
@@ -78,25 +79,19 @@ func (da *DependencyAnalyzer) extractGoImports(ctx context.Context, fileContent 
 	return deps, nil
 }
 
-// goImportPaths returns the import paths of a Go file's import declarations.
+// goImportPaths returns the import paths of a Go file's import declarations,
+// read by go/parser (ImportsOnly), so any formatting of the declarations
+// works and no string literal after them counts. A file with a syntax error
+// in its imports gives the imports parsed before the error.
 func goImportPaths(content []byte) []string {
+	file, _ := parser.ParseFile(token.NewFileSet(), "", content, parser.ImportsOnly)
+	if file == nil {
+		return nil
+	}
 	var paths []string
-	inBlock := false
-	for _, line := range strings.Split(string(content), "\n") {
-		line = strings.TrimSpace(line)
-		switch {
-		case inBlock && strings.HasPrefix(line, ")"):
-			inBlock = false
-		case inBlock:
-			if m := goImportSpec.FindStringSubmatch(line); m != nil {
-				paths = append(paths, m[1])
-			}
-		case line == "import (" || strings.HasPrefix(line, "import ("):
-			inBlock = true
-		case strings.HasPrefix(line, "import "):
-			if m := goImportSingle.FindStringSubmatch(line); m != nil {
-				paths = append(paths, m[1])
-			}
+	for _, spec := range file.Imports {
+		if path, err := strconv.Unquote(spec.Path.Value); err == nil && path != "" {
+			paths = append(paths, path)
 		}
 	}
 	return paths

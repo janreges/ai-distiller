@@ -107,6 +107,22 @@ func TestDependencyAwareFollowsGoPackages(t *testing.T) {
 	assert.Len(t, filePaths(out), 5)
 }
 
+// Go imports are read by go/parser: an import block on one line counts, and
+// a string literal after the imports is no import.
+func TestDependencyAwareReadsGoImportsInAnyLayout(t *testing.T) {
+	tmp := t.TempDir()
+	writeProject(t, tmp, map[string]string{
+		".git/HEAD": "ref: refs/heads/main\n",
+		"go.mod":    "module m\n\ngo 1.22\n",
+		"main.go":   "package main\n\nimport (\"fmt\"; \"m/a\")\n\nvar names = []string{\n\t\"m/b\",\n}\n\nfunc main() { fmt.Println(a.A(), names) }\n",
+		"a/a.go":    "package a\n\nfunc A() int { return 1 }\n",
+		"b/b.go":    "package b\n\nfunc B() int { return 2 }\n",
+	})
+	out, stderr, code := aidRun(t, tmp, nil, "main.go", "--dependency-aware", "--stdout", "--summary-type=off")
+	require.Equal(t, 0, code, stderr)
+	assert.Equal(t, []string{"main.go", "a/a.go"}, filePaths(out))
+}
+
 // Rust: "mod x;" files (not #[cfg(test)] ones), and the module files named
 // by crate::, super::, the crate's own library name and a path dependency's
 // name, in use declarations and in expressions; not paths in doc comments.

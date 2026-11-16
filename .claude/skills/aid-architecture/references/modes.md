@@ -183,7 +183,7 @@ AI actions get it). That function:
    `internal/processor/concurrent.go`);
 2. hands the input's files to
    `internal/processor/dependency.go#DependencyAnalyzer.Follow`, which reads
-   each file's imports (`DependencyAnalyzer.Imports`, one regex extractor per
+   each file's imports (`DependencyAnalyzer.Imports`, one extractor per
    language behind `extractIncludeStatements`), breadth-first, one level per
    step up to `MaxDepth`, and keeps each resolved path once if it is an
    existing file with a processor, lies inside the boundary and passes the
