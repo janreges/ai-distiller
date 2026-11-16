@@ -12,8 +12,8 @@ TypeScript support in AI Distiller is designed to capture the rich type informat
 
 | Construct | Support Level | Notes |
 |-----------|--------------|-------|
-| **Classes** | ✅ Full | Including abstract classes, inheritance, generics |
-| **Interfaces** | ⚠️ Partial | With extends and generics; index signatures (`[key: string]: any`) are not printed |
+| **Classes** | ✅ Full | Including abstract classes, inheritance, generics; every `extends` and `implements` base as written (`React.Component<Props>`, `ns.Base<string>`) |
+| **Interfaces** | ⚠️ Partial | With extends (as written, `extends Base<string>, ns.Other`) and generics; index signatures (`[key: string]: any`) are not printed |
 | **Functions** | ✅ Full | Regular, async, arrow functions, overloads (every signature is printed) |
 | **Methods** | ✅ Full | Public, private, protected, abstract, static |
 | **Type System** | ✅ Full | Union, intersection, conditional, mapped types |
@@ -426,6 +426,12 @@ class Service {
 5. **Function bodies** (✅ Fixed): `--implementation=1` prints the real body instead of a placeholder
 6. **Comments and JSDoc** (✅ Fixed): JSDoc blocks print by default (`--docstrings=0` removes them), `//` and `/* */` comments with `--comments=1`
 7. **Exported type aliases** (✅ Fixed): keep their `export` keyword
+
+### Recently Fixed (after v1.5.0)
+
+1. **Imports** (✅ Fixed): printed as written (`import D, { A, B as C } from './m'`, `import * as ns`, `import type`) instead of a bare `import './m'`
+2. **Re-exports and default exports** (✅ Fixed): `export * from`, `export { x as y } from`, `export { q }`, `export default Inner` and `export = X` print, so a barrel file is no longer empty; `export default function main()` keeps its `default`
+3. **Generic and qualified bases** (✅ Fixed): `interface A extends B<string>`, `class X extends React.Component<P>` and `extends ns.Base<T>` lost their base
 
 ### Current Limitations
 

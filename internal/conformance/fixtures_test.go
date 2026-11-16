@@ -84,6 +84,9 @@ var fixtures = []fixture{
 			"export type { ConfReType } from './conf-retype'"}},
 		check{Cap: "reexport-kept-without-imports", Flags: []string{"--imports=0"}, Contains: []string{"export * from './conf-all'"}},
 		check{Cap: "export-list-makes-public", Contains: []string{"const confListed = 2", "export { confListed }", "export default confListed"}},
+		check{Cap: "heritage-as-written", Contains: []string{
+			"export interface ConfBased extends ConfGenericBase<string>, confNs.ConfQualified<number> {",
+			"export class ConfDerived extends confNs.ConfBaseClass<{ id: number }> implements ConfBased {"}},
 		check{Cap: "body-indent", Flags: []string{"--implementation=1"},
 			Contains: []string{"        const a = \"CONF_BODY_A\";\n        return a;\n    }\n"}})},
 	{Lang: "javascript", File: "javascript/sample.js", Checks: append(standard(markers{

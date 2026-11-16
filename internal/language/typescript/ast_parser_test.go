@@ -348,3 +348,29 @@ func TestTS_ImportForms(t *testing.T) {
 	assert.Equal(t, []ir.ImportedSymbol{{Name: "*", Alias: "F"}}, imp(5).Symbols)
 	assert.Equal(t, []ir.ImportedSymbol{{Name: "default", Alias: "H"}, {Name: "*", Alias: "I"}}, imp(6).Symbols)
 }
+
+// typeNames returns the names of refs.
+func typeNames(refs []ir.TypeRef) []string {
+	var out []string
+	for _, r := range refs {
+		out = append(out, r.Name)
+	}
+	return out
+}
+
+// Every base in an extends or implements clause is kept as written: generic,
+// qualified, both, or an expression.
+func TestTS_HeritageAsWritten(t *testing.T) {
+	src := "interface A extends B<string>, ns.C, D<\n  E,\n> {}\n" +
+		"class K extends React.Component<{ x: number }> implements M<number>, ns.N {}\n" +
+		"class L extends mixin(A, B) {}\n" +
+		"class P extends Q {}\n"
+	f := parseTS(t, src)
+	require.Len(t, f.Children, 4)
+	assert.Equal(t, []string{"B<string>", "ns.C", "D<E>"}, typeNames(f.Children[0].(*ir.DistilledInterface).Extends))
+	k := f.Children[1].(*ir.DistilledClass)
+	assert.Equal(t, []string{"React.Component<{ x: number }>"}, typeNames(k.Extends))
+	assert.Equal(t, []string{"M<number>", "ns.N"}, typeNames(k.Implements))
+	assert.Equal(t, []string{"mixin(A, B)"}, typeNames(f.Children[2].(*ir.DistilledClass).Extends))
+	assert.Equal(t, []string{"Q"}, typeNames(f.Children[3].(*ir.DistilledClass).Extends))
+}

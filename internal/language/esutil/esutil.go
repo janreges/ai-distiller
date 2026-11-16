@@ -90,8 +90,8 @@ func bodyStart(node *sitter.Node) (uint, bool) {
 // its `async`, type parameters, parameters and return type, a function
 // expression its keyword, name, parameters and return type. Comments are
 // left out, and whitespace that holds a line break becomes one space (none
-// after `(` or `[`, before `)`, `]`, `,` or `;`, and a trailing comma before
-// a closing bracket goes), so the result is one line. Strings and template
+// after `(`, `[` or `<`, before `)`, `]`, `>`, `,` or `;`, and a trailing
+// comma before a closing bracket goes), so the result is one line. Strings and template
 // literals are kept verbatim.
 //
 //	forwardRef<B, P>(({ a = 1, ...rest }, ref) => { ... })
@@ -180,15 +180,15 @@ func (s *signer) token(start, end uint) {
 // before the token next.
 func (s *signer) writeBreak(next string) {
 	out := s.b.String()
-	closing := strings.HasPrefix(next, ")") || strings.HasPrefix(next, "]") || strings.HasPrefix(next, "}")
+	closing := strings.HasPrefix(next, ")") || strings.HasPrefix(next, "]") || strings.HasPrefix(next, "}") || next == ">"
 	if closing && strings.HasSuffix(out, ",") {
 		out = strings.TrimSuffix(out, ",")
 		s.b.Reset()
 		s.b.WriteString(out)
 	}
 	switch {
-	case strings.HasSuffix(out, "(") || strings.HasSuffix(out, "["):
-	case strings.HasPrefix(next, ")") || strings.HasPrefix(next, "]"):
+	case strings.HasSuffix(out, "(") || strings.HasSuffix(out, "[") || strings.HasSuffix(out, "<"):
+	case strings.HasPrefix(next, ")") || strings.HasPrefix(next, "]") || next == ">":
 	case strings.HasPrefix(next, ",") || strings.HasPrefix(next, ";"):
 	default:
 		s.b.WriteString(" ")

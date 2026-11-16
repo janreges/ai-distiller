@@ -454,61 +454,14 @@ func (p *ASTParser) parseClass(node *sitter.Node, isExported bool) *ir.Distilled
 		class.TypeParams = p.parseTypeParameters(typeParams)
 	}
 
-	// Parse extends clause
-	extendsClause := p.findChild(node, "class_heritage")
-	if extendsClause != nil {
-		for i := 0; i < int(extendsClause.ChildCount()); i++ {
-			child := extendsClause.Child(uint(i))
-			if child == nil {
-				continue
-			}
-
-			if child.Kind() == "extends_clause" {
-				// Look for type_identifier or identifier
-				typeNode := p.findChild(child, "type_identifier")
-				if typeNode == nil {
-					typeNode = p.findChild(child, "identifier")
-				}
-				if typeNode != nil {
-					typeName := p.nodeText(typeNode)
-
-					// Check for type arguments
-					typeArgs := p.findChild(child, "type_arguments")
-					if typeArgs != nil {
-						typeName += p.nodeText(typeArgs)
-					}
-
-					class.Extends = append(class.Extends, ir.TypeRef{
-						Name: typeName,
-					})
-				}
-			} else if child.Kind() == "implements_clause" {
-				// Parse implements
-				for j := 0; j < int(child.ChildCount()); j++ {
-					implChild := child.Child(uint(j))
-					if implChild == nil {
-						continue
-					}
-
-					if implChild.Kind() == "type_identifier" {
-						class.Implements = append(class.Implements, ir.TypeRef{
-							Name: p.nodeText(implChild),
-						})
-					} else if implChild.Kind() == "generic_type" {
-						// Handle generic implements like Cacheable<string, User>
-						baseType := p.findChild(implChild, "type_identifier")
-						if baseType != nil {
-							typeName := p.nodeText(baseType)
-							typeArgs := p.findChild(implChild, "type_arguments")
-							if typeArgs != nil {
-								typeName += p.nodeText(typeArgs)
-							}
-							class.Implements = append(class.Implements, ir.TypeRef{
-								Name: typeName,
-							})
-						}
-					}
-				}
+	// Parse the extends and implements clauses
+	if heritage := p.findChild(node, "class_heritage"); heritage != nil {
+		for i := 0; i < int(heritage.NamedChildCount()); i++ {
+			switch clause := heritage.NamedChild(uint(i)); clause.Kind() {
+			case "extends_clause":
+				class.Extends = append(class.Extends, p.heritageTypes(clause)...)
+			case "implements_clause":
+				class.Implements = append(class.Implements, p.heritageTypes(clause)...)
 			}
 		}
 	}
@@ -907,25 +860,8 @@ func (p *ASTParser) parseInterface(node *sitter.Node, isExported bool) *ir.Disti
 	}
 
 	// Parse extends clause
-	extendsClause := p.findChild(node, "extends_type_clause")
-	if extendsClause != nil {
-		// Debug: print what we find in extends clause
-		// fmt.Printf("Found extends clause with %d children\n", extendsClause.ChildCount())
-		// for i := 0; i < int(extendsClause.ChildCount()); i++ {
-		// 	child := extendsClause.Child(i)
-		// 	if child != nil {
-		// 		fmt.Printf("  Child %d: type=%s, text=%q\n", i, child.Kind(), p.nodeText(child))
-		// 	}
-		// }
-
-		for i := 0; i < int(extendsClause.ChildCount()); i++ {
-			child := extendsClause.Child(uint(i))
-			if child != nil && (child.Kind() == "type_identifier" || child.Kind() == "identifier") {
-				intf.Extends = append(intf.Extends, ir.TypeRef{
-					Name: p.nodeText(child),
-				})
-			}
-		}
+	if extendsClause := p.findChild(node, "extends_type_clause"); extendsClause != nil {
+		intf.Extends = p.heritageTypes(extendsClause)
 	}
 
 	// Parse interface body
@@ -935,6 +871,26 @@ func (p *ASTParser) parseInterface(node *sitter.Node, isExported bool) *ir.Disti
 	}
 
 	return intf
+}
+
+// heritageTypes returns the bases an extends, implements or interface
+// extends clause names, each as written: `B<string>`, `ns.Base<T>`,
+// `React.Component<{ x: number }>`, `mixin(A, B)`. A class's extends clause
+// gives the base expression and its type arguments as two children, which
+// are joined.
+func (p *ASTParser) heritageTypes(clause *sitter.Node) []ir.TypeRef {
+	var refs []ir.TypeRef
+	for i := 0; i < int(clause.NamedChildCount()); i++ {
+		child := clause.NamedChild(uint(i))
+		switch {
+		case child.Kind() == "comment":
+		case child.Kind() == "type_arguments" && len(refs) > 0:
+			refs[len(refs)-1].Name += esutil.Signature(child, p.source)
+		default:
+			refs = append(refs, ir.TypeRef{Name: esutil.Signature(child, p.source)})
+		}
+	}
+	return refs
 }
 
 // parseInterfaceBody parses interface body members

@@ -63,3 +63,6 @@ export type { ConfReType } from "./conf-retype";
 const confListed = 2;
 export { confListed };
 export default confListed;
+
+export interface ConfBased extends ConfGenericBase<string>, confNs.ConfQualified<number> {}
+export class ConfDerived extends confNs.ConfBaseClass<{ id: number }> implements ConfBased {}
