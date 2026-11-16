@@ -5,9 +5,12 @@
 - Wired: `internal/language/php/processor.go#Processor.ProcessWithOptions`
   creates `NewTreeSitterProcessor()` per call and runs
   `internal/language/php/tree_sitter_processor.go#TreeSitterProcessor.ProcessSource`.
-- Grammar: `github.com/tree-sitter/tree-sitter-php/bindings/go` (v0.25.1 in
+- Grammar: `github.com/tree-sitter/tree-sitter-php/bindings/go` (v0.25.0 in
   `go.mod`, ABI 15; before v0.24 a `const` in an enum body was a syntax
-  error), the `php` grammar (`LanguagePHP()`, which includes the HTML text
+  error; v0.25.1 makes `f(Double::for(1))` and `#[Cast(Integer::class)]` an
+  ERROR, since a cast type name before `::` in an argument list is taken for
+  a cast keyword, and can drop the whole class, so do not upgrade to it;
+  `TestPHP_GrammarParsesCastNamedClasses` guards this), the `php` grammar (`LanguagePHP()`, which includes the HTML text
   around `<?php`), wrapped with `sitter.NewLanguage`. Tree: `go run ./cmd/ast-dump --lang php`.
 - Extensions: `.php`, `.phtml`, `.php3`, `.php4`, `.php5`, `.php7`, `.phps`,
   `.inc`.

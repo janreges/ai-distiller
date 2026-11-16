@@ -10,6 +10,8 @@ import (
 	"github.com/janreges/ai-distiller/internal/processor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	sitter "github.com/tree-sitter/go-tree-sitter"
+	tree_sitter_php "github.com/tree-sitter/tree-sitter-php/bindings/go"
 )
 
 func TestProcessorBasicClass(t *testing.T) {
@@ -604,4 +606,41 @@ function helper(Status ...$s): never { exit; }
 	assert.True(t, ref.Parameters[1].IsVariadic)
 	require.NotNil(t, ref.Extensions)
 	assert.True(t, ref.Extensions.PHP.ReturnsReference)
+}
+
+// tree-sitter-php v0.25.1 takes a class named like a cast type (Double,
+// Integer, ...) before `::` in an argument list for a cast keyword: the
+// attribute lost its argument and a class around such a call vanished. The
+// grammar in go.mod must parse these, and print them as written.
+func TestPHP_GrammarParsesCastNamedClasses(t *testing.T) {
+	src := `<?php
+namespace App;
+
+use Types\Integer;
+
+#[Cast(Integer::class)]
+final class Dto {
+    public function id(): int { return 1; }
+}
+
+class RoutingResponseFactoryTest extends TestCase
+{
+    public function testStreamDownload()
+    {
+        $factory = new ResponseFactory(Double::for(ViewFactory::class), Double::for(Redirector::class));
+        $response = $factory->streamDownload(fn () => null, 'x');
+        f(Boolean::from(1), Real::make(), Binary::of(), Object::new(), Int::max(), Float::min(), Bool::yes(), String::of(), Unset::it());
+    }
+}
+`
+	parser := sitter.NewParser()
+	defer parser.Close()
+	require.NoError(t, parser.SetLanguage(sitter.NewLanguage(tree_sitter_php.LanguagePHP())))
+	tree := parser.Parse([]byte(src), nil)
+	defer tree.Close()
+	assert.False(t, tree.RootNode().HasError(), tree.RootNode().ToSexp())
+
+	out := distillPHP(t, src, nil)
+	assert.Contains(t, out, "#[Cast(Integer::class)]\nfinal class Dto {\n    public id(): int\n}\n")
+	assert.Contains(t, out, "class RoutingResponseFactoryTest extends TestCase {\n    public testStreamDownload()\n}\n")
 }

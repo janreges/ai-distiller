@@ -332,5 +332,10 @@ var fixtures = []fixture{
 		check{Cap: "enum-members", Contains: []string{
 			"#[ConfMarker]\nenum ConfStatus: string implements ConfAliasShown {\n    use ConfTrait;\n    case ConfActive = 'active';\n" +
 				"    public const CONF_DEFAULT = self::ConfActive;\n    public confLabel(): string\n}\n",
-			"enum ConfPure {\n    case ConfOne;\n    public confPure(): int\n}\n"}})},
+			"enum ConfPure {\n    case ConfOne;\n    public confPure(): int\n}\n"}},
+		// A class named like a cast type before `::` in an argument list
+		// parses (tree-sitter-php v0.25.1 made it an ERROR).
+		check{Cap: "cast-named-class", Contains: []string{
+			"use Conf\\Types\\Integer;\n",
+			"#[ConfCast(Integer::class)]\nfinal class ConfDto {\n    public confCast(): int\n}\n"}})},
 }

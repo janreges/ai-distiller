@@ -621,6 +621,10 @@ class Repository {
 5. **Docblock indentation** (🟡 Minor)
    - **Issue**: A member docblock loses the indentation inside its lines (`*   id: int` prints as `* id: int`)
 
+6. **PHP 8.5 `clone` with arguments** (🟡 Minor)
+   - **Issue**: The grammar (tree-sitter-php v0.25.0) does not parse `clone($obj, ['a' => 1])`; the method that holds it still prints, but its body is not reliable with `--implementation=1`
+   - **Why not v0.25.1**: v0.25.1 parses it, but fails on a class named like a cast type (`Double`, `Integer`, `Boolean`, ...) before `::` in an argument list, such as `#[Cast(Integer::class)]` or `f(Double::for(X::class))`, and can lose the whole class
+
 ## Best Practices
 
 ### 1. **Use PSR-19 Annotations for Virtual APIs**

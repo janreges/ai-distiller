@@ -7,6 +7,7 @@ use Conf\Base\ConfBase as ConfAliasBase;
 use Conf\Contracts\{ConfShown as ConfAliasShown, ConfUnusedMember};
 use function Conf\Helpers\conf_helper;
 use const Conf\Helpers\CONF_LIMIT;
+use Conf\Types\Integer;
 
 // CONF_LINE_COMMENT
 
@@ -70,5 +71,12 @@ enum ConfPure {
 
     public function confPure(): int {
         return 1;
+    }
+}
+
+#[ConfCast(Integer::class)]
+final class ConfDto {
+    public function confCast(): int {
+        return conf_helper(Double::for(1), Integer::class);
     }
 }
