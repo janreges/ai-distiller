@@ -63,8 +63,11 @@
   `--comments` and does not appear by default.
 - Comments go through `internal/language/commentutil/commentutil.go#StripJSStyle`:
   `/** */` is `doc`, `/* */` `block`, `//` and `///` `line`; a file-level doc with
-  a file tag is `Inner`. JSDoc `@param {T} name` and `@returns {T}` also fill
-  parameter and return types.
+  a file tag is `Inner`. JSDoc `@param {T} name` (also `[name=x]`), `@returns {T}`
+  and `@type {T}` also fill parameter, return and variable types; a type is
+  read up to the brace that closes it, also over lines
+  (`internal/language/javascript/tree_sitter_processor.go#jsdocType`). A
+  `@typedef` types nothing.
 - `Extensions` holds only `JavaScript.IsFunctionExpression` (see above).
 
 ## Unused files

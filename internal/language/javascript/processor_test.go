@@ -475,6 +475,43 @@ func TestJS_VariableNamedValue(t *testing.T) {
 	assert.Equal(t, ir.VisibilityPrivate, f.Children[2].(*ir.DistilledField).Visibility)
 }
 
+// A JSDoc type is read whole up to its closing brace, also over lines; an
+// optional parameter `[name=x]` gets its type; a @typedef does not type the
+// declaration after it.
+func TestJS_JSDocBracedTypes(t *testing.T) {
+	f := parseJS(t, "/** @type {WeakMap<object, Set<Function>>} */\nconst a = new WeakMap();\n"+
+		"/**\n * @type {Array<{type: string,\n *   key: string}>}\n */\nconst b = [];\n"+
+		"/**\n * @param {Object<string, number>} w - weights\n * @param {number} [n=5] - count\n * @param plain no type\n * @returns {Promise<Map<string, number>>} result\n */\nfunction c(w, n, plain, no) {}\n"+
+		"/**\n * @typedef {Object} Config\n */\nconst d = {};\n")
+	fieldType := func(i int) string {
+		if typ := f.Children[i].(*ir.DistilledField).Type; typ != nil {
+			return typ.Name
+		}
+		return ""
+	}
+	var fields []int
+	var fn *ir.DistilledFunction
+	for i, c := range f.Children {
+		switch n := c.(type) {
+		case *ir.DistilledField:
+			fields = append(fields, i)
+		case *ir.DistilledFunction:
+			fn = n
+		}
+	}
+	require.Len(t, fields, 3)
+	assert.Equal(t, "WeakMap<object, Set<Function>>", fieldType(fields[0]))
+	assert.Equal(t, "Array<{type: string, key: string}>", fieldType(fields[1]))
+	assert.Equal(t, "", fieldType(fields[2]))
+	require.NotNil(t, fn)
+	types := map[string]string{}
+	for _, p := range fn.Parameters {
+		types[p.Name] = p.Type.Name
+	}
+	assert.Equal(t, map[string]string{"w": "Object<string, number>", "n": "number", "plain": "", "no": ""}, types)
+	assert.Equal(t, "Promise<Map<string, number>>", fn.Returns.Name)
+}
+
 // A variable whose value is a function expression is a function marked as
 // one, so it prints with `function`; an arrow function is not marked.
 func TestJS_FunctionExpressionVariable(t *testing.T) {

@@ -164,6 +164,9 @@ func (p *TreeSitterProcessor) parseJSDoc(text string) *JSDocInfo {
 	lines := strings.Split(text, "\n")
 	hasTypeInfo := false
 
+	// A tag runs on over the next lines while its braced type is open, so
+	// `@type {Array<{a: number,` + `b: string}>}` is read whole.
+	var tags []string
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		line = strings.TrimPrefix(line, "* ")
@@ -175,60 +178,53 @@ func (p *TreeSitterProcessor) parseJSDoc(text string) *JSDocInfo {
 			continue
 		}
 
-		// Parse tags
-		if strings.HasPrefix(line, "@") {
-			parts := strings.Fields(line)
-			if len(parts) < 1 {
-				continue
-			}
-
-			tag := parts[0]
-			switch tag {
-			case "@param":
-				if len(parts) >= 3 {
-					// @param {type} name - description
-					typeStr := strings.Trim(parts[1], "{}")
-					paramName := strings.TrimPrefix(parts[2], "...")
-					info.paramTypes[paramName] = typeStr
-					hasTypeInfo = true
-				}
-			case "@returns", "@return":
-				if len(parts) >= 2 {
-					// @returns {type} description
-					info.returnType = strings.Trim(parts[1], "{}")
-					hasTypeInfo = true
-				}
-			case "@type":
-				if len(parts) >= 2 {
-					// @type {type}
-					info.typedefType = strings.Trim(parts[1], "{}")
-					hasTypeInfo = true
-				}
-			case "@typedef":
-				if len(parts) >= 2 {
-					// @typedef {type} Name
-					info.typedefType = strings.Trim(parts[1], "{}")
-					hasTypeInfo = true
-				}
-			case "@private":
-				info.isPrivate = true
-				hasTypeInfo = true
-			case "@protected":
-				info.isProtected = true
-				hasTypeInfo = true
-			case "@public":
-				info.isPublic = true
-				hasTypeInfo = true
-			case "@static":
-				info.isStatic = true
-				hasTypeInfo = true
-			case "@async":
-				info.isAsync = true
-				hasTypeInfo = true
-			}
+		if n := len(tags); n > 0 && jsdocTypeOpen(tags[n-1]) {
+			tags[n-1] += " " + line
+		} else if strings.HasPrefix(line, "@") {
+			tags = append(tags, line)
 		} else if info.description == "" {
 			// First non-tag line is description
 			info.description = line
+		}
+	}
+
+	for _, tag := range tags {
+		word, after := jsdocTag(tag)
+		typ, rest, typed := jsdocType(after)
+		switch word {
+		case "@param":
+			// @param {type} name - description
+			if name := jsdocParamName(rest); typed && name != "" {
+				info.paramTypes[name] = typ
+				hasTypeInfo = true
+			}
+		case "@returns", "@return":
+			// @returns {type} description
+			if typed {
+				info.returnType = typ
+				hasTypeInfo = true
+			}
+		case "@type":
+			// @type {type}
+			if typed {
+				info.typedefType = typ
+				hasTypeInfo = true
+			}
+		case "@private":
+			info.isPrivate = true
+			hasTypeInfo = true
+		case "@protected":
+			info.isProtected = true
+			hasTypeInfo = true
+		case "@public":
+			info.isPublic = true
+			hasTypeInfo = true
+		case "@static":
+			info.isStatic = true
+			hasTypeInfo = true
+		case "@async":
+			info.isAsync = true
+			hasTypeInfo = true
 		}
 	}
 
@@ -236,6 +232,65 @@ func (p *TreeSitterProcessor) parseJSDoc(text string) *JSDocInfo {
 		return info
 	}
 	return nil
+}
+
+// jsdocType splits the text after a JSDoc tag into its braced type, read
+// whole up to the brace that closes it (`{Object<string, {a: number}>}`
+// gives `Object<string, {a: number}>`), and the text after it. ok is false
+// when the text does not start with a closed `{...}`.
+func jsdocType(s string) (typ, rest string, ok bool) {
+	s = strings.TrimSpace(s)
+	if !strings.HasPrefix(s, "{") {
+		return "", s, false
+	}
+	depth := 0
+	for i, r := range s {
+		switch r {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return strings.TrimSpace(s[1:i]), strings.TrimSpace(s[i+1:]), true
+			}
+		}
+	}
+	return "", s, false
+}
+
+// jsdocTypeOpen reports whether a tag's braced type is not closed yet, so
+// the tag goes on on the next line.
+func jsdocTypeOpen(tag string) bool {
+	_, after := jsdocTag(tag)
+	_, _, ok := jsdocType(after)
+	return strings.HasPrefix(after, "{") && !ok
+}
+
+// jsdocTag splits a tag line into its tag word (`@param`) and the text
+// after it.
+func jsdocTag(tag string) (word, after string) {
+	fields := strings.Fields(tag)
+	if len(fields) == 0 {
+		return "", ""
+	}
+	return fields[0], strings.TrimSpace(strings.TrimPrefix(tag, fields[0]))
+}
+
+// jsdocParamName returns the parameter a `@param {T}` tag names: `name`
+// from `name`, `...name`, `[name]` and `[name=default]`.
+func jsdocParamName(rest string) string {
+	fields := strings.Fields(rest)
+	if len(fields) == 0 {
+		return ""
+	}
+	name := strings.TrimPrefix(fields[0], "...")
+	if strings.HasPrefix(name, "[") {
+		name = strings.TrimPrefix(name, "[")
+		if i := strings.IndexAny(name, "=]"); i >= 0 {
+			name = name[:i]
+		}
+	}
+	return name
 }
 
 // processNode recursively processes tree-sitter nodes

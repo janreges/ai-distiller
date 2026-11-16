@@ -155,7 +155,9 @@ var fixtures = []fixture{
 			NotContains: []string{"confFnExpr = (confQ)"}},
 		check{Cap: "generator-method-star", Contains: []string{
 			"    *confGenMethod()",
-			"    async *confAsyncGenMethod()"}})},
+			"    async *confAsyncGenMethod()"}},
+		check{Cap: "jsdoc-braced-type", Contains: []string{
+			"export const confTypedMap: Map<string, Set<number>> = new Map()"}})},
 	{Lang: "go", File: "go/sample.go", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "ConfField", "ConfPublic", "ConfOther"},
 		Private:   []string{"confPrivate"},

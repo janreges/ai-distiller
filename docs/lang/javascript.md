@@ -49,6 +49,8 @@ This appears in the distilled output with type annotations (the JSDoc block itse
 - `function createUser(name: string, age: number) -> User`
 - `async function fetchData(options: Object) -> Promise<Data>`
 
+A type is read whole, nested braces and spaces included, also when it goes on over lines: `@type {WeakMap<object, Set<Function>>}` gives `const listeners: WeakMap<object, Set<Function>>`, and `@param {number} [timeout=5000]` types the optional parameter `timeout`. A `@typedef` declares a type name and does not type the declaration after it.
+
 ### Function Parameter Extraction
 
 The parser extracts the parameters of functions, arrow functions and class methods, including:
@@ -106,7 +108,7 @@ Distills to:
 - ✅ **Exported declarations** are printed with their `export` or `export default` keyword, as in TypeScript (`export const createClient = (apiKey)`, `export default class:` for an anonymous class); `module.exports = ...` is shown only with `--comments=1`
 - ✅ **Re-exports and export lists** print as written: `export * from './a'`, `export { x, y as z } from './c'`, `export { q }`, `export default Inner`
 - ✅ **Generator functions** print `function* name()` (`async function* name()`), generator methods `*name()` (`async *name()`, `static *name()`)
-- ✅ **JSDoc type extraction** for parameters and return values
+- ✅ **JSDoc type extraction** for parameters, return values and variables (`@type`)
 - ✅ **Private members** detection: `#private` names, and class members whose name starts with `_` unless their JSDoc says `@public`
 - ✅ **JSDoc blocks** printed by default above the declaration they document; `//` and `/* */` comments with `--comments=1`
 

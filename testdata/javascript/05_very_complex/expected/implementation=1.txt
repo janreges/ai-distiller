@@ -43,7 +43,7 @@ class CooperativeScheduler:
      * @param {object} [options={}] - Task options
      * @returns {number} The ID of the newly registered task.
      */
-    registerTask(generatorFunc: GeneratorFunction, options = {}) -> number {
+    registerTask(generatorFunc: GeneratorFunction, options: object = {}) -> number {
         const id = this.nextTaskId++;
         // Create a new task object using prototype-based "inheritance".
         const task = Object.create(TaskPrototype).init(id, generatorFunc, options);
@@ -64,7 +64,7 @@ class CooperativeScheduler:
      * @param {number} [timeout=5000] - Max time to wait in ms.
      * @returns {Promise<void>}
      */
-    async shutdown(timeout = 5000) -> Promise<void> {
+    async shutdown(timeout: number = 5000) -> Promise<void> {
         console.log('Scheduler shutting down gracefully...');
         this.isRunning = false; // Prevent new iterations from starting with new tasks
 

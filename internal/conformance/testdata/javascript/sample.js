@@ -53,3 +53,5 @@ export class ConfGenerators {
     *confGenMethod() {}
     async *confAsyncGenMethod() {}
 }
+/** @type {Map<string, Set<number>>} */
+export const confTypedMap = new Map();
