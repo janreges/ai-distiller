@@ -107,7 +107,11 @@ var fixtures = []fixture{
 			NotContains: []string{"CONF_HIDDEN_FIELD_NOTE"}},
 		check{Cap: "member-comments-hidden-by-default", NotContains: []string{"CONF_FIELD_DOC", "CONF_METHOD_TRAILING"}},
 		check{Cap: "hidden-field-comment-shown", Flags: []string{"--comments=1", "--internal=1"},
-			Contains: []string{"\tconfSecret int // CONF_HIDDEN_FIELD_NOTE\n}\n"}})},
+			Contains: []string{"\tconfSecret int // CONF_HIDDEN_FIELD_NOTE\n}\n"}},
+		// Only confPrivate and confSecret print, and neither names io or
+		// strings: the import filter drops both, and the block with them.
+		check{Cap: "no-empty-import-block", Flags: []string{"--public=0", "--internal=1"},
+			Contains: []string{"package conf\n\n// CONF_PRIVATE_DOC\n"}, NotContains: []string{"import"}})},
 	{Lang: "rust", File: "rust/sample.rs", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "conf_field", "conf_public", "conf_other"},
 		Private:   []string{"conf_private"},

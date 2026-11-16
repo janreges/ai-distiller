@@ -1,9 +1,6 @@
 <file path="source.go">
 package cache
 
-import (
-)
-
 // Cache is a generic, thread-safe key-value store.
 // This implementation is specific to Linux.
 

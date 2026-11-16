@@ -122,19 +122,13 @@ import (
 )
 ```
 
-### 3. Empty Import Block
-**Status**: Cosmetic  
-**Impact**: Low
-
-When the import filter drops every import of a file (the imports are used only in function bodies that are not printed), an empty `import (` `)` block remains.
-
-### 4. Generic Type Parameters
+### 3. Generic Type Parameters
 **Status**: Basic support  
 **Impact**: Medium - Complex constraints may not be fully preserved
 
 Type parameters and constraints are kept; grouped type parameters are expanded (`[T, V any]` prints as `[T any, V any]`).
 
-### 5. CGO Support
+### 4. CGO Support
 **Status**: Minimal  
 **Impact**: Low - C code blocks not properly preserved
 
@@ -184,9 +178,6 @@ func Add(x int, y int) int { // Line comment on the function signature
 ```
 <file path="construct_1_basic.go">
 package basic
-
-import (
-)
 
 // Global constant Pi, a fundamental value.
 
@@ -294,9 +285,6 @@ func (cw *customWriter) Write(p []byte) (n int, err error) { return 0, nil }
 ```
 <file path="construct_2_simple.go">
 package simple
-
-import (
-)
 
 // Writer defines a simple interface for writing data.
 
@@ -461,7 +449,7 @@ func ProcessNumericChan[T Number](ch <-chan *Node[T]) T
    - Lowercase first letter = Unexported (internal: `--internal=1` shows it; `--private=1` adds nothing for Go)
    - A method is as visible as the less visible of its own name and its receiver type
 
-2. **Import Organization**: Imports print as one `import ( ... )` block; in text output, an import that the printed code does not use is dropped (`--filter-imports=false` keeps it).
+2. **Import Organization**: Imports print as one `import ( ... )` block; in text output, an import that the printed code does not use is dropped (`--filter-imports=false` keeps it), and when none is left, so is the block.
 
 3. **Generic Support**: Type parameters and constraints of Go 1.18+ generics are kept.
 

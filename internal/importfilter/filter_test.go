@@ -168,6 +168,48 @@ const app = express()
 	}
 }
 
+func TestGoFilterRemovesEmptiedImportBlock(t *testing.T) {
+	filter := NewGoFilter()
+	run := func(code string) string {
+		t.Helper()
+		out, _, err := filter.FilterUnusedImports(code, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		return out
+	}
+
+	// No import is left: the block goes whole, with its comment and the
+	// blank line above it.
+	code := "<file path=\"a.go\">\npackage user\n\nimport (\n\t\"fmt\"\n// for errors\n\tm \"math\"\n)\n\n" +
+		"// User doc\n\ntype User struct {\n\tID string\n}\n</file>"
+	want := "<file path=\"a.go\">\npackage user\n\n// User doc\n\ntype User struct {\n\tID string\n}\n</file>"
+	if got := run(code); got != want {
+		t.Errorf("emptied block:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+
+	// One import is still used: the block stays with it.
+	code = "<file path=\"a.go\">\npackage user\n\nimport (\n\t\"fmt\"\n\t\"io\"\n)\n\ntype R struct {\n\tr io.Reader\n}\n</file>"
+	want = "<file path=\"a.go\">\npackage user\n\nimport (\n\t\"io\"\n)\n\ntype R struct {\n\tr io.Reader\n}\n</file>"
+	if got := run(code); got != want {
+		t.Errorf("block with a used import:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+
+	// A blank import is always kept, and so is its block.
+	code = "<file path=\"a.go\">\npackage user\n\nimport (\n\t\"fmt\"\n\t_ \"embed\"\n)\n\ntype T struct{}\n</file>"
+	want = "<file path=\"a.go\">\npackage user\n\nimport (\n\t_ \"embed\"\n)\n\ntype T struct{}\n</file>"
+	if got := run(code); got != want {
+		t.Errorf("block with a blank import:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+
+	// A ")" in a comment inside the block does not end it.
+	code = "<file path=\"a.go\">\npackage user\n\nimport (\n\t\"fmt\"\n// fmt (printing)\n\t\"os\"\n)\n\nfunc F(f *os.File)\n</file>"
+	want = "<file path=\"a.go\">\npackage user\n\nimport (\n// fmt (printing)\n\t\"os\"\n)\n\nfunc F(f *os.File)\n</file>"
+	if got := run(code); got != want {
+		t.Errorf("comment with a parenthesis:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
 func TestGoFilter(t *testing.T) {
 	filter := NewGoFilter()
 

@@ -64,7 +64,10 @@ line that is not a use statement, so a file with several namespaces finds a
 usage between two import blocks; it skips `//` and `#` comment lines but not
 `#[...]` attributes, and also the `<file>` tags and `namespace` lines.
 
-The removed lines are cut out of the text; nothing else changes.
+The removed lines are cut out of the text; nothing else changes, except in
+Go: a block none of whose imports is kept goes whole, `import (`, `)`, the
+comments in it and the blank line above it
+(`internal/importfilter/go_filter.go#GoFilter.removeEmptiedBlocks`).
 
 ## Languages
 

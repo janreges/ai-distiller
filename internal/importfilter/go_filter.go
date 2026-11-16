@@ -2,6 +2,7 @@ package importfilter
 
 import (
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -22,12 +23,12 @@ func (f *GoFilter) FilterUnusedImports(code string, debugLevel int) (string, []s
 	f.LogDebug(debugLevel, 3, "Starting Go import filtering")
 
 	// Parse imports
-	imports, err := f.parseImports(code, debugLevel)
+	imports, blocks, err := f.parseImports(code, debugLevel)
 	if err != nil {
 		return code, nil, err
 	}
 
-	if len(imports) == 0 {
+	if len(imports) == 0 && len(blocks) == 0 {
 		f.LogDebug(debugLevel, 3, "No imports found")
 		return code, nil, nil
 	}
@@ -44,7 +45,7 @@ func (f *GoFilter) FilterUnusedImports(code string, debugLevel int) (string, []s
 
 	// Check usage and collect unused imports
 	var removedImports []string
-	var linesToRemove []struct{ start, end int }
+	var linesToRemove []lineRange
 
 	for _, imp := range imports {
 		// Always keep blank imports (side-effect imports)
@@ -83,9 +84,13 @@ func (f *GoFilter) FilterUnusedImports(code string, debugLevel int) (string, []s
 		if !used {
 			f.LogDebug(debugLevel, 2, "Removing unused import: %s", imp.FullLine)
 			removedImports = append(removedImports, imp.FullLine)
-			linesToRemove = append(linesToRemove, struct{ start, end int }{imp.StartLine, imp.EndLine})
+			linesToRemove = append(linesToRemove, lineRange{imp.StartLine, imp.EndLine})
 		}
 	}
+
+	// A block whose imports all go is removed whole, "import (" and ")"
+	// included, with the blank line above it, so no empty block is left.
+	linesToRemove = f.removeEmptiedBlocks(strings.Split(code, "\n"), blocks, imports, linesToRemove)
 
 	// Remove unused imports (in reverse order to maintain line numbers)
 	result := code
@@ -98,9 +103,56 @@ func (f *GoFilter) FilterUnusedImports(code string, debugLevel int) (string, []s
 	return result, removedImports, nil
 }
 
-// parseImports extracts import statements from Go code
-func (f *GoFilter) parseImports(code string, debugLevel int) ([]ImportStatement, error) {
+// lineRange is a run of lines, 1-based and inclusive.
+type lineRange struct{ start, end int }
+
+// removeEmptiedBlocks returns the line ranges to remove, in ascending order.
+// remove holds the ranges of the unused imports. A block in blocks none of
+// whose imports is kept goes whole instead: one range from its "import ("
+// line, or the blank line above it, to its ")" line, the comments in it
+// included. lines is the code, split into lines.
+func (f *GoFilter) removeEmptiedBlocks(lines []string, blocks []lineRange, imports []ImportStatement, remove []lineRange) []lineRange {
+	removed := make(map[int]bool, len(remove))
+	for _, r := range remove {
+		for l := r.start; l <= r.end; l++ {
+			removed[l] = true
+		}
+	}
+	var out []lineRange
+	for _, b := range blocks {
+		emptied := true
+		for _, imp := range imports {
+			if imp.StartLine > b.start && imp.StartLine < b.end && !removed[imp.StartLine] {
+				emptied = false
+				break
+			}
+		}
+		if !emptied {
+			continue
+		}
+		start := b.start
+		if start > 1 && strings.TrimSpace(lines[start-2]) == "" {
+			start--
+		}
+		out = append(out, lineRange{start, b.end})
+		for l := b.start; l <= b.end; l++ {
+			delete(removed, l)
+		}
+	}
+	for _, r := range remove {
+		if removed[r.start] {
+			out = append(out, r)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].start < out[j].start })
+	return out
+}
+
+// parseImports extracts import statements from Go code, and the line ranges
+// of the import blocks ("import (" to ")").
+func (f *GoFilter) parseImports(code string, debugLevel int) ([]ImportStatement, []lineRange, error) {
 	var imports []ImportStatement
+	var blocks []lineRange
 	lines := strings.Split(code, "\n")
 
 	// Regex patterns for Go imports
@@ -188,9 +240,12 @@ func (f *GoFilter) parseImports(code string, debugLevel int) ([]ImportStatement,
 		// Check for import block start
 		if importStartRe.MatchString(line) {
 			// Parse import block
+			blockStart := i + 1
 			i++
 
-			for i < len(lines) && !strings.Contains(lines[i], ")") {
+			// The block ends at the line that starts with ")"; a ")" in a
+			// comment inside the block does not end it.
+			for i < len(lines) && !closesImportBlock(lines[i]) {
 				blockLine := lines[i]
 				blockTrimmed := strings.TrimSpace(blockLine)
 
@@ -238,6 +293,7 @@ func (f *GoFilter) parseImports(code string, debugLevel int) ([]ImportStatement,
 
 			// Skip the closing parenthesis
 			if i < len(lines) {
+				blocks = append(blocks, lineRange{blockStart, i + 1})
 				i++
 			}
 			continue
@@ -246,7 +302,7 @@ func (f *GoFilter) parseImports(code string, debugLevel int) ([]ImportStatement,
 		i++
 	}
 
-	return imports, nil
+	return imports, blocks, nil
 }
 
 // extractPackageName extracts the package name from an import path
@@ -296,6 +352,12 @@ func (f *GoFilter) extractPackageName(importPath string) string {
 	return importPath
 }
 
+// closesImportBlock reports whether line is the ")" that closes an import
+// block.
+func closesImportBlock(line string) bool {
+	return strings.HasPrefix(strings.TrimSpace(line), ")")
+}
+
 // isInsideImportBlock checks if we're currently inside an import block
 func (f *GoFilter) isInsideImportBlock(lines []string, currentIdx int) bool {
 	// Look backwards for "import ("
@@ -304,7 +366,7 @@ func (f *GoFilter) isInsideImportBlock(lines []string, currentIdx int) bool {
 		if strings.HasPrefix(line, "import") && strings.Contains(line, "(") {
 			// Now check if we've seen the closing ")" after the import (
 			for j := i + 1; j <= currentIdx; j++ {
-				if strings.Contains(lines[j], ")") {
+				if closesImportBlock(lines[j]) {
 					return false
 				}
 			}

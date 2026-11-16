@@ -2,9 +2,6 @@
 //  server.go
 package server
 
-import (
-)
-
 // Config holds server configuration.
 
 type Config struct {
