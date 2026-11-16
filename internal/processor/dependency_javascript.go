@@ -3,13 +3,17 @@ package processor
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
-	"sort"
 	"strings"
+	"unsafe"
 
 	"github.com/janreges/ai-distiller/internal/debug"
+	"github.com/janreges/ai-distiller/internal/language/tsparse"
+	sitter "github.com/tree-sitter/go-tree-sitter"
+	tree_sitter_javascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
+	typescript "tree-sitter-typescript"
 )
 
 // tsConfig is what --dependency-aware reads from a tsconfig.json or
@@ -21,46 +25,101 @@ type tsConfig struct {
 	pathsDir string              // the directory of the config that declares paths
 }
 
-var (
-	jsFromClause = regexp.MustCompile(`\bfrom\s*["']([^"'\n]+)["']`)
-	jsSideEffect = regexp.MustCompile(`(?m)^\s*import\s*["']([^"'\n]+)["']`)
-	jsCall       = regexp.MustCompile(`\b(?:import|require)\s*\(\s*["']([^"'\n]+)["']\s*\)`)
-)
-
 // jsExtensions are the extensions tried for an import without one, in
 // TypeScript's order of preference.
 var jsExtensions = []string{".ts", ".tsx", ".d.ts", ".js", ".jsx", ".mts", ".cts", ".mjs", ".cjs"}
 
 // extractJavaScriptImports returns the files a JavaScript or TypeScript file
 // imports, in source order: the module of every "import ... from", "export
-// ... from", side-effect import, dynamic import() and require() that is a
-// relative path or matches compilerOptions.paths (or baseUrl) of the
-// nearest tsconfig.json or jsconfig.json. Statements may span lines. Packages
-// from node_modules and Node built-ins are not followed.
+// ... from", side-effect import, "import x = require()", dynamic import()
+// and require() with a string literal that is a relative path or matches
+// compilerOptions.paths (or baseUrl) of the nearest tsconfig.json or
+// jsconfig.json. The specifiers come from the tree-sitter tree, so text in
+// comments, strings and template literals never counts. Packages from
+// node_modules and Node built-ins are not followed.
 func (da *DependencyAnalyzer) extractJavaScriptImports(ctx context.Context, fileContent []byte, filePath string) ([]string, error) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	code := stripSlashComments(string(fileContent))
-
-	type spec struct {
-		pos  int
-		name string
+	specs, err := jsImportSpecifiers(ctx, fileContent, filePath)
+	if err != nil {
+		return nil, err
 	}
-	var specs []spec
-	for _, re := range []*regexp.Regexp{jsFromClause, jsSideEffect, jsCall} {
-		for _, m := range re.FindAllStringSubmatchIndex(code, -1) {
-			specs = append(specs, spec{pos: m[2], name: code[m[2]:m[3]]})
-		}
-	}
-	sort.SliceStable(specs, func(i, j int) bool { return specs[i].pos < specs[j].pos })
-
 	var deps []string
-	for _, s := range specs {
-		if f := da.resolveJSModule(s.name, filePath); f != "" {
+	for _, spec := range specs {
+		if f := da.resolveJSModule(spec, filePath); f != "" {
 			deps = append(deps, f)
-			dbg.Logf(debug.LevelDetailed, "JS import %s -> %s", s.name, f)
+			dbg.Logf(debug.LevelDetailed, "JS import %s -> %s", spec, f)
 		}
 	}
 	return deps, nil
+}
+
+// jsLanguage returns the tree-sitter grammar for a JavaScript or TypeScript
+// file name: TSX for .tsx, TypeScript for .ts, .mts and .cts, else
+// JavaScript (with JSX).
+func jsLanguage(filePath string) (*sitter.Language, error) {
+	var lang unsafe.Pointer
+	switch strings.ToLower(filepath.Ext(filePath)) {
+	case ".tsx":
+		lang = typescript.LanguageTSX()
+	case ".ts", ".mts", ".cts":
+		lang = typescript.Language()
+	default:
+		lang = tree_sitter_javascript.Language()
+	}
+	if lang == nil {
+		return nil, fmt.Errorf("no tree-sitter grammar for %s (cgo disabled)", filePath)
+	}
+	return sitter.NewLanguage(lang), nil
+}
+
+// jsImportSpecifiers returns the module specifiers of a JavaScript or
+// TypeScript file in source order, read from its tree-sitter tree: the
+// source string of import and export declarations and of "import x =
+// require()", and the string argument of import() and require() calls.
+func jsImportSpecifiers(ctx context.Context, content []byte, filePath string) ([]string, error) {
+	lang, err := jsLanguage(filePath)
+	if err != nil {
+		return nil, err
+	}
+	parser, err := tsparse.NewParser(lang)
+	if err != nil {
+		return nil, err
+	}
+	defer parser.Close()
+	tree, err := tsparse.Parse(ctx, parser, content)
+	if err != nil {
+		return nil, err
+	}
+	defer tree.Close()
+
+	var specs []string
+	add := func(str *sitter.Node) {
+		if str == nil || str.Kind() != "string" {
+			return // a template literal or an expression: not a static specifier
+		}
+		if text := str.Utf8Text(content); len(text) >= 2 {
+			specs = append(specs, text[1:len(text)-1])
+		}
+	}
+	var visit func(n *sitter.Node)
+	visit = func(n *sitter.Node) {
+		switch n.Kind() {
+		case "import_statement", "export_statement", "import_require_clause":
+			add(n.ChildByFieldName("source"))
+		case "call_expression":
+			fn := n.ChildByFieldName("function")
+			if fn != nil && (fn.Kind() == "import" || fn.Kind() == "identifier" && fn.Utf8Text(content) == "require") {
+				if args := n.ChildByFieldName("arguments"); args != nil && args.NamedChildCount() > 0 {
+					add(args.NamedChild(0))
+				}
+			}
+		}
+		for i := uint(0); i < n.ChildCount(); i++ {
+			visit(n.Child(i))
+		}
+	}
+	visit(tree.RootNode())
+	return specs, nil
 }
 
 // resolveJSModule returns the file an import specifier names, or "".
@@ -71,8 +130,11 @@ func (da *DependencyAnalyzer) resolveJSModule(spec, fromFile string) string {
 	if spec == "" {
 		return ""
 	}
+	// "./dir/", "." and ".." name a directory, never a file next to it.
+	dirOnly := spec == "." || spec == ".." || strings.HasSuffix(spec, "/") ||
+		strings.HasSuffix(spec, "/.") || strings.HasSuffix(spec, "/..")
 	if spec == "." || spec == ".." || strings.HasPrefix(spec, "./") || strings.HasPrefix(spec, "../") {
-		return resolveJSPath(filepath.Join(filepath.Dir(fromFile), filepath.FromSlash(spec)))
+		return da.resolveJSPath(filepath.Join(filepath.Dir(fromFile), filepath.FromSlash(spec)), dirOnly)
 	}
 	if strings.HasPrefix(spec, "/") || strings.Contains(spec, ":") {
 		return "" // a URL path, "node:fs", "https://..."
@@ -82,18 +144,55 @@ func (da *DependencyAnalyzer) resolveJSModule(spec, fromFile string) string {
 		return ""
 	}
 	for _, target := range cfg.match(spec) {
-		if f := resolveJSPath(target); f != "" {
+		if f := da.resolveJSPath(target, dirOnly); f != "" {
 			return f
 		}
 	}
 	return ""
 }
 
-// resolveJSPath finds the file for an import path without its extension
+// resolveJSPath finds the file for an import path the way TypeScript and
+// Node do: as a file (resolveJSFile), then as a directory (resolveJSDir).
+// With dirOnly (the specifier ends in "/" or is "." or ".."), only as a
+// directory, so "./dir/" never finds dir.ts.
+func (da *DependencyAnalyzer) resolveJSPath(base string, dirOnly bool) string {
+	if !dirOnly {
+		if f := resolveJSFile(base); f != "" {
+			return f
+		}
+	}
+	return da.resolveJSDir(base, 0)
+}
+
+// resolveJSDir finds the file a directory import names: the file that
+// "main" of the directory's package.json names (resolved like an import
+// path), else its index file. depth bounds a chain of package.json files
+// whose main names another directory.
+func (da *DependencyAnalyzer) resolveJSDir(dir string, depth int) string {
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		return ""
+	}
+	if main := da.packageMain(dir); main != "" && depth < 4 {
+		target := filepath.Join(dir, filepath.FromSlash(main))
+		if f := resolveJSFile(target); f != "" {
+			return f
+		}
+		if f := da.resolveJSDir(target, depth+1); f != "" {
+			return f
+		}
+	}
+	for _, ext := range jsExtensions {
+		if f := existingFile(filepath.Join(dir, "index"+ext)); f != "" {
+			return f
+		}
+	}
+	return ""
+}
+
+// resolveJSFile finds the file for an import path without its extension
 // resolution: the path itself, the TypeScript source of a ".js" path (ESM
-// imports name the compiled file), the path with each extension, then its
-// index file.
-func resolveJSPath(base string) string {
+// imports name the compiled file), then the path with each extension.
+func resolveJSFile(base string) string {
 	if f := existingFile(base); f != "" {
 		return f
 	}
@@ -119,12 +218,27 @@ func resolveJSPath(base string) string {
 			return f
 		}
 	}
-	for _, ext := range jsExtensions {
-		if f := existingFile(filepath.Join(base, "index"+ext)); f != "" {
-			return f
-		}
-	}
 	return ""
+}
+
+// packageMain returns the "main" field of dir/package.json, or "" when there
+// is none, it cannot be read or it lies outside the scope's boundary.
+func (da *DependencyAnalyzer) packageMain(dir string) string {
+	manifest := filepath.Join(dir, "package.json")
+	if existingFile(manifest) == "" || !da.scope.contains(manifest) {
+		return ""
+	}
+	content, err := os.ReadFile(manifest)
+	if err != nil {
+		return ""
+	}
+	var pkg struct {
+		Main string `json:"main"`
+	}
+	if json.Unmarshal(content, &pkg) != nil {
+		return ""
+	}
+	return pkg.Main
 }
 
 // match returns the paths a non-relative specifier maps to: the targets of

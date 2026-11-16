@@ -1,9 +1,11 @@
 package processor
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExpandRustUseTree(t *testing.T) {
@@ -59,6 +61,33 @@ func TestGoImportPaths(t *testing.T) {
 	for src, want := range cases {
 		assert.Equal(t, want, goImportPaths([]byte(src)), src)
 	}
+}
+
+// JS and TS specifiers come from the tree-sitter tree: declarations,
+// import() and require() with a string literal, in source order; nothing
+// from comments, strings, template literals or regular expressions.
+func TestJSImportSpecifiers(t *testing.T) {
+	ts := "import type { A } from './a';\n" +
+		"import B, { C } from \"./b\";\n" +
+		"import './side';\n" +
+		"import fs = require('./legacy');\n" +
+		"export { D } from './d';\n" +
+		"export * as E from './e';\n" +
+		"const lazy = () => import('./lazy');\n" +
+		"const tpl = import(`./tpl/${name}`);\n" +
+		"const dyn = require(name);\n" +
+		"const s = \"import x from './str'\"; // import y from './comment'\n" +
+		"/* require('./block') */ const r = /from '.\\/regex'/;\n" +
+		"const t = `export * from './template'`;\n"
+	got, err := jsImportSpecifiers(context.Background(), []byte(ts), "main.ts")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"./a", "./b", "./side", "./legacy", "./d", "./e", "./lazy"}, got)
+
+	jsx := "import React from 'react';\nconst Button = require('./button');\n" +
+		"export default function App() { return <div title=\"import('./attr')\">{require('./inline')}</div>; }\n"
+	got, err = jsImportSpecifiers(context.Background(), []byte(jsx), "app.jsx")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"react", "./button", "./inline"}, got)
 }
 
 func TestStripJSONC(t *testing.T) {

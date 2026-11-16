@@ -199,7 +199,11 @@ file: Go through `go.mod` (`internal/processor/dependency_go.go`), Rust
 through `Cargo.toml` (`internal/processor/dependency_rust.go`), TypeScript and
 JavaScript through `tsconfig.json`/`jsconfig.json` paths
 (`internal/processor/dependency_javascript.go`) and PHP through the PSR-4
-autoload of `composer.json` (`internal/processor/dependency_php.go`). The
+autoload of `composer.json` (`internal/processor/dependency_php.go`). Go
+reads the import declarations with `go/parser` (`goImportPaths`), and
+TypeScript and JavaScript take the specifiers from the tree-sitter tree
+(`jsImportSpecifiers`), so text in strings and comments never counts; the
+others use regular expressions. The
 other extractors in `dependency.go` match paths next to the importing file.
 README's "What is followed, per language" table lists what each one follows
 and what was measured on real repositories.

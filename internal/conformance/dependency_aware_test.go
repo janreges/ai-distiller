@@ -170,6 +170,45 @@ func TestDependencyAwareFollowsTypeScriptImports(t *testing.T) {
 	assert.Equal(t, []string{"main.tsx", "app/index.tsx", "lib/format.ts", "lib/api.ts", "lazy/page.tsx"}, filePaths(out))
 }
 
+// A specifier that ends in "/" names a directory (its package.json main,
+// else its index file), never the file next to it; without the slash the
+// file wins. Import-like text in strings, template literals, regular
+// expressions and comments anywhere on a line is not followed.
+func TestDependencyAwareFollowsOnlyRealJSImports(t *testing.T) {
+	tmp := t.TempDir()
+	writeProject(t, tmp, map[string]string{
+		".git/HEAD": "ref: refs/heads/main\n",
+		"src/main.ts": "import { fromIndex } from './dir/';\n" +
+			"import { real } from \"./lib/real\";\n" +
+			"import { entry } from './pkg/';\n" +
+			"import { sibling } from './pkg';\n" +
+			"const sql = \"SELECT * FROM 'users'\";\n" +
+			"const msg = `import { nope } from './lib/fake'`;\n" +
+			"const call = \"require('./lib/fake2')\";\n" +
+			"const re = /import\\('.\\/lib\\/fake3'\\)/;\n" +
+			"const x = 1; // import { y } from './lib/fake4'\n" +
+			"const z = 2; /* export * from './lib/fake5' */\n" +
+			"const req = require('./lib/req');\n" +
+			"export function main() { return [fromIndex, real, entry, sibling, req]; }\n",
+		"src/dir.ts":           "export function dirFile() { return 0; }\n",
+		"src/dir/index.ts":     "export function fromIndex() { return 1; }\n",
+		"src/lib/real.ts":      "export function real() { return 2; }\n",
+		"src/pkg.ts":           "export function sibling() { return 3; }\n",
+		"src/pkg/package.json": `{"main": "lib/entry.js"}` + "\n",
+		"src/pkg/lib/entry.ts": "export function entry() { return 4; }\n",
+		"src/pkg/index.ts":     "export function pkgIndex() { return 5; }\n",
+		"src/lib/req.ts":       "export function req() { return 6; }\n",
+		"src/lib/fake.ts":      "export function fake() {}\n",
+		"src/lib/fake2.ts":     "export function fake2() {}\n",
+		"src/lib/fake3.ts":     "export function fake3() {}\n",
+		"src/lib/fake4.ts":     "export function fake4() {}\n",
+		"src/lib/fake5.ts":     "export function fake5() {}\n",
+	})
+	out, stderr, code := aidRun(t, tmp, nil, "src/main.ts", "--dependency-aware", "--stdout", "--summary-type=off", "--max-depth=1")
+	require.Equal(t, 0, code, stderr)
+	assert.Equal(t, []string{"main.ts", "dir/index.ts", "lib/real.ts", "pkg/lib/entry.ts", "pkg.ts", "lib/req.ts"}, filePaths(out))
+}
+
 // PHP: classes named in use imports (grouped, aliased), trait use, extends
 // and implements, found through the PSR-4 autoload of every composer.json
 // from the file up to the repository top (a package's own and the root's),
