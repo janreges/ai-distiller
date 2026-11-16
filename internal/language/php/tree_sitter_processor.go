@@ -473,7 +473,7 @@ func (p *TreeSitterProcessor) processNamespace(node *sitter.Node, file *ir.Disti
 //     its symbol name.
 func (p *TreeSitterProcessor) processUseDeclaration(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) {
 	// `use function A\{...}` puts the kind on the statement; `use function
-	// A\b;` puts it on the clause.
+	// A\b, A\c;` puts it on the first clause.
 	kind := p.useKind(node)
 
 	if group := node.ChildByFieldName("body"); group != nil && group.Kind() == "namespace_use_group" {
@@ -516,18 +516,20 @@ func (p *TreeSitterProcessor) processUseDeclaration(node *sitter.Node, file *ir.
 		if clause.Kind() != "namespace_use_clause" {
 			continue
 		}
+		// In `use function A\b, A\c;` the grammar puts the keyword in the
+		// first clause only, and it applies to every clause of the statement
+		// (PHP does not mix kinds outside a group).
+		if k := p.useKind(clause); k != "" {
+			kind = k
+		}
 		name, alias := p.useClauseName(clause)
 		if name == "" {
 			continue
 		}
 		p.recordUseAlias(name, alias)
-		clauseKind := kind
-		if k := p.useKind(clause); k != "" {
-			clauseKind = k
-		}
 		p.addNode(file, parent, &ir.DistilledImport{
 			BaseNode:   p.nodeLocation(clause),
-			ImportType: useImportType(clauseKind),
+			ImportType: useImportType(kind),
 			Module:     name,
 			Symbols:    []ir.ImportedSymbol{{Name: name, Alias: alias}},
 		})

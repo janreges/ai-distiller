@@ -5,8 +5,8 @@ namespace Conf;
 use DateTimeImmutable;
 use Conf\Base\ConfBase as ConfAliasBase;
 use Conf\Contracts\{ConfShown as ConfAliasShown, ConfUnusedMember};
-use function Conf\Helpers\conf_helper;
-use const Conf\Helpers\CONF_LIMIT;
+use function Conf\Helpers\conf_helper, Conf\Helpers\conf_other as confOtherFn;
+use const Conf\Helpers\CONF_LIMIT, Conf\Helpers\CONF_MAX;
 use Conf\Types\Integer;
 
 // CONF_LINE_COMMENT
@@ -33,7 +33,7 @@ class ConfWidget extends ConfAliasBase implements ConfAliasShown {
     }
 
     public function confCall(): int {
-        return conf_helper(CONF_LIMIT);
+        return conf_helper(CONF_LIMIT) + confOtherFn(CONF_MAX);
     }
 
     public static function confMake(int ...$confIds): static {

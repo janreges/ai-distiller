@@ -235,6 +235,8 @@ use function Foo\{f1, f2 as g2};
 use Foo\{Sub\D, function h, const K};
 use \Lead\Slash;
 use X\Y, Z\W as V;
+use function Foo\helper, Foo\other as otherFn;
+use const A\B, A\C;
 class Holder {}
 `
 	out := distillPHP(t, src, nil)
@@ -249,9 +251,14 @@ class Holder {}
 		"use Foo\\{Sub\\D, function h, const K};\n",
 		"use \\Lead\\Slash;\n",
 		"use X\\Y;\nuse Z\\W as V;\n",
+		// The keyword of a statement with several clauses applies to each.
+		"use function Foo\\helper;\nuse function Foo\\other as otherFn;\n",
+		"use const A\\B;\nuse const A\\C;\n",
 	} {
 		assert.Contains(t, out, want)
 	}
+	assert.NotContains(t, out, "use Foo\\other")
+	assert.NotContains(t, out, "use A\\C")
 }
 
 func TestProcessorTraits(t *testing.T) {

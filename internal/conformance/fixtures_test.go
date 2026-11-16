@@ -318,9 +318,10 @@ var fixtures = []fixture{
 			"use Conf\\Base\\ConfBase as ConfAliasBase;\n",
 			"use Conf\\Contracts\\{ConfShown as ConfAliasShown, ConfUnusedMember};\n",
 			"class ConfWidget extends ConfAliasBase implements ConfAliasShown {\n    use ConfTrait;\n"}},
+		// The keyword of a statement with several clauses applies to each.
 		check{Cap: "use-function-const", Flags: []string{"--implementation=1"}, Contains: []string{
-			"use function Conf\\Helpers\\conf_helper;\n",
-			"use const Conf\\Helpers\\CONF_LIMIT;\n"}},
+			"use function Conf\\Helpers\\conf_helper;\nuse function Conf\\Helpers\\conf_other as confOtherFn;\n",
+			"use const Conf\\Helpers\\CONF_LIMIT;\nuse const Conf\\Helpers\\CONF_MAX;\n"}},
 		// Parameters and return types print as written.
 		check{Cap: "signature-as-written", Contains: []string{
 			"    public static confMake(int ...$confIds): static\n",

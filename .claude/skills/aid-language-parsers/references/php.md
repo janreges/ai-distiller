@@ -77,7 +77,9 @@
   declarations of its body are its siblings. `--imports=0` removes it.
 - A use statement is a `DistilledImport` per clause
   (`internal/language/php/tree_sitter_processor.go#TreeSitterProcessor.processUseDeclaration`):
-  `ImportType` is `use`, `use function` or `use const`; `Module` is the name
+  `ImportType` is `use`, `use function` or `use const` (in `use function
+  A\b, A\c;` the grammar puts the keyword in the first clause's `type`
+  field only, and it applies to every clause); `Module` is the name
   as written and the one symbol holds that name and the alias
   (`use A\B as C;`). A group `use A\{B, C as D};` is one import whose
   `Module` is the prefix with its trailing backslash (`A\`) and whose symbols
