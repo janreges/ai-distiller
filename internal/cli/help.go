@@ -310,10 +310,11 @@ Diagnostics and Help:
     --cheat                    Show the quick reference card
 
 EXPERIMENTAL
-    --dependency-aware         EXPERIMENTAL: follow calls across files and keep only what the entry file uses
-                               (regex-based)
+    --dependency-aware         EXPERIMENTAL: after the input, distil the project files it imports, each whole
+                               and with the same flags (regex-based); a directory adds the files outside
+                               it that it imports; a note on stderr when nothing can be followed
                                (default: off; behaviour may change)
-    --max-depth N              EXPERIMENTAL: call depth for --dependency-aware (default: 2)
+    --max-depth N              EXPERIMENTAL: levels of imports --dependency-aware follows (default: 2)
 
 SUPPORTED LANGUAGES
 

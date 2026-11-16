@@ -51,16 +51,17 @@ A path run in the normal mode, step by step:
   2. `internal/processor/processor.go#Processor.ProcessPath`: a directory
      goes to `internal/processor/concurrent.go#Processor.processDirectoryConcurrent`,
      which walks it (section 5) and runs a worker pool; a file goes straight
-     to the next step.
+     to the next step. With `--dependency-aware`,
+     `internal/processor/dependency.go#Processor.ProcessWithDependencies`
+     runs instead: the same steps for the input, then the same for every
+     project file it imports (`references/modes.md`).
   3. `internal/processor/processor.go#Processor.ProcessFile` picks the
      language processor by extension
      (`internal/processor/registry.go#GetByFilename`) and calls its
      `ProcessWithOptions`. The processor parses into an `ir.DistilledFile`
      and runs `internal/stripper/stripper.go#Stripper` with
      `internal/processor/interface.go#ProcessOptions.ToStripperOptions`
-     (section 6). With `--dependency-aware`,
-     `internal/processor/dependency.go#ProcessWithDependencyAnalysis`
-     replaces the result.
+     (section 6).
   4. `internal/formatter/registry.go#Get` returns the formatter for
      `--format`; it renders one file (`Format`) or a directory
      (`FormatMultiple`). The text formatter passes each file's text through

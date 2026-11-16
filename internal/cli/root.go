@@ -238,8 +238,8 @@ func initFlags() {
 	rootCmd.Flags().BoolVar(filterImports, "filter-imports", true, "Filter unused imports in text output")
 
 	// Dependency-aware distillation flags
-	rootCmd.Flags().BoolVar(&dependencyAware, "dependency-aware", false, "EXPERIMENTAL: follow calls across files and keep only what the entry file uses (regex-based)")
-	rootCmd.Flags().IntVar(&maxDepth, "max-depth", 2, "EXPERIMENTAL: call depth for --dependency-aware (default: 2)")
+	rootCmd.Flags().BoolVar(&dependencyAware, "dependency-aware", false, "EXPERIMENTAL: also distil the project files the input imports (regex-based)")
+	rootCmd.Flags().IntVar(&maxDepth, "max-depth", 2, "EXPERIMENTAL: levels of imports --dependency-aware follows (default: 2)")
 
 	// Handle version flag specially
 	rootCmd.PreRun = func(cmd *cobra.Command, args []string) {
@@ -347,6 +347,10 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 		return handleGitMode(ctx, absPath)
 	}
 
+	if dependencyAware && maxDepth < 1 {
+		return fmt.Errorf("--max-depth must be 1 or more with --dependency-aware (got %d)", maxDepth)
+	}
+
 	// Check if AI analysis task list flag is set (deprecated)
 	if aiAnalysisTaskList {
 		// Convert to new AI action system
@@ -429,7 +433,16 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 	startTime := time.Now()
 
 	// Process the input
-	result, err := proc.ProcessPath(absPath, procOpts)
+	var result ir.DistilledNode
+	if procOpts.SymbolResolution {
+		var followed int
+		result, followed, err = proc.ProcessWithDependencies(absPath, procOpts)
+		if err == nil && followed == 0 {
+			printNothingFollowedNote(absPath, inputPath)
+		}
+	} else {
+		result, err = proc.ProcessPath(absPath, procOpts)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to process: %w", err)
 	}
@@ -567,6 +580,17 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// printNothingFollowedNote tells on stderr that --dependency-aware added no
+// file, so an output holding only the input itself is not mistaken for a
+// complete dependency set.
+func printNothingFollowedNote(absPath, inputPath string) {
+	if info, err := os.Stat(absPath); err == nil && info.IsDir() {
+		fmt.Fprintf(os.Stderr, "Note: --dependency-aware followed no imports out of %s: none resolved to a file outside it that aid can distill\n", inputPath)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "Note: --dependency-aware followed no imports of %s: none resolved to a project file aid can distill\n", inputPath)
 }
 
 func generateOutputFilename(path string, stripOptions []string, format string) string {

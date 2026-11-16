@@ -173,19 +173,28 @@ Off by default; `internal/processor/interface.go#DefaultProcessOptions` also
 keeps it off (`SymbolResolution` false, `MaxDepth` 2). The flag sets
 `SymbolResolution`, `--max-depth` sets `MaxDepth`.
 
-`Processor.processFile` (each file of a directory run too) calls
-`internal/processor/dependency.go#ProcessWithDependencyAnalysis` after the
-normal result. That function processes the file again without the option,
-finds a root of its own (the file's directory or the nearest one above it
-with `go.mod`, `package.json`, `pyproject.toml`, `Cargo.toml` or `.git`, else
-the file's directory; not `internal/project`) and runs
-`internal/processor/dependency.go#DependencyAnalyzer.AnalyzeDependencies`: it
-follows import and include statements to related files, builds symbol tables
-and a call graph with per-language regular expressions (the symbol-table
-types come from `internal/semantic`), and marks what the entry file uses up
-to `MaxDepth`.
-The result is one file at the entry file's absolute path holding the source
-text of the used definitions, file by file. On an error it falls back to the
-normal result and logs why at `-v`. Stdin never reaches it; the MCP tool
-`distill_with_dependencies` uses it. Tests check only that it is off by
-default.
+`runDistiller` rejects a `--max-depth` below 1 when the flag is set, then
+calls `internal/processor/dependency.go#Processor.ProcessWithDependencies`
+instead of `ProcessPath` (`ProcessPath` itself routes there too, which is how
+AI actions get it). That function:
+
+1. distils the input without the option: a file with `ProcessFile`, a
+   directory with the normal walk (`walkDirectory`, `processTasks` in
+   `internal/processor/concurrent.go`);
+2. hands the input's files to
+   `internal/processor/dependency.go#DependencyAnalyzer.Follow`, which reads
+   each file's imports (`DependencyAnalyzer.Imports`, one regex extractor per
+   language behind `extractIncludeStatements`), breadth-first, one level per
+   step up to `MaxDepth`, and keeps each resolved path once if it is an
+   existing file with a processor;
+3. distils every followed file with `ProcessFile` and the same options and
+   appends it to the result, a `DistilledDirectory`, with a path relative to
+   the entry file's directory (or the input directory), `../` included
+   (`dependencyDisplayPath`; absolute with `--file-path-type=absolute`).
+
+No symbol is resolved: a followed file is distilled whole. When nothing is
+followed, `runDistiller` prints one `Note:` line on stderr
+(`internal/cli/root.go#printNothingFollowedNote`) and exits 0. Stdin never
+reaches it; the MCP tool `distill_with_dependencies` uses it. CLI tests:
+`internal/conformance/dependency_aware_test.go`, fixtures in
+`internal/conformance/testdata/depaware/`.

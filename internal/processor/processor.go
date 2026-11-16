@@ -34,11 +34,20 @@ func NewWithContext(ctx context.Context) *Processor {
 	}
 }
 
-// ProcessPath processes a file or directory
+// ProcessPath processes a file or directory. With opts.SymbolResolution
+// (--dependency-aware) it returns ProcessWithDependencies' directory.
 func (p *Processor) ProcessPath(path string, opts ProcessOptions) (ir.DistilledNode, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to stat path: %w", err)
+	}
+
+	if opts.SymbolResolution {
+		result, _, err := p.ProcessWithDependencies(path, opts)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
 	}
 
 	if info.IsDir() {
@@ -153,16 +162,6 @@ func (p *Processor) processFile(filename string, opts ProcessOptions) (*ir.Disti
 			d.Dump(debug.LevelTrace, fmt.Sprintf("IR for %s", filepath.Base(filename)), result)
 		})
 
-		// Apply dependency-aware analysis if enabled
-		if opts.SymbolResolution && opts.MaxDepth >= 0 {
-			dependencyResult, err := ProcessWithDependencyAnalysis(p.ctx, p, filename, opts)
-			if err != nil {
-				dbg.Logf(debug.LevelBasic, "Dependency analysis failed, using normal result: %v", err)
-				return result, nil
-			}
-			return dependencyResult, nil
-		}
-
 		return result, nil
 	}
 
@@ -200,30 +199,10 @@ func (p *Processor) processFile(filename string, opts ProcessOptions) (*ir.Disti
 					d.Dump(debug.LevelTrace, fmt.Sprintf("Stripped IR for %s", filepath.Base(filename)), file)
 				})
 
-				// Apply dependency-aware analysis if enabled
-				if opts.SymbolResolution && opts.MaxDepth >= 0 {
-					dependencyResult, err := ProcessWithDependencyAnalysis(p.ctx, p, filename, opts)
-					if err != nil {
-						dbg.Logf(debug.LevelBasic, "Dependency analysis failed, using normal result: %v", err)
-						return file, nil
-					}
-					return dependencyResult, nil
-				}
-
 				return file, nil
 			}
 			return nil, fmt.Errorf("unexpected node type after stripping")
 		}
-	}
-
-	// Apply dependency-aware analysis if enabled
-	if opts.SymbolResolution && opts.MaxDepth >= 0 {
-		dependencyResult, err := ProcessWithDependencyAnalysis(p.ctx, p, filename, opts)
-		if err != nil {
-			dbg.Logf(debug.LevelBasic, "Dependency analysis failed, using normal result: %v", err)
-			return result, nil
-		}
-		return dependencyResult, nil
 	}
 
 	return result, nil

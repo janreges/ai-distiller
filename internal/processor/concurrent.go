@@ -31,25 +31,22 @@ type FileResult struct {
 
 // processDirectoryConcurrent processes directory using multiple workers
 func (p *Processor) processDirectoryConcurrent(dir string, opts ProcessOptions) (*ir.DistilledDirectory, error) {
+	files, err := p.walkDirectory(dir, opts)
+	if err != nil {
+		return nil, err
+	}
+	return p.processTasks(dir, files, opts), nil
+}
+
+// walkDirectory lists the files of dir that a directory run distils, in the
+// walk's lexical order.
+func (p *Processor) walkDirectory(dir string, opts ProcessOptions) ([]FileTask, error) {
 	// Create ignore matcher for the directory
 	ignoreMatcher, ignoreErr := ignore.New(dir)
 	if ignoreErr != nil {
 		// Log warning but continue without ignore functionality
 		fmt.Fprintf(os.Stderr, "Warning: failed to create ignore matcher: %v\n", ignoreErr)
 		ignoreMatcher = nil
-	}
-
-	// Calculate number of workers
-	numWorkers := opts.Workers
-	if numWorkers < 0 {
-		// Negative counts used to run serially; keep that as one worker.
-		numWorkers = 1
-	} else if numWorkers == 0 {
-		// Default to 80% of CPU cores
-		numWorkers = int(float64(runtime.NumCPU()) * 0.8)
-		if numWorkers < 1 {
-			numWorkers = 1
-		}
 	}
 
 	// First, collect all files to process
@@ -145,6 +142,24 @@ func (p *Processor) processDirectoryConcurrent(dir string, opts ProcessOptions) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to walk directory: %w", err)
 	}
+	return files, nil
+}
+
+// processTasks distils the files that walkDirectory listed for dir with a
+// pool of workers and returns them in the listed order.
+func (p *Processor) processTasks(dir string, files []FileTask, opts ProcessOptions) *ir.DistilledDirectory {
+	// Calculate number of workers
+	numWorkers := opts.Workers
+	if numWorkers < 0 {
+		// Negative counts used to run serially; keep that as one worker.
+		numWorkers = 1
+	} else if numWorkers == 0 {
+		// Default to 80% of CPU cores
+		numWorkers = int(float64(runtime.NumCPU()) * 0.8)
+		if numWorkers < 1 {
+			numWorkers = 1
+		}
+	}
 
 	// Calculate display path for directory
 	displayPath := dir
@@ -175,7 +190,7 @@ func (p *Processor) processDirectoryConcurrent(dir string, opts ProcessOptions) 
 			BaseNode: ir.BaseNode{},
 			Path:     displayPath,
 			Children: []ir.DistilledNode{},
-		}, nil
+		}
 	}
 
 	// Create channels for task distribution and result collection
@@ -237,7 +252,7 @@ func (p *Processor) processDirectoryConcurrent(dir string, opts ProcessOptions) 
 		}
 	}
 
-	return dirResult, nil
+	return dirResult
 }
 
 // worker processes files from the task channel

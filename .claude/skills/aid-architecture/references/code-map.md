@@ -65,10 +65,6 @@ AI actions and support:
 
 Reached, but running only in a corner:
 
-- `internal/semantic`: tree-sitter (Python) analysis and the symbol-table
-  types; imported only by `internal/processor/dependency.go`, so it matters
-  only with `--dependency-aware`. Its queries are embedded from
-  `internal/semantic/queries`.
 - `internal/parser/grammars`: not a package of this module but separate Go
   module: `tree-sitter-typescript`, which `go.mod` replaces with
   this path (`aid-language-parsers`, `references/tree-sitter-cgo.md`).
@@ -80,6 +76,7 @@ Reached, but running only in a corner:
 | `cmd/ast-dump` | prints the tree-sitter tree a processor walks (`aid-language-parsers`, section 4) |
 | `cmd/test-audit` | audits the snapshot fixtures in `testdata/` through `internal/testrunner` (`aid-testing-debugging`) |
 | `internal/conformance` | test-only package: the conformance suite and the CLI contract tests (`internal/conformance/doc.go`) |
+| `internal/semantic` | tree-sitter (Python) analysis and symbol-table types with their own tests; `--dependency-aware` used it until it stopped resolving symbols, nothing imports it now. Its queries are embedded from `internal/semantic/queries` |
 | `internal/testrunner` | the snapshot suite, `BuildBinary` for tests, and the audit used by `cmd/test-audit` |
 
 Every package in the table compiles with `go build`; only `cmd/aid` is built

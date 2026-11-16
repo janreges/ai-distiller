@@ -48,11 +48,11 @@ processor registers under and the IR's `Language`.
 8. Import filter (optional; not every language has one):
    `internal/importfilter/<lang>_filter.go`, registered from its `init()` with
    `internal/importfilter/filter.go#Register`.
-9. Dependency analysis (optional, for the AI actions that follow calls): the
-   language switches in `internal/processor/dependency.go`
+9. Dependency analysis (optional, for `--dependency-aware`, which follows
+   imports): the language switches in `internal/processor/dependency.go`
    (`DependencyAnalyzer.extractIncludeStatements`,
-   `DependencyAnalyzer.buildSymbolTableForFile`,
-   `DependencyAnalyzer.detectLanguage`, `DependencyAnalyzer.extractCallsFromFile`).
+   `DependencyAnalyzer.detectLanguage`) and an extractor that returns the
+   files a source file imports.
 
 ## Tests
 

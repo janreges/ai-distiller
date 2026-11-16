@@ -201,92 +201,43 @@ The tree-sitter grammars are compiled into the `aid` binary through cgo - zero e
 
 ## 🔗 Dependency-Aware Distillation (experimental)
 
-The analysis is heuristic and regex-based, and results vary by language.
+`--dependency-aware` distils a file together with the project files it imports. aid prints the entry file exactly as it prints it without the flag, then follows its imports, breadth-first, and distils every file it reaches with the same flags (visibility, `--implementation`, `--comments`, ...). `--max-depth` (default 2) is the number of import levels: `1` adds the files the entry file imports, `2` also the files those import, and so on. Each file appears once, with its path relative to the entry file's directory (`../lib/util.ts` for a file outside it).
 
-**Advanced Feature**: AI Distiller includes dependency-aware distillation that analyzes call graphs across files and includes only the code that is actually used from your codebase. This creates focused distillations for deep code analysis by following function/method calls across multiple files.
+The analysis is heuristic: imports are found with regular expressions and resolved to files on disk. It does not work out which symbols the entry file uses, so a followed file is distilled whole. Imports of the standard library and of installed packages are not followed. When no import resolves to a project file aid can distill, aid prints the entry file alone and says so in one line on stderr.
 
-> 💡 **New to dependency analysis?** This feature traces which functions actually call each other in your code, creating a minimal context that includes only the relevant parts. Perfect for AI tools that need to understand code relationships without processing entire files.
-
-### 🎯 How Dependency-Aware Analysis Works
-
-Instead of including entire files, dependency-aware distillation:
-1. **Identifies entry points** (main functions, exported APIs)
-2. **Traces function calls** across file boundaries
-3. **Builds call graphs** to understand dependencies
-4. **Includes only used code** - functions that are actually called
-5. **Filters out unused code** - dead code elimination for AI context
+Given a directory, aid distils every file of it as without the flag and adds the files outside the directory that they import.
 
 ```bash
-# Basic dependency analysis
-aid main.py --dependency-aware
+# The entry file and what it imports, two levels deep
+aid cmd/server/main.go --dependency-aware
 
-# Control analysis depth
-aid main.py --dependency-aware --max-depth=2
+# Only the files the entry file imports directly
+aid src/app.ts --dependency-aware --max-depth=1
 
-# Include implementations for deeper analysis
-aid main.py --dependency-aware --implementation=1 --max-depth=3
+# With function bodies
+aid src/app.ts --dependency-aware --implementation=1
+
+# A directory plus the files outside it that it imports
+aid src/components --dependency-aware
 ```
 
-### 📊 Language Support Quality
+### What is followed, per language
 
-We've worked extensively to make dependency-aware distillation as reliable as possible across different programming languages. However, the complexity varies significantly between languages, and we want to be transparent about the current state:
+Measured on public repositories (`git clone --depth 1`, 2026-11-16) with the default `--max-depth=2`; "followed" counts the files added to the entry file. Languages without a measurement have not been checked on a real project.
 
-| Language | Support Level | Cross-File Analysis | Intra-File Calls | Performance | Notes |
-|----------|---------------|--------------------|--------------------|-------------|-------|
-| **Python** | 🟢 **Very Good** | ✅ Full | ✅ Complete | ~37ms | Package imports, all call patterns |
-| **JavaScript** | 🟢 **Very Good** | ✅ Full | ✅ Complete | ~38ms | CommonJS & ES6 modules |
-| **Go** | 🟢 **Very Good** | ✅ Full | ✅ Complete | ~37ms | Package system integration |
-| **Rust** | 🟢 **Very Good** | ✅ Full | ✅ Complete | ~36ms | Crate system, proper filtering |
-| **Java** | 🟢 **Very Good** | ✅ Full | ✅ Complete | ~41ms | Package imports, static methods |
-| **Swift** | 🟢 **Very Good** | ✅ Full | ✅ Complete | ~37ms | Class and static method detection |
-| **PHP** | 🟢 **Very Good** | ✅ Full | ✅ Complete | ~37ms | Include/require resolution |
-| **Ruby** | 🟢 **Very Good** | ✅ Full | ✅ Complete | ~40ms | Module system, all call patterns |
-| **TypeScript** | 🟡 **Limited** | ❌ Issues | ❌ Issues | N/A | Language processor limitations |
-| **C#** | 🟡 **Limited** | ❌ Issues | ❌ Issues | N/A | Language processor limitations |
-| **C++** | 🟡 **Limited** | ❌ Issues | ❌ Issues | N/A | Language processor limitations |
-| **Kotlin** | 🟠 **Good** | ✅ Partial | ⚠️ Basic | ~45ms | Companion objects, some edge cases |
-
-**Legend:**
-- 🟢 **Very Good**: Production-ready, handles complex scenarios reliably
-- 🟠 **Good**: Solid functionality with minor limitations
-- 🟡 **Limited**: Basic functionality, parsing capabilities may be limited
-- ✅ **Full**: Complete cross-file dependency tracing
-- ⚠️ **Basic**: Simple scenarios work well, complex patterns may be limited
-- ❌ **Issues**: Functionality is significantly limited
-
-### 🚀 Performance Characteristics
-
-**Very Good Performance** (8 languages):
-- **Processing Time**: 36-41ms consistently
-- **Compression**: roughly 65-72% size reduction (approximate, measured on small sample files)
-- **Scalability**: Handles projects up to 10 files efficiently
-- **Memory Usage**: Minimal, no hanging or timeout issues
-
-**Areas for Enhancement**:
-- **Large Projects**: Performance may be limited with 50+ files
-- **Language Processors**: C#, C++, TypeScript have fundamental limitations  
-- **Complex Call Patterns**: Advanced metaprogramming patterns may be limited
-
-### 💡 When to Use Dependency-Aware Analysis
-
-**Perfect for:**
-- 🎯 **Impact Analysis** - Understand what code is affected by changes
-- 🔍 **Code Navigation** - Follow execution flows across multiple files
-- 🎪 **Focused Context** - Get only relevant code for AI assistants
-- 📚 **Legacy Understanding** - Trace through complex codebases systematically
-- 🔧 **API Analysis** - See which methods are actually called vs. just defined
-
-**Best Practices:**
-```bash
-# Start with small depth for quick overview
-aid main.py --dependency-aware --max-depth=1
-
-# Increase depth for comprehensive analysis
-aid main.py --dependency-aware --max-depth=2 --implementation=1
-
-# Use with specific languages known to work well
-aid src/ --dependency-aware --include="*.py,*.js,*.go"
-```
+| Language | Imports that are followed | Measured |
+|---|---|---|
+| Python | `import x`, `from x import y` (a module next to the importing file), relative `from .x import y` | not checked |
+| JavaScript | `import ... from './x'` and `require('./x')` on one line; `x.js`, `x.ts`, `x.jsx`, `x.tsx`, `x/index.js`, `x/index.ts` | react-redux-realworld-example-app `src/index.js`: 2 files at depth 1, 14 at depth 2 |
+| TypeScript | as JavaScript; `.tsx` files are not read for imports | zod `packages/zod/src/index.ts`, `v4/classic/schemas.ts` and bulletproof-react `apps/react-vite/src/main.tsx`: none |
+| Go | relative import paths (`./x`) only, which Go modules do not use | bubbletea `examples/simple/main.go`, chi `mux.go`: none |
+| Rust | `mod x;` and `use x::...` when `x.rs` lies next to the file | siteone-crawler `src/main.rs`: none |
+| PHP | `require_once 'x.php'` | laravel `src/Illuminate/Database/Eloquent/Model.php`: none |
+| Ruby | `require_relative`, `require` of a file next to the importing file | not checked |
+| Java, C# | an imported class `X` as `X.java`/`X.cs` next to the file, plus every file of the same directory | not checked |
+| Kotlin | `import a.b.X` as an `X.kt` file near the importing file | not checked |
+| Swift | every `.swift` file of the same directory | not checked |
+| C++ | `#include "x.h"` next to the file, plus `x.cpp` | not checked |
 
 ### 🚀 Transform Massive Codebases Into AI-Friendly Context
 

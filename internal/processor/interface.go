@@ -83,10 +83,12 @@ type ProcessOptions struct {
 	// keep their implementation even when implementations are otherwise stripped.
 	ExpandSymbols []string
 
-	// MaxDepth limits the depth of nested structures
+	// MaxDepth is how many levels of imports --dependency-aware follows
+	// (--max-depth; 1: what the input imports directly).
 	MaxDepth int
 
-	// SymbolResolution enables symbol cross-referencing
+	// SymbolResolution is --dependency-aware: ProcessPath also distils the
+	// files the input imports (ProcessWithDependencies).
 	SymbolResolution bool
 
 	// IncludeLineNumbers adds line number information

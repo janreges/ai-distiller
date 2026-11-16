@@ -311,10 +311,10 @@ export class AidDistillerServer {
       "distill_with_dependencies",
       {
         title: "Dependency-Aware Code Distillation",
-        description: "EXPERIMENTAL (regex-based, may miss or over-include calls): follows function/method calls across files up to the specified depth and returns distilled code of only what the target file appears to use.\n\nUSAGE: Perfect for understanding code execution flows, impact analysis, and creating focused context for AI assistants. Particularly useful for large codebases where you need to understand how specific functionality works across multiple files.",
+        description: "EXPERIMENTAL (regex-based, may miss imports): returns the distilled target file followed by the distilled project files it imports, up to max_depth levels of imports. Each followed file is distilled whole with the same options; paths are relative to the target file's directory. Imports of the standard library and of installed packages are not followed, so a result holding only the target file means none of its imports resolved to a project file.\n\nUSAGE: context for one file together with the local code it depends on.",
         inputSchema: z.strictObject({
           file_path: z.string().describe("Target file to analyze" + IN_ROOT),
-          max_depth: z.number().default(2).describe("Maximum depth to follow dependencies (default: 2)"),
+          max_depth: z.number().default(2).describe("Levels of imports to follow, 1 = only what the target file imports directly (default: 2)"),
           include_private: z.boolean().optional().describe("Include private members (default: false)"),
           include_protected: z.boolean().optional().describe("Include protected members (default: false)"),
           include_internal: z.boolean().optional().describe("Include internal/package-private members (default: false)"),

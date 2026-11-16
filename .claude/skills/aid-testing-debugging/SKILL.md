@@ -275,8 +275,10 @@ Read from `references/test-inventory.md`; when a change lands here, add a test.
 - Git mode (`aid .git`) and the text of AI action prompts. Tests cover the AI
   actions' source collection, `-o` being rejected with `--ai-action`, and that the
   docs list every action; nothing runs git mode.
-- `--dependency-aware`: only that it is off by default. `--raw`: only the raw
-  processor's text/binary decision.
+- `--dependency-aware`: the CLI tests in
+  `internal/conformance/dependency_aware_test.go` run it on the small
+  projects in `internal/conformance/testdata/depaware/`; real repositories
+  only by hand. `--raw`: only the raw processor's text/binary decision.
 - Debug output: only that `-v` and `-vvv` set the verbosity count, not what is printed.
 - The MCP server end to end. `mcp-npm/test` exercises the runner, the tool texts,
   the file listing and the postinstall helpers with `node` as the child process,
