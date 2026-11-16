@@ -24,11 +24,20 @@ import (
 
 // DependencyStats counts what ProcessWithDependencies followed and skipped.
 type DependencyStats struct {
-	Followed     int    // followed files in the result
-	Outside      int    // imported files not read because they lie outside Boundary
-	Excluded     int    // imported files left out by --include, --exclude, .aidignore or a default-ignored directory
-	Boundary     string // the directory following stays in, described ("the repository /x")
-	BoundaryKind string // "repository", "project root", "input directory" or "AID_CONFINE_ROOT directory"
+	Followed     int             // followed files in the result
+	Outside      int             // imported files not read because they lie outside Boundary
+	Excluded     int             // imported files left out by --include, --exclude, .aidignore or a default-ignored directory
+	Skipped      []SkippedImport // the Outside and Excluded imports, in the order they were found
+	Boundary     string          // the directory following stays in, described ("the repository /x")
+	BoundaryKind string          // "repository", "project root", "input directory" or "AID_CONFINE_ROOT directory"
+}
+
+// SkippedImport is an imported file (or Go package directory) that
+// --dependency-aware did not read.
+type SkippedImport struct {
+	Path    string // absolute from Follow; in DependencyStats as aid prints a followed file's path
+	Outside bool   // outside the boundary; else excluded by the selection rules
+	Reason  string // "outside the <boundary kind>", or "excluded by <rule>"
 }
 
 // ProcessWithDependencies distils path (a file, or every file a directory run
@@ -78,10 +87,18 @@ func (p *Processor) ProcessWithDependencies(path string, opts ProcessOptions) (r
 	stats.Boundary, stats.BoundaryKind = scope.describe(), scope.kind
 	dbg.Logf(debug.LevelBasic, "Following imports inside %s", stats.Boundary)
 	analyzer := NewDependencyAnalyzer(p.ctx, scope)
-	deps, outside, excluded := analyzer.Follow(starts, opts.MaxDepth)
-	stats.Outside, stats.Excluded = outside, excluded
+	deps, skipped := analyzer.Follow(starts, opts.MaxDepth)
+	for _, s := range skipped {
+		if s.Outside {
+			stats.Outside++
+		} else {
+			stats.Excluded++
+		}
+		s.Path = dependencyDisplayPath(s.Path, baseDir, opts)
+		stats.Skipped = append(stats.Skipped, s)
+	}
 	dbg.Logf(debug.LevelBasic, "Followed %d files from %s (max depth %d); skipped %d outside %s and %d excluded",
-		len(deps), absPath, opts.MaxDepth, outside, stats.Boundary, excluded)
+		len(deps), absPath, opts.MaxDepth, stats.Outside, stats.Boundary, stats.Excluded)
 	for _, dep := range deps {
 		file, err := p.ProcessFile(dep, fileOpts)
 		if err != nil {
@@ -190,13 +207,18 @@ func stripSlashComments(code string) string {
 // levels (1: what starts import directly), each once, without starts
 // themselves. Only existing files that aid has a processor for are returned,
 // and of those only the ones inside the scope's boundary (symlinks resolved)
-// that its selection rules keep; outside and excluded count the others,
-// which are neither read nor followed further. -v logs each of them.
-func (da *DependencyAnalyzer) Follow(starts []string, maxDepth int) (followed []string, outside, excluded int) {
+// that its selection rules keep; skipped lists the others (and Go package
+// directories outside the boundary), which are neither read nor followed
+// further. -v logs each of them.
+func (da *DependencyAnalyzer) Follow(starts []string, maxDepth int) (followed []string, skipped []SkippedImport) {
 	dbg := debug.FromContext(da.ctx).WithSubsystem("dependency")
 	seen := make(map[string]bool, len(starts))
 	for _, s := range starts {
 		seen[filepath.Clean(s)] = true
+	}
+	outside := func(dep, file string) {
+		dbg.Logf(debug.LevelBasic, "Not following %s (imported by %s): outside %s", dep, file, da.scope.describe())
+		skipped = append(skipped, SkippedImport{Path: dep, Outside: true, Reason: "outside the " + da.scope.kind})
 	}
 	frontier := starts
 	for depth := 1; depth <= maxDepth && len(frontier) > 0; depth++ {
@@ -216,8 +238,7 @@ func (da *DependencyAnalyzer) Follow(starts []string, maxDepth int) (followed []
 					// A Go package directory the resolver did not read
 					// because it lies outside.
 					if !da.scope.contains(dep) {
-						dbg.Logf(debug.LevelBasic, "Not following %s (imported by %s): outside %s", dep, file, da.scope.describe())
-						outside++
+						outside(dep, file)
 					}
 					continue
 				}
@@ -226,13 +247,12 @@ func (da *DependencyAnalyzer) Follow(starts []string, maxDepth int) (followed []
 					continue
 				}
 				if !da.scope.contains(dep) {
-					dbg.Logf(debug.LevelBasic, "Not following %s (imported by %s): outside %s", dep, file, da.scope.describe())
-					outside++
+					outside(dep, file)
 					continue
 				}
 				if reason := da.scope.excludedBy(dep); reason != "" {
 					dbg.Logf(debug.LevelBasic, "Not following %s (imported by %s): excluded by %s", dep, file, reason)
-					excluded++
+					skipped = append(skipped, SkippedImport{Path: dep, Reason: "excluded by " + reason})
 					continue
 				}
 				dbg.Logf(debug.LevelDetailed, "Following %s (depth %d, imported by %s)", dep, depth, file)
@@ -242,7 +262,7 @@ func (da *DependencyAnalyzer) Follow(starts []string, maxDepth int) (followed []
 		}
 		frontier = next
 	}
-	return followed, outside, excluded
+	return followed, skipped
 }
 
 // Imports returns the files that filePath imports and that resolve to an

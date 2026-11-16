@@ -275,7 +275,7 @@ func TestDependencyAwareStaysInsideTheRepository(t *testing.T) {
 	require.Equal(t, 0, code)
 	assert.Equal(t, []string{"only.js"}, filePaths(out))
 	assert.Equal(t, noImportsNote+" of app/only.js: none resolved to a project file aid can distill"+
-		" (skipped 1 outside the repository; -v lists them)\n", stderr)
+		"; skipped ../../outside/secret.js (outside the repository)\n", stderr)
 }
 
 // Without .git above the input, the boundary is the project root aid
@@ -387,8 +387,10 @@ func TestDependencyAwareFollowsOnlySelectedFiles(t *testing.T) {
 	// A directory: what its walk leaves out is not brought back by an import.
 	out, stderr = runDepAware(t, "select/src")
 	assert.Equal(t, []string{"main.js", "util.js", "util.test.js"}, filePaths(out))
-	assert.Contains(t, stderr, noImportsNote+" out of select/src: none resolved to a file outside it that aid can distill"+
-		" (skipped 3 excluded by --include, --exclude, .aidignore or a default-ignored directory; -v lists them)\n")
+	assert.Regexp(t, `^`+regexp.QuoteMeta(noImportsNote+" out of select/src: none resolved to a file outside it that aid can distill")+
+		`; skipped \.\./generated/api\.js \(excluded by \S*select/\.aidignore\), `+
+		`vendor/helper\.js \(excluded by the directory vendor, which a directory walk skips by default\), `+
+		`secret\.js \(excluded by \S*select/src/\.aidignore\)\n$`, stderr)
 	out, _ = runDepAware(t, "python/app/services", "--exclude", "templates.py")
 	assert.Equal(t, []string{"mailer.py", "../models.py"}, filePaths(out))
 
@@ -413,4 +415,28 @@ func TestDependencyAwareSaysWhenNothingIsFollowed(t *testing.T) {
 	out, stderr = runDepAware(t, "js")
 	assert.Equal(t, []string{"index.js"}, filePaths(out))
 	assert.Contains(t, stderr, noImportsNote+" out of js:")
+}
+
+// The note names up to three skipped imports with their reason, as aid
+// prints paths, then how many more; one line, exit 0, and no advice to pass
+// -v, which an MCP client cannot do.
+func TestDependencyAwareNoteNamesWhatItSkipped(t *testing.T) {
+	tmp := t.TempDir()
+	writeProject(t, tmp, map[string]string{
+		"repo/.git/HEAD":      "ref: refs/heads/main\n",
+		"repo/.aidignore":     "app/ignored.js\n",
+		"repo/app/main.js":    "import './ignored.js';\nimport '../../outside/a.js';\nimport '../../outside/b.js';\nimport '../../outside/c.js';\nimport '../../outside/d.js';\n",
+		"repo/app/ignored.js": "export const ignored = 1;\n",
+		"outside/a.js":        "export const a = 1;\n",
+		"outside/b.js":        "export const b = 1;\n",
+		"outside/c.js":        "export const c = 1;\n",
+		"outside/d.js":        "export const d = 1;\n",
+	})
+	out, stderr, code := aidRun(t, filepath.Join(tmp, "repo"), nil, "app/main.js", "--dependency-aware", "--stdout", "--summary-type=off")
+	require.Equal(t, 0, code, stderr)
+	assert.Equal(t, []string{"main.js"}, filePaths(out))
+	assert.Equal(t, noImportsNote+" of app/main.js: none resolved to a project file aid can distill; skipped "+
+		"ignored.js (excluded by .aidignore), ../../outside/a.js (outside the repository), "+
+		"../../outside/b.js (outside the repository) and 2 more\n", stderr)
+	assert.NotContains(t, stderr, "-v")
 }

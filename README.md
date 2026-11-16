@@ -211,7 +211,7 @@ Following never leaves the repository: a file whose real path (symlinks resolved
 
 Followed files pass the selection rules of a directory walk: `--include`, `--exclude`, every `.aidignore` from the repository top down to the file's directory, and the directories a walk skips by default (`node_modules`, `vendor`, `build`, ...). The patterns match the path aid prints without its leading `../`, so the directories that hold the input never match. A file the rules leave out is not read, so its imports are not followed either. The input itself is not filtered, as without the flag, and `--recursive=0` limits only the walk of a directory input.
 
-`-v` names every import skipped for either reason, and when nothing is followed the stderr note counts them.
+`-v` names every import skipped for either reason. When nothing is followed, the one-line note on stderr names the first three skipped imports with their reason (`skipped ../shared/x.js (outside the repository), ...`) and how many more there are.
 
 Given a directory, aid distils every file of it as without the flag and adds the files outside the directory that they import.
 

@@ -224,7 +224,10 @@ rules to a followed file: every `.aidignore` from the boundary down to the
 file's directory, the default-ignored directories (`isDefaultIgnoredDir`) and
 `.aid`, and `--include`/`--exclude` (`matchPatterns`) on the path below the
 deepest directory that holds both the input and the file. `-v` logs each
-skipped import; the `Note:` line counts them (`DependencyStats`).
+skipped import; `Follow` returns them as `SkippedImport`s, and the `Note:`
+line names the first three with their reason, then `and N more`
+(`DependencyStats.Skipped`). It gives no advice to pass `-v`, which an MCP
+client cannot do.
 
 No symbol is resolved: a followed file is distilled whole. When nothing is
 followed, `runDistiller` prints one `Note:` line on stderr
