@@ -178,7 +178,7 @@ These flags may change without notice.
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--dependency-aware` | `false` | EXPERIMENTAL: after the input, distil the project files it imports, each whole and with the same flags (regex-based). Paths are relative to the input. A directory adds the files outside it that its files import. Never follows a file outside the repository (the nearest directory holding `.git`, symlinks resolved; else the project root). When nothing can be followed, a one-line note goes to stderr |
+| `--dependency-aware` | `false` | EXPERIMENTAL: after the input, distil the project files it imports, each whole and with the same flags (regex-based). Paths are relative to the input. A directory adds the files outside it that its files import. Never follows a file outside the repository (the nearest directory holding `.git`, symlinks resolved; else the project root), and followed files pass `--include`, `--exclude`, `.aidignore` and the default-ignored directories as in a directory walk. When nothing can be followed, a one-line note goes to stderr |
 | `--max-depth NUM` | `2` | EXPERIMENTAL: levels of imports `--dependency-aware` follows (1: what the input imports directly); must be 1 or more |
 
 ## Output File Naming & Management

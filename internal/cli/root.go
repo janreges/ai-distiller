@@ -585,11 +585,14 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 // printNothingFollowedNote tells on stderr, in one line, that
 // --dependency-aware added no file, so an output holding only the input
 // itself is not mistaken for a complete dependency set, and how many imported
-// files it skipped because they lie outside the repository.
+// files it skipped because they lie outside the repository or are excluded.
 func printNothingFollowedNote(absPath, inputPath string, stats processor.DependencyStats) {
 	var skipped []string
 	if stats.Outside > 0 {
 		skipped = append(skipped, fmt.Sprintf("%d outside the %s", stats.Outside, stats.BoundaryKind))
+	}
+	if stats.Excluded > 0 {
+		skipped = append(skipped, fmt.Sprintf("%d excluded by --include, --exclude, .aidignore or a default-ignored directory", stats.Excluded))
 	}
 	reason := ""
 	if len(skipped) > 0 {

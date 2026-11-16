@@ -249,6 +249,44 @@ func TestDependencyAwareWithoutGitStaysInsideTheProjectRoot(t *testing.T) {
 	assert.Regexp(t, `Not following \S+/shared/lib\.js \(imported by \S+/src/main\.js\): outside the project root \S+/proj\n`, stderr)
 }
 
+// Followed files pass the selection rules of a directory walk: --include,
+// --exclude, every .aidignore from the repository top down to the file's
+// directory, and the directories a walk skips by default. The patterns
+// match the printed path without its leading "../" segments, so the
+// directories that hold the input never match. The input itself is not
+// filtered, as in a run without the flag.
+func TestDependencyAwareFollowsOnlySelectedFiles(t *testing.T) {
+	// select/src/main.js imports ../generated/api.js (select/.aidignore:
+	// generated/), ./secret.js (select/src/.aidignore), ./vendor/helper.js
+	// (vendor is skipped by default), ./util.js and ./util.test.js.
+	out, stderr := runDepAware(t, "select/src/main.js", "-v")
+	assert.Equal(t, []string{"main.js", "util.js", "util.test.js"}, filePaths(out))
+	assert.Regexp(t, `Not following \S+/select/generated/api\.js \(imported by \S+\): excluded by \S*select/\.aidignore\n`, stderr)
+	assert.Regexp(t, `Not following \S+/select/src/secret\.js \(imported by \S+\): excluded by \S*select/src/\.aidignore\n`, stderr)
+	assert.Regexp(t, `Not following \S+/select/src/vendor/helper\.js \(imported by \S+\): excluded by the directory vendor`, stderr)
+
+	out, _ = runDepAware(t, "select/src/main.js", "--exclude", "*.test.js")
+	assert.Equal(t, []string{"main.js", "util.js"}, filePaths(out))
+	out, _ = runDepAware(t, "select/src/main.js", "--include", "*.test.js")
+	assert.Equal(t, []string{"main.js", "util.test.js"}, filePaths(out))
+
+	// A directory: what its walk leaves out is not brought back by an import.
+	out, stderr = runDepAware(t, "select/src")
+	assert.Equal(t, []string{"main.js", "util.js", "util.test.js"}, filePaths(out))
+	assert.Contains(t, stderr, noImportsNote+" out of select/src: none resolved to a file outside it that aid can distill"+
+		" (skipped 3 excluded by --include, --exclude, .aidignore or a default-ignored directory; -v lists them)\n")
+	out, _ = runDepAware(t, "python/app/services", "--exclude", "templates.py")
+	assert.Equal(t, []string{"mailer.py", "../models.py"}, filePaths(out))
+
+	// "store" matches ../../store/*.go; an excluded file is not read, so
+	// db.go, which only store.go imports, is not reached. "*shop*" matches
+	// only directories that hold the input, which never count.
+	out, _ = runDepAware(t, "go/shop/cmd/shop/main.go", "--exclude", "store")
+	assert.Equal(t, []string{"main.go", "flags.go", "../../../kit/log/log.go"}, filePaths(out))
+	out, _ = runDepAware(t, "go/shop/cmd/shop/main.go", "--exclude", "*shop*")
+	assert.Len(t, filePaths(out), 6)
+}
+
 func TestDependencyAwareSaysWhenNothingIsFollowed(t *testing.T) {
 	// index.js imports only npm packages: nothing to follow, but the entry
 	// file is still printed and the run succeeds.

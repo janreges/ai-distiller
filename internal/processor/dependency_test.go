@@ -73,4 +73,10 @@ func TestFollowScopePathHelpers(t *testing.T) {
 	assert.False(t, pathInside("/rx/b.go", "/r"))
 	assert.False(t, pathInside("/b.go", "/r"))
 	assert.True(t, pathInside("/r/..b/c.go", "/r"))
+
+	assert.Equal(t, "/r/go", commonDir("/r/go/shop/cmd/shop", "/r/go/kit/log/log.go"))
+	assert.Equal(t, "/r/app", commonDir("/r/app", "/r/app/sub/x.py"))
+
+	assert.Equal(t, []string{"/r", "/r/a", "/r/a/b"}, dirsBetween("/r", "/r/a/b"))
+	assert.Equal(t, []string{"/r"}, dirsBetween("/r", "/r"))
 }

@@ -186,9 +186,9 @@ AI actions get it). That function:
    each file's imports (`DependencyAnalyzer.Imports`, one regex extractor per
    language behind `extractIncludeStatements`), breadth-first, one level per
    step up to `MaxDepth`, and keeps each resolved path once if it is an
-   existing file with a processor and lies inside the boundary
-   (`internal/processor/dependency_scope.go`, see below); a skipped file is
-   not read;
+   existing file with a processor, lies inside the boundary and passes the
+   walk's selection rules (both in `internal/processor/dependency_scope.go`,
+   see below); a skipped file is not read;
 3. distils every followed file with `ProcessFile` and the same options and
    appends it to the result, a `DistilledDirectory`, with a path relative to
    the entry file's directory (or the input directory), `../` included
@@ -209,8 +209,12 @@ input that holds `.git`, else the project root of `internal/project` when it
 holds the input, else the input's directory. `followScope.contains` compares
 real paths (symlinks resolved); the resolvers read no `go.mod`, `Cargo.toml`,
 `tsconfig.json`, `composer.json` or package listing outside it
-(`DependencyAnalyzer.findUp`). `-v` logs each skipped import; the `Note:`
-line counts them (`DependencyStats`).
+(`DependencyAnalyzer.findUp`). `followScope.excludedBy` applies the walk's
+rules to a followed file: every `.aidignore` from the boundary down to the
+file's directory, the default-ignored directories (`isDefaultIgnoredDir`) and
+`.aid`, and `--include`/`--exclude` (`matchPatterns`) on the path below the
+deepest directory that holds both the input and the file. `-v` logs each
+skipped import; the `Note:` line counts them (`DependencyStats`).
 
 No symbol is resolved: a followed file is distilled whole. When nothing is
 followed, `runDistiller` prints one `Note:` line on stderr

@@ -207,7 +207,9 @@ The analysis is heuristic: imports are found with regular expressions and resolv
 
 Following never leaves the repository: a file whose real path (symlinks resolved) lies outside the nearest directory above the input that holds `.git` is not read, and neither are the `go.mod`, `Cargo.toml`, `tsconfig.json` or `composer.json` files there. Without `.git`, the boundary is the [project root](#-smart-project-root-detection) aid detects from the working directory when it holds the input, else the input's directory.
 
-`-v` names every import skipped for this reason, and when nothing is followed the stderr note counts them.
+Followed files pass the selection rules of a directory walk: `--include`, `--exclude`, every `.aidignore` from the repository top down to the file's directory, and the directories a walk skips by default (`node_modules`, `vendor`, `build`, ...). The patterns match the path aid prints without its leading `../`, so the directories that hold the input never match. A file the rules leave out is not read, so its imports are not followed either. The input itself is not filtered, as without the flag, and `--recursive=0` limits only the walk of a directory input.
+
+`-v` names every import skipped for either reason, and when nothing is followed the stderr note counts them.
 
 Given a directory, aid distils every file of it as without the flag and adds the files outside the directory that they import.
 
