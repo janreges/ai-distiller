@@ -113,10 +113,10 @@ func TestGoFormatter_MemberComments(t *testing.T) {
 	// 	// doc of Close            line 5
 	// 	Close() error // end       line 6
 	// }
-	// The comments among the embedded types go above them, the method's
-	// own comments stay with it.
+	// Each element prints where it is written, with its own comments.
 	i := &ir.DistilledInterface{Name: "I",
-		Extends: []ir.TypeRef{{Name: "io.Reader"}, {Name: "io.Writer"}},
+		Extends:   []ir.TypeRef{{Name: "io.Reader"}, {Name: "io.Writer"}},
+		ExtendsAt: []ir.Location{at(3, 2).Location, at(4, 2).Location},
 		Children: []ir.DistilledNode{
 			comment(2, 2, "doc of Reader"),
 			comment(4, 12, "end of Writer"),
@@ -124,8 +124,35 @@ func TestGoFormatter_MemberComments(t *testing.T) {
 			comment(6, 16, "end"),
 			&ir.DistilledFunction{BaseNode: at(6, 2), Name: "Close", Returns: &ir.TypeRef{Name: "error"}},
 		}}
-	assert.Equal(t, "\ntype I interface {\n\t// doc of Reader\n\t// end of Writer\n\tio.Reader\n\tio.Writer\n"+
+	assert.Equal(t, "\ntype I interface {\n\t// doc of Reader\n\tio.Reader\n\tio.Writer // end of Writer\n"+
 		"\t// doc of Close\n\tClose() error // end\n}\n", format(i))
+
+	// type J interface {               line 1
+	// 	// doc of M                    line 2
+	// 	M()                            line 3
+	// 	// doc of Reader: J also reads line 4
+	// 	io.Reader                      line 5
+	// 	// doc of N                    line 6
+	// 	N()                            line 7
+	// }
+	// An embedded element after a method stays there, under its doc.
+	j := &ir.DistilledInterface{Name: "J",
+		Extends:   []ir.TypeRef{{Name: "io.Reader"}},
+		ExtendsAt: []ir.Location{at(5, 2).Location},
+		Children: []ir.DistilledNode{
+			comment(2, 2, "doc of M"),
+			&ir.DistilledFunction{BaseNode: at(3, 2), Name: "M"},
+			comment(4, 2, "doc of Reader: J also reads"),
+			comment(6, 2, "doc of N"),
+			&ir.DistilledFunction{BaseNode: at(7, 2), Name: "N"},
+		}}
+	assert.Equal(t, "\ntype J interface {\n\t// doc of M\n\tM()\n\t// doc of Reader: J also reads\n\tio.Reader\n"+
+		"\t// doc of N\n\tN()\n}\n", format(j))
+
+	// Without the locations, the embedded elements come first.
+	j.ExtendsAt = nil
+	assert.Equal(t, "\ntype J interface {\n\tio.Reader\n\t// doc of M\n\tM()\n\t// doc of Reader: J also reads\n"+
+		"\t// doc of N\n\tN()\n}\n", format(j))
 }
 
 func TestGoFormatter_ImportComments(t *testing.T) {

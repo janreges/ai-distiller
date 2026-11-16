@@ -776,8 +776,9 @@ func (p *ASTParser) processStruct(name string, structType *ast.StructType) *ir.D
 
 // processInterface processes an interface type. Each embedded element (an
 // embedded interface such as io.Reader, or a type set such as ~int | ~string)
-// is one entry of Extends, as written; the children are the methods and the
-// comments of the body, in source order (memberNodes).
+// is one entry of Extends, as written, with its location in ExtendsAt; the
+// children are the methods and the comments of the body, in source order
+// (memberNodes), an embedded element's doc and line-end comment included.
 func (p *ASTParser) processInterface(name string, interfaceType *ast.InterfaceType) *ir.DistilledInterface {
 	intf := &ir.DistilledInterface{
 		BaseNode: ir.BaseNode{
@@ -791,6 +792,7 @@ func (p *ASTParser) processInterface(name string, interfaceType *ast.InterfaceTy
 		if len(method.Names) == 0 {
 			// Embedded element: one entry, a union stays whole
 			intf.Extends = append(intf.Extends, ir.TypeRef{Name: p.typeToString(method.Type)})
+			intf.ExtendsAt = append(intf.ExtendsAt, p.getLocation(method.Pos(), method.End()))
 			return nil
 		}
 		var nodes []ir.DistilledNode

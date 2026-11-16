@@ -46,7 +46,9 @@
   `interface` type is a `DistilledInterface` whose children are its methods.
   Each embedded element of an interface is one `Extends` entry as written: an
   embedded interface (`io.Reader`) or a whole type-set union
-  (`~int | ~string`). The text prints them one per line before the methods.
+  (`~int | ~string`), with its location in `ExtendsAt` (not in JSON). The
+  text prints them one per line where they are written among the methods,
+  each under its doc, with the comment at the end of its line.
 - Any other type declaration is a `DistilledTypeAlias`. Only a real alias
   (`type Alias = int`, also `type Pair = struct{...}` on the class and
   `type Any = interface{...}` on the interface) carries the modifier

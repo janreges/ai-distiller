@@ -141,13 +141,17 @@ func (n *DistilledClass) Accept(visitor Visitor) DistilledNode {
 // DistilledInterface represents an interface declaration
 type DistilledInterface struct {
 	BaseNode
-	Name       string          `json:"name"`
-	Visibility Visibility      `json:"visibility"`
-	Modifiers  []Modifier      `json:"modifiers,omitempty"`
-	TypeParams []TypeParam     `json:"type_params,omitempty"`
-	Extends    []TypeRef       `json:"extends,omitempty"`
-	Permits    []TypeRef       `json:"permits,omitempty"`
-	Children   []DistilledNode `json:"children,omitempty"`
+	Name       string      `json:"name"`
+	Visibility Visibility  `json:"visibility"`
+	Modifiers  []Modifier  `json:"modifiers,omitempty"`
+	TypeParams []TypeParam `json:"type_params,omitempty"`
+	Extends    []TypeRef   `json:"extends,omitempty"`
+	// ExtendsAt holds where each entry of Extends is written, when the
+	// parser records it: in Go an embedded element sits among the methods,
+	// and the text formatter prints it there, between the children.
+	ExtendsAt []Location      `json:"-"`
+	Permits   []TypeRef       `json:"permits,omitempty"`
+	Children  []DistilledNode `json:"children,omitempty"`
 }
 
 // GetNodeKind implements DistilledNode

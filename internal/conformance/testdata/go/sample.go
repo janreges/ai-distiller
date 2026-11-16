@@ -47,6 +47,13 @@ type ConfReadCloser interface {
 	ConfExtra() int // CONF_METHOD_TRAILING
 }
 
+// ConfLate embeds an interface after its method.
+type ConfLate interface {
+	ConfFirst()
+	// CONF_EMBED_DOC
+	io.Writer // CONF_EMBED_TRAILING
+}
+
 // ConfNumber is a type-set constraint.
 type ConfNumber interface {
 	~int | ~int64

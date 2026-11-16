@@ -197,6 +197,9 @@ var fixtures = []fixture{
 			"\tio.Closer\n\t// CONF_METHOD_DOC\n\tConfExtra() int // CONF_METHOD_TRAILING\n}\n"},
 			NotContains: []string{"CONF_HIDDEN_FIELD_NOTE"}},
 		check{Cap: "member-comments-hidden-by-default", NotContains: []string{"CONF_FIELD_DOC", "CONF_METHOD_TRAILING"}},
+		// An embedded element prints where it is written, with its comments.
+		check{Cap: "embed-comments-in-place", Flags: []string{"--comments=1"}, Contains: []string{
+			"type ConfLate interface {\n\tConfFirst()\n\t// CONF_EMBED_DOC\n\tio.Writer // CONF_EMBED_TRAILING\n}\n"}},
 		check{Cap: "hidden-field-comment-shown", Flags: []string{"--comments=1", "--internal=1"},
 			Contains: []string{"\tconfSecret int // CONF_HIDDEN_FIELD_NOTE\n}\n"}},
 		// A comment in a function body is part of the body: it prints with

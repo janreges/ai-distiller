@@ -395,24 +395,54 @@ func (f *GoFormatter) formatInterface(w io.Writer, intf *ir.DistilledInterface, 
 		return nil
 	}
 	fmt.Fprintln(w, " {")
-	// Embedded elements first, one per line: an embedded interface
-	// (io.Reader) or a type set (~int | ~string), each as written, under
-	// the comments written among them; then the methods with theirs.
-	split := 0
-	if len(intf.Extends) > 0 {
-		split = embedCommentsEnd(intf.Children)
-	}
-	if err := f.formatMembers(w, intf.Children[:split], indent+1); err != nil {
-		return err
-	}
-	for _, ext := range intf.Extends {
-		fmt.Fprintf(w, "%s%s\n", goIndent(indent+1), ext.Name)
-	}
-	if err := f.formatMembers(w, intf.Children[split:], indent+1); err != nil {
+	// The embedded elements, one per line, an embedded interface
+	// (io.Reader) or a type set (~int | ~string), each as written, and the
+	// methods, each with its comments
+	if err := f.formatMembers(w, interfaceMembers(intf), indent+1); err != nil {
 		return err
 	}
 	fmt.Fprintf(w, "%s}\n", indentStr)
 	return nil
+}
+
+// interfaceMembers returns the members of an interface in the order they
+// print: each embedded element of Extends, as an embedded field, where
+// ExtendsAt says it is written among the children (its doc above it, the
+// comment at the end of its line before it, as for a field), so that every
+// comment stays with its element. Without the locations, the embedded
+// elements come first.
+func interfaceMembers(intf *ir.DistilledInterface) []ir.DistilledNode {
+	embeds := make([]ir.DistilledNode, len(intf.Extends))
+	for i, ext := range intf.Extends {
+		field := &ir.DistilledField{Name: ext.Name, Type: &ir.TypeRef{Name: ext.Name},
+			Modifiers: []ir.Modifier{ir.ModifierEmbedded}}
+		if len(intf.ExtendsAt) == len(intf.Extends) {
+			field.Location = intf.ExtendsAt[i]
+		}
+		embeds[i] = field
+	}
+	if len(embeds) == 0 || len(intf.ExtendsAt) != len(intf.Extends) {
+		return append(embeds, intf.Children...)
+	}
+	members := make([]ir.DistilledNode, 0, len(embeds)+len(intf.Children))
+	for _, child := range intf.Children {
+		for len(embeds) > 0 && writtenBefore(embeds[0].GetLocation(), child) {
+			members, embeds = append(members, embeds[0]), embeds[1:]
+		}
+		members = append(members, child)
+	}
+	return append(members, embeds...)
+}
+
+// writtenBefore reports whether the member at loc is written before child:
+// child starts after it, or is a comment that starts below its last line
+// (a comment on that line is the member's own, at the end of its line).
+func writtenBefore(loc ir.Location, child ir.DistilledNode) bool {
+	at := child.GetLocation()
+	if child.GetNodeKind() == ir.KindComment {
+		return at.StartLine > loc.EndLine
+	}
+	return at.StartLine > loc.StartLine || at.StartLine == loc.StartLine && at.StartColumn > loc.StartColumn
 }
 
 // formatMembers writes the children of a struct or interface body, one line
@@ -464,40 +494,6 @@ func endsLineOf(c *ir.DistilledComment, member ir.DistilledNode) bool {
 	at, m := c.Location, member.GetLocation()
 	return at.StartLine > 0 && !strings.Contains(c.Text, "\n") && at.StartLine == m.EndLine &&
 		(at.StartLine > m.StartLine || at.StartColumn > m.StartColumn)
-}
-
-// embedCommentsEnd returns where the comments written among the embedded
-// types of an interface end in its children: before the first method and the
-// comments that belong to it, the one at the end of its line and the group
-// directly above it at its column. Without a method, every child is such a
-// comment. The embedded types themselves are in Extends, without a position.
-func embedCommentsEnd(children []ir.DistilledNode) int {
-	first := slices.IndexFunc(children, func(n ir.DistilledNode) bool {
-		_, ok := n.(*ir.DistilledFunction)
-		return ok
-	})
-	if first < 0 {
-		return len(children)
-	}
-	end := first
-	if c, ok := commentAt(children, end-1); ok && endsLineOf(c, children[first]) {
-		end--
-	}
-	method := children[first].GetLocation()
-	if c, ok := commentAt(children, end-1); ok &&
-		c.Location.EndLine+1 == method.StartLine && c.Location.StartColumn == method.StartColumn {
-		end--
-	}
-	return end
-}
-
-// commentAt returns children[i] when it is a comment.
-func commentAt(children []ir.DistilledNode, i int) (*ir.DistilledComment, bool) {
-	if i < 0 || i >= len(children) {
-		return nil, false
-	}
-	c, ok := children[i].(*ir.DistilledComment)
-	return c, ok
 }
 
 // goFieldLine returns a struct field as it prints, without indentation: an

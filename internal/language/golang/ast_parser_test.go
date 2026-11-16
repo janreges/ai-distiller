@@ -70,6 +70,12 @@ func TestASTParser_InterfaceEmbeddedElements(t *testing.T) {
 	assert.Equal(t, "Extra", intfs["Two"].Children[0].(*ir.DistilledFunction).Name)
 	assert.Equal(t, []ir.TypeRef{{Name: "~int | ~int64 | float64"}}, intfs["Number"].Extends)
 	assert.Equal(t, []ir.TypeRef{{Name: "fmt.Stringer"}, {Name: "~string | ~[]byte"}}, intfs["Mixed"].Extends)
+
+	// Each entry has its location, so the text prints it where it is
+	// written among the methods.
+	require.Len(t, intfs["Two"].ExtendsAt, 2)
+	assert.Equal(t, ir.Location{StartLine: 4, StartColumn: 2, EndLine: 4, EndColumn: 11}, intfs["Two"].ExtendsAt[0])
+	assert.Equal(t, 5, intfs["Two"].ExtendsAt[1].StartLine)
 }
 
 func TestASTParser_DefinedTypeAndAlias(t *testing.T) {
