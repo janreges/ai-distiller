@@ -15,7 +15,7 @@ TypeScript support in AI Distiller is designed to capture the rich type informat
 | **Classes** | ✅ Full | Including abstract classes, inheritance, generics; every `extends` and `implements` base as written (`React.Component<Props>`, `ns.Base<string>`) |
 | **Interfaces** | ⚠️ Partial | With extends (as written, `extends Base<string>, ns.Other`) and generics; index signatures (`[key: string]: any`) are not printed |
 | **Functions** | ✅ Full | Regular, async, arrow functions, overloads (every signature is printed) |
-| **Methods** | ✅ Full | Public, private, protected, abstract, static |
+| **Methods** | ✅ Full | Public, private, protected, abstract, static; accessors (`get size(): number`, `set size(v: number)`), generators (`async *iter()`, `function* gen()`) |
 | **Type System** | ✅ Full | Union, intersection, conditional, mapped types |
 | **Generics** | ✅ Full | With constraints, defaults, inference |
 | **Type Aliases** | ✅ Full | Including complex utility types |
@@ -335,6 +335,7 @@ AI Distiller recognizes common TypeScript framework patterns:
 4. **Const Arrow Functions**: Displayed like a function signature (`export const handler(req: Request): Response`); the `=>` form is printed only with `--implementation=1`
 5. **`const enum`**: Printed as a plain `enum`
 6. **Optional and readonly markers on members**: The `?` of optional properties and methods and the `readonly` of interface members are dropped (`email?: string` prints as `property email: string`); class members keep `readonly` (`public readonly limit: number = 3`) and parameters keep their `?`
+7. **`const` type parameters**: The `const` of `<const T>` is dropped (`<T>`)
 
 ## Best Practices
 
@@ -433,6 +434,7 @@ class Service {
 2. **Re-exports and default exports** (✅ Fixed): `export * from`, `export { x as y } from`, `export { q }`, `export default Inner` and `export = X` print, so a barrel file is no longer empty; `export default function main()` keeps its `default`
 3. **Generic and qualified bases** (✅ Fixed): `interface A extends B<string>`, `class X extends React.Component<P>` and `extends ns.Base<T>` lost their base
 4. **Parameters** (✅ Fixed): destructured parameters (`{ a }: P`, `[x, y]: T`) and rest parameters were dropped, defaults and the `?` of optional parameters were not shown, and parameter properties lost `readonly`
+5. **Accessors, generators, generic defaults** (✅ Fixed): `get size()` and `set size(v)` printed as two plain `size` methods, the `*` of generators was lost and `function* gen()` was missing, and a type parameter's default (`<T extends object = {}>`) was dropped
 
 ### Current Limitations
 

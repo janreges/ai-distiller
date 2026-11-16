@@ -71,3 +71,9 @@ export function confParams({ confA, confB = 1 }: ConfOpts, [confX]: [number], co
 export class ConfProps {
     constructor(readonly confRo: number, private confHid: string) {}
 }
+export class ConfAccessors<T extends object = {}> {
+    get confSize(): number { return 0; }
+    set confSize(v: number) {}
+    async *confIter(): AsyncGenerator<T> {}
+}
+export function* confGen(): Generator<number> {}

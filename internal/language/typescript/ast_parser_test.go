@@ -175,8 +175,26 @@ func TestTS_HashMethodsAndAccessorsArePrivate(t *testing.T) {
 		}
 	}
 	assert.Equal(t, ir.VisibilityPrivate, vis["#p"])
-	assert.Equal(t, ir.VisibilityPrivate, vis["#g"])
+	assert.Equal(t, ir.VisibilityPrivate, vis["get #g"])
 	assert.Equal(t, ir.VisibilityPublic, vis["open"])
+}
+
+// Accessors and generators are named as the JavaScript processor names
+// them (`get size`, `*iter`); type parameters keep their default.
+func TestTS_AccessorsGeneratorsAndTypeParamDefaults(t *testing.T) {
+	f := parseTS(t, "class K<T extends object = {}> {\n  get size(): number { return 0; }\n  set size(v: number) {}\n  async *iter() {}\n  get(key: string) {}\n}\n"+
+		"function* gen() {}\n"+
+		"interface I { get n(): number; }\n")
+	k := f.Children[0].(*ir.DistilledClass)
+	assert.Equal(t, []ir.TypeParam{{Name: "T", Constraints: []ir.TypeRef{{Name: "object"}}, Default: &ir.TypeRef{Name: "{}"}}}, k.TypeParams)
+	var names []string
+	for _, c := range k.Children {
+		names = append(names, c.(*ir.DistilledFunction).Name)
+	}
+	assert.Equal(t, []string{"get size", "set size", "*iter", "get"}, names)
+	assert.Contains(t, k.Children[2].(*ir.DistilledFunction).Modifiers, ir.ModifierAsync)
+	assert.Equal(t, "*gen", f.Children[1].(*ir.DistilledFunction).Name)
+	assert.Equal(t, "get n", f.Children[2].(*ir.DistilledInterface).Children[0].(*ir.DistilledFunction).Name)
 }
 
 func TestTS_Comments(t *testing.T) {

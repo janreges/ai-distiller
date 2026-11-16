@@ -51,6 +51,11 @@
   `DistilledEnum`; `type X = ...` is a `DistilledTypeAlias`.
 - `parseClassBody` reorders the members: fields first, then the constructor,
   then the methods, then trailing comments.
+- Accessors are named `get x` and `set x`, generators `*name` (a generator
+  function declaration too), as in JavaScript
+  (`internal/language/typescript/ast_parser.go#ASTParser.accessorName`); the
+  formatter prints `function* name` for a generator function. A type
+  parameter's default is `TypeParam.Default`.
 - An exported declaration carries the modifier `export`, and `default` after
   `export default`; `export default class {}` is a `DistilledClass` without a
   name. Every other export statement (a re-export, an export list, `export

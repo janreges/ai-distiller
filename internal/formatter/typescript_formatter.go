@@ -111,17 +111,7 @@ func (f *TypeScriptFormatter) formatClass(w io.Writer, class *ir.DistilledClass,
 		fmt.Fprintf(w, " %s", class.Name)
 	}
 
-	// Add generic type parameters
-	if len(class.TypeParams) > 0 {
-		typeParams := make([]string, len(class.TypeParams))
-		for i, param := range class.TypeParams {
-			typeParams[i] = param.Name
-			if len(param.Constraints) > 0 {
-				typeParams[i] += " extends " + param.Constraints[0].Name
-			}
-		}
-		fmt.Fprintf(w, "<%s>", strings.Join(typeParams, ", "))
-	}
+	fmt.Fprint(w, tsTypeParams(class.TypeParams))
 
 	// Add extends clause
 	if len(class.Extends) > 0 {
@@ -165,17 +155,7 @@ func (f *TypeScriptFormatter) formatInterface(w io.Writer, intf *ir.DistilledInt
 	f.writeBlankLine(w)
 	fmt.Fprintf(w, "%sinterface %s", esExportPrefix(intf.Modifiers), intf.Name)
 
-	// Add generic type parameters
-	if len(intf.TypeParams) > 0 {
-		typeParams := make([]string, len(intf.TypeParams))
-		for i, param := range intf.TypeParams {
-			typeParams[i] = param.Name
-			if len(param.Constraints) > 0 {
-				typeParams[i] += " extends " + param.Constraints[0].Name
-			}
-		}
-		fmt.Fprintf(w, "<%s>", strings.Join(typeParams, ", "))
-	}
+	fmt.Fprint(w, tsTypeParams(intf.TypeParams))
 
 	// Add extends clause
 	if len(intf.Extends) > 0 {
@@ -202,17 +182,7 @@ func (f *TypeScriptFormatter) formatInterface(w io.Writer, intf *ir.DistilledInt
 			// Interface methods
 			fmt.Fprintf(w, "    method %s", c.Name)
 
-			// Add generic type parameters if any
-			if len(c.TypeParams) > 0 {
-				typeParams := make([]string, len(c.TypeParams))
-				for i, param := range c.TypeParams {
-					typeParams[i] = param.Name
-					if len(param.Constraints) > 0 {
-						typeParams[i] += " extends " + param.Constraints[0].Name
-					}
-				}
-				fmt.Fprintf(w, "<%s>", strings.Join(typeParams, ", "))
-			}
+			fmt.Fprint(w, tsTypeParams(c.TypeParams))
 
 			fmt.Fprintf(w, "(%s)", tsParams(c.Parameters))
 
@@ -267,24 +237,18 @@ func (f *TypeScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 		if isConst {
 			fmt.Fprintf(w, "%s%sconst %s", indentStr, exportPrefix, fn.Name)
 		} else {
-			fmt.Fprintf(w, "%s%s%sfunction %s", indentStr, exportPrefix, modifiers, fn.Name)
+			keyword, name := "function ", fn.Name
+			if strings.HasPrefix(name, "*") {
+				keyword, name = "function* ", name[1:]
+			}
+			fmt.Fprintf(w, "%s%s%s%s%s", indentStr, exportPrefix, modifiers, keyword, name)
 		}
 	} else {
 		// Methods inside classes/interfaces - no "function" keyword needed
 		fmt.Fprintf(w, "%s%s%s", indentStr, modifiers, fn.Name)
 	}
 
-	// Add generic type parameters
-	if len(fn.TypeParams) > 0 {
-		typeParams := make([]string, len(fn.TypeParams))
-		for i, param := range fn.TypeParams {
-			typeParams[i] = param.Name
-			if len(param.Constraints) > 0 {
-				typeParams[i] += " extends " + param.Constraints[0].Name
-			}
-		}
-		fmt.Fprintf(w, "<%s>", strings.Join(typeParams, ", "))
-	}
+	fmt.Fprint(w, tsTypeParams(fn.TypeParams))
 
 	fmt.Fprintf(w, "(%s)", tsParams(fn.Parameters))
 
@@ -307,6 +271,25 @@ func (f *TypeScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 	}
 
 	return nil
+}
+
+// tsTypeParams prints type parameters as written, `<T extends object = {}, U>`,
+// or nothing when there are none.
+func tsTypeParams(params []ir.TypeParam) string {
+	if len(params) == 0 {
+		return ""
+	}
+	out := make([]string, len(params))
+	for i, param := range params {
+		out[i] = param.Name
+		if len(param.Constraints) > 0 {
+			out[i] += " extends " + param.Constraints[0].Name
+		}
+		if param.Default != nil && param.Default.Name != "" {
+			out[i] += " = " + param.Default.Name
+		}
+	}
+	return "<" + strings.Join(out, ", ") + ">"
 }
 
 // tsParams prints parameters as written, comma-separated: `...rest: U[]`,
@@ -386,17 +369,7 @@ func (f *TypeScriptFormatter) formatField(w io.Writer, field *ir.DistilledField,
 func (f *TypeScriptFormatter) formatTypeAlias(w io.Writer, alias *ir.DistilledTypeAlias) error {
 	fmt.Fprintf(w, "%stype %s", esExportPrefix(alias.Modifiers), alias.Name)
 
-	// Add generic type parameters
-	if len(alias.TypeParams) > 0 {
-		typeParams := make([]string, len(alias.TypeParams))
-		for i, param := range alias.TypeParams {
-			typeParams[i] = param.Name
-			if len(param.Constraints) > 0 {
-				typeParams[i] += " extends " + param.Constraints[0].Name
-			}
-		}
-		fmt.Fprintf(w, "<%s>", strings.Join(typeParams, ", "))
-	}
+	fmt.Fprint(w, tsTypeParams(alias.TypeParams))
 
 	fmt.Fprintf(w, " = %s\n", alias.Type.Name)
 

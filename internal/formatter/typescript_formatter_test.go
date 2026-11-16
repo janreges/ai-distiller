@@ -89,6 +89,20 @@ func TestTypeScriptFormatter_Comments(t *testing.T) {
 	})
 }
 
+// Type parameters keep their default everywhere they print; a generator
+// function prints `function*`, a generator method `*name`.
+func TestTypeScriptFormatter_TypeParamsAndGenerators(t *testing.T) {
+	tps := []ir.TypeParam{{Name: "T", Constraints: []ir.TypeRef{{Name: "object"}}, Default: &ir.TypeRef{Name: "{}"}}, {Name: "U"}}
+	assert.Equal(t, "<T extends object = {}, U>", tsTypeParams(tps))
+	assert.Equal(t, "", tsTypeParams(nil))
+	assert.Equal(t, "\nclass K<T extends object = {}, U> {\n}\n", tsFormat(t, &ir.DistilledClass{Name: "K", TypeParams: tps}, 0))
+	assert.Equal(t, "type A<T extends object = {}, U> = T\n", tsFormat(t, &ir.DistilledTypeAlias{Name: "A", TypeParams: tps, Type: ir.TypeRef{Name: "T"}}, 0))
+	async := []ir.Modifier{ir.ModifierExport, ir.ModifierAsync}
+	assert.Equal(t, "export async function* gen()\n", tsFormat(t, &ir.DistilledFunction{Name: "*gen", Modifiers: async}, 0))
+	assert.Equal(t, "    public async *iter()\n", tsFormat(t, &ir.DistilledFunction{Name: "*iter", Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{ir.ModifierAsync}}, 1))
+	assert.Equal(t, "    public get size(): number\n", tsFormat(t, &ir.DistilledFunction{Name: "get size", Visibility: ir.VisibilityPublic, Returns: &ir.TypeRef{Name: "number"}}, 1))
+}
+
 // Parameters print as written, in functions, methods and interface methods.
 func TestTypeScriptFormatter_Parameters(t *testing.T) {
 	params := []ir.Parameter{

@@ -88,6 +88,12 @@ var fixtures = []fixture{
 			"export function confParams({ confA, confB = 1 }: ConfOpts, [confX]: [number], confOpt?: string, confDef: number = 0, ...confRest: string[]): void",
 			"public readonly confRo: number",
 			"public constructor(confRo: number, confHid: string)"}},
+		check{Cap: "accessors-generators-type-defaults", Contains: []string{
+			"export class ConfAccessors<T extends object = {}> {",
+			"public get confSize(): number",
+			"public set confSize(v: number)",
+			"public async *confIter(): AsyncGenerator<T>",
+			"export function* confGen(): Generator<number>"}},
 		check{Cap: "heritage-as-written", Contains: []string{
 			"export interface ConfBased extends ConfGenericBase<string>, confNs.ConfQualified<number> {",
 			"export class ConfDerived extends confNs.ConfBaseClass<{ id: number }> implements ConfBased {"}},

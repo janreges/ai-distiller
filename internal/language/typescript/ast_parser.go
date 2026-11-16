@@ -140,7 +140,7 @@ func (p *ASTParser) parseStatement(node *sitter.Node, isExported bool) []ir.Dist
 		if enum := p.parseEnum(node, isExported); enum != nil {
 			nodes = append(nodes, enum)
 		}
-	case "function_declaration", "function_signature":
+	case "function_declaration", "generator_function_declaration", "function_signature":
 		if fn := p.parseFunction(node, isExported); fn != nil {
 			nodes = append(nodes, fn)
 		}
@@ -689,6 +689,7 @@ func (p *ASTParser) parseMethod(node *sitter.Node) *ir.DistilledFunction {
 			method.Implementation = p.nodeText(child)
 		}
 	}
+	method.Name = p.accessorName(node, method.Name)
 
 	return method
 }
@@ -739,6 +740,7 @@ func (p *ASTParser) parseMethodSignature(node *sitter.Node) *ir.DistilledFunctio
 			method.Returns = p.typeFromAnnotation(child)
 		}
 	}
+	method.Name = p.accessorName(node, method.Name)
 
 	return method
 }
@@ -1118,8 +1120,26 @@ func (p *ASTParser) parseFunction(node *sitter.Node, isExported bool) *ir.Distil
 			fn.Implementation = p.nodeText(child)
 		}
 	}
+	fn.Name = p.accessorName(node, fn.Name)
 
 	return fn
+}
+
+// accessorName returns name as the JavaScript processor names a method:
+// `get size` and `set size` for an accessor, `*iter` for a generator (a
+// generator function declaration too). The get, set and * tokens are
+// anonymous children of the method or function node; a method that is
+// itself named get has a property_identifier name instead.
+func (p *ASTParser) accessorName(node *sitter.Node, name string) string {
+	for i := uint(0); i < node.ChildCount(); i++ {
+		switch node.Child(i).Kind() {
+		case "get", "set":
+			return node.Child(i).Kind() + " " + name
+		case "*":
+			return "*" + name
+		}
+	}
+	return name
 }
 
 // typeFromAnnotation returns the type of a type_annotation node, or of a
@@ -1421,6 +1441,13 @@ func (p *ASTParser) parseTypeParameters(node *sitter.Node) []ir.TypeParam {
 				param.Constraints = append(param.Constraints, ir.TypeRef{
 					Name: constraintType,
 				})
+			}
+		}
+
+		// The default type: `= {}` in `T extends object = {}`.
+		if value := child.ChildByFieldName("value"); value != nil {
+			if def := value.NamedChild(0); def != nil {
+				param.Default = &ir.TypeRef{Name: esutil.Signature(def, p.source)}
 			}
 		}
 
