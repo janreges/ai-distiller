@@ -61,7 +61,7 @@ Valid categories for `--include-only` and `--exclude-items`: `public`, `protecte
 | `--annotations 0\|1` | `1` | Include decorators/annotations (`@property`, `@Override`, `[Serializable]`) |
 | `--fields 0\|1` | `1` | Include class fields and properties |
 | `--methods 0\|1` | `1` | Include methods and functions |
-| `--expand PATTERNS` | none | Keep the full body only for symbols whose name matches these globs (comma-separated or repeated, for example `GetUser,*Service*`); every other symbol stays a signature. Matching a type name expands the methods nested inside it. |
+| `--expand PATTERNS` | none | Keep the full body only for symbols whose name matches these globs (comma-separated or repeated, for example `GetUser,*Service*`); every other symbol stays a signature. Matching a type name expands the methods nested inside it. A JavaScript or TypeScript getter, setter or generator matches by its bare name: `size` expands `get size()` and `set size(v)`, `items` expands `*items()`. |
 
 ## File selection
 

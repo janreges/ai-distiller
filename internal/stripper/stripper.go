@@ -33,8 +33,14 @@ type Options struct {
 // matches by its method name. A name that carries generic parameters
 // ("longest<'a, T>", "Foo::longest<T>") also matches by its member cut at the
 // first "<". Every candidate the name had before the generic cut stays one.
+// A JavaScript or TypeScript accessor or generator, whose name carries its
+// keyword or star ("get size", "set size", "*items"), also matches by its
+// bare name ("size", "items").
 func (o Options) shouldExpand(name string) bool {
 	candidates := []string{name}
+	if bare := bareMemberName(name); bare != name {
+		candidates = append(candidates, bare)
+	}
 	if i := strings.LastIndex(name, "::"); i >= 0 {
 		candidates = append(candidates, name[i+2:])
 	}
@@ -58,6 +64,17 @@ func (o Options) shouldExpand(name string) bool {
 		}
 	}
 	return false
+}
+
+// bareMemberName returns name without the leading "get " or "set " of an
+// accessor and the "*" of a generator, or name itself.
+func bareMemberName(name string) string {
+	for _, prefix := range []string{"get ", "set "} {
+		if rest, ok := strings.CutPrefix(name, prefix); ok {
+			return rest
+		}
+	}
+	return strings.TrimPrefix(name, "*")
 }
 
 // memberName returns name after its last "::" that is outside angle brackets

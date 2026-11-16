@@ -78,7 +78,9 @@ PHP API docblocks (`Extensions.PHP.IsAPIDocblock`) are kept whatever
 `internal/stripper/stripper.go#Options.shouldExpand` matches each pattern with
 `filepath.Match` (case-sensitive, `*` does not cross `/`) against a function's
 name; a name containing `::` (a C++ out-of-class definition) is also matched by
-the part after the last `::`. A function keeps its `Implementation` when its
+the part after the last `::`, and a JavaScript or TypeScript accessor or
+generator, whose IR name is `get size`, `set size` or `*items`, also by its
+bare name (`size`, `items`; `internal/stripper/stripper.go#bareMemberName`). A function keeps its `Implementation` when its
 name matches or when it lies inside a class or struct whose name matches,
 nested types included; interfaces and enums do not open such a scope.
 

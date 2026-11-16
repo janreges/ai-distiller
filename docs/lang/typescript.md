@@ -449,6 +449,7 @@ class Service {
 9. **Import aliases and `export as namespace`** (✅ Fixed): `import G = ns.H`, `export import G = ns.H` and a UMD module's `export as namespace Lib` were dropped; they print as written, and the unused-import filter removes an import alias whose name the output never uses, like any other import
 10. **React import in `.tsx` files** (✅ Fixed): the unused-import filter dropped `import React from 'react'` from a component file, because the distilled text never names `React`; the classic JSX transform needs it, so a `.tsx` file (or one whose source has JSX) keeps the import that binds `React`
 11. **Used imports removed by the filter** (✅ Fixed): an import whose names start or end with `$` (`import type { $ZodType }`, `import { obs$ }`) was always removed, and so was every import used only above a later import-looking line (an `import G = ns.H` in a namespace, an import in a `declare module`, a `require(...)` in a printed body) or between two imports. The filter now looks in every line outside the imports, matches a name as a whole identifier with `$` in it, and keeps the namespace an import alias names (`import * as Geometry` for `import Polygon = Geometry.Polygon`)
+12. **`--expand` on accessors and generators** (✅ Fixed): `--expand size` no longer matched `get size()` and `set size(v)`, nor `--expand items` the generator `*items()`, once they printed with their keyword and star; they match by their bare name again (the JavaScript processor names them the same way)
 
 ### Current Limitations
 

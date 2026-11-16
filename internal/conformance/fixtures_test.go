@@ -118,6 +118,11 @@ var fixtures = []fixture{
 			"public set confSize(v: number)",
 			"public async *confIter(): AsyncGenerator<T>",
 			"export function* confGen(): Generator<number>"}},
+		check{Cap: "expand-accessor-generator-by-name", Flags: []string{"--expand=confSize,confIter,confGen"}, Contains: []string{
+			"public get confSize(): number { return 0; }",
+			"public set confSize(v: number) {}",
+			"public async *confIter(): AsyncGenerator<T> {}",
+			"export function* confGen(): Generator<number> {}"}},
 		check{Cap: "declaration-keyword", Contains: []string{
 			"export let confLetArrow = (confL: number)",
 			"export var confVarValue = 3"},
@@ -174,6 +179,8 @@ var fixtures = []fixture{
 		check{Cap: "generator-method-star", Contains: []string{
 			"    *confGenMethod()",
 			"    async *confAsyncGenMethod()"}},
+		check{Cap: "expand-generator-by-name", Flags: []string{"--expand=confGenMethod"}, Contains: []string{
+			"    *confGenMethod() {}"}},
 		check{Cap: "jsx-keeps-react", Contains: []string{"import React from 'react'", "export function ConfJsxView()"}},
 		check{Cap: "jsdoc-braced-type", Contains: []string{
 			"export const confTypedMap: Map<string, Set<number>> = new Map()"}})},

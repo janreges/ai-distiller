@@ -153,3 +153,30 @@ func TestESImportFilterKeepsUsedImports(t *testing.T) {
 		})
 	}
 }
+
+// --expand NAME keeps the body of a getter, setter or generator called NAME.
+func TestESExpandMatchesAccessorsAndGenerators(t *testing.T) {
+	expand := func(patterns ...string) processor.ProcessOptions {
+		opts := esDefault
+		opts.ExpandSymbols = patterns
+		return opts
+	}
+	ts := "export class Box {\n  get size(): number { return 1; }\n  set size(v: number) { this.v = v; }\n" +
+		"  *items(): Generator<number> { yield 1; }\n  load(): void { console.log(1); }\n}\n" +
+		"export function* gen(): Generator<number> { yield 2; }\n"
+	assert.Equal(t, []string{"", "export class Box {",
+		"    public get size(): number { return 1; }",
+		"    public set size(v: number) { this.v = v; }",
+		"    public *items(): Generator<number> { yield 1; }",
+		"    public load(): void",
+		"}",
+		"export function* gen(): Generator<number> { yield 2; }"},
+		distillES(t, "acc.ts", ts, expand("size", "items", "gen")))
+
+	js := "export class Box {\n  get size() { return 1; }\n  *items() { yield 1; }\n}\nexport function* gen() { yield 2; }\n"
+	assert.Equal(t, []string{"", "export class Box:",
+		"    get size() { return 1; }",
+		"    *items() { yield 1; }",
+		"export function* gen() { yield 2; }"},
+		distillES(t, "acc.js", js, expand("size", "items", "gen")))
+}

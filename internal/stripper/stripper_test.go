@@ -926,3 +926,30 @@ func TestShouldExpand_GenericName(t *testing.T) {
 		assert.Equal(t, tc.want, o.shouldExpand(tc.name), "--expand=%s on %s", tc.pattern, tc.name)
 	}
 }
+
+// A JavaScript or TypeScript accessor or generator matches by its name as
+// written and by its bare name.
+func TestShouldExpand_AccessorAndGenerator(t *testing.T) {
+	cases := []struct {
+		pattern string
+		name    string
+		want    bool
+	}{
+		{"size", "get size", true},
+		{"size", "set size", true},
+		{"get size", "get size", true},
+		{"*size", "get size", true},
+		{"items", "*items", true},
+		{"*items", "*items", true},
+		{"it*", "*items", true},
+		{"gen", "*gen", true},
+		{"size", "get sizes", false},
+		{"get", "get", true},
+		{"set", "set size", false},
+		{"items", "**items", false},
+	}
+	for _, tc := range cases {
+		o := Options{ExpandSymbols: []string{tc.pattern}}
+		assert.Equal(t, tc.want, o.shouldExpand(tc.name), "--expand=%s on %s", tc.pattern, tc.name)
+	}
+}
