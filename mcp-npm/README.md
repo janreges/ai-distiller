@@ -99,7 +99,7 @@ AI Distiller (aid) **DOES NOT perform analysis** - it generates prompts with dis
 
 - **Distill tools** (`distill_file`, `distill_directory`, `distill_with_dependencies`): return the distilled code directly; nothing is cached or written
 - **AI action tools**: always write a markdown file and return its path, whatever the size
-- **File naming**: `.aid/<ACTION>.<YYYY-MM-DD>.<HH-MM-SS>.<folder>.md` in the project root (for example `BUG-HUNTING-ANALYSIS`, `SECURITY-AUDIT`, `REFACTORING-ANALYSIS`, `DIAGRAMS-ANALYSIS`); the two flow actions write task lists and directories under `.aid/` in `AID_ROOT`
+- **File naming**: `.aid/<ACTION>.<YYYY-MM-DD>.<HH-MM-SS>.<folder>.md` in aid's project root, which `AID_CONFINE_ROOT` keeps inside `AID_ROOT` (for example `BUG-HUNTING-ANALYSIS`, `SECURITY-AUDIT`, `REFACTORING-ANALYSIS`, `DIAGRAMS-ANALYSIS`); the two flow actions write task lists and directories under `.aid/` in `AID_ROOT`
 - **Content**: AI prompt + distilled code in one file
 - **Tool usage**: AI agents call these tools via 'aid' command
 
@@ -125,7 +125,9 @@ AI Distiller (aid) **DOES NOT perform analysis** - it generates prompts with dis
 
 Required parameters are marked with `*`. `include_patterns` and `exclude_patterns` are comma-separated globs. A parameter that is not in this table fails the call with an error that names it (`Unrecognized key: "include_privat"`).
 
-Every path parameter (`file_path`, `directory_path`, `target_path`, and `path` of `list_files`) must lie inside `AID_ROOT`. A relative path is resolved against `AID_ROOT`; symlinks are resolved before the check, so a symlink inside the project that points outside it is refused too. A `..` after a part of the path that does not resolve to an existing directory (`nope/../src`) is refused as well, because the server cannot tell where it leads. An empty path is an input error; `"."` names `AID_ROOT` itself. A path outside fails the call before `aid` runs, with an error that names `AID_ROOT`; to work with files elsewhere, start the server with `AID_ROOT` set to a directory that contains them. There is no switch to turn the check off.
+Every path parameter (`file_path`, `directory_path`, `target_path`, and `path` of `list_files`) must lie inside `AID_ROOT`. A relative path is resolved against `AID_ROOT`; symlinks are resolved before the check, so a symlink inside the project that points outside it is refused too. A `..` after a part of the path that does not resolve to an existing directory (`nope/../src`) is refused as well, because the server cannot tell where it leads. An empty path is an input error; `"."` names `AID_ROOT` itself. A path whose real path is outside fails the call before `aid` runs, with an error that names `AID_ROOT`; to work with files elsewhere, start the server with `AID_ROOT` set to a directory that contains them. There is no switch to turn the check off.
+
+The server also runs `aid` with `AID_CONFINE_ROOT` set to the real path of `AID_ROOT`. `aid` then reads nothing outside it on its own either: a directory walk skips a symlinked file whose target is outside, `distill_with_dependencies` follows no import out of it, and the AI-action tools write their `.aid/` files inside it. This needs an `aid` of the same release as this package, which is the one the install downloads; an older `aid` ignores the variable, and then only the check of the path parameter holds.
 
 | Tool | Parameters |
 |------|------------|
@@ -152,7 +154,7 @@ Every path parameter (`file_path`, `directory_path`, `target_path`, and `path` o
 
 ### Environment Variables
 
-- `AID_ROOT` - **REQUIRED for user-scoped installation**: Root directory for analysis. Without this, the tool cannot determine which project to analyze. The tools read and list only files under it (default: the server's working directory); a path parameter outside it, also through a symlink, fails the call.
+- `AID_ROOT` - **REQUIRED for user-scoped installation**: Root directory for analysis. Without this, the tool cannot determine which project to analyze. The tools read and list only files under it (default: the server's working directory): a path parameter whose real path is outside it fails the call, and `aid` runs with `AID_CONFINE_ROOT` set to it, so it neither reads outside it nor writes its `.aid/` files outside it (see "All Registered Tools").
 - `AID_MCP_TIMEOUT_MS` - Time limit for one `aid` run, in milliseconds (default: `120000`). When it is hit, `aid` is stopped and the tool returns an error saying the run did not finish; narrow the request or raise the limit.
 - `AID_MCP_MAX_OUTPUT_BYTES` - Cap on the stdout of one `aid` run, in bytes (default: `1000000`). When it is hit, `aid` is stopped and the result is returned marked incomplete, with the notice first and last.
 - `AID_MCP_DEBUG=true` (or `DEBUG=true`) - Debug logging of every tool call and the `aid` arguments, written to stderr.

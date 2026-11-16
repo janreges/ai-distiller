@@ -11,7 +11,7 @@ import * as fs from "fs";
 import { runAid, limitsFromEnv, AidRunError, SerialQueue } from "./run-aid.js";
 import { aiActionText, withIncompleteNotice, truncationNotice, spawnFailureMessage } from "./tool-text.js";
 import { listFiles, listFilesText, MAX_LIST_ENTRIES } from "./list-files.js";
-import { confinePath } from "./confine.js";
+import { confinePath, confinedEnv } from "./confine.js";
 
 // Debug logging control
 const isDebug = process.env.DEBUG === 'true' || process.env.DEBUG === '1' || process.env.AID_MCP_DEBUG === 'true';
@@ -170,14 +170,16 @@ export class AidDistillerServer {
   private async runAidCommand(args: string[]): Promise<string> {
     const cwd = process.env.AID_ROOT || process.cwd();
     const limits = limitsFromEnv(process.env);
+    // aid itself stays inside AID_ROOT: walks, followed imports, its .aid/ files.
+    const env = confinedEnv(process.env, cwd);
     if (isDebug) {
       console.error(`[AID MCP] Running command: ${binaryPath} ${JSON.stringify(args)}`);
-      console.error(`[AID MCP] Working directory: ${cwd}`);
+      console.error(`[AID MCP] Working directory: ${cwd}, AID_CONFINE_ROOT=${env.AID_CONFINE_ROOT}`);
       console.error(`[AID MCP] Limits: ${JSON.stringify(limits)}`);
     }
 
     try {
-      const { stdout, stderr, truncated } = await runAid(binaryPath, args, { cwd, ...limits });
+      const { stdout, stderr, truncated } = await runAid(binaryPath, args, { cwd, env, ...limits });
       // Put stderr (progress/info) first, then the actual content
       let result = stderr.trim() ? stderr + '\n\n' : '';
       result += stdout;
@@ -311,7 +313,7 @@ export class AidDistillerServer {
       "distill_with_dependencies",
       {
         title: "Dependency-Aware Code Distillation",
-        description: "EXPERIMENTAL (regex-based, may miss imports): returns the distilled target file followed by the distilled project files it imports, up to max_depth levels of imports. Each followed file is distilled whole with the same options; paths are relative to the target file's directory. Imports of the standard library and of installed packages are not followed, so a result holding only the target file means none of its imports resolved to a project file. Never reads a file outside the repository (the nearest directory holding .git); followed files pass .aidignore and the include/exclude rules of a directory walk.\n\nUSAGE: context for one file together with the local code it depends on.",
+        description: "EXPERIMENTAL (regex-based, may miss imports): returns the distilled target file followed by the distilled project files it imports, up to max_depth levels of imports. Each followed file is distilled whole with the same options; paths are relative to the target file's directory. Imports of the standard library and of installed packages are not followed, so a result holding only the target file means none of its imports resolved to a project file. Never reads a file outside AID_ROOT (the server root) or outside the repository of the target file (the nearest directory holding .git); followed files pass .aidignore and the include/exclude rules of a directory walk.\n\nUSAGE: context for one file together with the local code it depends on.",
         inputSchema: z.strictObject({
           file_path: z.string().describe("Target file to analyze" + IN_ROOT),
           max_depth: z.number().default(2).describe("Levels of imports to follow, 1 = only what the target file imports directly (default: 2)"),

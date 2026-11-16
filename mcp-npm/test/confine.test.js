@@ -5,7 +5,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
 const { InMemoryTransport } = require('@modelcontextprotocol/sdk/inMemory.js');
-const { confinePath, OutsideRootError, UncheckablePathError } = require('../dist/confine.js');
+const { confinePath, confinedEnv, OutsideRootError, UncheckablePathError } = require('../dist/confine.js');
+const { runAid } = require('../dist/run-aid.js');
 const { AidDistillerServer } = require('../dist/mcp-server-sdk.js');
 
 // A real project directory with a real outside directory, symlinks inside
@@ -152,6 +153,16 @@ test('an empty value is an input error, not all of the root', () => {
       'path is resolved against it, and "." is AID_ROOT itself.');
     return true;
   });
+});
+
+test('an aid child gets AID_CONFINE_ROOT, the real path of AID_ROOT, and the rest of the environment', async () => {
+  const { base, root } = fixture();
+  const env = confinedEnv({ ...process.env, AID_CONFINE_ROOT: '/', AID_TEST_KEEP: 'kept' }, path.join(base, 'rootlink'));
+  // A real child process reads its environment, as aid does.
+  const script = "console.log(process.env.AID_CONFINE_ROOT + '|' + process.env.AID_TEST_KEEP)";
+  const { stdout } = await runAid(process.execPath, ['-e', script],
+    { cwd: root, env, timeoutMs: 5000, maxOutputBytes: 100000 });
+  assert.equal(stdout.trim(), `${root}|kept`);
 });
 
 test('a NUL character is an input error, not a path', () => {

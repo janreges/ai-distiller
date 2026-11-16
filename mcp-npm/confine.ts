@@ -67,6 +67,16 @@ export function realPathOfLongestPrefix(p: string): string {
   return path.join(real, ...rest);
 }
 
+/**
+ * The environment for an aid run in root: env with AID_CONFINE_ROOT set to the
+ * real path of root, so that aid itself does not read outside it (directory
+ * walks, followed imports) and writes its .aid/ files inside it. An aid older
+ * than this package ignores the variable; confinePath stays the first check.
+ */
+export function confinedEnv(env: NodeJS.ProcessEnv, root: string): NodeJS.ProcessEnv {
+  return { ...env, AID_CONFINE_ROOT: realPathOfLongestPrefix(path.resolve(root)) };
+}
+
 /** Whether target lies in dir or is dir; both are absolute real paths. */
 function isInside(target: string, dir: string): boolean {
   const rel = path.relative(dir, target);

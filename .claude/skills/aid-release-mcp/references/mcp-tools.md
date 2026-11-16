@@ -24,6 +24,14 @@ Registered Tools", parameters per tool) and the root `README.md` (section
   real `AID_ROOT` (`.` for the root, `./-x` for a name that starts with
   `-`), and `aid` runs with `AID_ROOT` as its working directory. In the
   tables below `<file_path>` and `<target_path>` stand for that argument.
+- Every `aid` child runs with the server's environment plus
+  `AID_CONFINE_ROOT` = the real path of `AID_ROOT`
+  (`mcp-npm/confine.ts#confinedEnv`). `aid` then refuses a path argument
+  outside it, skips files outside it in a directory walk (a symlinked file
+  whose target is outside), stops `--dependency-aware` following at it and
+  writes its `.aid/` files under it. This needs the `aid` of the same
+  release, which postinstall fetches; an older `aid` ignores the variable,
+  and only `confinePath` holds.
 - The arguments are passed to `spawn` as a list, without a shell: a value
   such as `--include=*.go,*.py` reaches `aid` unchanged.
 - An optional flag is added only when the parameter differs from the CLI
