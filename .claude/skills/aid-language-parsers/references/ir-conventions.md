@@ -21,7 +21,7 @@ declaration, so a parser has to fill them.
 | `DistilledClass` | yes | `Name`, `Visibility`, `Modifiers`, `Decorators`, `TypeParams`, `Extends`, `Implements`, `Mixins`, `Deprecated`, `Description`, `APIDocblock` |
 | `DistilledInterface` | yes | `Name`, `Visibility`, `Modifiers`, `TypeParams`, `Extends`, `Permits` |
 | `DistilledStruct` | yes | `Name`, `Visibility`, `TypeParams` |
-| `DistilledEnum` | yes | `Name`, `Visibility`, `Type` |
+| `DistilledEnum` | yes | `Name`, `Visibility`, `Modifiers` (TypeScript: `export`), `Type` |
 | `DistilledTypeAlias` | no | `Name`, `Visibility`, `Modifiers`, `TypeParams`, `Type` |
 | `DistilledFunction` | no | `Name`, `Visibility`, `Modifiers`, `Decorators`, `TypeParams`, `Parameters`, `Returns`, `Throws`, `Implementation`, `Deprecated`, `Description` |
 | `DistilledField` | no | `Name`, `Visibility`, `Modifiers`, `Type`, `DefaultValue`, `Decorators`, `IsProperty`, `HasGetter`, `HasSetter`, `GetterVisibility`, `SetterVisibility`; `Implementation` (JavaScript and TypeScript only): the whole initializer when `DefaultValue` is its signature with function bodies left out |

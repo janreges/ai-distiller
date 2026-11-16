@@ -186,10 +186,12 @@ func (n *DistilledStruct) Accept(visitor Visitor) DistilledNode {
 // DistilledEnum represents an enum declaration
 type DistilledEnum struct {
 	BaseNode
-	Name       string          `json:"name"`
-	Visibility Visibility      `json:"visibility"`
-	Type       *TypeRef        `json:"type,omitempty"`
-	Children   []DistilledNode `json:"children,omitempty"`
+	Name       string     `json:"name"`
+	Visibility Visibility `json:"visibility"`
+	// Modifiers: TypeScript sets export on an enum declared with `export`.
+	Modifiers []Modifier      `json:"modifiers,omitempty"`
+	Type      *TypeRef        `json:"type,omitempty"`
+	Children  []DistilledNode `json:"children,omitempty"`
 }
 
 // GetNodeKind implements DistilledNode

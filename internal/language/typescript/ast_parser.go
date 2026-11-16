@@ -1019,6 +1019,9 @@ func (p *ASTParser) parseEnum(node *sitter.Node, isExported bool) *ir.DistilledE
 		Visibility: p.getVisibility(isExported),
 		Children:   []ir.DistilledNode{},
 	}
+	if isExported {
+		enum.Modifiers = []ir.Modifier{ir.ModifierExport}
+	}
 
 	// Parse enum name
 	nameNode := p.findChild(node, "identifier")

@@ -83,7 +83,9 @@ var fixtures = []fixture{
 			"export { confPicked, confOrig as ConfRenamed } from './conf-picked'",
 			"export type { ConfReType } from './conf-retype'"}},
 		check{Cap: "reexport-kept-without-imports", Flags: []string{"--imports=0"}, Contains: []string{"export * from './conf-all'"}},
-		check{Cap: "export-list-makes-public", Contains: []string{"const confListed = 2", "export { confListed }", "export default confListed"}},
+		check{Cap: "export-list-makes-public", Contains: []string{"const confListed = 2", "export { confListed }", "export default confListed",
+			"enum ConfListedEnum {", "export { ConfListedEnum }"},
+			NotContains: []string{"export enum ConfListedEnum"}},
 		check{Cap: "parameters-as-written", Contains: []string{
 			"export function confParams({ confA, confB = 1 }: ConfOpts, [confX]: [number], confOpt?: string, confDef: number = 0, ...confRest: string[]): void",
 			"public readonly confRo: number",

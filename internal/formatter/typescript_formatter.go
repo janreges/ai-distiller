@@ -399,11 +399,7 @@ func (f *TypeScriptFormatter) getTypeScriptVisibilityKeyword(visibility ir.Visib
 // DistilledEnum has no modifiers, so "export" follows its visibility.
 func (f *TypeScriptFormatter) formatEnum(w io.Writer, enum *ir.DistilledEnum, indent int) error {
 	pad := strings.Repeat("    ", indent)
-	export := ""
-	if enum.Visibility == ir.VisibilityPublic {
-		export = "export "
-	}
-	fmt.Fprintf(w, "%s%senum %s {\n", pad, export, enum.Name)
+	fmt.Fprintf(w, "%s%senum %s {\n", pad, esExportPrefix(enum.Modifiers), enum.Name)
 	for _, child := range enum.Children {
 		member, ok := child.(*ir.DistilledField)
 		if !ok {

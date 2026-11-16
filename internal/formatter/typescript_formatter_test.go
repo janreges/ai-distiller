@@ -37,11 +37,15 @@ func TestTypeScriptFormatter_FunctionBody(t *testing.T) {
 }
 
 func TestTypeScriptFormatter_Enum(t *testing.T) {
-	e := &ir.DistilledEnum{Name: "Color", Visibility: ir.VisibilityPublic, Children: []ir.DistilledNode{
+	e := &ir.DistilledEnum{Name: "Color", Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{ir.ModifierExport}, Children: []ir.DistilledNode{
 		&ir.DistilledField{Name: "Red"},
 		&ir.DistilledField{Name: "Green", DefaultValue: `"green"`},
 	}}
 	assert.Equal(t, "export enum Color {\n    Red\n    Green = \"green\"\n}\n", tsFormat(t, e, 0))
+	// A public enum without the export modifier (exported by an export
+	// list, or in an ambient module) prints no export keyword it lacks.
+	e.Modifiers = nil
+	assert.Equal(t, "enum Color {\n    Red\n    Green = \"green\"\n}\n", tsFormat(t, e, 0))
 }
 
 func TestTypeScriptFormatter_Namespace(t *testing.T) {

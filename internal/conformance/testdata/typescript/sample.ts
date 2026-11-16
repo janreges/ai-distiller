@@ -85,3 +85,5 @@ export const confTypedArrow: ConfHandler = (confReq) => confReq;
 export function confMultiType(confM: {
     confK: string;
 }): void {}
+enum ConfListedEnum { ConfL }
+export { ConfListedEnum };
