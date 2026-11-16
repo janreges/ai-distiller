@@ -262,10 +262,18 @@ type DistilledFunction struct {
 	// there is no Implementation text, but the text formatter still prints the
 	// `def name():` notation of a function that has a body. The stripper
 	// clears it together with the implementation.
-	DocOnlyBody bool             `json:"-"`
-	ThrowsInfo  []ThrowsInfo     `json:"throws_info,omitempty"`
-	Deprecated  *DeprecationInfo `json:"deprecated,omitempty"`
-	Description string           `json:"description,omitempty"`
+	DocOnlyBody bool `json:"-"`
+	// SourceSignature is the signature as written in the source, set by the
+	// Go parser when a comment is written inside it: from "func" (an
+	// interface method: from its name) to the body, its lines after the
+	// first indented only relative to the first. The comment is also a
+	// comment node right before the function, inside its span; while that
+	// node is kept (--comments=1), the Go text formatter prints this text
+	// instead of the signature it rebuilds, so the comment stays on its line.
+	SourceSignature string           `json:"-"`
+	ThrowsInfo      []ThrowsInfo     `json:"throws_info,omitempty"`
+	Deprecated      *DeprecationInfo `json:"deprecated,omitempty"`
+	Description     string           `json:"description,omitempty"`
 }
 
 // GetNodeKind implements DistilledNode

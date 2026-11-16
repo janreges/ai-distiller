@@ -190,10 +190,11 @@ func TestASTParser_MemberCommentsStayInTheirType(t *testing.T) {
 
 	// The doc group is one comment above its field, the comment at the end
 	// of a field's line comes right before that field, a free comment keeps
-	// its place, and a comment inside a nested struct type is dropped.
+	// its place, and a comment inside a nested struct type, which prints as
+	// struct{...}, comes right before its field too.
 	assert.Equal(t, []child{
 		{"comment", "doc of A\n\nmore"}, {"comment", "end of A"}, {"field", "A"},
-		{"comment", "free"}, {"field", "Inner"},
+		{"comment", "free"}, {"comment", "nested"}, {"field", "Inner"},
 	}, describe(s.Children))
 	assert.Equal(t, []child{
 		{"comment", "end of Reader"}, {"comment", "doc of Close"}, {"comment", "end of Close"}, {"method", "Close"},
@@ -206,6 +207,33 @@ func TestASTParser_MemberCommentsStayInTheirType(t *testing.T) {
 	assert.LessOrEqual(t, end.EndLine, a.EndLine)
 }
 
+func TestASTParser_SourceSignatureOfAnInterfaceMethod(t *testing.T) {
+	// In a type group the method is written two levels deep; its signature
+	// keeps only the indentation relative to its first line.
+	src := "package p\n\n" +
+		"type (\n" +
+		"\tR interface {\n" +
+		"\t\tRead(\n" +
+		"\t\t\tp []byte, // the buffer\n" +
+		"\t\t) int\n" +
+		"\t}\n" +
+		")\n"
+	file, err := NewASTParser().ProcessSource(context.Background(), []byte(src), "p.go")
+	require.NoError(t, err)
+	var read *ir.DistilledFunction
+	for _, node := range file.Children {
+		if intf, ok := node.(*ir.DistilledInterface); ok {
+			for _, child := range intf.Children {
+				if fn, ok := child.(*ir.DistilledFunction); ok {
+					read = fn
+				}
+			}
+		}
+	}
+	require.NotNil(t, read)
+	assert.Equal(t, "Read(\n\tp []byte, // the buffer\n) int", read.SourceSignature)
+}
+
 func TestASTParser_CommentsInsideADeclarationStayInIt(t *testing.T) {
 	src := "package p\n\n" +
 		"// Get doc\n" +
@@ -216,20 +244,54 @@ func TestASTParser_CommentsInsideADeclarationStayInIt(t *testing.T) {
 		"} // after Get\n\n" +
 		"var handler = func() {\n\t// in a literal\n}\n\n" +
 		"type Fn func(\n\ta int, // in a type\n)\n\n" +
+		"var Table = map[string]int{\n\t\"a\": 1, // in a value\n}\n\n" +
+		"var x, y = []int{\n\t1, // in x\n}, 2 // after y\n\n" +
+		"func raise() /* int32 */ {\n}\n\n" +
 		"// free\n"
 	file, err := NewASTParser().ProcessSource(context.Background(), []byte(src), "p.go")
 	require.NoError(t, err)
 
-	var texts []string
-	for _, node := range file.Children {
-		if c, ok := node.(*ir.DistilledComment); ok {
-			texts = append(texts, c.Text)
+	var got []string
+	for i, node := range file.Children {
+		switch n := node.(type) {
+		case *ir.DistilledComment:
+			got = append(got, "// "+n.Text)
+			if n.Text == "Get doc" || n.Text == "free" {
+				continue
+			}
+			// Inside its declaration, the next one that is not a comment
+			var decl ir.DistilledNode
+			for _, next := range file.Children[i+1:] {
+				if next.GetNodeKind() != ir.KindComment {
+					decl = next
+					break
+				}
+			}
+			require.NotNil(t, decl, n.Text)
+			loc := decl.GetLocation()
+			assert.GreaterOrEqual(t, n.Location.StartLine, loc.StartLine, n.Text)
+			assert.LessOrEqual(t, n.Location.EndLine, loc.EndLine, n.Text)
+		case *ir.DistilledFunction:
+			got = append(got, n.Name)
+		case *ir.DistilledField:
+			got = append(got, n.Name)
+		case *ir.DistilledTypeAlias:
+			got = append(got, n.Name)
 		}
 	}
-	// Only the doc and the comments outside every declaration are nodes; the
-	// body keeps its comments verbatim.
-	assert.Equal(t, []string{"Get doc", "after Get", "free"}, texts)
-	assert.Contains(t, parseGoFunctions(t, src)["Get"].Implementation, "// in the body")
+	// The body and a function literal keep their comments verbatim; a
+	// comment in a signature, in a rebuilt type or in a value printed as
+	// {...} is a node right before its declaration (in a value, the name it
+	// is assigned to), inside its span, and a function keeps its signature
+	// as written.
+	assert.Equal(t, []string{
+		"// Get doc", "// the id", "// after Get", "Get", "handler", "// in a type", "Fn",
+		"// in a value", "Table", "// in x", "x", "// after y", "y", "// int32", "raise", "// free",
+	}, got)
+	fns := parseGoFunctions(t, src)
+	assert.Contains(t, fns["Get"].Implementation, "// in the body")
+	assert.Equal(t, "func Get(id int, // the id\n\tname string) int", fns["Get"].SourceSignature)
+	assert.Equal(t, "func raise() /* int32 */", fns["raise"].SourceSignature)
 }
 
 func TestASTParser_SpecLineCommentsBeforeTheirSpec(t *testing.T) {
@@ -267,7 +329,7 @@ func TestASTParser_ImportComments(t *testing.T) {
 		"\t// doc of fmt\n" +
 		"\t\"fmt\" // printing\n\n" +
 		"\t// free\n\n" +
-		"\tm \"math\"\n" +
+		"\tm /* inside m */ \"math\"\n" +
 		"\t// after the last import\n" +
 		")\n\n" +
 		"// cgo preamble\n" +
@@ -276,7 +338,7 @@ func TestASTParser_ImportComments(t *testing.T) {
 	file, err := NewASTParser().ProcessSource(context.Background(), []byte(src), "p.go")
 	require.NoError(t, err)
 
-	var got, docs []string
+	var got, docs, ends []string
 	for _, node := range file.Children {
 		switch n := node.(type) {
 		case *ir.DistilledComment:
@@ -285,22 +347,26 @@ func TestASTParser_ImportComments(t *testing.T) {
 			if n.Extensions != nil && n.Extensions.Go != nil && n.Extensions.Go.ImportDoc {
 				docs = append(docs, n.Text)
 			}
+			if n.Extensions != nil && n.Extensions.Go != nil && n.Extensions.Go.ImportBlockEnd {
+				ends = append(ends, n.Text)
+			}
 		case *ir.DistilledImport:
 			got = append(got, n.Module)
 		case *ir.DistilledFunction:
 			got = append(got, n.Name)
 		}
 	}
-	// Each comment sits with the imports, the one at the end of an import's
-	// line right before it; a comment after the last import of a block is
-	// dropped, and no import comment follows the imports.
+	// Each comment sits with the imports, the one inside an import and the
+	// one at the end of its line right before it, a comment after the last
+	// import of a block after it, marked as such.
 	assert.Equal(t, []string{
-		"// header", "// decl doc", "// doc of fmt", "// printing", "fmt", "// free", "math",
-		"// cgo preamble", "// cgo", "C", "F",
+		"// header", "// decl doc", "// doc of fmt", "// printing", "fmt", "// free", "// inside m", "math",
+		"// after the last import", "// cgo preamble", "// cgo", "C", "F",
 	}, got)
 	// Only the group that ends on the line directly above "import" is a
 	// declaration's doc; the header set off by a blank line is not.
 	assert.Equal(t, []string{"decl doc", "cgo preamble"}, docs)
+	assert.Equal(t, []string{"after the last import"}, ends)
 }
 
 func TestASTParser_LineEndCommentBeforeItsNode(t *testing.T) {

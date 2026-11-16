@@ -6,6 +6,7 @@ import (
 	"io" // CONF_IMPORT_TRAILING
 	// CONF_IMPORT_DOC
 	"strings" // CONF_DROPPED_IMPORT_NOTE
+	// CONF_IMPORT_END
 )
 
 // CONF_LINE_COMMENT
@@ -100,3 +101,19 @@ type ConfKind int // CONF_TYPE_TRAILING
 func ConfQuick() int { return 1 } // CONF_FUNC_TRAILING
 
 func confHiddenQuick() int { return 2 } // CONF_HIDDEN_FUNC_NOTE
+
+// ConfOpen has a commented parameter.
+func ConfOpen(
+	path string, // CONF_PARAM_NOTE
+) error {
+	return nil
+}
+
+// ConfTable is a commented table.
+var ConfTable = map[string]int{
+	"a": 1, // CONF_VALUE_NOTE
+}
+
+var confHiddenTable = []int{
+	1, // CONF_HIDDEN_VALUE_NOTE
+}

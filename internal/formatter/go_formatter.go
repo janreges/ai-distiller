@@ -40,9 +40,13 @@ func goIndent(n int) string {
 //   - a comment that ends the line of the node after it (the parser puts the
 //     comment at the end of an import's or a const, var or type spec's line
 //     right before that node) is written at the end of the node's last line;
+//   - a comment inside the declaration after it (written in its signature,
+//     type or value, which the parser also puts right before it) is written
+//     with it (formatWithComments);
 //   - a comment between two imports, or directly above an import (its doc),
 //     goes in the import block, indented, so that the import filter drops it
-//     with its import; any other node closes the block;
+//     with its import, as does one written after the last import of a block
+//     (importBlockEnd); any other node closes the block;
 //   - the comments that sit on a declaration or on the import block
 //     (sitsOn: a doc) are held until it is written, and the blank line that
 //     sets it off from the node before, or that sets the first of them off
@@ -68,15 +72,20 @@ func (f *GoFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, indent 
 		_, err := io.WriteString(w, text)
 		return err
 	}
-	var prev ir.DistilledNode // the last node written
+	var prev ir.DistilledNode        // the last node written
+	var inner []*ir.DistilledComment // comments inside the next declaration
 	for i, node := range nodes {
 		c, isComment := node.(*ir.DistilledComment)
 		if isComment && i+1 < len(nodes) && endsLineOf(c, nodes[i+1]) {
 			trailing = append(trailing, c.Text)
 			continue
 		}
+		if isComment && inside(c, nextNonComment(nodes, i)) {
+			inner = append(inner, c)
+			continue
+		}
 		_, isImport := node.(*ir.DistilledImport)
-		inBlock := isImport || isComment && f.inImportBlock(nodes, i)
+		inBlock := isImport || isComment && (f.inImportBlock(nodes, i) || f.inImports && importBlockEnd(c))
 		if !inBlock && f.inImports {
 			if err := write(goIndent(indent) + ")\n"); err != nil {
 				return err
@@ -94,10 +103,10 @@ func (f *GoFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, indent 
 			nodeIndent++
 		}
 		var b strings.Builder
-		if err := f.formatWithTrailing(&b, node, nodeIndent, trailing); err != nil {
+		if err := f.formatWithComments(&b, node, nodeIndent, trailing, inner); err != nil {
 			return err
 		}
-		trailing = nil
+		trailing, inner = nil, nil
 		text := b.String()
 		switch {
 		case isComment && !inBlock && sitsOn(nodes, i):
@@ -112,6 +121,10 @@ func (f *GoFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, indent 
 			!strings.HasPrefix(text, "\n") && apart(prev, node):
 			// The package clause, set off from a comment above it that is
 			// not its doc (a copyright header)
+			text = "\n" + text
+		case isImport && prev != nil && prev.GetNodeKind() == ir.KindComment && importBlockEnd(prev.(*ir.DistilledComment)):
+			// The import of the next declaration, set off from the end of
+			// the block before
 			text = "\n" + text
 		}
 		if err := write(text); err != nil {
@@ -133,7 +146,8 @@ func (f *GoFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, indent 
 // doc (ImportDoc; a free comment before the imports, such as a file header,
 // does not), or on a declaration (the package clause included) as one of
 // the comments right above it, each a doc comment or ending on the line above
-// the next one. The comment at the end of the declaration's line is skipped.
+// the next one. The comment at the end of the declaration's line and those
+// inside it are skipped.
 func sitsOn(nodes []ir.DistilledNode, i int) bool {
 	j := i + 1
 	for j < len(nodes) && nodes[j].GetNodeKind() == ir.KindComment {
@@ -158,7 +172,7 @@ func sitsOn(nodes []ir.DistilledNode, i int) bool {
 		if !ok {
 			return false
 		}
-		if endsLineOf(c, decl) {
+		if endsLineOf(c, decl) || inside(c, decl) {
 			continue
 		}
 		loc := c.Location
@@ -175,6 +189,12 @@ func sitsOn(nodes []ir.DistilledNode, i int) bool {
 // importDoc reports whether c is the doc of an import declaration.
 func importDoc(c *ir.DistilledComment) bool {
 	return c.Extensions != nil && c.Extensions.Go != nil && c.Extensions.Go.ImportDoc
+}
+
+// importBlockEnd reports whether c is written in an import block after its
+// last import.
+func importBlockEnd(c *ir.DistilledComment) bool {
+	return c.Extensions != nil && c.Extensions.Go != nil && c.Extensions.Go.ImportBlockEnd
 }
 
 // apart reports whether node is set off by a blank line from prev, the node
@@ -220,22 +240,91 @@ func (f *GoFormatter) inImportBlock(nodes []ir.DistilledNode, i int) bool {
 	return true
 }
 
-// formatWithTrailing writes node with the comments in trailing at the end of
-// its last line.
-func (f *GoFormatter) formatWithTrailing(w io.Writer, node ir.DistilledNode, indent int, trailing []string) error {
-	if len(trailing) == 0 {
+// formatWithComments writes node with the comments in trailing at the end of
+// its last line, and the comments in inner, written inside it: a function
+// whose signature holds them prints that signature as written, comments
+// included (SourceSignature); under any other declaration, whose value or
+// type prints as {...} or rebuilt, they print one level deeper, in source
+// order, so that they read as part of it.
+func (f *GoFormatter) formatWithComments(w io.Writer, node ir.DistilledNode, indent int, trailing []string,
+	inner []*ir.DistilledComment) error {
+	if len(trailing) == 0 && len(inner) == 0 {
 		return f.FormatNode(w, node, indent)
 	}
 	var b strings.Builder
-	if err := f.FormatNode(&b, node, indent); err != nil {
+	if fn, ok := node.(*ir.DistilledFunction); ok && fn.SourceSignature != "" && len(inner) > 0 {
+		f.formatFunctionAsWritten(&b, fn, goIndent(indent))
+		inner = nil
+	} else if err := f.FormatNode(&b, node, indent); err != nil {
 		return err
 	}
 	line := strings.TrimSuffix(b.String(), "\n")
 	for _, text := range trailing {
 		line += " // " + text
 	}
-	_, err := fmt.Fprintln(w, line)
-	return err
+	if _, err := fmt.Fprintln(w, line); err != nil {
+		return err
+	}
+	for _, c := range inner {
+		if err := f.formatComment(w, c, goIndent(indent+1)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// formatFunctionAsWritten writes a top-level function or method with its
+// signature as written (SourceSignature), set off by a blank line, then its
+// body as formatFunction does.
+func (f *GoFormatter) formatFunctionAsWritten(w io.Writer, fn *ir.DistilledFunction, indent string) {
+	fmt.Fprintf(w, "\n%s%s", indent, indentLines(fn.SourceSignature, indent))
+	if fn.Implementation != "" {
+		fmt.Fprint(w, renderBodyVerbatim(fn.Implementation, indent))
+	} else {
+		fmt.Fprintln(w)
+	}
+}
+
+// indentLines returns text with indent before each of its lines after the
+// first that is not empty: a SourceSignature's lines keep only their
+// indentation relative to its first line.
+func indentLines(text, indent string) string {
+	if indent == "" {
+		return text
+	}
+	lines := strings.Split(text, "\n")
+	for i := 1; i < len(lines); i++ {
+		if lines[i] != "" {
+			lines[i] = indent + lines[i]
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// nextNonComment returns the first node after nodes[i] that is not a
+// comment, or nil.
+func nextNonComment(nodes []ir.DistilledNode, i int) ir.DistilledNode {
+	for _, n := range nodes[i+1:] {
+		if n.GetNodeKind() != ir.KindComment {
+			return n
+		}
+	}
+	return nil
+}
+
+// inside reports whether comment c is written inside decl, a declaration or
+// member: within its lines, after its start. The parser puts such a comment
+// (in a signature, a type or a value) right before decl.
+func inside(c *ir.DistilledComment, decl ir.DistilledNode) bool {
+	switch decl.(type) {
+	case *ir.DistilledField, *ir.DistilledFunction, *ir.DistilledTypeAlias,
+		*ir.DistilledClass, *ir.DistilledInterface:
+	default:
+		return false
+	}
+	at, d := c.Location, decl.GetLocation()
+	return at.StartLine > 0 && at.EndLine <= d.EndLine &&
+		(at.StartLine > d.StartLine || at.StartLine == d.StartLine && at.StartColumn > d.StartColumn)
 }
 
 // FormatNode implements LanguageFormatter. An import is one line of the
@@ -449,15 +538,22 @@ func writtenBefore(loc ir.Location, child ir.DistilledNode) bool {
 // each at indent: a field, an interface method, or a comment, which keeps
 // its place among them. A comment that ends a member's line in the source
 // (the parser puts it right before that member) is written at the end of
-// that member's line instead.
+// that member's line instead, and one written inside the member (in a
+// nested struct type, in a method's parameters) with it, as
+// formatWithComments does.
 func (f *GoFormatter) formatMembers(w io.Writer, children []ir.DistilledNode, indent int) error {
 	indentStr := goIndent(indent)
 	var trailing []string
+	var inner []*ir.DistilledComment
 	for i, child := range children {
 		switch n := child.(type) {
 		case *ir.DistilledComment:
 			if i+1 < len(children) && endsLineOf(n, children[i+1]) {
 				trailing = append(trailing, n.Text)
+				continue
+			}
+			if inside(n, nextNonComment(children, i)) {
+				inner = append(inner, n)
 				continue
 			}
 			if err := f.formatComment(w, n, indentStr); err != nil {
@@ -467,7 +563,13 @@ func (f *GoFormatter) formatMembers(w io.Writer, children []ir.DistilledNode, in
 		case *ir.DistilledField:
 			fmt.Fprint(w, indentStr+goFieldLine(n))
 		case *ir.DistilledFunction:
-			fmt.Fprint(w, indentStr+f.interfaceMethodLine(n))
+			if n.SourceSignature != "" && len(inner) > 0 {
+				// Its signature as written holds the comments inside it
+				fmt.Fprint(w, indentStr+indentLines(n.SourceSignature, indentStr))
+				inner = nil
+			} else {
+				fmt.Fprint(w, indentStr+f.interfaceMethodLine(n))
+			}
 		default:
 			continue
 		}
@@ -476,6 +578,14 @@ func (f *GoFormatter) formatMembers(w io.Writer, children []ir.DistilledNode, in
 		}
 		trailing = nil
 		fmt.Fprintln(w)
+		// The comments inside a field's type, which prints as struct{...},
+		// one level deeper
+		for _, c := range inner {
+			if err := f.formatComment(w, c, goIndent(indent+1)); err != nil {
+				return err
+			}
+		}
+		inner = nil
 	}
 	return nil
 }

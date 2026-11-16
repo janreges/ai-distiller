@@ -164,6 +164,10 @@ type GoExtensions struct {
 	// as opposed to a free comment before the imports, such as a file
 	// header set off by a blank line.
 	ImportDoc bool `json:"import_doc,omitempty"`
+	// ImportBlockEnd marks a comment written in an import block after its
+	// last import (before ")"), such as a commented-out import: the text
+	// prints it inside the block, not as a comment on what follows.
+	ImportBlockEnd bool `json:"import_block_end,omitempty"`
 }
 
 type PythonExtensions struct {

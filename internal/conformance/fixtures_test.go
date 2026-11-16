@@ -222,10 +222,22 @@ var fixtures = []fixture{
 		// strings is used only in confPrivate's body: the import filter
 		// drops it in the public output, and its comments with it.
 		check{Cap: "import-comments-in-block", Flags: []string{"--comments=1", "--implementation=1", "--internal=1"},
-			Contains: []string{"import (\n\t\"io\" // CONF_IMPORT_TRAILING\n\t// CONF_IMPORT_DOC\n\t\"strings\" // CONF_DROPPED_IMPORT_NOTE\n)\n"}},
+			Contains: []string{"import (\n\t\"io\" // CONF_IMPORT_TRAILING\n\t// CONF_IMPORT_DOC\n" +
+				"\t\"strings\" // CONF_DROPPED_IMPORT_NOTE\n\t// CONF_IMPORT_END\n)\n"}},
 		check{Cap: "dropped-import-comments-go", Flags: []string{"--comments=1"},
-			Contains:    []string{"import (\n\t\"io\" // CONF_IMPORT_TRAILING\n)\n"},
+			Contains:    []string{"import (\n\t\"io\" // CONF_IMPORT_TRAILING\n\t// CONF_IMPORT_END\n)\n"},
 			NotContains: []string{"CONF_IMPORT_DOC", "CONF_DROPPED_IMPORT_NOTE"}},
+		// A comment inside a declaration prints with it: a signature that
+		// holds one prints as written, one in a value printed as {...}
+		// under the declaration; it goes with a hidden declaration.
+		check{Cap: "signature-comments-as-written", Flags: []string{"--comments=1"},
+			Contains: []string{"// ConfOpen has a commented parameter.\nfunc ConfOpen(\n\tpath string, // CONF_PARAM_NOTE\n) error\n"}},
+		check{Cap: "value-comments-under-declaration", Flags: []string{"--comments=1"},
+			Contains:    []string{"// ConfTable is a commented table.\nvar ConfTable = map[string]int{...}\n\t// CONF_VALUE_NOTE\n"},
+			NotContains: []string{"CONF_HIDDEN_VALUE_NOTE"}},
+		check{Cap: "declaration-comments-hidden-by-default",
+			Contains:    []string{"func ConfOpen(path string) error\n", "var ConfTable = map[string]int{...}\n"},
+			NotContains: []string{"CONF_PARAM_NOTE", "CONF_VALUE_NOTE"}},
 		// The comment at the end of a one-line function's line prints
 		// there, and goes with a hidden function.
 		check{Cap: "func-line-comment-on-its-line", Flags: []string{"--comments=1"},

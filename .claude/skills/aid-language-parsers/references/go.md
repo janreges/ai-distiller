@@ -85,20 +85,32 @@
     (`internal/language/golang/ast_parser.go#ASTParser.importNodes`): its
     doc (the group ending on the line directly above `import`, marked
     `Extensions.Go.ImportDoc`, so the text prints it on the import block), the
-    groups before each import, the comment at the end of an import's line
-    right before it; a group after the last import of a block is dropped. A
+    groups before each import, the comments inside an import and at the end
+    of its line right before it; a group after the last import of a block is
+    marked `Extensions.Go.ImportBlockEnd`, so the text prints it before `)`. A
     comment set off from `import` by a blank line (a file header) is a free
     comment;
-  - any other comment inside a declaration (a function's parameters or body,
-    a function literal or function type in a spec) is no node at all
+  - a comment inside a declaration that the output rebuilds or elides (a
+    signature, a type printed rebuilt or as `struct{...}`, a value printed as
+    `{...}`) is a node right before the declaration, inside its span
+    (`internal/language/golang/ast_parser.go#ASTParser.innerComments`); in a
+    multi-name spec, one in a value before the name it is assigned to. A
+    function or interface method with one also gets its signature as written
+    in `DistilledFunction.SourceSignature` (not in JSON), which the text
+    prints while the comment node is kept; the text prints the others under
+    the declaration. Text the parser copies verbatim (a value that is not a
+    composite literal, through `ASTParser.sourceText`) keeps its comments;
+  - any other comment inside a declaration (a function's body, a function
+    literal in a value) is no node at all
     (`internal/language/golang/ast_parser.go#ASTParser.claimDeclComments`):
-    the body in `Implementation` holds it;
+    the body in `Implementation` or the verbatim value holds it;
   - the rest is inserted at file level by its line number
     (`internal/language/golang/ast_parser.go#ASTParser.insertCommentAtPosition`);
     a one-line comment at the end of a node's last line (a one-line
     function, the package clause) goes right before that node, inside its
     line span, like a spec's.
-- `Extensions` is used only for `Go.ImportDoc` on an import declaration's doc.
+- `Extensions` is used only for `Go.ImportDoc` on an import declaration's doc
+  and `Go.ImportBlockEnd` on a comment after the last import of a block.
 
 ## Unused files
 

@@ -1,6 +1,7 @@
 package golang
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"go/ast"
@@ -22,6 +23,76 @@ type ASTParser struct {
 	// processComments does not add at file level.
 	comments []*ast.CommentGroup
 	claimed  map[*ast.Comment]bool
+	// verbatim are the spans of source that print as written (a value or
+	// type the parser copies from the source): a comment inside one prints
+	// with that text (innerComments).
+	verbatim []span
+}
+
+// span is a stretch of source, from start to end.
+type span struct{ start, end token.Pos }
+
+// sourceText returns the source from start to end, and records it as
+// printed verbatim.
+func (p *ASTParser) sourceText(start, end token.Pos) (string, bool) {
+	from := p.fset.Position(start).Offset
+	to := p.fset.Position(end).Offset
+	if from < 0 || to > len(p.source) || from >= to {
+		return "", false
+	}
+	p.verbatim = append(p.verbatim, span{start, end})
+	return string(p.source[from:to]), true
+}
+
+// signatureAsWritten returns the source from start to end, a signature,
+// without trailing blanks, and its lines after the first without the
+// indentation of the line it starts on, so that they keep only their
+// indentation relative to it, as the text indents the signature's first
+// line by its own nesting.
+func (p *ASTParser) signatureAsWritten(start, end token.Pos) string {
+	text, ok := p.sourceText(start, end)
+	if !ok {
+		return ""
+	}
+	from := p.fset.Position(start).Offset
+	indent := string(p.source[bytes.LastIndexByte(p.source[:from], '\n')+1 : from])
+	if strings.TrimLeft(indent, " \t") != "" {
+		indent = "" // something else is written before start on its line
+	}
+	lines := strings.Split(strings.TrimRight(text, " \t"), "\n")
+	for i := 1; i < len(lines); i++ {
+		lines[i] = strings.TrimPrefix(lines[i], indent)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// innerComments returns, as line comments, the comment groups that start
+// between start and end, inside a declaration, that no node took yet and
+// that no verbatim text holds: those inside a part the output rebuilds (a
+// signature, a type) or elides (a value printed as {...}). They are
+// claimed. The caller puts them right before the declaration's node, inside
+// its span, so that the stripper drops them with it and with --comments=0,
+// and the text formatter prints them with it.
+func (p *ASTParser) innerComments(start, end token.Pos) []ir.DistilledNode {
+	var nodes []ir.DistilledNode
+	for _, group := range p.comments {
+		if group.Pos() <= start || group.Pos() >= end || p.claimed[group.List[0]] || p.heldVerbatim(group.Pos()) {
+			continue
+		}
+		nodes = p.appendCommentGroup(nodes, group)
+		p.claim(group)
+	}
+	return nodes
+}
+
+// heldVerbatim reports whether pos lies inside a span printed verbatim.
+func (p *ASTParser) heldVerbatim(pos token.Pos) bool {
+	for _, s := range p.verbatim {
+		if s.start < pos && pos < s.end {
+			return true
+		}
+	}
+	return false
 }
 
 // NewASTParser creates a new AST parser
@@ -48,6 +119,7 @@ func (p *ASTParser) ProcessSource(ctx context.Context, source []byte, filename s
 	}
 	p.comments = file.Comments
 	p.claimed = make(map[*ast.Comment]bool)
+	p.verbatim = nil
 
 	// Dump raw AST at trace level
 	debug.Lazy(ctx, debug.LevelTrace, func(d debug.Debugger) {
@@ -145,6 +217,18 @@ func (p *ASTParser) ProcessSource(ctx context.Context, source []byte, filename s
 				for _, doc := range docComments {
 					distilledFile.Children = append(distilledFile.Children, doc)
 				}
+				// The comments inside the signature or between it and the
+				// body, which the text prints as written while they are
+				// kept
+				end := d.Type.End()
+				if d.Body != nil {
+					end = d.Body.Lbrace
+				}
+				inner := p.innerComments(d.Pos(), end)
+				if len(inner) > 0 {
+					fn.SourceSignature = p.signatureAsWritten(d.Pos(), end)
+				}
+				distilledFile.Children = append(distilledFile.Children, inner...)
 				distilledFile.Children = append(distilledFile.Children, fn)
 			}
 		case *ast.GenDecl:
@@ -348,13 +432,15 @@ func (p *ASTParser) processComments(file *ast.File, distilledFile *ir.DistilledF
 	}
 }
 
-// claimDeclComments claims the comments inside a declaration, so that
-// processComments does not add them at file level, where they would read as
-// comments on the next declaration and stay when theirs is removed: those in
-// a function's parameters and body (the body keeps them verbatim and prints
-// them with --implementation=1) and those in a const, var or type spec (in a
-// function literal or a function type). The doc above a declaration and the
-// comment at the end of a spec's line lie outside these spans.
+// claimDeclComments claims the comments inside a declaration that no node
+// took, so that processComments does not add them at file level, where they
+// would read as comments on the next declaration and stay when theirs is
+// removed: those in a function's body (the body keeps them verbatim and
+// prints them with --implementation=1) and those in text that prints
+// verbatim (a function literal value). The comments inside a signature, a
+// type or a value printed as {...} are nodes already (innerComments). The
+// doc above a declaration and the comment at the end of a spec's line lie
+// outside these spans.
 func (p *ASTParser) claimDeclComments(file *ast.File) {
 	for _, decl := range file.Decls {
 		switch d := decl.(type) {
@@ -459,14 +545,14 @@ func (p *ASTParser) extractBuildConstraints(comments []*ast.CommentGroup) []stri
 // importNodes returns the imports of an import declaration with their
 // comments, all of them line comments: the declaration's doc (the group that
 // ends on the line directly above "import"), marked as such (ImportDoc),
-// then per import the comment groups before it and the comment at the end
-// of its line, which goes right before it, inside its span (as in
-// memberNodes), so that the text prints it at the end of the import's line.
-// A comment group after the last import of a block ("import (" ... ")") is
-// dropped: no import follows it in the block, and after ")" it would read as
-// a comment on the next declaration. All of them are claimed. Any other
-// comment before the declaration, such as a file header set off by a blank
-// line, is a free comment (processComments).
+// then per import the comment groups before it, and those inside it and the
+// comment at the end of its line, which go right before it, inside its span
+// (as in memberNodes), so that the text prints them at the end of the
+// import's line. A comment group after the last import of a block ("import
+// (" ... ")") is marked ImportBlockEnd: the text prints it before ")", where
+// it reads as a comment on the imports, not on the next declaration. All of
+// them are claimed. Any other comment before the declaration, such as a file
+// header set off by a blank line, is a free comment (processComments).
 func (p *ASTParser) importNodes(decl *ast.GenDecl) []ir.DistilledNode {
 	nodes := p.appendCommentGroup(nil, decl.Doc)
 	if len(nodes) > 0 {
@@ -488,6 +574,12 @@ func (p *ASTParser) importNodes(decl *ast.GenDecl) []ir.DistilledNode {
 			nodes = p.appendCommentGroup(nodes, inBlock[0])
 			inBlock = inBlock[1:]
 		}
+		// The comments inside the spec (between its name and its path)
+		for len(inBlock) > 0 && inBlock[0].Pos() < spec.End() {
+			nodes = p.appendCommentGroup(nodes, inBlock[0])
+			inBlock = inBlock[1:]
+		}
+		nodes = append(nodes, p.innerComments(spec.Pos(), spec.End())...)
 		if spec.Comment != nil {
 			for len(inBlock) > 0 && inBlock[0].Pos() <= spec.Comment.Pos() {
 				inBlock = inBlock[1:]
@@ -496,6 +588,13 @@ func (p *ASTParser) importNodes(decl *ast.GenDecl) []ir.DistilledNode {
 			p.claim(spec.Comment)
 		}
 		nodes = append(nodes, p.processImport(spec))
+	}
+	for _, group := range inBlock {
+		at := len(nodes)
+		nodes = p.appendCommentGroup(nodes, group)
+		for _, n := range nodes[at:] {
+			n.(*ir.DistilledComment).Extensions = &ir.NodeExtensions{Go: &ir.GoExtensions{ImportBlockEnd: true}}
+		}
 	}
 	return nodes
 }
@@ -605,8 +704,11 @@ func (p *ASTParser) processGenDecl(decl *ast.GenDecl) []ir.DistilledNode {
 			}
 			node := p.processTypeSpec(s)
 			if node != nil {
-				// The comment at the end of the spec's line goes right
-				// before it, inside its span, as in memberNodes
+				// The comments inside the spec that no member took (in a
+				// rebuilt type), then the comment at the end of the spec's
+				// line go right before it, inside its span, as in
+				// memberNodes
+				nodes = append(nodes, p.innerComments(s.Pos(), s.End())...)
 				nodes = p.appendCommentGroup(nodes, s.Comment)
 				nodes = append(nodes, node)
 			}
@@ -628,13 +730,13 @@ func (p *ASTParser) processGenDecl(decl *ast.GenDecl) []ir.DistilledNode {
 				}
 			}
 			// Process const/var declarations; each spans from its name to
-			// the end of the spec, and the comment at the end of the spec's
-			// line goes right before the last one, inside its span
+			// the end of the spec. The comments inside the spec that no
+			// verbatim value holds (in a value printed as {...}, in its
+			// type) go right before their const or var, inside its span:
+			// those in a value before the name it is assigned to, the
+			// others, then the comment at the end of the spec's line,
+			// before the last one
 			for i, name := range s.Names {
-				if i == len(s.Names)-1 {
-					nodes = p.appendCommentGroup(nodes, s.Comment)
-				}
-
 				field := &ir.DistilledField{
 					BaseNode: ir.BaseNode{
 						Location: p.getLocation(name.Pos(), s.End()),
@@ -659,6 +761,14 @@ func (p *ASTParser) processGenDecl(decl *ast.GenDecl) []ir.DistilledNode {
 					field.DefaultValue = p.exprToString(s.Values[i])
 				}
 
+				if i < len(s.Names)-1 {
+					if i < len(s.Values) {
+						nodes = append(nodes, p.innerComments(s.Values[i].Pos(), s.Values[i].End())...)
+					}
+				} else {
+					nodes = append(nodes, p.innerComments(s.Pos(), s.End())...)
+					nodes = p.appendCommentGroup(nodes, s.Comment)
+				}
 				nodes = append(nodes, field)
 			}
 		}
@@ -818,9 +928,11 @@ func (p *ASTParser) processInterface(name string, interfaceType *ast.InterfaceTy
 // that the stripper drops it with the node; the text formatter prints it at
 // the end of the node's line. The other comment groups of the body stay
 // where they are. A comment inside a field (in a nested struct type, which
-// prints as struct{...}) is dropped with the nested fields. All of them are
-// claimed, so that processComments does not add them at file level. Every
-// comment is a line comment: it follows --comments.
+// prints as struct{...}, or in an interface method's parameters) goes
+// before the field's last node too, before the one at the end of its line
+// (innerComments); an interface method with one gets its SourceSignature.
+// All of them are claimed, so that processComments does not add them at
+// file level. Every comment is a line comment: it follows --comments.
 func (p *ASTParser) memberNodes(list *ast.FieldList, build func(*ast.Field) []ir.DistilledNode) []ir.DistilledNode {
 	nodes := []ir.DistilledNode{}
 	if list == nil {
@@ -833,13 +945,11 @@ func (p *ASTParser) memberNodes(list *ast.FieldList, build func(*ast.Field) []ir
 	}
 	var free []*ast.CommentGroup // groups attached to no field, in order
 	for _, group := range p.comments {
-		if group.Pos() <= list.Opening || group.Pos() >= list.Closing {
+		if group.Pos() <= list.Opening || group.Pos() >= list.Closing || insideField(list, group.Pos()) {
 			continue
 		}
-		for _, c := range group.List {
-			p.claimed[c] = true
-		}
-		if !attached[group] && !insideField(list, group.Pos()) {
+		p.claim(group)
+		if !attached[group] {
 			free = append(free, group)
 		}
 	}
@@ -859,12 +969,19 @@ func (p *ASTParser) memberNodes(list *ast.FieldList, build func(*ast.Field) []ir
 		freeBefore(start)
 		nodes = p.appendCommentGroup(nodes, field.Doc)
 		members := build(field)
+		inner := p.innerComments(field.Pos(), field.End())
 		if len(members) == 0 {
+			nodes = append(nodes, inner...)
 			nodes = p.appendCommentGroup(nodes, field.Comment)
 			continue
 		}
 		last := len(members) - 1
+		if fn, ok := members[last].(*ir.DistilledFunction); ok && len(inner) > 0 {
+			// An interface method prints as written while they are kept
+			fn.SourceSignature = p.signatureAsWritten(field.Pos(), field.End())
+		}
 		nodes = append(nodes, members[:last]...)
+		nodes = append(nodes, inner...)
 		nodes = p.appendCommentGroup(nodes, field.Comment)
 		nodes = append(nodes, members[last])
 	}
@@ -1253,10 +1370,8 @@ func (p *ASTParser) typeToString(expr ast.Expr) string {
 		return p.typeToString(t.X) + "[" + strings.Join(indices, ", ") + "]"
 	}
 	// Fallback: get the source text
-	start := p.fset.Position(expr.Pos()).Offset
-	end := p.fset.Position(expr.End()).Offset
-	if start >= 0 && end <= len(p.source) && start < end {
-		return string(p.source[start:end])
+	if text, ok := p.sourceText(expr.Pos(), expr.End()); ok {
+		return text
 	}
 	return "unknown"
 }
@@ -1308,12 +1423,8 @@ func (p *ASTParser) exprToString(expr ast.Expr) string {
 		return p.typeToString(e.Type) + "{...}"
 	default:
 		// Get source text
-		start := p.fset.Position(expr.Pos()).Offset
-		end := p.fset.Position(expr.End()).Offset
-		if start >= 0 && end <= len(p.source) && start < end {
-			return string(p.source[start:end])
-		}
-		return ""
+		text, _ := p.sourceText(expr.Pos(), expr.End())
+		return text
 	}
 }
 

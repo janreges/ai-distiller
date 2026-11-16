@@ -260,6 +260,94 @@ func TestGoFormatter_SpecLineComments(t *testing.T) {
 	assert.Equal(t, "\nconst Max = 10 // the limit\n\n// free\n\ntype S struct {\n\tX int\n} // after S\n", b.String())
 }
 
+func TestGoFormatter_CommentsInsideADeclaration(t *testing.T) {
+	at := func(from, col, to int) ir.BaseNode {
+		return ir.BaseNode{Location: ir.Location{StartLine: from, StartColumn: col, EndLine: to, EndColumn: 2}}
+	}
+	comment := func(line, col int, text string) *ir.DistilledComment {
+		return &ir.DistilledComment{BaseNode: at(line, col, line), Text: text, Format: ir.CommentLine}
+	}
+
+	// // Get doc                     line 1
+	// func Get(                      line 2
+	// 	id int, // the id             line 3
+	// ) int {                        line 4
+	// 	return id
+	// }                              line 6
+	//
+	// // Table doc                   line 8
+	// var Table = map[string]int{    line 9
+	// 	// section                    line 10
+	// 	"a": 1, // first              line 11
+	// } // after Table               line 12
+	//
+	// type S struct {                line 14
+	// 	Inner struct {                line 15
+	// 		X int // nested           line 16
+	// 	}                             line 17
+	// 	Read(                         (an interface method, for the test)
+	// 		p []byte, // the buffer   line 19
+	// 	) int                         line 20
+	// }
+	get := &ir.DistilledFunction{
+		BaseNode: at(2, 1, 6), Name: "Get", Visibility: ir.VisibilityPublic,
+		Parameters:      []ir.Parameter{{Name: "id", Type: ir.TypeRef{Name: "int"}}},
+		Returns:         &ir.TypeRef{Name: "int"},
+		Implementation:  "{\n\treturn id\n}",
+		SourceSignature: "func Get(\n\tid int, // the id\n) int",
+	}
+	read := &ir.DistilledFunction{
+		BaseNode: at(18, 2, 20), Name: "Read",
+		Parameters:      []ir.Parameter{{Name: "p", Type: ir.TypeRef{Name: "[]byte"}}},
+		Returns:         &ir.TypeRef{Name: "int"},
+		SourceSignature: "Read(\n\tp []byte, // the buffer\n) int",
+	}
+	nodes := []ir.DistilledNode{
+		&ir.DistilledComment{BaseNode: at(1, 1, 1), Text: "Get doc", Format: ir.CommentDoc},
+		comment(3, 10, "the id"),
+		get,
+		comment(8, 1, "Table doc"),
+		comment(10, 2, "section"),
+		comment(11, 10, "first"),
+		comment(12, 3, "after Table"),
+		&ir.DistilledField{BaseNode: at(9, 5, 12), Name: "Table", DefaultValue: "map[string]int{...}"},
+		&ir.DistilledInterface{BaseNode: at(14, 6, 21), Name: "S", Children: []ir.DistilledNode{
+			comment(16, 9, "nested"),
+			&ir.DistilledField{BaseNode: at(15, 2, 17), Name: "Inner", Type: &ir.TypeRef{Name: "struct{...}"}},
+			comment(19, 13, "the buffer"),
+			read,
+		}},
+	}
+	var b strings.Builder
+	require.NoError(t, NewGoFormatter().(SiblingFormatter).FormatNodes(&b, nodes, 0))
+	// A doc still sits on its declaration; a signature that holds a comment
+	// prints as written; the comments in a value printed as {...} or in a
+	// nested type print under it, one level deeper, in source order, and the
+	// one at the end of the declaration's last line stays at its end.
+	assert.Equal(t, "\n// Get doc\nfunc Get(\n\tid int, // the id\n) int {\n\treturn id\n}\n"+
+		"\n// Table doc\nvar Table = map[string]int{...} // after Table\n\t// section\n\t// first\n"+
+		"\ntype S interface {\n\tInner struct{...}\n\t\t// nested\n\tRead(\n\t\tp []byte, // the buffer\n\t) int\n}\n",
+		b.String())
+
+	// Without the comments (--comments=0) the signature is rebuilt.
+	b.Reset()
+	require.NoError(t, NewGoFormatter().(SiblingFormatter).FormatNodes(&b, []ir.DistilledNode{get}, 0))
+	assert.Equal(t, "\nfunc Get(id int) int {\n\treturn id\n}\n", b.String())
+
+	// A comment after the last import of a block stays in it, set off from
+	// the import of the next declaration.
+	end := comment(4, 2, "\"example.com/x\"")
+	end.Extensions = &ir.NodeExtensions{Go: &ir.GoExtensions{ImportBlockEnd: true}}
+	b.Reset()
+	require.NoError(t, NewGoFormatter().(SiblingFormatter).FormatNodes(&b, []ir.DistilledNode{
+		&ir.DistilledImport{BaseNode: at(3, 2, 3), Module: "fmt", Symbols: []ir.ImportedSymbol{{Name: "fmt"}}},
+		end,
+		&ir.DistilledImport{BaseNode: at(7, 8, 7), Module: "os", Symbols: []ir.ImportedSymbol{{Name: "os"}}},
+		&ir.DistilledField{BaseNode: at(9, 5, 9), Name: "V", Type: &ir.TypeRef{Name: "int"}},
+	}, 0))
+	assert.Equal(t, "\nimport (\n\t\"fmt\"\n\t// \"example.com/x\"\n\n\t\"os\"\n)\n\nvar V int\n", b.String())
+}
+
 func TestGoFormatter_DocSitsOnItsDeclaration(t *testing.T) {
 	at := func(line int) ir.BaseNode {
 		return ir.BaseNode{Location: ir.Location{StartLine: line, StartColumn: 1, EndLine: line, EndColumn: 10}}
