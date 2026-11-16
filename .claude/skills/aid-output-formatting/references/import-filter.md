@@ -68,6 +68,25 @@ line that is not a use statement, so a file with several namespaces finds a
 usage between two import blocks; it skips `//` and `#` comment lines but not
 `#[...]` attributes, and also the `<file>` tags and `namespace` lines.
 
+JavaScript and TypeScript search on their own too
+(`internal/importfilter/javascript_filter.go#jsSearchLines`,
+`internal/importfilter/javascript_filter.go#jsNameUsed`):
+
+- every line that is not an import statement, wherever it is. An
+  import-looking line further down (an `import G = ns.H` in a namespace, an
+  import in a `declare module`, a `require(...)` in a printed body) does not
+  hide the uses above it, and a use between two imports counts.
+- a name matches as a whole identifier with `$` as part of it,
+  `(^|[^\w$])name($|[^\w$])`: `\b` would never match `$ZodType` or `obs$`.
+  The shared `SearchForUsage` keeps `\b`, because the C# and C++ filters
+  search for text that is not an identifier (`.Where(`, `List<`).
+- the namespace an import alias names counts as used while the alias stays:
+  `import Polygon = Geometry.Polygon` keeps `import * as Geometry`. When the
+  alias goes, the filter checks again, and the namespace goes too if
+  nothing else uses it.
+- `<file>` tags, blank lines and lines starting with `//` or `#` are
+  skipped.
+
 The removed lines are cut out of the text; nothing else changes, except in
 Go: a removed import takes the `//` comment lines directly above it (the
 comment at the end of its line goes with the line), and a block none of

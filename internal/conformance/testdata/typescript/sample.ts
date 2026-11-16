@@ -5,6 +5,11 @@ import * as confNs from "./conf-ns";
 import { confGone as ConfGoneAlias } from "./conf-gone";
 import ConfAliasUsed = confNs.ConfInner;
 import ConfAliasGone = confNs.ConfUnused;
+import type { $ConfDollar } from "./conf-dollar";
+import { confObs$ } from "./conf-obs";
+import { ConfAbove } from "./conf-above";
+import * as confGeo from "./conf-geo";
+import ConfPoly = confGeo.ConfPoly;
 
 // CONF_LINE_COMMENT
 
@@ -102,4 +107,10 @@ export class ConfMarked {
     confOptName?: string;
 }
 export const confAliased: ConfAliasUsed = 1;
+export function confDollar(x: $ConfDollar): typeof confObs$ { return confObs$; }
+export function confAbove(x: ConfAbove, p: ConfPoly): void {}
+export namespace ConfLate {
+    import ConfLateAlias = confNs.ConfLateInner;
+    export const confLate: ConfLateAlias = 1;
+}
 export as namespace ConfLib;

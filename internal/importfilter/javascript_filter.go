@@ -45,48 +45,29 @@ func (f *JavaScriptFilter) filterSource(code string, src Source, debugLevel int)
 	}
 
 	f.LogDebug(debugLevel, 1, "Found %d import statements", len(imports))
+	base := jsSearchLines(code, imports)
 
-	// Find the last import line to know where to start searching for usage
-	lastImportLine := 0
-	for _, imp := range imports {
-		if imp.EndLine > lastImportLine {
-			lastImportLine = imp.EndLine
+	// An import alias that stays uses the namespace it names, so removing
+	// an unused alias can leave its namespace unused: check again until no
+	// further alias goes.
+	unused := make([]bool, len(imports))
+	for aliasGone := true; aliasGone; {
+		aliasGone = false
+		search := jsSearchText(base, imports, unused)
+		for i, imp := range imports {
+			if unused[i] || f.jsImportUsed(imp, search, jsx, debugLevel) {
+				continue
+			}
+			f.LogDebug(debugLevel, 2, "Removing unused import: %s", imp.FullLine)
+			unused[i] = true
+			aliasGone = aliasGone || imp.isAlias
 		}
 	}
 
-	// Check usage and collect unused imports
 	var removedImports []string
 	var linesToRemove []struct{ start, end int }
-
-	for _, imp := range imports {
-		// Always keep side-effect imports (no imported names)
-		if imp.IsSideEffect {
-			f.LogDebug(debugLevel, 3, "Keeping side-effect import: %s", imp.FullLine)
-			continue
-		}
-
-		// The import is used when any name it binds occurs in the code
-		names := jsLocalNames(imp)
-		if len(names) == 0 {
-			f.LogDebug(debugLevel, 3, "Keeping import without a recognised name: %s", imp.FullLine)
-			continue
-		}
-		used := false
-		for _, name := range names {
-			if jsx && name == "React" {
-				f.LogDebug(debugLevel, 3, "Keeping React, which JSX uses")
-				used = true
-				break
-			}
-			if f.SearchForUsage(code, name, lastImportLine) {
-				f.LogDebug(debugLevel, 3, "Found usage of '%s'", name)
-				used = true
-				break
-			}
-		}
-
-		if !used {
-			f.LogDebug(debugLevel, 2, "Removing unused import: %s", imp.FullLine)
+	for i, imp := range imports {
+		if unused[i] {
 			removedImports = append(removedImports, imp.FullLine)
 			linesToRemove = append(linesToRemove, struct{ start, end int }{imp.StartLine, imp.EndLine})
 		}
@@ -101,6 +82,79 @@ func (f *JavaScriptFilter) filterSource(code string, src Source, debugLevel int)
 	f.LogDebug(debugLevel, 3, "Removed %d unused imports", len(removedImports))
 
 	return result, removedImports, nil
+}
+
+// jsImportUsed reports whether imp stays: a side-effect import, an import
+// without a name the filter recognises, or one that binds a name search uses
+// (React too, in a file with JSX).
+func (f *JavaScriptFilter) jsImportUsed(imp ImportStatement, search string, jsx bool, debugLevel int) bool {
+	if imp.IsSideEffect {
+		f.LogDebug(debugLevel, 3, "Keeping side-effect import: %s", imp.FullLine)
+		return true
+	}
+	names := jsLocalNames(imp)
+	if len(names) == 0 {
+		f.LogDebug(debugLevel, 3, "Keeping import without a recognised name: %s", imp.FullLine)
+		return true
+	}
+	for _, name := range names {
+		if jsx && name == "React" {
+			f.LogDebug(debugLevel, 3, "Keeping React, which JSX uses")
+			return true
+		}
+		if jsNameUsed(search, name) {
+			f.LogDebug(debugLevel, 3, "Found usage of '%s'", name)
+			return true
+		}
+	}
+	return false
+}
+
+// jsSearchLines returns the lines in which an import's names are looked
+// for: every line outside the import statements, wherever it is, so a name
+// used between two imports or above an import-looking line further down (an
+// `import G = ns.H` in a namespace, an import in a `declare module`, a
+// `require(...)` in a printed body) counts. The file tags, blank lines and
+// lines starting with `//` or `#` are left out.
+func jsSearchLines(code string, imports []ImportStatement) []string {
+	isImportLine := make(map[int]bool)
+	for _, imp := range imports {
+		for l := imp.StartLine; l <= imp.EndLine; l++ {
+			isImportLine[l-1] = true
+		}
+	}
+	var search []string
+	for i, line := range strings.Split(code, "\n") {
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case isImportLine[i], trimmed == "":
+		case strings.HasPrefix(trimmed, "<file") || strings.HasPrefix(trimmed, "</file>"):
+		case strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "#"):
+		default:
+			search = append(search, line)
+		}
+	}
+	return search
+}
+
+// jsSearchText joins lines with the namespace each import alias that is not
+// unused names: `import G = ns.H` uses ns.
+func jsSearchText(lines []string, imports []ImportStatement, unused []bool) string {
+	search := append([]string(nil), lines...)
+	for i, imp := range imports {
+		if imp.isAlias && !unused[i] {
+			root, _, _ := strings.Cut(imp.Module, ".")
+			search = append(search, strings.TrimSpace(root))
+		}
+	}
+	return strings.Join(search, "\n")
+}
+
+// jsNameUsed reports whether name occurs in text as a whole identifier. `$`
+// is part of an identifier, which `\b` does not know: `\b$ZodType\b` never
+// matches, and `\bobs\b` would match in `obs$`.
+func jsNameUsed(text, name string) bool {
+	return regexp.MustCompile(`(?m)(^|[^\w$])` + regexp.QuoteMeta(name) + `($|[^\w$])`).MatchString(text)
 }
 
 // parseImports extracts import statements from JavaScript/TypeScript code
@@ -275,6 +329,7 @@ func (f *JavaScriptFilter) parseImports(code string, debugLevel int) ([]ImportSt
 				EndLine:   i + 1,
 				Module:    matches[2],
 				Aliases:   map[string]string{"default": matches[1]},
+				isAlias:   true,
 			})
 			i++
 			continue

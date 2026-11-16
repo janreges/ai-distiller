@@ -25,6 +25,7 @@ type ImportStatement struct {
 	IsSideEffect  bool              // true for side-effect imports like "import 'polyfill'"
 	Module        string            // Module/package name
 	Aliases       map[string]string // Mapping of alias->original name
+	isAlias       bool              // a TypeScript import alias, `import G = ns.H`; Module is ns.H
 }
 
 // Registry for language-specific filters

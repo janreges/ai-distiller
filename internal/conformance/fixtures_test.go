@@ -80,6 +80,12 @@ var fixtures = []fixture{
 		check{Cap: "import-equals-alias-unfiltered", Flags: []string{"--filter-imports=false"},
 			Contains: []string{"import ConfAliasGone = confNs.ConfUnused"}},
 		check{Cap: "export-as-namespace", Contains: []string{"export as namespace ConfLib"}},
+		check{Cap: "import-names-with-dollar", Contains: []string{
+			"import type { $ConfDollar } from './conf-dollar'", "import { confObs$ } from './conf-obs'"}},
+		check{Cap: "import-used-above-later-import", Contains: []string{"import { ConfAbove } from './conf-above'",
+			"    import ConfLateAlias = confNs.ConfLateInner"}},
+		check{Cap: "import-alias-uses-namespace", Contains: []string{"import * as confGeo from './conf-geo'",
+			"import ConfPoly = confGeo.ConfPoly"}},
 		check{Cap: "import-alias-kept-unfiltered", Flags: []string{"--filter-imports=false"},
 			Contains: []string{"import { confGone as ConfGoneAlias } from './conf-gone'"}},
 		check{Cap: "reexport-forms", Contains: []string{
