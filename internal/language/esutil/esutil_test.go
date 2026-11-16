@@ -54,6 +54,16 @@ func TestSignature(t *testing.T) {
 		{"const a = styled.div(({ theme }) => ({ color: theme.c }));", "styled.div(({ theme }))"},
 		{"const a = { get() { return 1; }, b: 2 };", "{ get(), b: 2 }"},
 		{"const a = tag(`line one\n  line two`, (x) => x);", "tag(`line one\n  line two`, (x))"},
+		// In a call that takes a function, an object literal argument over
+		// MaxValueLen reads {...}, at any depth; a shorter one stays.
+		{"const a = core.$constructor<T>(\"T\", (inst, def) => { init(); }, {\n  check(...chks) { return 1; },\n  with(...chks) { return 2; },\n" +
+			"  clone(def, params) { return 3; },\n  brand() {},\n  register(reg, meta) {},\n});", `core.$constructor<T>("T", (inst, def), {...})`},
+		{"const a = make(\"N\", (inst) => {}, util.derived({ minValue: (inst) => 1 }, {\n  gt(value, params) {}, gte(value, params) {},\n" +
+			"  lt(value, params) {}, lte(value, params) {}, positive(params) {},\n}));", `make("N", (inst), util.derived({ minValue: (inst) }, {...}))`},
+		{"const a = useStore((s) => s.a, { equal: shallow });", "useStore((s), { equal: shallow })"},
+		// A call that takes no function keeps its arguments.
+		{"const a = defineConfig({ plugins: [react()], test: { environment: 'jsdom', setupFiles: './setup.ts', coverage: { provider: 'v8' } } });",
+			"defineConfig({ plugins: [react()], test: { environment: 'jsdom', setupFiles: './setup.ts', coverage: { provider: 'v8' } } })"},
 	} {
 		t.Run(tc.want, func(t *testing.T) {
 			firstStatement(t, tc.src, false, func(stmt *sitter.Node, source []byte) {

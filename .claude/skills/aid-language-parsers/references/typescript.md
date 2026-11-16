@@ -93,7 +93,9 @@
   function (`forwardRef((props, ref) => ...)`, `new Pool(() => ...)`,
   `internal/language/esutil/esutil.go#TakesFunction`), `DefaultValue` is its
   text with the function bodies left out
-  (`internal/language/esutil/esutil.go#Signature`) and `Implementation` the
+  (`internal/language/esutil/esutil.go#Signature`; in a call that takes a
+  function, an object literal argument longer than 80 characters reads
+  `{...}`) and `Implementation` the
   whole initializer, which the stripper keeps only with `--implementation=1`
   (`internal/language/typescript/ast_parser.go#ASTParser.parseVariableDeclaration`).
 - Structural interface satisfaction

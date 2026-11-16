@@ -138,12 +138,17 @@ func bodyStart(node *sitter.Node) (uint, bool) {
 // left out, and whitespace that holds a line break becomes one space (none
 // after `(`, `[` or `<`, before `)`, `]`, `>`, `,` or `;`, and a trailing
 // comma before a closing bracket goes), so the result is one line. Strings
-// and template literals are kept verbatim.
+// and template literals are kept verbatim. In the signature of a call that
+// takes a function (TakesFunction), an object literal passed to a call, at
+// any depth, reads `{...}` when its own signature is longer than
+// MaxValueLen.
 //
 //	forwardRef<B, P>(({ a = 1, ...rest }, ref) => { ... })
 //	  -> forwardRef<B, P>(({ a = 1, ...rest }, ref))
+//	core.$constructor("ZodType", (inst, def) => { ... }, { check(...chks) { ... }, ... })
+//	  -> core.$constructor("ZodType", (inst, def), {...})
 func Signature(node *sitter.Node, source []byte) string {
-	s := &signer{source: source, prevEnd: node.StartByte()}
+	s := &signer{source: source, prevEnd: node.StartByte(), elideObjects: TakesFunction(node)}
 	s.walk(node)
 	return s.b.String()
 }
@@ -153,6 +158,9 @@ type signer struct {
 	b       strings.Builder
 	prevEnd uint // end of the last byte consumed
 	broken  bool // a line break, comment or left-out body since the last token
+	// elideObjects: an object literal argument longer than MaxValueLen
+	// reads {...}.
+	elideObjects bool
 }
 
 func (s *signer) walk(node *sitter.Node) {
@@ -187,6 +195,14 @@ func (s *signer) walk(node *sitter.Node) {
 			s.emit("(", child.StartByte(), child.StartByte())
 			s.walk(child)
 			s.emit(")", child.EndByte(), child.EndByte())
+			continue
+		}
+		// An object literal passed to a call is left out as {...} when its
+		// signature is longer than MaxValueLen: a long options object or
+		// the method table of a constructor call. The other arguments, the
+		// functions too, stay.
+		if s.elideObjects && node.Kind() == "arguments" && child.Kind() == "object" && len(Signature(child, s.source)) > MaxValueLen {
+			s.emit("{...}", child.StartByte(), child.EndByte())
 			continue
 		}
 		s.walk(child)

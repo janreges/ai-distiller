@@ -81,6 +81,7 @@ var fixtures = []fixture{
 			Contains: []string{"import ConfAliasGone = confNs.ConfUnused"}},
 		check{Cap: "export-as-namespace", Contains: []string{"export as namespace ConfLib"}},
 		check{Cap: "export-equals-value-cap", NotContains: []string{"confExportEq"}},
+		check{Cap: "wrapper-call-long-object-argument", Contains: []string{`export const confCtor = confMake("ConfCtor", (confInst), {...})`}},
 		check{Cap: "export-import-require", Contains: []string{"export import confReq = require('conf-req')"}},
 		check{Cap: "import-names-with-dollar", Contains: []string{
 			"import type { $ConfDollar } from './conf-dollar'", "import { confObs$ } from './conf-obs'"}},

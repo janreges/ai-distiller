@@ -108,6 +108,11 @@ export class ConfMarked {
     confOptName?: string;
 }
 export const confAliased: ConfAliasUsed = 1;
+export const confCtor = confMake("ConfCtor", (confInst) => {}, {
+    confCheck(...confChecks) { return 1; },
+    confClone(confDef, confParams) { return 2; },
+    confRegister(confReg, confMeta) { return 3; },
+});
 export function confDollar(x: $ConfDollar): typeof confObs$ { return confObs$; }
 export function confAbove(x: ConfAbove, p: ConfPoly): void {}
 export namespace ConfLate {

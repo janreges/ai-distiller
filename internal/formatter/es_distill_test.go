@@ -182,6 +182,24 @@ func TestESExportValueCap(t *testing.T) {
 		distillES(t, "expeq.ts", "export interface Keep {}\nexport = { a: 1 };\n", esDefault))
 }
 
+// In a constant initialised with a call that takes a function, an object
+// literal argument over the value cap prints as {...}; the function keeps
+// its signature, and a call that takes no function is left as it is.
+func TestESLongObjectArgumentInWrapperCall(t *testing.T) {
+	methods := "{\n  check(...chks) { return 1; },\n  with(...chks) { return 2; },\n  clone(def, params) { return 3; },\n" +
+		"  brand() { return 4; },\n  register(reg, meta) { return 5; },\n}"
+	ts := "export const ZodType: Ctor<ZodType> = core.$constructor<ZodType>(\"ZodType\", (inst, def) => {\n  init(inst);\n}, " + methods + ");\n" +
+		"export const small = core.$constructor(\"S\", (inst) => {}, { a() {} });\n"
+	assert.Equal(t, []string{
+		`export const ZodType: Ctor<ZodType> = core.$constructor<ZodType>("ZodType", (inst, def), {...})`,
+		`export const small = core.$constructor("S", (inst), { a() })`,
+	}, distillES(t, "schemas.ts", ts, esDefault))
+
+	js := "export const ZodType = core.$constructor(\"ZodType\", (inst, def) => {\n  init(inst);\n}, " + methods + ");\n"
+	assert.Equal(t, []string{`export const ZodType = core.$constructor("ZodType", (inst, def), {...})`},
+		distillES(t, "schemas.js", js, esDefault))
+}
+
 // --expand NAME keeps the body of a getter, setter or generator called NAME.
 func TestESExpandMatchesAccessorsAndGenerators(t *testing.T) {
 	expand := func(patterns ...string) processor.ProcessOptions {

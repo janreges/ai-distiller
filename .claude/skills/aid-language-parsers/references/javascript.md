@@ -41,7 +41,8 @@
   `DistilledField`s. The keyword is a modifier: `const` is `final`, `let`
   and `var` are `let` and `var`. A field whose value is
   a call that takes a function (`forwardRef((props, ref) => ...)`) has the
-  call with the function bodies left out as `DefaultValue` and the whole
+  call with the function bodies left out, and an object literal argument
+  longer than 80 characters as `{...}`, as `DefaultValue` and the whole
   initializer as `Implementation`, as in TypeScript
   (`internal/language/esutil/esutil.go#TakesFunction`).
 - `export class/function/const ...` is parsed as the declaration itself and
