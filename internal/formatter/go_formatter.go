@@ -108,6 +108,11 @@ func (f *GoFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, indent 
 			continue
 		case isComment && !inBlock && prev != nil && apart(prev, c):
 			text = "\n" + text
+		case !isComment && !inBlock && prev != nil && prev.GetNodeKind() == ir.KindComment &&
+			!strings.HasPrefix(text, "\n") && apart(prev, node):
+			// The package clause, set off from a comment above it that is
+			// not its doc (a copyright header)
+			text = "\n" + text
 		}
 		if err := write(text); err != nil {
 			return err
@@ -172,15 +177,15 @@ func importDoc(c *ir.DistilledComment) bool {
 	return c.Extensions != nil && c.Extensions.Go != nil && c.Extensions.Go.ImportDoc
 }
 
-// apart reports whether comment c is set off by a blank line from prev, the
-// node written before it: always after a node that is not a comment, after a
+// apart reports whether node is set off by a blank line from prev, the node
+// written before it: always after a node that is not a comment, after a
 // comment only when a line lies between them in the source.
-func apart(prev ir.DistilledNode, c *ir.DistilledComment) bool {
+func apart(prev, node ir.DistilledNode) bool {
 	if prev.GetNodeKind() != ir.KindComment {
 		return true
 	}
 	end := prev.GetLocation().EndLine
-	return end > 0 && c.Location.StartLine > end+1
+	return end > 0 && node.GetLocation().StartLine > end+1
 }
 
 // inImportBlock reports whether the comment nodes[i] goes in the import

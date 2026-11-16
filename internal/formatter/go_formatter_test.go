@@ -295,6 +295,13 @@ func TestGoFormatter_DocSitsOnItsDeclaration(t *testing.T) {
 	require.NoError(t, NewGoFormatter().(SiblingFormatter).FormatNodes(&b,
 		[]ir.DistilledNode{header, pkgDoc, &ir.DistilledPackage{BaseNode: at(4), Name: "p"}}, 0))
 	assert.Equal(t, "// Copyright\n\n// Package p doc\npackage p\n", b.String())
+
+	// Without a package doc, too: the header does not stand on the package
+	// clause as if it were its doc.
+	b.Reset()
+	require.NoError(t, NewGoFormatter().(SiblingFormatter).FormatNodes(&b,
+		[]ir.DistilledNode{header, &ir.DistilledPackage{BaseNode: at(3), Name: "p"}}, 0))
+	assert.Equal(t, "// Copyright\n\npackage p\n", b.String())
 }
 
 func TestGoFormatter_DefinedTypeAndAlias(t *testing.T) {
