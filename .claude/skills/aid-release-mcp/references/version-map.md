@@ -56,4 +56,5 @@ Details: `references/installers.md`.
 
 - `get_capabilities` reports `protocol_version` `2025-03-26`: an MCP protocol
   version written in `mcp-npm/mcp-server-sdk.ts`, not the package version.
-- `mcp-npm/package.json` `engines.node` (`>=18.0.0`) and the dependency ranges.
+- `mcp-npm/package.json` `engines.node` (`>=20`, the minimum of `@hono/node-server`,
+  which the MCP SDK depends on; CI tests Node 20, 22 and 24) and the dependency ranges.
