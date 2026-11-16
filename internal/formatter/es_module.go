@@ -18,16 +18,25 @@ import (
 //	import type { T } from 'm'           (IsType)
 //	import { type T, V } from 'm'        (a symbol's IsType)
 //	import x = require('m')              (import type "require", TypeScript)
+//	import G = ns.H                      (import type "alias", TypeScript)
+//	export import G = ns.H               (an alias with IsExport)
 //
 // A default import is recognised only as the first symbol, where the clause
 // writes it; a later "default" symbol prints as `default as X` in braces.
 func esImportLine(imp *ir.DistilledImport) string {
-	if imp.ImportType == "require" {
+	if imp.ImportType == "require" || imp.ImportType == "alias" {
 		local := ""
 		if len(imp.Symbols) > 0 {
 			local = imp.Symbols[0].Alias
 		}
-		return fmt.Sprintf("import %s = require('%s')", local, imp.Module)
+		if imp.ImportType == "require" {
+			return fmt.Sprintf("import %s = require('%s')", local, imp.Module)
+		}
+		export := ""
+		if imp.IsExport {
+			export = "export "
+		}
+		return fmt.Sprintf("%simport %s = %s", export, local, imp.Module)
 	}
 
 	var clause []string
@@ -66,8 +75,11 @@ func esImportLine(imp *ir.DistilledImport) string {
 //	export type { T } from './t'
 //	export default Inner
 //	export = Foo
+//	export as namespace Lib
 func esExportLine(exp *ir.DistilledExport) string {
 	switch {
+	case exp.Namespace != "":
+		return "export as namespace " + exp.Namespace
 	case exp.IsDefault:
 		return "export default " + exp.Value
 	case exp.Value != "":

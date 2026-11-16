@@ -122,6 +122,8 @@ func (p *ASTParser) parseStatement(node *sitter.Node, isExported bool) []ir.Dist
 		if imp := p.parseImport(node); imp != nil {
 			nodes = append(nodes, imp)
 		}
+	case "import_alias":
+		nodes = append(nodes, p.parseImportAlias(node, isExported))
 	case "export_statement":
 		nodes = append(nodes, p.parseExport(node)...)
 	case "class_declaration", "abstract_class_declaration":
@@ -275,6 +277,31 @@ func (p *ASTParser) parseImport(node *sitter.Node) *ir.DistilledImport {
 		}
 	}
 
+	return imp
+}
+
+// parseImportAlias parses `import G = ns.H` (`export import G = ns.H` when
+// isExported): the import type "alias" with the entity name as written as
+// its module and the symbol "*" aliased G.
+func (p *ASTParser) parseImportAlias(node *sitter.Node, isExported bool) *ir.DistilledImport {
+	imp := &ir.DistilledImport{
+		BaseNode:   ir.BaseNode{Location: p.nodeToLocation(node)},
+		ImportType: "alias",
+		IsExport:   isExported,
+		Symbols:    []ir.ImportedSymbol{},
+	}
+	afterEquals := false
+	for i := uint(0); i < node.ChildCount(); i++ {
+		child := node.Child(i)
+		switch {
+		case child.Kind() == "=":
+			afterEquals = true
+		case !afterEquals && child.Kind() == "identifier":
+			imp.Symbols = append(imp.Symbols, ir.ImportedSymbol{Name: "*", Alias: p.nodeText(child)})
+		case afterEquals && child.IsNamed() && child.Kind() != "comment" && imp.Module == "":
+			imp.Module = esutil.Signature(child, p.source)
+		}
+	}
 	return imp
 }
 

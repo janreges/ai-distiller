@@ -148,6 +148,9 @@ func (f *XMLFormatter) formatNode(w io.Writer, node ir.DistilledNode, depth int)
 		if n.IsType {
 			f.writeAttr(w, "is_type", "true")
 		}
+		if n.IsExport {
+			f.writeAttr(w, "is_export", "true")
+		}
 		f.writeNodeAttrs(w, n)
 		f.writeSymbols(w, indent, "</import>", n.Symbols)
 
@@ -161,6 +164,7 @@ func (f *XMLFormatter) formatNode(w io.Writer, node ir.DistilledNode, depth int)
 		if n.IsType {
 			f.writeAttr(w, "is_type", "true")
 		}
+		f.writeAttr(w, "namespace", n.Namespace)
 		f.writeNodeAttrs(w, n)
 		f.writeSymbols(w, indent, "</export>", n.Symbols)
 

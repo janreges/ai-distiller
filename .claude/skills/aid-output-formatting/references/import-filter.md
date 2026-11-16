@@ -79,7 +79,7 @@ under the language name the processors use.
 | Language | File | Name searched in the text | Always kept |
 |---|---|---|---|
 | python | `internal/importfilter/python_filter.go` | each imported name or its alias; for `import m` also `m` | `from m import *` |
-| javascript, typescript | `internal/importfilter/javascript_filter.go` (one filter for both) | every name the import binds (`internal/importfilter/javascript_filter.go#jsLocalNames`): the default import's name, the namespace alias, each named import's alias or else its name; also for `import type` and `import x = require('m')` | side-effect imports (`import 'x'`); `export` lines are never read as imports |
+| javascript, typescript | `internal/importfilter/javascript_filter.go` (one filter for both) | every name the import binds (`internal/importfilter/javascript_filter.go#jsLocalNames`): the default import's name, the namespace alias, each named import's alias or else its name; also for `import type`, `import x = require('m')` and the import alias `import G = ns.H` | side-effect imports (`import 'x'`); `export` lines are never read as imports |
 | go | `internal/importfilter/go_filter.go` | the alias, else the last path element (the one before a `/vN` suffix; a few standard paths are mapped) | blank imports and `"C"` |
 | java | `internal/importfilter/java_filter.go` | the class name (last element); for `import static`, the member | wildcard imports |
 | csharp (`c#`) | `internal/importfilter/csharp_filter.go` | the alias, else the last namespace element; for some `System.*` namespaces also typical type names (`internal/importfilter/csharp_filter.go#CSharpFilter.checkSystemNamespaceUsage`) | nothing |

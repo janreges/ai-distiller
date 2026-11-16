@@ -3,6 +3,8 @@ import ConfDefault, { confNamed as ConfAlias } from "./conf-mod";
 import type { ConfOnlyType } from "./conf-types";
 import * as confNs from "./conf-ns";
 import { confGone as ConfGoneAlias } from "./conf-gone";
+import ConfAliasUsed = confNs.ConfInner;
+import ConfAliasGone = confNs.ConfUnused;
 
 // CONF_LINE_COMMENT
 
@@ -99,3 +101,5 @@ export class ConfMarked {
     [confK: string]: any;
     confOptName?: string;
 }
+export const confAliased: ConfAliasUsed = 1;
+export as namespace ConfLib;

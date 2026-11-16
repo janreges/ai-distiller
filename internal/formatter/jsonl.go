@@ -136,6 +136,9 @@ func (f *JSONLFormatter) nodeToJSON(filePath string, node ir.DistilledNode, path
 		if n.IsType {
 			obj["is_type"] = true
 		}
+		if n.IsExport {
+			obj["is_export"] = true
+		}
 		if len(n.Symbols) > 0 {
 			obj["symbols"] = n.Symbols
 		}
@@ -155,6 +158,9 @@ func (f *JSONLFormatter) nodeToJSON(filePath string, node ir.DistilledNode, path
 		}
 		if n.IsType {
 			obj["is_type"] = true
+		}
+		if n.Namespace != "" {
+			obj["namespace"] = n.Namespace
 		}
 
 	case *ir.DistilledClass:
@@ -321,9 +327,11 @@ func (f *JSONLFormatter) countNodes(nodes []ir.DistilledNode, stats map[string]i
 
 // exportName names an export line: the module re-exported from, else
 // "default" for `export default`, else the value of `export =`, else the
-// exported names.
+// namespace of `export as namespace`, else the exported names.
 func exportName(n *ir.DistilledExport) string {
 	switch {
+	case n.Namespace != "":
+		return n.Namespace
 	case n.Module != "":
 		return n.Module
 	case n.IsDefault:

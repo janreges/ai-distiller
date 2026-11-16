@@ -116,6 +116,7 @@ func TestExport(t *testing.T) {
 		{"export default connect(\n  a,\n  b,\n)(View);", &ir.DistilledExport{IsDefault: true, Value: "connect(a, b)(View)"}},
 		{"export default memo(function L() {\n  return 1;\n});", &ir.DistilledExport{IsDefault: true, Value: "memo(function L())"}},
 		{`export = Foo;`, &ir.DistilledExport{Value: "Foo"}},
+		{`export as namespace Lib;`, &ir.DistilledExport{Namespace: "Lib"}},
 		// Declarations and class expressions are the processor's; a long
 		// value without a function is left out.
 		{`export class K {}`, nil},

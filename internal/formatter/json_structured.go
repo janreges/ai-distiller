@@ -197,6 +197,9 @@ func (f *JSONStructuredFormatter) importToStructured(n *ir.DistilledImport) map[
 	if n.IsType {
 		imp["is_type"] = true
 	}
+	if n.IsExport {
+		imp["is_export"] = true
+	}
 	if len(n.Symbols) > 0 {
 		imp["symbols"] = symbolsToStructured(n.Symbols)
 	}
@@ -221,6 +224,9 @@ func (f *JSONStructuredFormatter) exportToStructured(n *ir.DistilledExport) map[
 	}
 	if n.IsType {
 		exp["is_type"] = true
+	}
+	if n.Namespace != "" {
+		exp["namespace"] = n.Namespace
 	}
 	f.addCommonFields(exp, n)
 	return exp

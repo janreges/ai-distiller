@@ -75,6 +75,11 @@ var fixtures = []fixture{
 			"import type { ConfOnlyType } from './conf-types'",
 			"import * as confNs from './conf-ns'"}},
 		check{Cap: "import-filter-alias", NotContains: []string{"ConfGoneAlias"}},
+		check{Cap: "import-equals-alias", Contains: []string{"import ConfAliasUsed = confNs.ConfInner"},
+			NotContains: []string{"ConfAliasGone"}},
+		check{Cap: "import-equals-alias-unfiltered", Flags: []string{"--filter-imports=false"},
+			Contains: []string{"import ConfAliasGone = confNs.ConfUnused"}},
+		check{Cap: "export-as-namespace", Contains: []string{"export as namespace ConfLib"}},
 		check{Cap: "import-alias-kept-unfiltered", Flags: []string{"--filter-imports=false"},
 			Contains: []string{"import { confGone as ConfGoneAlias } from './conf-gone'"}},
 		check{Cap: "reexport-forms", Contains: []string{

@@ -248,6 +248,7 @@ func (s *signer) writeBreak(next string) {
 //	export { a }                    no module: names of this file
 //	export default <expression>     IsDefault, Value: the expression's Signature
 //	export = <expression>           Value (TypeScript)
+//	export as namespace Lib         Namespace (TypeScript)
 //
 // The value of `export default` is left out (nil) when it holds no function
 // and its signature is longer than MaxValueLen: a long object literal or
@@ -271,7 +272,7 @@ func Export(node *sitter.Node, source []byte) *ir.DistilledExport {
 		}
 		return exp
 	}
-	afterEquals := false
+	afterEquals, asNamespace := false, false
 	for i := uint(0); i < node.ChildCount(); i++ {
 		child := node.Child(i)
 		if child == nil {
@@ -312,13 +313,18 @@ func Export(node *sitter.Node, source []byte) *ir.DistilledExport {
 			}
 		case "=":
 			afterEquals = true
+		case "namespace":
+			asNamespace = true
 		default:
-			if afterEquals && child.IsNamed() && exp.Value == "" {
+			switch {
+			case asNamespace && child.Kind() == "identifier" && exp.Namespace == "":
+				exp.Namespace = text(child, source)
+			case afterEquals && child.IsNamed() && exp.Value == "":
 				exp.Value = Signature(child, source)
 			}
 		}
 	}
-	if len(exp.Symbols) == 0 && exp.Value == "" {
+	if len(exp.Symbols) == 0 && exp.Value == "" && exp.Namespace == "" {
 		return nil
 	}
 	return exp

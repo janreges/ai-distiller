@@ -26,13 +26,16 @@ func (n *DistilledPackage) Accept(visitor Visitor) DistilledNode {
 
 // Import nodes
 
-// DistilledImport represents an import statement
+// DistilledImport represents an import statement. TypeScript's import alias
+// `import G = ns.H` has the import type "alias", the entity name as Module and
+// the symbol "*" aliased G.
 type DistilledImport struct {
 	BaseNode
-	ImportType string           `json:"import_type"` // "import", "from", "require", etc.
+	ImportType string           `json:"import_type"` // "import", "from", "require", "alias", etc.
 	Module     string           `json:"module"`
 	Symbols    []ImportedSymbol `json:"symbols,omitempty"`
-	IsType     bool             `json:"is_type,omitempty"` // TypeScript `import type ...`
+	IsType     bool             `json:"is_type,omitempty"`   // TypeScript `import type ...`
+	IsExport   bool             `json:"is_export,omitempty"` // TypeScript `export import G = ns.H`
 }
 
 // ImportedSymbol represents an imported symbol. Alias, when set, is the name
@@ -65,8 +68,8 @@ func (n *DistilledImport) Accept(visitor Visitor) DistilledNode {
 // declares nothing itself: a re-export (`export * from "m"`, `export * as ns
 // from "m"`, `export { a, b as c } from "m"`), an export list of names of
 // the file (`export { a }`), `export default <expression>` or TypeScript's
-// `export = <expression>`. An exported declaration carries ModifierExport
-// instead.
+// `export = <expression>` and `export as namespace Lib`. An exported
+// declaration carries ModifierExport instead.
 type DistilledExport struct {
 	BaseNode
 	// Module is the module re-exported from; empty for names of this file.
@@ -81,6 +84,9 @@ type DistilledExport struct {
 	Value     string `json:"value,omitempty"`
 	IsDefault bool   `json:"is_default,omitempty"`
 	IsType    bool   `json:"is_type,omitempty"` // `export type { T } ...`
+	// Namespace is the global name of TypeScript's `export as namespace
+	// Lib` (the global of a UMD module).
+	Namespace string `json:"namespace,omitempty"`
 }
 
 // GetNodeKind implements DistilledNode

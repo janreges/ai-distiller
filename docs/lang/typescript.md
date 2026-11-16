@@ -19,7 +19,7 @@ TypeScript support in AI Distiller is designed to capture the rich type informat
 | **Type System** | ✅ Full | Union, intersection, conditional, mapped types |
 | **Generics** | ✅ Full | With constraints, defaults, inference |
 | **Type Aliases** | ✅ Full | Including complex utility types |
-| **Imports/Exports** | ✅ Full | Imports as written (`import D, { A, B as C } from './m'`, `import type`, `import * as ns`); re-exports and export lists (`export * from './a'`, `export { x as y } from './c'`, `export { q }`, `export default Inner`); `export` and `export default` on declarations |
+| **Imports/Exports** | ✅ Full | Imports as written (`import D, { A, B as C } from './m'`, `import type`, `import * as ns`); re-exports and export lists (`export * from './a'`, `export { x as y } from './c'`, `export { q }`, `export default Inner`); `export` and `export default` on declarations; import aliases (`import G = ns.H`, `export import G = ns.H`) and `export as namespace Lib` |
 | **Enums** | ✅ Full | Members with their initialisers; `const enum` prints as `enum` |
 | **Decorators** | ⚠️ Partial | Method decorators are printed with their arguments; class and property decorators are dropped |
 | **Namespaces** | ✅ Full | `namespace X {}` and `declare module "x" {}` with their members |
@@ -446,6 +446,7 @@ class Service {
 6. **Arrow-function and wrapped constants** (✅ Fixed): `export const handler = async <T>(req: Request): Response => ...` printed as `export const handler(req: Request): Response`, without `=`, `async` and the type parameters; it prints `export const handler = async <T>(req: Request): Response`. A constant initialised with a call that takes a function printed bare (`export const Button`) or with its body; it prints `export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({ variant = "a", ...props }, ref))` and the whole initializer with `--implementation=1`. A typed arrow constant keeps its type: `const Inner: React.FC<P> = ({ a })`
 7. **`let` and `var`** (✅ Fixed): a `let` or `var` initialised with an arrow function printed as `function f(a: number)` and a `var` as `let`; every variable prints with its keyword as written (`let f = (a: number)`, `var v = 3`)
 8. **Optional, readonly and index-signature members** (✅ Fixed): the `?` of optional properties and methods and the `readonly` of interface members were dropped (`email?: string` printed as `property email: string`), and index signatures were not printed; they print as written: `property readonly id: string`, `property email?: string`, `method run?(a: number): void`, `property [key: string]: unknown`, and in a class `public name?: string`, `public [key: string]: any`
+9. **Import aliases and `export as namespace`** (✅ Fixed): `import G = ns.H`, `export import G = ns.H` and a UMD module's `export as namespace Lib` were dropped; they print as written, and the unused-import filter removes an import alias whose name the output never uses, like any other import
 
 ### Current Limitations
 

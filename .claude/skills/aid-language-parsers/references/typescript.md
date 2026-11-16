@@ -67,8 +67,12 @@
 - An exported declaration carries the modifier `export`, and `default` after
   `export default`; `export default class {}` is a `DistilledClass` without a
   name. Every other export statement (a re-export, an export list, `export
-  default <expression>`, `export = x`) is a `DistilledExport`
-  (`internal/language/esutil/esutil.go#Export`). A declaration that an export
+  default <expression>`, `export = x`, `export as namespace Lib` with
+  `Namespace`) is a `DistilledExport`
+  (`internal/language/esutil/esutil.go#Export`). An import alias, `import G =
+  ns.H`, is a `DistilledImport` with the import type `alias`, the entity name as
+  `Module` and the symbol `*` aliased `G`; `export import G = ns.H` sets
+  `IsExport` (`internal/language/typescript/ast_parser.go#ASTParser.parseImportAlias`). A declaration that an export
   list or `export default <name>` of the same file or namespace names is
   `public`, without an `export` modifier
   (`internal/language/typescript/ast_parser.go#publishExportedNames`). A variable whose value

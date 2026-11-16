@@ -27,6 +27,8 @@ func TestESImportLine(t *testing.T) {
 		// A "default" symbol after the first one was written in braces.
 		{ir.DistilledImport{ImportType: "import", Module: "./m", Symbols: []ir.ImportedSymbol{sym("A", ""), sym("default", "B")}}, "import { A, default as B } from './m'"},
 		{ir.DistilledImport{ImportType: "require", Module: "f", Symbols: []ir.ImportedSymbol{sym("*", "F")}}, "import F = require('f')"},
+		{ir.DistilledImport{ImportType: "alias", Module: "ns.H", Symbols: []ir.ImportedSymbol{sym("*", "G")}}, "import G = ns.H"},
+		{ir.DistilledImport{ImportType: "alias", Module: "ns.E", IsExport: true, Symbols: []ir.ImportedSymbol{sym("*", "E")}}, "export import E = ns.E"},
 	} {
 		t.Run(tc.want, func(t *testing.T) {
 			imp := tc.imp
@@ -77,6 +79,7 @@ func TestESExportLine(t *testing.T) {
 		{ir.DistilledExport{Symbols: []ir.ImportedSymbol{{Name: "P", IsType: true}, sym("default", "")}}, "export { type P, default }"},
 		{ir.DistilledExport{IsDefault: true, Value: "Inner"}, "export default Inner"},
 		{ir.DistilledExport{Value: "Foo"}, "export = Foo"},
+		{ir.DistilledExport{Namespace: "Lib"}, "export as namespace Lib"},
 	} {
 		t.Run(tc.want, func(t *testing.T) {
 			exp := tc.exp
@@ -92,8 +95,16 @@ func TestStructuredFormatsShowExports(t *testing.T) {
 	file := &ir.DistilledFile{Path: "t.ts", Language: "typescript", Children: []ir.DistilledNode{
 		&ir.DistilledExport{Module: "./c", IsType: true, Symbols: []ir.ImportedSymbol{{Name: "y", Alias: "z"}}},
 		&ir.DistilledExport{IsDefault: true, Value: "Inner"},
+		&ir.DistilledExport{Namespace: "Lib"},
+		&ir.DistilledImport{ImportType: "alias", Module: "ns.E", IsExport: true, Symbols: []ir.ImportedSymbol{{Name: "*", Alias: "E"}}},
 	}}
 	out := structuredOutputs(t, file)
+	assert.Contains(t, out["jsonl"], `{"file":"t.ts","name":"Lib","namespace":"Lib","path":[],"type":"export"}`)
+	assert.Contains(t, out["jsonl"], `"import_type":"alias","is_export":true,"module":"ns.E"`)
+	assert.Contains(t, out["json-structured"], `"namespace": "Lib"`)
+	assert.Contains(t, out["json-structured"], `"is_export": true`)
+	assert.Contains(t, out["xml"], `<export namespace="Lib"/>`)
+	assert.Contains(t, out["xml"], `<import type="alias" module="ns.E" is_export="true">`)
 	assert.Contains(t, out["jsonl"], `{"file":"t.ts","is_type":true,"module":"./c","name":"./c","path":[],"symbols":[{"name":"y","alias":"z"}],"type":"export"}`)
 	assert.Contains(t, out["jsonl"], `{"file":"t.ts","is_default":true,"name":"default","path":[],"type":"export","value":"Inner"}`)
 	assert.Contains(t, out["json-structured"], `"exports": [`)

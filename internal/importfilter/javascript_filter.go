@@ -112,6 +112,8 @@ func (f *JavaScriptFilter) parseImports(code string, debugLevel int) ([]ImportSt
 	dynamicImportRe := regexp.MustCompile(`import\s*\(`)
 	// CommonJS require, and TypeScript's `import x = require('m')`
 	requireRe := regexp.MustCompile(`^\s*(?:const|let|var|import)\s+(.+?)\s*=\s*require\s*\(\s*['"` + "`" + `](.+?)['"` + "`" + `]\s*\)\s*;?\s*$`)
+	// TypeScript's import alias, `import G = ns.H`
+	aliasRe := regexp.MustCompile(`^\s*import\s+([\w$]+)\s*=\s*([\w$]+(?:\s*\.\s*[\w$]+)*)\s*;?\s*$`)
 	// Type imports (TypeScript)
 	typeImportRe := regexp.MustCompile(`^\s*import\s+type\s+(.+?)\s+from\s+['"` + "`" + `](.+?)['"` + "`" + `]\s*;?\s*$`)
 
@@ -245,6 +247,19 @@ func (f *JavaScriptFilter) parseImports(code string, debugLevel int) ([]ImportSt
 			}
 
 			imports = append(imports, imp)
+			i++
+			continue
+		}
+
+		// Try to match an import alias: it binds its local name
+		if matches := aliasRe.FindStringSubmatch(line); matches != nil {
+			imports = append(imports, ImportStatement{
+				FullLine:  line,
+				StartLine: i + 1,
+				EndLine:   i + 1,
+				Module:    matches[2],
+				Aliases:   map[string]string{"default": matches[1]},
+			})
 			i++
 			continue
 		}

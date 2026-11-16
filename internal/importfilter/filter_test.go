@@ -155,6 +155,8 @@ const app = express()
 		{"inline type", "import { type T, V } from './x'", "function f(t: T)"},
 		{"default as", "import { A, default as B } from './m'", "function f(b: B)"},
 		{"import equals require", "import F = require('f')", "function f(x: F)"},
+		{"import alias", "import G = ns.Inner.H", "function f(x: G)"},
+		{"import alias, unused", "import G = ns.Inner.H", ""},
 	}
 	for _, form := range forms {
 		// B, the original name of the alias C, occurs in every file.
@@ -169,7 +171,7 @@ const app = express()
 		}
 	}
 	// A re-export is never an import to remove, even when nothing uses its names.
-	reexports := "<file path=\"x.ts\">\nimport { used } from './u'\nexport * from './a'\nexport { x, y as z } from './c'\nexport type { T } from './t'\nexport default used\n</file>"
+	reexports := "<file path=\"x.ts\">\nimport { used } from './u'\nexport * from './a'\nexport { x, y as z } from './c'\nexport type { T } from './t'\nexport default used\nexport import E = ns.E\nexport as namespace Lib\n</file>"
 	if filtered, removed, _ := filter.FilterUnusedImports(reexports, 0); len(removed) != 0 || filtered != reexports {
 		t.Errorf("re-exports changed: removed %v", removed)
 	}

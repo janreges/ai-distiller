@@ -368,6 +368,19 @@ func TestTS_ImportForms(t *testing.T) {
 	assert.Equal(t, []ir.ImportedSymbol{{Name: "default", Alias: "H"}, {Name: "*", Alias: "I"}}, imp(6).Symbols)
 }
 
+// `import G = ns.H` is an import alias, `export import` an exported one, and
+// `export as namespace Lib` an export with a namespace.
+func TestTS_ImportAliasAndExportAsNamespace(t *testing.T) {
+	f := parseTS(t, "import G = ns.H;\nexport import E = ns.Inner.E;\nexport as namespace Lib;\n")
+	require.Len(t, f.Children, 3)
+	assert.Equal(t, &ir.DistilledImport{BaseNode: f.Children[0].(*ir.DistilledImport).BaseNode, ImportType: "alias", Module: "ns.H",
+		Symbols: []ir.ImportedSymbol{{Name: "*", Alias: "G"}}}, f.Children[0])
+	e := f.Children[1].(*ir.DistilledImport)
+	assert.Equal(t, "ns.Inner.E", e.Module)
+	assert.True(t, e.IsExport)
+	assert.Equal(t, "Lib", f.Children[2].(*ir.DistilledExport).Namespace)
+}
+
 // typeNames returns the names of refs.
 func typeNames(refs []ir.TypeRef) []string {
 	var out []string
