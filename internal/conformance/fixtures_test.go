@@ -166,5 +166,11 @@ var fixtures = []fixture{
 			"class ConfWidget extends ConfAliasBase implements ConfAliasShown {\n    use ConfTrait;\n"}},
 		check{Cap: "use-function-const", Flags: []string{"--implementation=1"}, Contains: []string{
 			"use function Conf\\Helpers\\conf_helper;\n",
-			"use const Conf\\Helpers\\CONF_LIMIT;\n"}})},
+			"use const Conf\\Helpers\\CONF_LIMIT;\n"}},
+		// Parameters and return types print as written.
+		check{Cap: "signature-as-written", Contains: []string{
+			"    public static confMake(int ...$confIds): static\n",
+			"    public &confRef(array &$confArr): array\n",
+			"    public confNever(): never\n",
+			"conf_dnf((ConfA&ConfB)|null $confDnf): (ConfA&ConfB)|null\n"}})},
 }

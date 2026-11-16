@@ -34,4 +34,20 @@ class ConfWidget extends ConfAliasBase implements ConfAliasShown {
     public function confCall(): int {
         return conf_helper(CONF_LIMIT);
     }
+
+    public static function confMake(int ...$confIds): static {
+        return new static();
+    }
+
+    public function &confRef(array &$confArr): array {
+        return $confArr;
+    }
+
+    public function confNever(): never {
+        exit;
+    }
+}
+
+function conf_dnf((ConfA&ConfB)|null $confDnf): (ConfA&ConfB)|null {
+    return $confDnf;
 }

@@ -281,6 +281,9 @@ func (f *JSONStructuredFormatter) functionToStructured(n *ir.DistilledFunction) 
 			if p.IsVariadic {
 				param["variadic"] = true
 			}
+			if p.IsReference {
+				param["reference"] = true
+			}
 			params[i] = param
 		}
 		fn["parameters"] = params

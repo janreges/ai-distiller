@@ -229,6 +229,9 @@ type PHPExtensions struct {
 	IsEnumCase bool `json:"is_enum_case,omitempty"`
 	// Indicates if this class is actually a trait
 	IsTrait bool `json:"is_trait,omitempty"`
+	// ReturnsReference marks a function that returns by reference
+	// (`function &f()`).
+	ReturnsReference bool `json:"returns_reference,omitempty"`
 }
 
 // FieldOrigin indicates where a field/method was defined

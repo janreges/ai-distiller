@@ -330,6 +330,10 @@ func (f *PHPFormatter) formatFunction(fn *ir.DistilledFunction, indent int) stri
 	if len(modifiers) > 0 {
 		signature = strings.Join(modifiers, " ") + " "
 	}
+	// A function that returns by reference keeps its `&`: `public &ref(): array`
+	if fn.Extensions != nil && fn.Extensions.PHP != nil && fn.Extensions.PHP.ReturnsReference {
+		signature += "&"
+	}
 	signature += fn.Name
 
 	// Parameters
@@ -345,6 +349,14 @@ func (f *PHPFormatter) formatFunction(fn *ir.DistilledFunction, indent int) stri
 				typeName = "?" + typeName
 			}
 			param = typeName + " "
+		}
+
+		// By reference and variadic, in PHP's order: `int &...$rest`
+		if p.IsReference {
+			param += "&"
+		}
+		if p.IsVariadic {
+			param += "..."
 		}
 
 		// Parameter name (PHP variables start with $)
@@ -366,9 +378,7 @@ func (f *PHPFormatter) formatFunction(fn *ir.DistilledFunction, indent int) stri
 	// Return type
 	if fn.Returns != nil {
 		returnType := fn.Returns.Name
-		if returnType == "never" {
-			returnType = "never"
-		} else if returnType == "" {
+		if returnType == "" {
 			returnType = "void"
 		}
 		signature += ": " + returnType

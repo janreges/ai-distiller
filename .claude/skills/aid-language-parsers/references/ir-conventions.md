@@ -27,8 +27,8 @@ declaration, so a parser has to fill them.
 | `DistilledComment` | no | `Text` (without delimiters), `Format`, `Inner` |
 | `DistilledRawContent` | no | `Content`, printed as is |
 
-A `Parameter` has `Name`, `Type`, `DefaultValue`, `IsVariadic`, `IsOptional`
-and `Decorators`; a `TypeRef` has `Name`, `Package`, `TypeArgs` and nullability
+A `Parameter` has `Name`, `Type`, `DefaultValue`, `IsVariadic`, `IsOptional`,
+`Decorators` and `IsReference` (a PHP `&$x`); a `TypeRef` has `Name`, `Package`, `TypeArgs` and nullability
 and array flags. Nothing else in the IR has children: a method is a child of
 its type, never a child of another function.
 

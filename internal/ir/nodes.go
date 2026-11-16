@@ -340,4 +340,6 @@ type Parameter struct {
 	IsVariadic   bool     `json:"is_variadic,omitempty"`
 	IsOptional   bool     `json:"is_optional,omitempty"`
 	Decorators   []string `json:"decorators,omitempty"`
+	// IsReference marks a parameter passed by reference (PHP `&$x`).
+	IsReference bool `json:"is_reference,omitempty"`
 }

@@ -23,3 +23,40 @@ func TestPHPFormatter_FunctionBody(t *testing.T) {
 	// A block body loses its brace lines and is re-indented under the method.
 	assert.Equal(t, "    public quick(): int {\n        return 1;\n    }\n", format("{\n        return 1;\n    }"))
 }
+
+func TestPHPFormatter_SignaturePartsPrintAsWritten(t *testing.T) {
+	fn := &ir.DistilledFunction{
+		BaseNode:   ir.BaseNode{Extensions: &ir.NodeExtensions{PHP: &ir.PHPExtensions{ReturnsReference: true}}},
+		Name:       "collect",
+		Visibility: ir.VisibilityPublic,
+		Modifiers:  []ir.Modifier{ir.ModifierStatic},
+		Parameters: []ir.Parameter{
+			{Name: "arr", Type: ir.TypeRef{Name: "array"}, IsReference: true},
+			{Name: "dnf", Type: ir.TypeRef{Name: "(A&B)|null"}, DefaultValue: "null"},
+			{Name: "rest", Type: ir.TypeRef{Name: "int"}, IsReference: true, IsVariadic: true},
+		},
+		Returns: &ir.TypeRef{Name: "never"},
+	}
+	var b strings.Builder
+	require.NoError(t, NewPHPFormatter().FormatNode(&b, fn, 1))
+	assert.Equal(t, "    public static &collect(array &$arr, (A&B)|null $dnf = null, int &...$rest): never\n", b.String())
+}
+
+// A by-reference parameter is marked in the structured formats too.
+func TestStructuredFormats_ReferenceParameter(t *testing.T) {
+	file := &ir.DistilledFile{Path: "r.php", Language: "php", Children: []ir.DistilledNode{
+		&ir.DistilledFunction{Name: "push", Parameters: []ir.Parameter{{Name: "arr", Type: ir.TypeRef{Name: "array"}, IsReference: true}}},
+	}}
+	for name, tc := range map[string]struct {
+		f    Formatter
+		want string
+	}{
+		"jsonl":           {NewJSONLFormatter(Options{}), `"reference":true`},
+		"json-structured": {NewJSONStructuredFormatter(Options{}), `"reference": true`},
+		"xml":             {NewXMLFormatter(Options{}), `<parameter name="arr" type="array" reference="true"/>`},
+	} {
+		var b strings.Builder
+		require.NoError(t, tc.f.Format(&b, file), name)
+		assert.Contains(t, b.String(), tc.want, name)
+	}
+}

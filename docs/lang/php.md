@@ -27,10 +27,12 @@ PHP support in AI Distiller is designed to extract the essential structure of PH
 
 | Feature | Support Level | Notes |
 |---------|--------------|-------|
-| **Type declarations** | ✅ Full | Parameters, returns, properties |
+| **Type declarations** | ✅ Full | Parameters, returns, properties, printed as written |
 | **Union types** | ✅ Full | PHP 8.0+ `string\|int` |
-| **Intersection types** | ✅ Full | PHP 8.1+ `Countable&Iterator` |
+| **Intersection types** | ✅ Full | PHP 8.1+ `Countable&Iterator`; DNF types (8.2+) such as `(A&B)\|null` |
 | **Nullable types** | ✅ Full | `?string` syntax |
+| **`never`, `static`, `mixed`** | ✅ Full | Printed as return types (`b(): never`) |
+| **Variadic and by-reference** | ✅ Full | `make(int ...$ids)`, `sort(array &$items)`, a by-reference return as `public &ref(): array`; a `@param mixed ...$args` docblock also marks a plain `$args` variadic |
 | **Array types** | ✅ Full | Via PHPDoc: `array<K,V>`, `list<T>` (printed as `T[]`); a one-line array shape (`array{id: int}`) prints in the signature, a multi-line one stays in the docblock |
 | **Advanced types** | ✅ Full | `class-string<T>`, `key-of<>`, `value-of<>` from `@param` and `@return` |
 | **Default values** | ✅ Full | Parameter defaults preserved |

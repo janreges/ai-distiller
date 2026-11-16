@@ -75,7 +75,7 @@ Fields per kind (`internal/formatter/jsonl.go#JSONLFormatter.nodeToJSON`):
 | `import` | `import_type`, `module`, `symbols` (`name`, `alias`) |
 | `class` | `visibility`, `modifiers`, `extends`, `implements` |
 | `interface` | `visibility`, `extends` |
-| `function` | `visibility`, `modifiers`, `parameters` (always, `[]` when empty; each `name`, `type`, `default`, `optional`, `variadic`), `returns`, `implementation` |
+| `function` | `visibility`, `modifiers`, `parameters` (always, `[]` when empty; each `name`, `type`, `default`, `optional`, `variadic`, `reference`), `returns`, `implementation` |
 | `field` | `visibility`, `modifiers`, `field_type`, `default` |
 | `type_alias` | `visibility`, `alias_type` |
 | `comment` | `format`, `text` |
@@ -203,7 +203,7 @@ Shape:
 - Elements: `<package name>`, `<import type module>` with `<symbol name alias>`,
   `<class name visibility modifiers>`, `<interface name visibility>`,
   `<struct>`, `<enum>`, `<function name visibility modifiers returns>` with
-  `<parameters>` (`<parameter name type default optional variadic>`) and
+  `<parameters>` (`<parameter name type default optional variadic reference>`) and
   `<implementation>`, `<field name visibility modifiers type default>`,
   `<type_alias name visibility type>`, `<comment format>`; any other kind is
   `<node kind="..."/>`. Modifiers are one space-separated attribute; an

@@ -207,6 +207,9 @@ func (f *XMLFormatter) formatNode(w io.Writer, node ir.DistilledNode, depth int)
 					if p.IsVariadic {
 						f.writeAttr(w, "variadic", "true")
 					}
+					if p.IsReference {
+						f.writeAttr(w, "reference", "true")
+					}
 					fmt.Fprintln(w, "/>")
 				}
 				fmt.Fprintf(w, "%s  </parameters>\n", indent)

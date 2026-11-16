@@ -258,6 +258,9 @@ func (f *JSONLFormatter) parametersToJSON(params []ir.Parameter) []map[string]in
 		if p.IsVariadic {
 			param["variadic"] = true
 		}
+		if p.IsReference {
+			param["reference"] = true
+		}
 		result[i] = param
 	}
 	return result

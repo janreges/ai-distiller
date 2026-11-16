@@ -36,6 +36,8 @@ type PHPDocInfo struct {
 	propertyType string
 	returnType   string
 	paramTypes   map[string]string
+	// variadicParams names the parameters written `...$x` in @param
+	variadicParams map[string]bool
 }
 
 // NewTreeSitterProcessor creates a new tree-sitter based processor
@@ -166,7 +168,8 @@ func (p *TreeSitterProcessor) findNextCodeLine(commentNode *sitter.Node) int {
 // parsePHPDoc parses PHPDoc comment and extracts type information
 func (p *TreeSitterProcessor) parsePHPDoc(text string) *PHPDocInfo {
 	info := &PHPDocInfo{
-		paramTypes: make(map[string]string),
+		paramTypes:     make(map[string]string),
+		variadicParams: make(map[string]bool),
 	}
 
 	// Clean up docblock
@@ -209,8 +212,13 @@ func (p *TreeSitterProcessor) parsePHPDoc(text string) *PHPDocInfo {
 			// Complex types can have spaces, so we look for $paramName pattern
 			dollarPos := strings.Index(paramStr, "$")
 			if dollarPos > 0 {
-				// Extract type (everything before the $)
+				// Extract type (everything before the $). The `...` and `&`
+				// of `@param int &...$x` belong to the parameter, not to its
+				// type; the `&` is the code's to declare, the `...` is kept.
 				typeName := strings.TrimSpace(paramStr[:dollarPos])
+				variadic := strings.HasSuffix(typeName, "...")
+				typeName = strings.TrimSpace(strings.TrimSuffix(typeName, "..."))
+				typeName = strings.TrimSpace(strings.TrimSuffix(typeName, "&"))
 				// Extract parameter name
 				rest := paramStr[dollarPos+1:]
 				spacePos := strings.IndexFunc(rest, unicode.IsSpace)
@@ -220,6 +228,7 @@ func (p *TreeSitterProcessor) parsePHPDoc(text string) *PHPDocInfo {
 				}
 				if typeName != "" && paramName != "" {
 					info.paramTypes[paramName] = p.normalizeArrayType(typeName)
+					info.variadicParams[paramName] = variadic
 					hasTypeInfo = true
 				}
 			}
@@ -802,18 +811,8 @@ func (p *TreeSitterProcessor) processMethod(node *sitter.Node, file *ir.Distille
 				}
 			}
 
-		case ":":
-			// Return type follows the colon
-			if i+1 < int(node.ChildCount()) {
-				nextChild := node.Child(uint(i + 1))
-				if nextChild.Kind() == "primitive_type" || nextChild.Kind() == "named_type" ||
-					nextChild.Kind() == "union_type" || nextChild.Kind() == "intersection_type" ||
-					nextChild.Kind() == "optional_type" {
-					fn.Returns = &ir.TypeRef{
-						Name: p.getNodeText(nextChild),
-					}
-				}
-			}
+		case "reference_modifier":
+			setReturnsReference(fn)
 
 		case "compound_statement":
 			// Method body
@@ -829,6 +828,7 @@ func (p *TreeSitterProcessor) processMethod(node *sitter.Node, file *ir.Distille
 	if !hasVisibility {
 		fn.Visibility = ir.VisibilityPublic
 	}
+	p.readReturnType(node, fn)
 
 	// Check for PHPDoc type information
 	nodeLine := int(node.StartPosition().Row) + 1
@@ -850,6 +850,11 @@ func (p *TreeSitterProcessor) processMethod(node *sitter.Node, file *ir.Distille
 
 		// Apply param types
 		for i := range fn.Parameters {
+			// A parameter the docblock writes `...$x` takes extra arguments
+			// (func_get_args) even when the code declares it plain.
+			if docInfo.variadicParams[fn.Parameters[i].Name] {
+				fn.Parameters[i].IsVariadic = true
+			}
 			if docType, exists := docInfo.paramTypes[fn.Parameters[i].Name]; exists {
 				// Always prefer docblock type if it's more specific
 				// This includes class-string<T>, callable():object, int-mask-of<>, etc.
@@ -876,7 +881,12 @@ func (p *TreeSitterProcessor) processProperty(node *sitter.Node, file *ir.Distil
 	var propertyType *ir.TypeRef
 	var attributes []string
 
-	// Process property modifiers and type
+	// The type of any kind, `(A&B)|null` included
+	if t := node.ChildByFieldName("type"); t != nil {
+		propertyType = &ir.TypeRef{Name: p.getNodeText(t)}
+	}
+
+	// Process property modifiers
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(uint(i))
 		switch child.Kind() {
@@ -893,11 +903,6 @@ func (p *TreeSitterProcessor) processProperty(node *sitter.Node, file *ir.Distil
 
 		case "readonly_modifier":
 			modifiers = append(modifiers, ir.ModifierReadonly)
-
-		case "type", "union_type", "intersection_type", "optional_type", "primitive_type", "named_type":
-			propertyType = &ir.TypeRef{
-				Name: p.getNodeText(child),
-			}
 
 		case "attribute_list":
 			p.processAttributes(child, &attributes)
@@ -981,18 +986,8 @@ func (p *TreeSitterProcessor) processFunction(node *sitter.Node, file *ir.Distil
 		case "formal_parameters":
 			p.processParameters(child, fn)
 
-		case ":":
-			// Return type follows the colon
-			if i+1 < int(node.ChildCount()) {
-				nextChild := node.Child(uint(i + 1))
-				if nextChild.Kind() == "primitive_type" || nextChild.Kind() == "named_type" ||
-					nextChild.Kind() == "union_type" || nextChild.Kind() == "intersection_type" ||
-					nextChild.Kind() == "optional_type" {
-					fn.Returns = &ir.TypeRef{
-						Name: p.getNodeText(nextChild),
-					}
-				}
-			}
+		case "reference_modifier":
+			setReturnsReference(fn)
 
 		case "compound_statement":
 			// Function body
@@ -1003,6 +998,7 @@ func (p *TreeSitterProcessor) processFunction(node *sitter.Node, file *ir.Distil
 			}
 		}
 	}
+	p.readReturnType(node, fn)
 
 	// Check for PHPDoc type information
 	nodeLine := int(node.StartPosition().Row) + 1
@@ -1024,6 +1020,11 @@ func (p *TreeSitterProcessor) processFunction(node *sitter.Node, file *ir.Distil
 
 		// Apply param types
 		for i := range fn.Parameters {
+			// A parameter the docblock writes `...$x` takes extra arguments
+			// (func_get_args) even when the code declares it plain.
+			if docInfo.variadicParams[fn.Parameters[i].Name] {
+				fn.Parameters[i].IsVariadic = true
+			}
 			if docType, exists := docInfo.paramTypes[fn.Parameters[i].Name]; exists {
 				// Always prefer docblock type if it's more specific
 				// This includes class-string<T>, callable():object, int-mask-of<>, etc.
@@ -1043,6 +1044,26 @@ func (p *TreeSitterProcessor) processFunction(node *sitter.Node, file *ir.Distil
 	p.addNode(file, parent, fn)
 }
 
+// readReturnType sets the declared return type of a function or method as
+// written, whatever its kind (`never` is a bottom_type, `(A&B)|null` a
+// disjunctive_normal_form_type).
+func (p *TreeSitterProcessor) readReturnType(node *sitter.Node, fn *ir.DistilledFunction) {
+	if rt := node.ChildByFieldName("return_type"); rt != nil {
+		fn.Returns = &ir.TypeRef{Name: p.getNodeText(rt)}
+	}
+}
+
+// setReturnsReference marks a function declared `function &name()`.
+func setReturnsReference(fn *ir.DistilledFunction) {
+	if fn.Extensions == nil {
+		fn.Extensions = &ir.NodeExtensions{}
+	}
+	if fn.Extensions.PHP == nil {
+		fn.Extensions.PHP = &ir.PHPExtensions{}
+	}
+	fn.Extensions.PHP.ReturnsReference = true
+}
+
 // processParameters processes function/method parameters
 func (p *TreeSitterProcessor) processParameters(node *sitter.Node, fn *ir.DistilledFunction) {
 	for i := 0; i < int(node.ChildCount()); i++ {
@@ -1057,65 +1078,42 @@ func (p *TreeSitterProcessor) processParameters(node *sitter.Node, fn *ir.Distil
 	}
 }
 
-// processParameter processes a single parameter
+// processParameter reads one parameter as written: its type of any kind
+// (`(A&B)|null` included), `&` for a reference, `...` for a variadic and the
+// default value.
 func (p *TreeSitterProcessor) processParameter(node *sitter.Node) ir.Parameter {
-	param := ir.Parameter{}
+	param := ir.Parameter{IsVariadic: node.Kind() == "variadic_parameter"}
+	if t := node.ChildByFieldName("type"); t != nil {
+		param.Type = ir.TypeRef{Name: p.getNodeText(t)}
+	}
+	if node.ChildByFieldName("reference_modifier") != nil {
+		param.IsReference = true
+	}
+	param.Name, param.IsReference = p.parameterName(node, param.IsReference)
+	if d := node.ChildByFieldName("default_value"); d != nil {
+		param.DefaultValue = p.getNodeText(d)
+	}
+	return param
+}
 
-	// Debug: print parameter structure
-	// fmt.Printf("DEBUG processParameter: node type=%s, has %d children\n", node.Kind(), node.ChildCount())
-	// for i := 0; i < int(node.ChildCount()); i++ {
-	// 	child := node.Child(i)
-	// 	fmt.Printf("  Child %d: type=%s, text=%s\n", i, child.Kind(), p.getNodeText(child))
-	// }
-
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(uint(i))
-		switch child.Kind() {
-		case "attribute_list":
-			// PHP 8 parameter attributes
-
-		case "visibility_modifier":
-			// Constructor property promotion
-
-		case "readonly_modifier":
-			// Constructor property promotion with readonly
-
-		case "type", "union_type", "intersection_type", "optional_type", "primitive_type", "named_type":
-			param.Type = ir.TypeRef{
-				Name: p.getNodeText(child),
-			}
-
-		case "reference_modifier":
-			// &$param
-
-		case "variadic_unpacking":
-			// ...$params
-
-		case "variable_name":
-			param.Name = strings.TrimPrefix(p.getNodeText(child), "$")
-
-		case "=":
-			// Default value follows the = sign
-			if i+1 < int(node.ChildCount()) {
-				nextChild := node.Child(uint(i + 1))
-				param.DefaultValue = p.getNodeText(nextChild)
-			}
-
-		case "default_value":
-			// Get default value - skip the = sign
-			// fmt.Printf("DEBUG: default_value node has %d children\n", child.ChildCount())
-			for j := 0; j < int(child.ChildCount()); j++ {
-				grandchild := child.Child(uint(j))
-				// fmt.Printf("  Child %d: type=%s, text=%s\n", j, grandchild.Kind(), p.getNodeText(grandchild))
-				if grandchild.Kind() != "=" {
-					param.DefaultValue = p.getNodeText(grandchild)
-					break
-				}
+// parameterName returns the name of a parameter without its `$`. A promoted
+// parameter written `&$x` has a by_ref node as its name, which also makes
+// it a reference.
+func (p *TreeSitterProcessor) parameterName(node *sitter.Node, isReference bool) (string, bool) {
+	name := node.ChildByFieldName("name")
+	if name == nil {
+		return "", isReference
+	}
+	if name.Kind() == "by_ref" {
+		isReference = true
+		for i := uint(0); i < name.NamedChildCount(); i++ {
+			if v := name.NamedChild(i); v.Kind() == "variable_name" {
+				name = v
+				break
 			}
 		}
 	}
-
-	return param
+	return strings.TrimPrefix(p.getNodeText(name), "$"), isReference
 }
 
 // processPromotedProperties processes constructor promoted properties
@@ -1146,19 +1144,12 @@ func (p *TreeSitterProcessor) processPromotedProperties(parametersNode *sitter.N
 
 				case "readonly_modifier":
 					field.Modifiers = append(field.Modifiers, ir.ModifierReadonly)
-
-				case "type", "union_type", "intersection_type", "optional_type", "primitive_type", "named_type":
-					field.Type = &ir.TypeRef{
-						Name: p.getNodeText(paramChild),
-					}
-
-				case "variable_name":
-					field.Name = strings.TrimPrefix(p.getNodeText(paramChild), "$")
-
-				case "default_value":
-					field.DefaultValue = p.getNodeText(paramChild)
 				}
 			}
+			if t := child.ChildByFieldName("type"); t != nil {
+				field.Type = &ir.TypeRef{Name: p.getNodeText(t)}
+			}
+			field.Name, _ = p.parameterName(child, false)
 
 			// Add the field to the class, ahead of the comments that precede the
 			// constructor: they document the constructor, not its fields.

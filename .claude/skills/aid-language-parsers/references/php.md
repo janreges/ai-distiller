@@ -74,6 +74,12 @@
   `Module` is the prefix with its trailing backslash (`A\`) and whose symbols
   are the members; a member with its own kind keeps it in the symbol name
   (`function f`). The text formatter prints all of them as written.
+- Types are read as written from the grammar's `type` and `return_type`
+  fields, whatever their kind (`never` is a `bottom_type`, `(A&B)|null` a
+  `disjunctive_normal_form_type`). A `...$x` parameter sets `IsVariadic`, a
+  `&$x` (also a promoted `private &$x`) sets `IsReference`, and `function
+  &f()` sets `Extensions.PHP.ReturnsReference`
+  (`internal/language/php/tree_sitter_processor.go#TreeSitterProcessor.processParameter`).
 - `Implementation` is the function body with its braces (`{ return; }`).
 - Comments: `/** */` has the legacy format `docblock`, which counts as doc
   (`internal/ir/comment.go#DistilledComment.IsDoc`); `/* */` is `block`, `//`

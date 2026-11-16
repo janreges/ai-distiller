@@ -462,3 +462,88 @@ enum Suit: string {
 	off := distillPHP(t, src, func(o *processor.ProcessOptions) { o.IncludeDocstrings = false })
 	assert.NotContains(t, off, "_DOC")
 }
+
+// Every parameter and return type form prints as written: variadics, by
+// reference parameters and returns, `never`, DNF types and the rest.
+func TestPHP_SignaturesPrintAsWritten(t *testing.T) {
+	src := `<?php
+class T {
+    public (A&B)|null $dnfProp;
+    public function a(): void {}
+    public function b(): never { exit; }
+    public function c(): static { return $this; }
+    public function d(): ?self { return null; }
+    public function e(): mixed { return 1; }
+    public function f(): int|string|null { return 1; }
+    public function g(): A&B { return $x; }
+    public function h(): (A&B)|null { return null; }
+    public function i(): ?\Foo\Bar { return null; }
+    public function j(): false { return false; }
+    public function &ref(array &$arr, &...$rest): array { return $arr; }
+    public static function make(int ...$ids): static { return new static(); }
+    public function opt(int &$x = 1, ?callable $cb = null, (A&B)|null $dnf = null, $untyped = 2) {}
+    public function __construct(private int &$counter, public readonly (A&B)|C $both) {}
+    /**
+     * @param  string  ...$guards
+     * @param  array<string, int>  &$map
+     */
+    public function guarded(array &$map, string ...$guards) {}
+    /**
+     * @param  mixed  ...$tags
+     */
+    public function tag($abstracts, $tags) {}
+}
+function &globalRef(): array { static $a = []; return $a; }
+function helper(Status ...$s): never { exit; }
+`
+	out := distillPHP(t, src, func(o *processor.ProcessOptions) { o.IncludePrivate = true })
+	for _, want := range []string{
+		"    public (A&B)|null $dnfProp;\n",
+		"    public a(): void\n",
+		"    public b(): never\n",
+		"    public c(): static\n",
+		"    public d(): ?self\n",
+		"    public e(): mixed\n",
+		"    public f(): int|string|null\n",
+		"    public g(): A&B\n",
+		"    public h(): (A&B)|null\n",
+		"    public i(): ?\\Foo\\Bar\n",
+		"    public j(): false\n",
+		"    public &ref(array &$arr, &...$rest): array\n",
+		"    public static make(int ...$ids): static\n",
+		"    public opt(int &$x = 1, ?callable $cb = null, (A&B)|null $dnf = null, $untyped = 2)\n",
+		"    private int $counter;\n",
+		"    public readonly (A&B)|C $both;\n",
+		"    public __construct(int &$counter, (A&B)|C $both)\n",
+		// A docblock type replaces the native one, without the `&` and `...`
+		// that PHPDoc writes before the name.
+		"    public guarded(array<string, int> &$map, string ...$guards)\n",
+		// A docblock `...$x` makes a plain parameter variadic (func_get_args).
+		"    public tag($abstracts, mixed ...$tags)\n",
+		"&globalRef(): array\n",
+		"helper(Status ...$s): never\n",
+	} {
+		assert.Contains(t, out, want)
+	}
+
+	// The IR carries the same facts, for every output format.
+	file, err := NewProcessor().ProcessWithOptions(context.Background(), strings.NewReader(src), "test.php", processor.DefaultProcessOptions())
+	require.NoError(t, err)
+	var ref *ir.DistilledFunction
+	for _, child := range file.Children {
+		if c, ok := child.(*ir.DistilledClass); ok {
+			for _, m := range c.Children {
+				if fn, ok := m.(*ir.DistilledFunction); ok && fn.Name == "ref" {
+					ref = fn
+				}
+			}
+		}
+	}
+	require.NotNil(t, ref)
+	require.Len(t, ref.Parameters, 2)
+	assert.True(t, ref.Parameters[0].IsReference)
+	assert.True(t, ref.Parameters[1].IsReference)
+	assert.True(t, ref.Parameters[1].IsVariadic)
+	require.NotNil(t, ref.Extensions)
+	assert.True(t, ref.Extensions.PHP.ReturnsReference)
+}
