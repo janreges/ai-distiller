@@ -50,9 +50,9 @@ one the prompt AI actions distil to:
    picks the language formatter by `file.Language`, calls its `Reset` (per-file
    state), then
    - if it implements `internal/formatter/language_formatter.go#SiblingFormatter`
-     (C++, C#, Kotlin, Python, Ruby, Rust), calls `FormatNodes` on the whole child
-     list, because where those formatters print a node depends on the node
-     after it (a doc comment waits for the declaration it documents);
+     (C++, C#, Go, Kotlin, Python, Ruby, Rust), calls `FormatNodes` on the
+     whole child list, because where those formatters print a node depends on
+     the node after it (a doc comment waits for the declaration it documents);
    - otherwise calls `FormatNode` for each child;
    - if no formatter is registered for the language, uses the generic fallback
      `internal/formatter/language_aware_text_formatter.go#LanguageAwareTextFormatter.formatNodeGeneric`.

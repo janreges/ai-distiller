@@ -63,17 +63,23 @@
   comment and the `@build_constraint(...)` comment built from `//go:build` lines
   have an empty `Format`, so they follow `--comments`, not `--docstrings`. A
   package doc line loses `//` and one space, any further indentation stays
-  (`internal/language/golang/ast_parser.go#packageDocText`). A comment
-  inside a declaration (a function's parameters or body, a const, var or type
-  spec) is no node at all
-  (`internal/language/golang/ast_parser.go#ASTParser.claimDeclComments`): the
-  body in `Implementation` holds it. Every other comment (`//` or `/* */`) is
-  `line` and is inserted at file level by its line number, except the comments
-  of a struct or interface body: they are children of their type
-  (`internal/language/golang/ast_parser.go#ASTParser.memberNodes`), one node
-  per comment group, a field's doc before the field and the comment at the end
-  of its line right before it too, inside its line span, so the stripper drops
-  both with the field. The text prints the latter at the end of the field's line.
+  (`internal/language/golang/ast_parser.go#packageDocText`). Every other
+  comment (`//` or `/* */`) is `line`:
+  - the comments of a struct or interface body are children of their type
+    (`internal/language/golang/ast_parser.go#ASTParser.memberNodes`), one node
+    per comment group, a field's doc before the field and the comment at the
+    end of its line right before it too, inside its line span, so the stripper
+    drops both with the field. The text prints the latter at the end of the
+    field's line;
+  - the comment at the end of a const, var or type spec's line goes the same
+    way right before the spec's (last) node
+    (`internal/language/golang/ast_parser.go#ASTParser.processGenDecl`); a
+    const or var spans from its name to the end of its spec;
+  - any other comment inside a declaration (a function's parameters or body,
+    a function literal or function type in a spec) is no node at all
+    (`internal/language/golang/ast_parser.go#ASTParser.claimDeclComments`):
+    the body in `Implementation` holds it;
+  - the rest is inserted at file level by its line number.
 - `Extensions` is not used.
 
 ## Unused files

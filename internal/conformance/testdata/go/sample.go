@@ -79,3 +79,10 @@ type ConfRecord struct {
 type ConfPair = struct {
 	ConfLeft int
 }
+
+const (
+	ConfLimit     = 10 // CONF_CONST_TRAILING
+	confHiddenMax = 20 // CONF_HIDDEN_CONST_NOTE
+)
+
+type ConfKind int // CONF_TYPE_TRAILING

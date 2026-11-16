@@ -130,6 +130,32 @@ func TestGoFormatter_MemberComments(t *testing.T) {
 		"\t// doc of Close\n\tClose() error // end\n}\n", format(i))
 }
 
+func TestGoFormatter_SpecLineComments(t *testing.T) {
+	span := func(from, to, col int) ir.BaseNode {
+		return ir.BaseNode{Location: ir.Location{StartLine: from, StartColumn: col, EndLine: to, EndColumn: col + 10}}
+	}
+	comment := func(line, col int, text string) *ir.DistilledComment {
+		return &ir.DistilledComment{BaseNode: span(line, line, col), Text: text, Format: ir.CommentLine}
+	}
+
+	// const Max = 10 // the limit     line 1
+	// // free                         line 2
+	// type S struct {                 line 3
+	// 	X int
+	// } // after S                    line 5
+	nodes := []ir.DistilledNode{
+		comment(1, 16, "the limit"),
+		&ir.DistilledField{BaseNode: span(1, 1, 7), Name: "Max", DefaultValue: "10", Modifiers: []ir.Modifier{ir.ModifierFinal}},
+		comment(2, 1, "free"),
+		comment(5, 3, "after S"),
+		&ir.DistilledClass{BaseNode: span(3, 5, 8), Name: "S", Children: []ir.DistilledNode{
+			&ir.DistilledField{Name: "X", Type: &ir.TypeRef{Name: "int"}}}},
+	}
+	var b strings.Builder
+	require.NoError(t, NewGoFormatter().(SiblingFormatter).FormatNodes(&b, nodes, 0))
+	assert.Equal(t, "\nconst Max = 10 // the limit\n// free\n\ntype S struct {\n\tX int\n} // after S\n", b.String())
+}
+
 func TestGoFormatter_DefinedTypeAndAlias(t *testing.T) {
 	format := func(n ir.DistilledNode) string {
 		var b strings.Builder

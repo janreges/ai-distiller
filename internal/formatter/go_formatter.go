@@ -36,6 +36,39 @@ func goIndent(n int) string {
 	return strings.Repeat("\t", n)
 }
 
+// FormatNodes implements SiblingFormatter. A comment that ends the line of
+// the declaration after it (the parser puts the comment at the end of a
+// const, var or type spec's line right before it) is written at the end of
+// that declaration's last line.
+func (f *GoFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, indent int) error {
+	var trailing []string
+	for i, node := range nodes {
+		if c, ok := node.(*ir.DistilledComment); ok && i+1 < len(nodes) && endsLineOf(c, nodes[i+1]) {
+			trailing = append(trailing, c.Text)
+			continue
+		}
+		if len(trailing) == 0 {
+			if err := f.FormatNode(w, node, indent); err != nil {
+				return err
+			}
+			continue
+		}
+		var b strings.Builder
+		if err := f.FormatNode(&b, node, indent); err != nil {
+			return err
+		}
+		line := strings.TrimSuffix(b.String(), "\n")
+		for _, text := range trailing {
+			line += " // " + text
+		}
+		trailing = nil
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // FormatNode implements LanguageFormatter
 func (f *GoFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent int) error {
 	indentStr := goIndent(indent)
@@ -264,10 +297,11 @@ func (f *GoFormatter) formatMembers(w io.Writer, children []ir.DistilledNode, in
 
 // endsLineOf reports whether comment c is written at the end of member's
 // (last) line: one line of text that starts on that line, after the member
-// starts.
+// starts. A member is a field, an interface method, a const, var or type.
 func endsLineOf(c *ir.DistilledComment, member ir.DistilledNode) bool {
 	switch member.(type) {
-	case *ir.DistilledField, *ir.DistilledFunction:
+	case *ir.DistilledField, *ir.DistilledFunction, *ir.DistilledTypeAlias,
+		*ir.DistilledClass, *ir.DistilledInterface:
 	default:
 		return false
 	}

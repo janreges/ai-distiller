@@ -226,6 +226,33 @@ func TestASTParser_CommentsInsideADeclarationStayInIt(t *testing.T) {
 	assert.Contains(t, parseGoFunctions(t, src)["Get"].Implementation, "// in the body")
 }
 
+func TestASTParser_SpecLineCommentsBeforeTheirSpec(t *testing.T) {
+	src := "package p\n\n" +
+		"const (\n\tA = 1 // one\n\tB, C = 2, 3 // two and three\n)\n\n" +
+		"var F = func() {\n} // after F\n\n" +
+		"type ID int // an id\n"
+	file, err := NewASTParser().ProcessSource(context.Background(), []byte(src), "p.go")
+	require.NoError(t, err)
+
+	var got []string
+	for i, node := range file.Children {
+		switch n := node.(type) {
+		case *ir.DistilledComment:
+			// Each comment is right before its declaration, inside its span,
+			// so that the stripper removes it with the declaration.
+			decl := file.Children[i+1].GetLocation()
+			assert.Equal(t, decl.EndLine, n.Location.StartLine, n.Text)
+			assert.GreaterOrEqual(t, n.Location.StartLine, decl.StartLine, n.Text)
+			got = append(got, "// "+n.Text)
+		case *ir.DistilledField:
+			got = append(got, n.Name)
+		case *ir.DistilledTypeAlias:
+			got = append(got, n.Name)
+		}
+	}
+	assert.Equal(t, []string{"// one", "A", "B", "// two and three", "C", "// after F", "F", "// an id", "ID"}, got)
+}
+
 func TestASTParser_PackageDocText(t *testing.T) {
 	src := "// Package p does things.\n" +
 		"//\n" +

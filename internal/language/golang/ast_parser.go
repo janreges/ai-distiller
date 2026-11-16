@@ -293,7 +293,8 @@ func (p *ASTParser) processComments(file *ast.File, distilledFile *ir.DistilledF
 					processedComments[c] = true
 				}
 			}
-			// Also check specs within GenDecl
+			// Also check specs within GenDecl: processGenDecl added their
+			// docs and the comments at the end of their lines
 			for _, spec := range d.Specs {
 				switch s := spec.(type) {
 				case *ast.ValueSpec:
@@ -520,6 +521,9 @@ func (p *ASTParser) processGenDecl(decl *ast.GenDecl) []ir.DistilledNode {
 			}
 			node := p.processTypeSpec(s)
 			if node != nil {
+				// The comment at the end of the spec's line goes right
+				// before it, inside its span, as in memberNodes
+				nodes = p.appendCommentGroup(nodes, s.Comment)
 				nodes = append(nodes, node)
 			}
 		case *ast.ValueSpec:
@@ -539,12 +543,17 @@ func (p *ASTParser) processGenDecl(decl *ast.GenDecl) []ir.DistilledNode {
 					}
 				}
 			}
-			// Process const/var declarations
+			// Process const/var declarations; each spans from its name to
+			// the end of the spec, and the comment at the end of the spec's
+			// line goes right before the last one, inside its span
 			for i, name := range s.Names {
+				if i == len(s.Names)-1 {
+					nodes = p.appendCommentGroup(nodes, s.Comment)
+				}
 
 				field := &ir.DistilledField{
 					BaseNode: ir.BaseNode{
-						Location: p.getLocation(name.Pos(), name.End()),
+						Location: p.getLocation(name.Pos(), s.End()),
 					},
 					Name:       name.Name,
 					Visibility: p.getVisibility(name.Name),

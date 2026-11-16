@@ -175,8 +175,13 @@ var fixtures = []fixture{
 			NotContains: []string{"CONF_BODY_NOTE", "CONF_HIDDEN_BODY_NOTE"}},
 		check{Cap: "body-comment-printed-once", Flags: []string{"--comments=1", "--implementation=1"},
 			Once: []string{"\t// CONF_BODY_NOTE\n"}, NotContains: []string{"CONF_HIDDEN_BODY_NOTE"}},
-		// Only confPrivate and confSecret print, and neither names io or
-		// strings: the import filter drops both, and the block with them.
+		check{Cap: "spec-comments-on-their-line", Flags: []string{"--comments=1"},
+			Contains:    []string{"const ConfLimit = 10 // CONF_CONST_TRAILING\n", "type ConfKind int // CONF_TYPE_TRAILING\n"},
+			NotContains: []string{"CONF_HIDDEN_CONST_NOTE"}},
+		check{Cap: "spec-comments-hidden-by-default", NotContains: []string{"CONF_CONST_TRAILING", "CONF_TYPE_TRAILING"}},
+		// Only confPrivate, confSecret and confHiddenMax print, and none
+		// names io or strings: the import filter drops both, and the block
+		// with them.
 		check{Cap: "no-empty-import-block", Flags: []string{"--public=0", "--internal=1"},
 			Contains: []string{"package conf\n\n// CONF_PRIVATE_DOC\n"}, NotContains: []string{"import"}})},
 	{Lang: "rust", File: "rust/sample.rs", Checks: append(standard(markers{
