@@ -193,29 +193,63 @@ class UserService implements ServiceInterface
 	require.NoError(t, err)
 	require.NotNil(t, file)
 
-	// Check that imports are captured
-	importCount := 0
-	var loggableImport, cacheableImport *ir.DistilledImport
+	var imports []*ir.DistilledImport
 	for _, child := range file.Children {
 		if imp, ok := child.(*ir.DistilledImport); ok {
-			importCount++
-			if strings.Contains(imp.Module, "Loggable") {
-				loggableImport = imp
-			}
-			if strings.Contains(imp.Module, "Cacheable") {
-				cacheableImport = imp
-			}
+			imports = append(imports, imp)
 		}
 	}
 
-	// Should have at least some imports
-	assert.Greater(t, importCount, 0, "No imports found")
+	// One import per statement, as written: the group keeps its prefix as the
+	// module and its members as symbols; an alias stays with its name.
+	want := []ir.DistilledImport{
+		{ImportType: "namespace", Module: `App\Core\Services`},
+		{ImportType: "use", Module: `App\Contracts\ServiceInterface`, Symbols: []ir.ImportedSymbol{{Name: `App\Contracts\ServiceInterface`}}},
+		{ImportType: "use", Module: `App\Traits\`, Symbols: []ir.ImportedSymbol{{Name: "Loggable"}, {Name: "Cacheable"}}},
+		{ImportType: "use", Module: `App\Events\UserCreated`, Symbols: []ir.ImportedSymbol{{Name: `App\Events\UserCreated`, Alias: "UserCreatedEvent"}}},
+		{ImportType: "use function", Module: `App\Helpers\sanitize_input`, Symbols: []ir.ImportedSymbol{{Name: `App\Helpers\sanitize_input`}}},
+		{ImportType: "use const", Module: `App\Config\DEFAULT_TIMEOUT`, Symbols: []ir.ImportedSymbol{{Name: `App\Config\DEFAULT_TIMEOUT`}}},
+	}
+	require.Len(t, imports, len(want))
+	for i, w := range want {
+		assert.Equal(t, w.ImportType, imports[i].ImportType, "import %d", i)
+		assert.Equal(t, w.Module, imports[i].Module, "import %d", i)
+		if len(w.Symbols) > 0 {
+			assert.Equal(t, w.Symbols, imports[i].Symbols, "import %d", i)
+		}
+	}
+}
 
-	// Check grouped use statements are parsed correctly
-	assert.NotNil(t, loggableImport, "Loggable import not found")
-	assert.NotNil(t, cacheableImport, "Cacheable import not found")
-	assert.Contains(t, loggableImport.Module, "App\\Traits\\Loggable")
-	assert.Contains(t, cacheableImport.Module, "App\\Traits\\Cacheable")
+func TestPHP_UseStatementsPrintAsWritten(t *testing.T) {
+	src := `<?php
+namespace N;
+use Foo\Bar as Baz;
+use function Illuminate\Support\enum_value;
+use function Foo\bar as baz2;
+use const Foo\BAR;
+use const Foo\QUX as QUUX;
+use Foo\{A, B as C};
+use function Foo\{f1, f2 as g2};
+use Foo\{Sub\D, function h, const K};
+use \Lead\Slash;
+use X\Y, Z\W as V;
+class Holder {}
+`
+	out := distillPHP(t, src, nil)
+	for _, want := range []string{
+		"use Foo\\Bar as Baz;\n",
+		"use function Illuminate\\Support\\enum_value;\n",
+		"use function Foo\\bar as baz2;\n",
+		"use const Foo\\BAR;\n",
+		"use const Foo\\QUX as QUUX;\n",
+		"use Foo\\{A, B as C};\n",
+		"use function Foo\\{f1, f2 as g2};\n",
+		"use Foo\\{Sub\\D, function h, const K};\n",
+		"use \\Lead\\Slash;\n",
+		"use X\\Y;\nuse Z\\W as V;\n",
+	} {
+		assert.Contains(t, out, want)
+	}
 }
 
 func TestProcessorTraits(t *testing.T) {

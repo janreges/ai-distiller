@@ -453,167 +453,121 @@ func (p *TreeSitterProcessor) processNamespace(node *sitter.Node, file *ir.Disti
 	}
 }
 
-// processUseDeclaration processes use statements
+// processUseDeclaration turns a namespace use statement into imports that keep
+// what the source wrote. ImportType is `use`, `use function` or `use const`.
+//
+//   - Each clause of `use A\B, C\D as E;` is one import whose Module is the
+//     name as written and whose single symbol carries that name and the alias.
+//   - A group `use A\{B, C as D};` is one import whose Module is the prefix
+//     with its trailing backslash (`A\`) and whose symbols are the members; a
+//     member with its own kind (`use A\{function f}`) keeps the keyword in
+//     its symbol name.
 func (p *TreeSitterProcessor) processUseDeclaration(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) {
-	// PHP use statements can import classes, functions, or constants
-	var importType string = "class" // default
+	// `use function A\{...}` puts the kind on the statement; `use function
+	// A\b;` puts it on the clause.
+	kind := p.useKind(node)
 
-	// Debug logging
-	// fmt.Printf("DEBUG processUseDeclaration: node type=%s, child count=%d\n", node.Kind(), node.ChildCount())
-	// for i := 0; i < int(node.ChildCount()); i++ {
-	// 	child := node.Child(i)
-	// 	fmt.Printf("  Child %d: type=%s, text=%s\n", i, child.Kind(), p.getNodeText(child))
-	// }
-
-	// Check for function or const use
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(uint(i))
-		if child.Kind() == "function" {
-			importType = "function"
-		} else if child.Kind() == "const" {
-			importType = "const"
+	if group := node.ChildByFieldName("body"); group != nil && group.Kind() == "namespace_use_group" {
+		// The prefix is the text between the keyword(s) and the brace,
+		// leading backslash included.
+		start := node.Child(0).EndByte()
+		if t := node.ChildByFieldName("type"); t != nil {
+			start = t.EndByte()
 		}
-	}
+		prefix := strings.TrimSpace(string(p.source[start:group.StartByte()]))
 
-	// Check if this is a grouped use statement
-	var groupPrefix string
-	var hasGroup bool
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(uint(i))
-		if child.Kind() == "namespace_name" || child.Kind() == "qualified_name" {
-			groupPrefix = p.getNodeText(child)
-		}
-		if child.Kind() == "namespace_use_group" {
-			hasGroup = true
-			// Process the group with the prefix
-			p.processUseGroup(child, file, parent, importType, groupPrefix)
-		}
-	}
-
-	// If not a grouped statement, process normally
-	if !hasGroup {
-		for i := 0; i < int(node.ChildCount()); i++ {
-			child := node.Child(uint(i))
-			if child.Kind() == "namespace_use_clause" {
-				p.processUseClause(child, file, parent, importType)
-			}
-		}
-	}
-}
-
-// processUseClause processes individual use clauses
-func (p *TreeSitterProcessor) processUseClause(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode, importType string) {
-	// fmt.Printf("DEBUG processUseClause: node type=%s\n", node.Kind())
-	var fullName string
-	var alias string
-
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(uint(i))
-		switch child.Kind() {
-		case "qualified_name", "namespace_name", "name":
-			fullName = p.getNodeText(child)
-			// fmt.Printf("  Found name: %s (type: %s)\n", fullName, child.Kind())
-		case "namespace_aliasing_clause":
-			// Get the alias
-			for j := 0; j < int(child.ChildCount()); j++ {
-				if child.Child(uint(j)).Kind() == "name" {
-					alias = p.getNodeText(child.Child(uint(j)))
-					break
-				}
-			}
-		}
-	}
-
-	if fullName != "" {
-		// Store alias mapping
-		if alias != "" {
-			p.useAliases[alias] = fullName
-		} else {
-			// Use the last part of the name as the alias
-			parts := strings.Split(fullName, "\\")
-			if len(parts) > 0 {
-				p.useAliases[parts[len(parts)-1]] = fullName
-			}
-		}
-
-		// Create import node
 		imp := &ir.DistilledImport{
 			BaseNode:   p.nodeLocation(node),
-			ImportType: "use",
-			Module:     fullName,
-			Symbols: []ir.ImportedSymbol{
-				{
-					Name:  fullName,
-					Alias: alias,
-				},
-			},
+			ImportType: useImportType(kind),
+			Module:     prefix,
 		}
+		for i := uint(0); i < group.NamedChildCount(); i++ {
+			clause := group.NamedChild(i)
+			if clause.Kind() != "namespace_use_clause" {
+				continue
+			}
+			name, alias := p.useClauseName(clause)
+			if name == "" {
+				continue
+			}
+			p.recordUseAlias(strings.TrimSuffix(prefix, "\\")+"\\"+name, alias)
+			if memberKind := p.useKind(clause); memberKind != "" {
+				name = memberKind + " " + name
+			}
+			imp.Symbols = append(imp.Symbols, ir.ImportedSymbol{Name: name, Alias: alias})
+		}
+		if len(imp.Symbols) > 0 {
+			p.addNode(file, parent, imp)
+		}
+		return
+	}
 
-		// fmt.Printf("  Creating import node: %s (alias: %s)\n", fullName, alias)
-		p.addNode(file, parent, imp)
-	} else {
-		// fmt.Printf("  WARNING: No fullName found\n")
+	for i := uint(0); i < node.NamedChildCount(); i++ {
+		clause := node.NamedChild(i)
+		if clause.Kind() != "namespace_use_clause" {
+			continue
+		}
+		name, alias := p.useClauseName(clause)
+		if name == "" {
+			continue
+		}
+		p.recordUseAlias(name, alias)
+		clauseKind := kind
+		if k := p.useKind(clause); k != "" {
+			clauseKind = k
+		}
+		p.addNode(file, parent, &ir.DistilledImport{
+			BaseNode:   p.nodeLocation(clause),
+			ImportType: useImportType(clauseKind),
+			Module:     name,
+			Symbols:    []ir.ImportedSymbol{{Name: name, Alias: alias}},
+		})
 	}
 }
 
-// processUseGroup processes grouped use statements
-func (p *TreeSitterProcessor) processUseGroup(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode, importType string, prefix string) {
+// useKind returns `function` or `const` when node (a use statement or one
+// of its clauses) has that kind keyword, else "".
+func (p *TreeSitterProcessor) useKind(node *sitter.Node) string {
+	if t := node.ChildByFieldName("type"); t != nil {
+		return strings.ToLower(p.getNodeText(t))
+	}
+	return ""
+}
 
-	// Process each item in the group
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(uint(i))
-		if child.Kind() == "namespace_use_clause" {
-			// Handle each individual import in the group
-			var itemName string
-			var alias string
+// useImportType is the ImportType of a use statement of the given kind.
+func useImportType(kind string) string {
+	if kind == "" {
+		return "use"
+	}
+	return "use " + kind
+}
 
-			for j := 0; j < int(child.ChildCount()); j++ {
-				grandchild := child.Child(uint(j))
-				switch grandchild.Kind() {
-				case "name", "qualified_name":
-					itemName = p.getNodeText(grandchild)
-				case "namespace_aliasing_clause":
-					// Get the alias
-					for k := 0; k < int(grandchild.ChildCount()); k++ {
-						if grandchild.Child(uint(k)).Kind() == "name" {
-							alias = p.getNodeText(grandchild.Child(uint(k)))
-							break
-						}
-					}
-				}
-			}
-
-			if itemName != "" {
-				fullName := prefix + "\\" + itemName
-
-				// Store alias mapping
-				if alias != "" {
-					p.useAliases[alias] = fullName
-				} else {
-					// Use the last part of the name as the alias
-					parts := strings.Split(itemName, "\\")
-					if len(parts) > 0 {
-						p.useAliases[parts[len(parts)-1]] = fullName
-					}
-				}
-
-				// Create import node
-				imp := &ir.DistilledImport{
-					BaseNode:   p.nodeLocation(child),
-					ImportType: "use",
-					Module:     fullName,
-					Symbols: []ir.ImportedSymbol{
-						{
-							Name:  fullName,
-							Alias: alias,
-						},
-					},
-				}
-
-				p.addNode(file, parent, imp)
+// useClauseName returns the imported name of a namespace_use_clause as
+// written and its alias. The alias is a `name` too, so it is told apart by
+// its field.
+func (p *TreeSitterProcessor) useClauseName(clause *sitter.Node) (name, alias string) {
+	if a := clause.ChildByFieldName("alias"); a != nil {
+		alias = p.getNodeText(a)
+	}
+	for i := uint(0); i < clause.ChildCount(); i++ {
+		switch clause.Child(i).Kind() {
+		case "qualified_name", "namespace_name", "name":
+			if clause.FieldNameForChild(uint32(i)) != "alias" {
+				return p.getNodeText(clause.Child(i)), alias
 			}
 		}
 	}
+	return "", alias
+}
+
+// recordUseAlias remembers which full name the short name (the alias, or the
+// last segment) stands for.
+func (p *TreeSitterProcessor) recordUseAlias(fullName, alias string) {
+	if alias == "" {
+		parts := strings.Split(fullName, "\\")
+		alias = parts[len(parts)-1]
+	}
+	p.useAliases[alias] = fullName
 }
 
 // processClass processes class declarations

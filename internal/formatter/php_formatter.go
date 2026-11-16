@@ -67,20 +67,34 @@ func (f *PHPFormatter) formatImport(imp *ir.DistilledImport) string {
 		return fmt.Sprintf("namespace %s;", imp.Module)
 	}
 
-	// Use statement with alias
-	if len(imp.Symbols) == 1 && imp.Symbols[0].Alias != "" {
-		return fmt.Sprintf("use %s\\%s as %s;", imp.Module, imp.Symbols[0].Name, imp.Symbols[0].Alias)
+	// ImportType is `use`, `use function` or `use const`.
+	keyword := imp.ImportType
+	if !strings.HasPrefix(keyword, "use") {
+		keyword = "use"
 	}
 
-	// Check for function/const imports
-	if strings.Contains(imp.Module, "function ") {
-		return fmt.Sprintf("use %s;", imp.Module)
-	}
-	if strings.Contains(imp.Module, "const ") {
-		return fmt.Sprintf("use %s;", imp.Module)
+	// A group use keeps its prefix (ending in a backslash) as the Module and
+	// its members as the symbols: `use Foo\{A, B as C};`.
+	if strings.HasSuffix(imp.Module, "\\") {
+		members := make([]string, 0, len(imp.Symbols))
+		for _, sym := range imp.Symbols {
+			members = append(members, phpUseName(sym))
+		}
+		return fmt.Sprintf("%s %s{%s};", keyword, imp.Module, strings.Join(members, ", "))
 	}
 
-	return fmt.Sprintf("use %s;", imp.Module)
+	if len(imp.Symbols) == 1 && imp.Symbols[0].Name == imp.Module {
+		return fmt.Sprintf("%s %s;", keyword, phpUseName(imp.Symbols[0]))
+	}
+	return fmt.Sprintf("%s %s;", keyword, imp.Module)
+}
+
+// phpUseName prints one imported name of a use statement with its alias.
+func phpUseName(sym ir.ImportedSymbol) string {
+	if sym.Alias != "" {
+		return sym.Name + " as " + sym.Alias
+	}
+	return sym.Name
 }
 
 func (f *PHPFormatter) formatClass(class *ir.DistilledClass, indent int) string {

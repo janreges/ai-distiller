@@ -90,6 +90,8 @@ trait ValidatableTrait {
 }
 /** Product entity */
 class Product extends BaseEntity implements CacheableInterface {
+    use TimestampableTrait;
+    use ValidatableTrait;
     /** Static constant for cache TTL */
     public const CACHE_TTL = 3600;
     /**

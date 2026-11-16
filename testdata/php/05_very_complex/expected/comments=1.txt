@@ -1,5 +1,6 @@
 <file path="source.php">
 namespace App\VeryComplex;
+use Attribute;
 use Generator;
 use Closure;
 use Fiber;

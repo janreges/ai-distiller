@@ -14,13 +14,13 @@ PHP support in AI Distiller is designed to extract the essential structure of PH
 |-----------|--------------|-------|
 | **Classes** | ✅ Full | Including abstract, final, readonly (8.2+) |
 | **Interfaces** | ✅ Full | Multiple inheritance supported |
-| **Traits** | ⚠️ Partial | Printed with the `trait` keyword; a class's `use TraitName;` lines are printed but the default import filter removes them (see Known Issues) |
+| **Traits** | ⚠️ Partial | Printed with the `trait` keyword; a class's `use A, B;` prints as one `use` line per trait; an `{ ... as ... }` conflict-resolution block is not printed |
 | **Enums** | ⚠️ Partial | Pure and backed enums (8.1+) with their case values; enum constants and methods print after the enum at file level |
 | **Functions** | ✅ Full | Global functions with type hints |
 | **Methods** | ✅ Full | Including magic methods, final, abstract |
 | **Properties** | ✅ Full | Typed, readonly and promoted properties; `@property` tags stay in the class docblock |
 | **Constants** | ⚠️ Partial | Class constants with visibility and value; interface constants are not printed |
-| **Namespaces** | ✅ Full | Grouped use statements are split into one `use` per name |
+| **Namespaces** | ✅ Full | `use` statements print as written: aliases (`use Foo\Bar as Baz;`), `use function`, `use const` and groups (`use Foo\{A, B as C};`); `use A, B;` prints one line per name |
 | **Attributes** | ✅ Full | PHP 8.0+ attributes on classes and methods |
 
 ### Type System Features
@@ -152,7 +152,7 @@ class Processor {
 
 ### 4. **Trait Support**
 
-PHP traits are displayed with the `trait` keyword (not as classes). The `use Timestampable, Loggable;` line inside the class is printed as one `use` per trait, but the import filter of the text format removes those lines; `--filter-imports=false` keeps them (see Known Issues):
+PHP traits are displayed with the `trait` keyword (not as classes). The `use Timestampable, Loggable;` line inside the class is printed as one `use` per trait:
 
 ```php
 <?php
@@ -177,6 +177,8 @@ trait Timestampable {
     public touch(): void
 }
 class User {
+    use Timestampable;
+    use Loggable;
     public string $name;
 }
 </file>
@@ -397,6 +399,8 @@ interface CacheInterface {
 ```
 <file path="modern_features.php">
 namespace App\Services;
+use App\Contracts\{Cacheable, Loggable};
+use App\Traits\{TimestampableTrait, ValidatableTrait};
 use App\Enums\Permission;
 /** User service with modern PHP 8 features */
 #[\Attribute(\Attribute::TARGET_CLASS)]
@@ -410,6 +414,8 @@ trait TimestampableTrait {
 }
 #[Service(name: 'notifications', version: 2)]
 class NotificationService implements Cacheable, Loggable {
+    use TimestampableTrait;
+    use ValidatableTrait;
     public __construct(DatabaseConnection $db, CacheInterface $cache, LoggerInterface $logger, bool $debug = false)
     public send(string|Email $message, User|string $recipient, ?array $options = null): Result|false
     public hasPermission(User $user, Permission $permission): bool
@@ -426,7 +432,7 @@ interface CacheInterface {
 </file>
 ```
 
-The import filter removed the `use App\Contracts\...` and `use App\Traits\...` lines and the trait `use` lines of `NotificationService` (see Known Issues); `--filter-imports=false` keeps them. The private promoted properties of `NotificationService` are hidden by default.
+The import filter keeps a `use` statement while one of its names (the alias, else the last name segment) appears in the output; a group stays whole when one member is used. The private promoted properties of `NotificationService` are hidden by default.
 
 </blockquote>
 </details>
@@ -584,29 +590,25 @@ class Repository {
 
 ### Critical Issues
 
-1. **The import filter removes used names and trait uses** (🔴 Bug)
-   - **Issue**: The text format's unused-import filter drops `use` statements whose name appears only in `implements` (`use App\Contracts\Cacheable;` with `class S implements Cacheable`) and drops a class's `use TraitName;` lines
-   - **Workaround**: `--filter-imports=false` keeps every `use`
-
-2. **Interface and enum members** (🔴 Bug)
+1. **Interface and enum members** (🔴 Bug)
    - **Issue**: Interface constants are not printed; an enum's constants and methods are printed after the enum, at file level and without visibility
    - **Example**: `enum E: int { case A = 1; const D = self::A; public function label(): string {} }` prints `enum E: int { case A = 1; }` followed by `const D = self::A` and `label(): string`
 
-3. **Empty constructors hidden** (🟢 Intentional)
+2. **Empty constructors hidden** (🟢 Intentional)
    - **Behavior**: Constructors without parameters are not shown
    - **Rationale**: Reduces noise in output
 
 ### Minor Issues
 
-4. **Template annotations** (🟢 Minor)
+3. **Template annotations** (🟢 Minor)
    - **Issue**: `@template` tags stay in the docblock; they do not change the signature
    - **Impact**: Generic type information in docblock only
 
-5. **Multi-line array shapes** (🟡 Minor)
+4. **Multi-line array shapes** (🟡 Minor)
    - **Issue**: An array shape written over several docblock lines stays in the docblock; the signature keeps the native type (`array $data`, see the `process.php` example above)
    - **Example**: a one-line shape is used instead: `@param array{id: int, name: string} $data` prints `save(array{id: int, name: string} $data)`
 
-6. **Docblock indentation** (🟡 Minor)
+5. **Docblock indentation** (🟡 Minor)
    - **Issue**: A member docblock loses the indentation inside its lines (`*   id: int` prints as `* id: int`)
 
 ## Best Practices
@@ -895,7 +897,7 @@ class Model { }
 
 ### "A use statement is missing"
 
-The text format's import filter removes `use` lines it considers unused, including some that are used (see Known Issues). Add `--filter-imports=false`.
+The text format's import filter removes a `use` statement whose name (the alias, else the last name segment) does not appear in the rest of the output, for example a class used only in a method body that is not printed. Add `--filter-imports=false` to keep every `use`.
 
 ### "Docblocks missing"
 

@@ -66,8 +66,14 @@
 - A namespace is not a `DistilledPackage`: `namespace X;` (or `namespace X {
   }`) is a `DistilledImport` with `ImportType` `namespace`, and the
   declarations of its body are its siblings. `--imports=0` removes it.
-- `use A\B;` (also `use function`, `use const`) is a `DistilledImport` with
-  `ImportType` `use`.
+- A use statement is a `DistilledImport` per clause
+  (`internal/language/php/tree_sitter_processor.go#TreeSitterProcessor.processUseDeclaration`):
+  `ImportType` is `use`, `use function` or `use const`; `Module` is the name
+  as written and the one symbol holds that name and the alias
+  (`use A\B as C;`). A group `use A\{B, C as D};` is one import whose
+  `Module` is the prefix with its trailing backslash (`A\`) and whose symbols
+  are the members; a member with its own kind keeps it in the symbol name
+  (`function f`). The text formatter prints all of them as written.
 - `Implementation` is the function body with its braces (`{ return; }`).
 - Comments: `/** */` has the legacy format `docblock`, which counts as doc
   (`internal/ir/comment.go#DistilledComment.IsDoc`); `/* */` is `block`, `//`

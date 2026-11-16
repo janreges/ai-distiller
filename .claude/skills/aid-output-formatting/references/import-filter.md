@@ -58,6 +58,12 @@ name in the text:
   such a comment keeps nothing, while a name in a printed docstring or `/** */`
   doc does keep the import.
 
+PHP searches on its own
+(`internal/importfilter/php_filter.go#PHPFilter.FilterUnusedImports`): every
+line that is not a use statement, so a file with several namespaces finds a
+usage between two import blocks; it skips `//` and `#` comment lines but not
+`#[...]` attributes, and also the `<file>` tags and `namespace` lines.
+
 The removed lines are cut out of the text; nothing else changes.
 
 ## Languages
@@ -72,7 +78,7 @@ under the language name the processors use.
 | go | `internal/importfilter/go_filter.go` | the alias, else the last path element (the one before a `/vN` suffix; a few standard paths are mapped) | blank imports and `"C"` |
 | java | `internal/importfilter/java_filter.go` | the class name (last element); for `import static`, the member | wildcard imports |
 | csharp (`c#`) | `internal/importfilter/csharp_filter.go` | the alias, else the last namespace element; for some `System.*` namespaces also typical type names (`internal/importfilter/csharp_filter.go#CSharpFilter.checkSystemNamespaceUsage`) | nothing |
-| php | `internal/importfilter/php_filter.go` | the alias, else the last name element | nothing |
+| php | `internal/importfilter/php_filter.go` | the alias, else the last name element, of each name; a group is kept when one member is used. Only `use` lines at column 0 are imports (indented ones are trait uses in a class). Every other line is searched, `#[...]` attributes included; class and function names match case-insensitively | nothing |
 | ruby | `internal/importfilter/ruby_filter.go` | the required file's base name in CamelCase (`json` gives `Json`), then the same in lower case | requires whose path contains `/` or `-` |
 | cpp (`c++`) | `internal/importfilter/cpp_filter.go` | for `<header>`: a marker for five headers (`std::string` for `<string>`, ...), any `std::` for the others | every `"header"` include |
 | kotlin, rust, swift | none | | everything |

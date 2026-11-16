@@ -609,24 +609,18 @@ class ProductRepository extends BaseRepository implements FindableById, Cacheabl
 		t.Fatalf("Failed to process: %v", err)
 	}
 
-	// Check grouped use imports
-	cacheableImport := false
-	deletableImport := false
+	// Check the grouped use import: one import with the prefix as its module
+	var group *ir.DistilledImport
 	for _, child := range file.Children {
-		if imp, ok := child.(*ir.DistilledImport); ok {
-			if strings.Contains(imp.Module, "Cacheable") && strings.Contains(imp.Module, "Contracts") {
-				cacheableImport = true
-			}
-			if strings.Contains(imp.Module, "Deletable") && strings.Contains(imp.Module, "Contracts") {
-				deletableImport = true
-			}
+		if imp, ok := child.(*ir.DistilledImport); ok && imp.Module == `App\Data\Contracts\` {
+			group = imp
 		}
 	}
-	if !cacheableImport {
-		t.Error("Cacheable import not correctly resolved")
+	if group == nil {
+		t.Fatal(`group import App\Data\Contracts\{...} not found`)
 	}
-	if !deletableImport {
-		t.Error("Deletable import not correctly resolved")
+	if len(group.Symbols) != 2 || group.Symbols[0].Name != "Cacheable" || group.Symbols[1].Name != "Deletable" {
+		t.Errorf("group members = %+v, want Cacheable and Deletable", group.Symbols)
 	}
 
 	// Check attribute on class

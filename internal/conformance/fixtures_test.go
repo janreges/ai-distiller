@@ -157,5 +157,14 @@ var fixtures = []fixture{
 		Private:   []string{"confPrivate"},
 		ExpandSym: "confPublic",
 	}), check{Cap: "body-indent", Flags: []string{"--implementation=1"},
-		Contains: []string{"        $a = \"CONF_BODY_A\";\n        return $a;\n"}})},
+		Contains: []string{"        $a = \"CONF_BODY_A\";\n        return $a;\n"}},
+		// A use statement prints as written, and the import filter keeps it
+		// while its name (the alias, else the last segment) is in the output.
+		check{Cap: "use-as-written", Contains: []string{
+			"use Conf\\Base\\ConfBase as ConfAliasBase;\n",
+			"use Conf\\Contracts\\{ConfShown as ConfAliasShown, ConfUnusedMember};\n",
+			"class ConfWidget extends ConfAliasBase implements ConfAliasShown {\n    use ConfTrait;\n"}},
+		check{Cap: "use-function-const", Flags: []string{"--implementation=1"}, Contains: []string{
+			"use function Conf\\Helpers\\conf_helper;\n",
+			"use const Conf\\Helpers\\CONF_LIMIT;\n"}})},
 }
