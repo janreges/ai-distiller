@@ -105,7 +105,7 @@ Distills to:
 - ✅ **ES6 classes** with constructors, methods, getters/setters
 - ✅ **Exported declarations** are printed with their `export` or `export default` keyword, as in TypeScript (`export const createClient = (apiKey)`, `export default class:` for an anonymous class); `module.exports = ...` is shown only with `--comments=1`
 - ✅ **Re-exports and export lists** print as written: `export * from './a'`, `export { x, y as z } from './c'`, `export { q }`, `export default Inner`
-- ✅ **Generator functions** print `function* name()` (`async function* name()`)
+- ✅ **Generator functions** print `function* name()` (`async function* name()`), generator methods `*name()` (`async *name()`, `static *name()`)
 - ✅ **JSDoc type extraction** for parameters and return values
 - ✅ **Private members** detection: `#private` names, and class members whose name starts with `_` unless their JSDoc says `@public`
 - ✅ **JSDoc blocks** printed by default above the declaration they document; `//` and `/* */` comments with `--comments=1`

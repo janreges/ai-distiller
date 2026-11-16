@@ -79,7 +79,7 @@ class ObservableFactory:
      * without loading all data into memory at once.
      * @returns {Generator<string, void, void>} An iterator for the mutation history.
      */
-    static * getMutationHistory() -> Generator<string, {
+    static *getMutationHistory() -> Generator<string, {
         for (const log of mutationLog) {
             yield `[${new Date(log.timestamp).toISOString()}] ${log.type}: ${log.key} => ${JSON.stringify(log.value)}`;
         }

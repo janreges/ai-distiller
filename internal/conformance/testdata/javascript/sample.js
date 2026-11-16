@@ -49,3 +49,7 @@ export let confLetArrow = (confL) => confL;
 export var confVarValue = 3;
 export const confFnExpr = function (confQ) {};
 export const confGenExpr = function* () {};
+export class ConfGenerators {
+    *confGenMethod() {}
+    async *confAsyncGenMethod() {}
+}

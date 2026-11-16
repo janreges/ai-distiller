@@ -152,7 +152,10 @@ var fixtures = []fixture{
 		check{Cap: "function-expression-constant", Contains: []string{
 			"export const confFnExpr = function (confQ)",
 			"export const confGenExpr = function* ()"},
-			NotContains: []string{"confFnExpr = (confQ)"}})},
+			NotContains: []string{"confFnExpr = (confQ)"}},
+		check{Cap: "generator-method-star", Contains: []string{
+			"    *confGenMethod()",
+			"    async *confAsyncGenMethod()"}})},
 	{Lang: "go", File: "go/sample.go", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "ConfField", "ConfPublic", "ConfOther"},
 		Private:   []string{"confPrivate"},

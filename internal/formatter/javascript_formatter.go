@@ -183,12 +183,13 @@ func (f *JavaScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 			if isAsync {
 				prefixParts = append(prefixParts, "async")
 			}
-			if isGenerator {
-				prefixParts = append(prefixParts, "*")
-			}
 			prefix := ""
 			if len(prefixParts) > 0 {
 				prefix = strings.Join(prefixParts, " ") + " "
+			}
+			// The star of a generator method sits on its name: `async *gen()`
+			if isGenerator {
+				prefix += "*"
 			}
 			fmt.Fprintf(w, "%s%s%s(%s)", indentStr, prefix, functionName, f.formatParameters(fn.Parameters))
 		}

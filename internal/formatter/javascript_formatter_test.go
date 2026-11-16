@@ -46,6 +46,14 @@ func TestJavaScriptFormatter_DeclarationKeyword(t *testing.T) {
 	assert.Equal(t, "let w = 4\n", jsFormat(t, &ir.DistilledField{Name: "w", DefaultValue: "4", Modifiers: []ir.Modifier{ir.ModifierLet}}, 0))
 }
 
+// The star of a generator method sits on its name, as written.
+func TestJavaScriptFormatter_GeneratorMethods(t *testing.T) {
+	assert.Equal(t, "    *gen()\n", jsFormat(t, &ir.DistilledFunction{Name: "*gen"}, 1))
+	assert.Equal(t, "    async *agen()\n", jsFormat(t, &ir.DistilledFunction{Name: "*agen", Modifiers: []ir.Modifier{ir.ModifierAsync}}, 1))
+	assert.Equal(t, "    static async *sgen(n)\n",
+		jsFormat(t, &ir.DistilledFunction{Name: "*sgen", Modifiers: []ir.Modifier{ir.ModifierStatic, ir.ModifierAsync}, Parameters: []ir.Parameter{{Name: "n"}}}, 1))
+}
+
 // A variable whose value is a function expression prints `function`, not
 // an arrow, and its body without `=>`.
 func TestJavaScriptFormatter_FunctionExpression(t *testing.T) {
