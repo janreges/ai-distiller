@@ -118,8 +118,8 @@ flags it stays: a C# namespace holding only an internal class prints
 `Extensions` carries language-specific data (`internal/ir/types.go#NodeExtensions`).
 On the live path only Java (`Extensions.Java`), PHP (`Extensions.PHP`) and
 Rust (`Extensions.Rust`: `IsUnsafe`, the `ABI` of an `extern` function, the
-`VisibilityPath` of `pub(in path)`, a tuple struct's arity and a header's
-`where` clause) set it.
+`VisibilityPath` of `pub(in path)`, a tuple struct's arity, the number of
+private named fields of a struct or union and a header's `where` clause) set it.
 
 ## Encoded differently per language
 

@@ -402,7 +402,7 @@ func TestRustFormatter_AttributesAndBodyDocs(t *testing.T) {
 	assert.Equal(t, []string{
 		"", "/// S doc", "#[derive(Debug, Clone)]", "#[repr(C)]", "pub struct S {",
 		"    /// x doc", "    #[serde(rename = \"x\")]", "    pub x: u8,",
-		"    /// z doc", "    pub z: u8,", "}",
+		"    /// z doc", "    pub z: u8,", "    /* private fields */", "}",
 		"", "pub enum E {",
 		"    /// a doc", "    #[default]", "    A,", "    /// b doc", "    B(u8),", "}",
 		"", "pub union U {", "    /// f doc", "    #[allow(dead_code)]", "    pub f: u32,", "}",
@@ -412,10 +412,10 @@ func TestRustFormatter_AttributesAndBodyDocs(t *testing.T) {
 	// Plain comments in a body print only with comments on, above the
 	// field they precede; the hidden field takes its doc and attribute along.
 	body := "pub struct S {\n    // note\n    pub a: u8,\n    /// hidden\n    // also hidden\n    b: u8,\n    /// hidden too\n    #[x]\n    c: u8,\n    d: u8, // trailing\n}\n"
-	assert.Equal(t, []string{"", "pub struct S {", "    pub a: u8,", "}"}, distillRust(t, body, rustDefault))
+	assert.Equal(t, []string{"", "pub struct S {", "    pub a: u8,", "    /* private fields */", "}"}, distillRust(t, body, rustDefault))
 	withComments := rustDefault
 	withComments.IncludeComments = true
-	assert.Equal(t, []string{"", "pub struct S {", "    // note", "    pub a: u8,", "}"},
+	assert.Equal(t, []string{"", "pub struct S {", "    // note", "    pub a: u8,", "    /* private fields */", "}"},
 		distillRust(t, body, withComments))
 
 	// Members, functions, consts and macros carry their attributes too.
@@ -468,4 +468,40 @@ func TestRustFormatter_CommentsSitOnTheirItem(t *testing.T) {
 		"    pub fn f()",
 		"}",
 	}, distillRust(t, src, opts))
+}
+
+// A struct or union whose private fields the stripper removed prints
+// "/* private fields */" for them, as rustdoc does, and a unit struct stays
+// "pub struct X;".
+func TestRustFormatter_RemovedPrivateFields(t *testing.T) {
+	pub, priv := ir.VisibilityPublic, ir.VisibilityPrivate
+	structWith := func(private int, fields ...ir.DistilledNode) *ir.DistilledClass {
+		return &ir.DistilledClass{Name: "S", Visibility: pub, Modifiers: []ir.Modifier{ir.ModifierStruct},
+			BaseNode: ir.BaseNode{Extensions: &ir.NodeExtensions{Rust: &ir.RustExtensions{PrivateFields: private}}},
+			Children: fields}
+	}
+	field := func(name string, vis ir.Visibility) *ir.DistilledField {
+		return &ir.DistilledField{Name: name, Visibility: vis, Type: &ir.TypeRef{Name: "u8"}}
+	}
+	assert.Equal(t, "\npub struct S { /* private fields */ }\n", formatRust(t, structWith(2), 0))
+	assert.Equal(t, "\npub struct S {\n    pub a: u8,\n    /* private fields */\n}\n",
+		formatRust(t, structWith(1, field("a", pub)), 0))
+	assert.Equal(t, "\npub struct S {\n    pub a: u8,\n    b: u8,\n}\n",
+		formatRust(t, structWith(1, field("a", pub), field("b", priv)), 0), "nothing was removed")
+	assert.Equal(t, "\npub struct S;\n", formatRust(t, structWith(0), 0))
+
+	src := "pub struct Config {\n    name: String,\n}\npub struct Mixed {\n    pub id: u32,\n    secret: String,\n}\n" +
+		"pub struct Marker;\npub union U {\n    i: u32,\n}\n"
+	assert.Equal(t, []string{
+		"", "pub struct Config { /* private fields */ }",
+		"", "pub struct Mixed {", "    pub id: u32,", "    /* private fields */", "}",
+		"", "pub struct Marker;",
+		"", "pub union U { /* private fields */ }",
+	}, distillRust(t, src, rustDefault))
+	assert.Equal(t, []string{
+		"", "pub struct Config {", "    name: String,", "}",
+		"", "pub struct Mixed {", "    pub id: u32,", "    secret: String,", "}",
+		"", "pub struct Marker;",
+		"", "pub union U {", "    i: u32,", "}",
+	}, distillRust(t, src, rustAll))
 }

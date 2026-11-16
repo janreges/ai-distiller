@@ -750,6 +750,7 @@ func (w *walker) structItem(node *sitter.Node, kind ir.Modifier) ir.DistilledNod
 	if body.Kind() != "field_declaration_list" {
 		return class
 	}
+	private := 0
 	w.bodyMembers(body, class, "field_declaration", func(child *sitter.Node) ir.DistilledNode {
 		fieldName := child.ChildByFieldName("name")
 		if fieldName == nil {
@@ -760,6 +761,9 @@ func (w *walker) structItem(node *sitter.Node, kind ir.Modifier) ir.DistilledNod
 			Name:       w.text(fieldName),
 			Visibility: w.visibility(child),
 		}
+		if field.Visibility != ir.VisibilityPublic {
+			private++
+		}
 		if modifier := w.visibilityModifier(child); modifier != nil {
 			w.recordVisibilityPath(&field.BaseNode, modifier)
 		}
@@ -768,6 +772,9 @@ func (w *walker) structItem(node *sitter.Node, kind ir.Modifier) ir.DistilledNod
 		}
 		return field
 	})
+	if private > 0 {
+		rustExtensions(&class.BaseNode).PrivateFields = private
+	}
 	return class
 }
 

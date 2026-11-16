@@ -21,7 +21,7 @@ pub trait DataSource {
 
 /// A generic container for an analysis result.
 /// It's generic over the type `T` which must implement `Display`.
-pub struct AnalysisResult<T: Display>;
+pub struct AnalysisResult<T: Display> { /* private fields */ }
 
 impl<T: Display> AnalysisResult<T> {
 

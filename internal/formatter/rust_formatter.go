@@ -461,18 +461,27 @@ func (f *RustFormatter) formatEnumBody(w io.Writer, class *ir.DistilledClass, in
 }
 
 // formatStructBody writes the named fields of a struct or union, or ";" when
-// none is left, and the methods of a struct in an impl block after it.
+// it has none, and the methods of a struct in an impl block after it. When
+// the stripper removed private fields, "/* private fields */" stands for
+// them, as in rustdoc: on the header line when no field is left, else after
+// the fields left.
 func (f *RustFormatter) formatStructBody(w io.Writer, class *ir.DistilledClass, indent int) error {
 	indentStr := strings.Repeat("    ", indent)
 	hasFields := false
+	privateLeft := 0
 	for _, child := range class.Children {
-		if _, ok := child.(*ir.DistilledField); ok {
+		if field, ok := child.(*ir.DistilledField); ok {
 			hasFields = true
-			break
+			if field.Visibility != ir.VisibilityPublic {
+				privateLeft++
+			}
 		}
 	}
+	privateRemoved := privateLeft < rustExtensions(&class.BaseNode).PrivateFields
 
-	if hasFields {
+	if !hasFields && privateRemoved {
+		fmt.Fprintln(w, " { /* private fields */ }")
+	} else if hasFields {
 		fmt.Fprintln(w, " {")
 		for _, child := range class.Children {
 			var err error
@@ -485,6 +494,9 @@ func (f *RustFormatter) formatStructBody(w io.Writer, class *ir.DistilledClass, 
 			if err != nil {
 				return err
 			}
+		}
+		if privateRemoved {
+			fmt.Fprintf(w, "%s    /* private fields */\n", indentStr)
 		}
 		fmt.Fprintf(w, "%s}\n", indentStr)
 	} else {

@@ -1424,3 +1424,15 @@ func TestRust_DocAboveAttributeFollowsItemAndDecorators(t *testing.T) {
 	assert.Equal(t, "pub doc", file.Children[0].(*ir.DistilledComment).Text)
 	assert.Equal(t, []string{"#[derive(Debug)]"}, file.Children[1].(*ir.DistilledClass).Decorators)
 }
+
+func TestRust_PrivateFieldsAreCounted(t *testing.T) {
+	src := "pub struct S {\n    pub a: u8,\n    b: u8,\n    pub(crate) c: u8,\n    pub(self) d: u8,\n}\n" +
+		"pub struct Open {\n    pub a: u8,\n}\npub struct Unit;\npub struct Pair(pub u8, u8);\n" +
+		"pub union U {\n    i: u32,\n    pub f: f32,\n}\n"
+	file := parseRust(t, src)
+	assert.Equal(t, 3, rustExt(findRustClass(t, file, "S")).PrivateFields, "private, pub(crate) and pub(self)")
+	assert.Equal(t, 0, rustExt(findRustClass(t, file, "Open")).PrivateFields)
+	assert.Equal(t, 0, rustExt(findRustClass(t, file, "Unit")).PrivateFields)
+	assert.Equal(t, 0, rustExt(findRustClass(t, file, "Pair")).PrivateFields, "a tuple struct has TupleArity instead")
+	assert.Equal(t, 1, rustExt(findRustClass(t, file, "U")).PrivateFields)
+}

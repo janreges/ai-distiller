@@ -6,6 +6,7 @@
 // The parser should handle struct definitions with public and private fields.
 pub struct SourceFile {
     pub path: String,
+    /* private fields */
 }
 
 /// A trait for items that can be summarized.

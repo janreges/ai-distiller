@@ -16,6 +16,7 @@ pub type Res<T> = Result<T, io::Error>;
 pub struct Point {
     /// The x coordinate.
     pub x: f64,
+    /* private fields */
 }
 
 pub struct Meters(pub f64);
@@ -24,10 +25,11 @@ pub struct Pair(pub i32, _);
 
 pub struct Unit;
 
-pub struct Wrapper<'a, T: Display + 'a>;
+pub struct Wrapper<'a, T: Display + 'a> { /* private fields */ }
 
 pub struct Bounded<T> where T: Clone {
     pub value: T,
+    /* private fields */
 }
 
 /// A shape.
@@ -113,7 +115,7 @@ macro_rules! exported {
     () => ...;
 }
 
-pub union IntOrFloat;
+pub union IntOrFloat { /* private fields */ }
 
 pub struct Arr<const N: usize> {
     pub data: [u8; N],

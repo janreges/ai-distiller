@@ -36,6 +36,7 @@ pub struct ServerConfig {
     pub host: String,
     // #[config(validate_with = "validate_port")]
     pub port: u16,
+    /* private fields */
 }
 
 // A dummy implementation to make the code runnable.
@@ -60,7 +61,7 @@ pub trait AdvancedContainer<const N: usize> {
 }
 
 /// Implementation with const generics
-pub struct FixedArray<T: Clone, const N: usize>;
+pub struct FixedArray<T: Clone, const N: usize> { /* private fields */ }
 
 impl<T: Clone, const N: usize> FixedArray<T, N> {
 

@@ -5,11 +5,11 @@ use std::future::Future;
 use std::pin::Pin;
 
 #[derive(Clone)]
-pub struct Config;
+pub struct Config { /* private fields */ }
 
 /// A service that uses a shared, mutable cache.
 /// This tests `Arc<Mutex<T>>`, a very common concurrent pattern.
-pub struct AnalysisService;
+pub struct AnalysisService { /* private fields */ }
 
 impl AnalysisService {
 
@@ -44,7 +44,7 @@ impl AsyncProcessor for AnalysisService {
 
 /// Union type for advanced FFI
 #[repr(C)]
-pub union FFIData;
+pub union FFIData { /* private fields */ }
 
 impl FFIData {
 

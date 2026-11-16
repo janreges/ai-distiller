@@ -202,6 +202,10 @@ type RustExtensions struct {
 	// named "0" to "TupleArity-1", and the ones the stripper removed print as
 	// "_".
 	TupleArity int `json:"tuple_arity,omitempty"`
+	// PrivateFields is the number of named fields of a struct or union that
+	// are not pub; when the stripper removed one of them, the struct prints
+	// "/* private fields */" where they were, as rustdoc does.
+	PrivateFields int `json:"private_fields,omitempty"`
 	// Where is the where clause of a struct, enum, union, trait or impl
 	// header ("where T: Clone").
 	Where string `json:"where,omitempty"`
