@@ -54,7 +54,10 @@ Details: `references/installers.md`.
 
 ## Not release versions
 
-- `get_capabilities` reports `protocol_version` `2025-03-26`: an MCP protocol
-  version written in `mcp-npm/mcp-server-sdk.ts`, not the package version.
+- `get_capabilities` reports `protocol_version`: the MCP protocol version of
+  the server's initialize answer, recorded by
+  `mcp-npm/mcp-server-sdk.ts#AidDistillerServer.connectTransport` (the
+  SDK picks the client's version when it supports it, else its latest), not
+  the package version.
 - `mcp-npm/package.json` `engines.node` (`>=20`, the minimum of `@hono/node-server`,
   which the MCP SDK depends on; CI tests Node 20, 22 and 24) and the dependency ranges.

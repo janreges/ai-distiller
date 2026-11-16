@@ -2,6 +2,8 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import type { Transport, TransportSendOptions } from "@modelcontextprotocol/sdk/shared/transport.js";
+import { InitializeResultSchema, type JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import * as path from "path";
 import * as os from "os";
@@ -123,6 +125,8 @@ export class AidDistillerServer {
   /** The SDK server with every tool registered; exported so tests can connect a client to it. */
   readonly server: McpServer;
   private queue = new SerialQueue();
+  /** The protocol version of the last initialize answer sent (connectTransport). */
+  private negotiatedProtocolVersion: string | undefined;
 
   constructor() {
     this.server = new McpServer({
@@ -760,7 +764,8 @@ export class AidDistillerServer {
         const capabilities = {
           server_name: "AI Distiller MCP",
           server_version: pkg.version,
-          protocol_version: "2025-03-26",
+          // The version of this connection's initialize answer; absent before one was sent.
+          protocol_version: this.negotiatedProtocolVersion,
           root_path: process.env.AID_ROOT || process.cwd(),
           tools: {
             core: [
@@ -833,6 +838,28 @@ export class AidDistillerServer {
   }
 
   /**
+   * Connects the server to transport and records the protocol version of every
+   * initialize answer the server sends. The SDK negotiates the version (the
+   * client's when supported, else its latest) and keeps no public record of it,
+   * so the answer on the wire is the only source that cannot disagree with what
+   * the client was told.
+   */
+  async connectTransport(transport: Transport): Promise<void> {
+    const send = transport.send.bind(transport);
+    transport.send = (message: JSONRPCMessage, options?: TransportSendOptions) => {
+      if ("result" in message) {
+        const answer = InitializeResultSchema.safeParse(message.result);
+        if (answer.success) {
+          this.negotiatedProtocolVersion = answer.data.protocolVersion;
+          if (isDebug) console.error(`[AID MCP] Protocol version negotiated: ${answer.data.protocolVersion}`);
+        }
+      }
+      return send(message, options);
+    };
+    await this.server.connect(transport);
+  }
+
+  /**
    * Connect to transport and start server
    */
   async connect(): Promise<void> {
@@ -850,13 +877,12 @@ export class AidDistillerServer {
         process.exit(1);
       };
       
-      await this.server.connect(transport);
-      
+      await this.connectTransport(transport);
+
       if (isDebug) {
         console.error(`[AID MCP] Server connected successfully
 Binary: ${binaryPath}
-Working directory: ${process.env.AID_ROOT || process.cwd()}
-Protocol: 2025-03-26`);
+Working directory: ${process.env.AID_ROOT || process.cwd()}`);
       }
     } catch (error) {
       console.error('[AID MCP] Failed to connect transport:', error);

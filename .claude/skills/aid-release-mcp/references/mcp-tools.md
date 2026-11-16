@@ -114,7 +114,7 @@ In `registerLegacyTools` (schema in `TOOL_SCHEMAS`):
 | Tool | Parameters | What it returns |
 |---|---|---|
 | `list_files` | `path` (default `AID_ROOT`; must lie inside `AID_ROOT`, checked like the path of the tools that run `aid`, and a relative path is resolved against it), `pattern` (`*` and `?` globs matched against the whole path relative to `path`; `*` also matches `/`), `recursive` (default true) | compact JSON from `mcp-npm/list-files.ts#listFiles`: `path` (the real absolute path listed), `file_count`, `total_size`, `languages`, and per file `path`, `size`, `modified`, `language`, `extension`. It skips subdirectories whose name starts with `.`, stops at `MAX_LIST_ENTRIES` (2000) with a notice first and last, and fails for a path that is not a directory. Languages come from `mcp-npm/list-files.ts#LANGUAGE_BY_EXTENSION`. |
-| `get_capabilities` | none | static JSON: server name and version (the package version), `protocol_version`, `root_path` (`AID_ROOT` or the working directory), the tool names by group, the 12 languages, the formats, the AI actions and a feature list |
+| `get_capabilities` | none | JSON: server name and version (the package version), `protocol_version` (the version of the server's initialize answer on this connection, recorded by `mcp-npm/mcp-server-sdk.ts#AidDistillerServer.connectTransport`; absent before an initialize was answered), `root_path` (`AID_ROOT` or the working directory), the tool names by group, the 12 languages, the formats, the AI actions and a feature list |
 
 ## Calling a tool by hand
 
@@ -126,7 +126,7 @@ export CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"
 mkdir -p mcp-npm/bin && go build -o mcp-npm/bin/aid ./cmd/aid
 (cd mcp-npm && npm ci && npm run build)
 (printf '%s\n' \
-  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"cli","version":"0"}}}' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"cli","version":"0"}}}' \
   '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"distill_file","arguments":{"file_path":"testdata/python/01_basic/source.py","include_private":true}}}'
  sleep 3) | AID_MCP_DEBUG=true node mcp-npm/mcp-server-wrapper.js
