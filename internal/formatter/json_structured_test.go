@@ -538,3 +538,24 @@ func TestJSONStructuredFormatter_ImportSymbols(t *testing.T) {
 	assert.Equal(t, "OrderedDict", sym1["name"])
 	assert.Equal(t, "ODict", sym1["alias"])
 }
+
+func TestJSONStructuredFormatter_TypeAliasModifier(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, NewJSONStructuredFormatter(Options{}).Format(&buf, goTypeDeclsFile()))
+
+	var out struct {
+		Structure map[string][]map[string]interface{} `json:"structure"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &out))
+	modifiers := map[string]interface{}{}
+	for _, group := range []string{"types", "interfaces", "classes"} {
+		for _, node := range out.Structure[group] {
+			modifiers[node["name"].(string)] = node["modifiers"]
+		}
+	}
+	assert.Len(t, modifiers, 4)
+	assert.Nil(t, modifiers["ID"])
+	assert.Equal(t, []interface{}{"type_alias"}, modifiers["Name"])
+	assert.Equal(t, []interface{}{"type_alias"}, modifiers["Any"])
+	assert.Equal(t, []interface{}{"type_alias"}, modifiers["Pair"])
+}

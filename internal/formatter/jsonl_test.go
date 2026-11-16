@@ -522,3 +522,37 @@ func TestJSONLFormatter_Parameters(t *testing.T) {
 	assert.Equal(t, "args", p3["name"])
 	assert.Equal(t, true, p3["variadic"])
 }
+
+// goTypeDeclsFile holds Go type declarations that differ only in whether
+// they are aliases (type_alias, written with "="): ID is a defined type, Name
+// an alias, Any an alias of an interface literal, Pair of a struct literal.
+func goTypeDeclsFile() *ir.DistilledFile {
+	alias := []ir.Modifier{ir.ModifierTypeAlias}
+	return &ir.DistilledFile{
+		Path:     "types.go",
+		Language: "go",
+		Children: []ir.DistilledNode{
+			&ir.DistilledTypeAlias{Name: "ID", Visibility: ir.VisibilityPublic, Type: ir.TypeRef{Name: "int"}},
+			&ir.DistilledTypeAlias{Name: "Name", Visibility: ir.VisibilityPublic, Type: ir.TypeRef{Name: "string"}, Modifiers: alias},
+			&ir.DistilledInterface{Name: "Any", Visibility: ir.VisibilityPublic, Modifiers: alias},
+			&ir.DistilledClass{Name: "Pair", Visibility: ir.VisibilityPublic, Modifiers: alias},
+		},
+	}
+}
+
+func TestJSONLFormatter_TypeAliasModifier(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, NewJSONLFormatter(Options{}).Format(&buf, goTypeDeclsFile()))
+
+	modifiers := map[string]interface{}{}
+	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n")[1:] {
+		var obj map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(line), &obj))
+		modifiers[obj["name"].(string)] = obj["modifiers"]
+	}
+	assert.Len(t, modifiers, 4)
+	assert.Nil(t, modifiers["ID"])
+	assert.Equal(t, []interface{}{"type_alias"}, modifiers["Name"])
+	assert.Equal(t, []interface{}{"type_alias"}, modifiers["Any"])
+	assert.Equal(t, []interface{}{"type_alias"}, modifiers["Pair"])
+}

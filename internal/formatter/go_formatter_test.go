@@ -155,12 +155,21 @@ func TestGoFormatter_MemberComments(t *testing.T) {
 }
 
 func TestGoFormatter_DefinedTypeAndAlias(t *testing.T) {
-	format := func(a *ir.DistilledTypeAlias) string {
+	format := func(n ir.DistilledNode) string {
 		var b strings.Builder
-		require.NoError(t, NewGoFormatter().FormatNode(&b, a, 0))
+		require.NoError(t, NewGoFormatter().FormatNode(&b, n, 0))
 		return b.String()
 	}
+	alias := []ir.Modifier{ir.ModifierTypeAlias}
 	assert.Equal(t, "\ntype Named int\n", format(&ir.DistilledTypeAlias{Name: "Named", Type: ir.TypeRef{Name: "int"}}))
 	assert.Equal(t, "\ntype Alias = int\n", format(&ir.DistilledTypeAlias{Name: "Alias", Type: ir.TypeRef{Name: "int"},
-		Modifiers: []ir.Modifier{ir.ModifierTypeAlias}}))
+		Modifiers: alias}))
+
+	// An alias of a struct or interface literal keeps its "=" too.
+	field := &ir.DistilledField{Name: "X", Type: &ir.TypeRef{Name: "int"}}
+	assert.Equal(t, "\ntype Point struct {\n\tX int\n}\n",
+		format(&ir.DistilledClass{Name: "Point", Children: []ir.DistilledNode{field}}))
+	assert.Equal(t, "\ntype Pair = struct {\n\tX int\n}\n",
+		format(&ir.DistilledClass{Name: "Pair", Modifiers: alias, Children: []ir.DistilledNode{field}}))
+	assert.Equal(t, "\ntype Any = interface {}\n", format(&ir.DistilledInterface{Name: "Any", Modifiers: alias}))
 }

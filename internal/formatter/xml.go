@@ -176,6 +176,7 @@ func (f *XMLFormatter) formatNode(w io.Writer, node ir.DistilledNode, depth int)
 		fmt.Fprintf(w, "%s<interface", indent)
 		f.writeAttr(w, "name", n.Name)
 		f.writeAttr(w, "visibility", string(n.Visibility))
+		f.writeModifiers(w, n.Modifiers)
 		f.writeNodeAttrs(w, n)
 		f.formatNodeChildren(w, ">", "</interface>", n.Children, depth)
 
@@ -269,6 +270,7 @@ func (f *XMLFormatter) formatNode(w io.Writer, node ir.DistilledNode, depth int)
 		fmt.Fprintf(w, "%s<type_alias", indent)
 		f.writeAttr(w, "name", n.Name)
 		f.writeAttr(w, "visibility", string(n.Visibility))
+		f.writeModifiers(w, n.Modifiers)
 		if n.Type.Name != "" {
 			f.writeAttr(w, "type", n.Type.Name)
 		}

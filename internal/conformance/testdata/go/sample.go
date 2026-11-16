@@ -72,3 +72,8 @@ type ConfRecord struct {
 	ConfNote   string // CONF_FIELD_TRAILING
 	confSecret int    // CONF_HIDDEN_FIELD_NOTE
 }
+
+// ConfPair is an alias of a struct literal.
+type ConfPair = struct {
+	ConfLeft int
+}

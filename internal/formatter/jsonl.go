@@ -171,6 +171,9 @@ func (f *JSONLFormatter) nodeToJSON(filePath string, node ir.DistilledNode, path
 
 	case *ir.DistilledInterface:
 		obj["visibility"] = n.Visibility
+		if len(n.Modifiers) > 0 {
+			obj["modifiers"] = n.Modifiers
+		}
 		if len(n.Extends) > 0 {
 			obj["extends"] = f.typeRefsToStrings(n.Extends)
 		}
@@ -209,6 +212,9 @@ func (f *JSONLFormatter) nodeToJSON(filePath string, node ir.DistilledNode, path
 
 	case *ir.DistilledTypeAlias:
 		obj["visibility"] = n.Visibility
+		if len(n.Modifiers) > 0 {
+			obj["modifiers"] = n.Modifiers
+		}
 		obj["alias_type"] = n.Type.Name
 
 	case *ir.DistilledComment:

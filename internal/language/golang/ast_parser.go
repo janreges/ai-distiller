@@ -562,14 +562,23 @@ func (p *ASTParser) processTypeSpec(spec *ast.TypeSpec) ir.DistilledNode {
 		}
 	}
 
+	// A defined type (type Named int) or, with "=", an alias (type Alias =
+	// int), which carries the modifier type_alias, as does an alias of a
+	// struct or interface literal (type Point = struct{ X int }).
 	switch t := spec.Type.(type) {
 	case *ast.StructType:
-		return p.processStructWithParams(spec.Name.Name, typeParams, t)
+		class := p.processStructWithParams(spec.Name.Name, typeParams, t)
+		if spec.Assign.IsValid() {
+			class.Modifiers = append(class.Modifiers, ir.ModifierTypeAlias)
+		}
+		return class
 	case *ast.InterfaceType:
-		return p.processInterfaceWithParams(spec.Name.Name, typeParams, t)
+		intf := p.processInterfaceWithParams(spec.Name.Name, typeParams, t)
+		if spec.Assign.IsValid() {
+			intf.Modifiers = append(intf.Modifiers, ir.ModifierTypeAlias)
+		}
+		return intf
 	default:
-		// A defined type (type Named int) or, with "=", an alias
-		// (type Alias = int), which carries the modifier type_alias.
 		alias := &ir.DistilledTypeAlias{
 			BaseNode: ir.BaseNode{
 				Location: p.getLocation(spec.Pos(), spec.End()),

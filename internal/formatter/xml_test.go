@@ -524,3 +524,14 @@ func TestXML_CDATAEndSequenceInImplementation(t *testing.T) {
 	assert.Contains(t, text.String(), "a[b[0]]>c")
 	assert.Contains(t, text.String(), "x ]]> y")
 }
+
+func TestXMLFormatter_TypeAliasModifier(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, NewXMLFormatter(Options{}).Format(&buf, goTypeDeclsFile()))
+
+	out := buf.String()
+	assert.Contains(t, out, `<type_alias name="ID" visibility="public" type="int"/>`)
+	assert.Contains(t, out, `<type_alias name="Name" visibility="public" modifiers="type_alias" type="string"/>`)
+	assert.Contains(t, out, `<interface name="Any" visibility="public" modifiers="type_alias"/>`)
+	assert.Contains(t, out, `<class name="Pair" visibility="public" modifiers="type_alias"/>`)
+}

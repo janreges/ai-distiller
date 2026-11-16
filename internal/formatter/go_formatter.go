@@ -193,7 +193,7 @@ func (f *GoFormatter) formatStruct(w io.Writer, class *ir.DistilledClass, indent
 	// Class comments are handled separately
 
 	// Format struct declaration
-	fmt.Fprintf(w, "\n%stype %s struct", indentStr, class.Name)
+	fmt.Fprintf(w, "\n%s%sstruct", indentStr, typeDeclHead(class.Name, class.Modifiers))
 
 	if len(class.Children) == 0 {
 		fmt.Fprintln(w, " {}")
@@ -212,7 +212,7 @@ func (f *GoFormatter) formatInterface(w io.Writer, intf *ir.DistilledInterface, 
 
 	// Interface comments are handled separately
 
-	fmt.Fprintf(w, "\n%stype %s interface", indentStr, intf.Name)
+	fmt.Fprintf(w, "\n%s%sinterface", indentStr, typeDeclHead(intf.Name, intf.Modifiers))
 
 	if len(intf.Extends) == 0 && len(intf.Children) == 0 {
 		fmt.Fprintln(w, " {}")
@@ -460,12 +460,18 @@ func (f *GoFormatter) insidePrintedBody(loc ir.Location) bool {
 func (f *GoFormatter) formatTypeAlias(w io.Writer, alias *ir.DistilledTypeAlias, indent string) error {
 	// Type alias comments are handled separately
 
-	if slices.Contains(alias.Modifiers, ir.ModifierTypeAlias) {
-		fmt.Fprintf(w, "\n%stype %s = %s\n", indent, alias.Name, alias.Type.Name)
-	} else {
-		fmt.Fprintf(w, "\n%stype %s %s\n", indent, alias.Name, alias.Type.Name)
-	}
+	fmt.Fprintf(w, "\n%s%s%s\n", indent, typeDeclHead(alias.Name, alias.Modifiers), alias.Type.Name)
 	return nil
+}
+
+// typeDeclHead returns the start of a type declaration up to its type:
+// "type Name " for a defined type, "type Name = " for an alias (the modifier
+// type_alias), so that "type ID int" and "type Name = string" stay apart.
+func typeDeclHead(name string, modifiers []ir.Modifier) string {
+	if slices.Contains(modifiers, ir.ModifierTypeAlias) {
+		return "type " + name + " = "
+	}
+	return "type " + name + " "
 }
 
 func (f *GoFormatter) formatParameters(w io.Writer, params []ir.Parameter) {

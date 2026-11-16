@@ -155,7 +155,8 @@ var fixtures = []fixture{
 			Contains:    []string{"type ConfReadCloser interface {\n\tio.Reader\n\tio.Closer\n\tConfExtra() int\n}\n"},
 			NotContains: []string{"io.Reader | io.Closer"}},
 		check{Cap: "type-set-union", Contains: []string{"type ConfNumber interface {\n\t~int | ~int64\n}\n"}},
-		check{Cap: "defined-type-vs-alias", Contains: []string{"type ConfID int\n", "type ConfName = string\n"},
+		check{Cap: "defined-type-vs-alias", Contains: []string{"type ConfID int\n", "type ConfName = string\n",
+			"type ConfPair = struct {\n\tConfLeft int\n}\n", "type ConfRouter struct {\n"},
 			NotContains: []string{"type ConfID = int"}},
 		check{Cap: "func-types", Contains: []string{
 			"type ConfHandler func(w io.Writer, n int) error\n",

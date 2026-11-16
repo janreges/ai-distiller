@@ -73,21 +73,33 @@ func TestASTParser_InterfaceEmbeddedElements(t *testing.T) {
 }
 
 func TestASTParser_DefinedTypeAndAlias(t *testing.T) {
-	src := "package p\n\ntype Named int\ntype Alias = int\ntype List[T any] []T\ntype Same[T any] = List[T]\n"
+	src := "package p\n\ntype Named int\ntype Alias = int\ntype List[T any] []T\ntype Same[T any] = List[T]\n" +
+		"type Point struct{ X int }\ntype Pair = struct{ A, B int }\n" +
+		"type Closer interface{ Close() error }\ntype Any = interface{}\n"
 	file, err := NewASTParser().ProcessSource(context.Background(), []byte(src), "p.go")
 	require.NoError(t, err)
 	mods := map[string][]ir.Modifier{}
 	for _, node := range file.Children {
-		if a, ok := node.(*ir.DistilledTypeAlias); ok {
-			mods[a.Name] = a.Modifiers
+		switch n := node.(type) {
+		case *ir.DistilledTypeAlias:
+			mods[n.Name] = n.Modifiers
+		case *ir.DistilledClass:
+			mods[n.Name] = n.Modifiers
+		case *ir.DistilledInterface:
+			mods[n.Name] = n.Modifiers
 		}
 	}
 
 	// Only a declaration with "=" is an alias; a defined type is a new type.
+	// A struct or interface literal is no exception.
 	assert.Empty(t, mods["Named"])
 	assert.Equal(t, []ir.Modifier{ir.ModifierTypeAlias}, mods["Alias"])
 	assert.Empty(t, mods["List[T any]"])
 	assert.Equal(t, []ir.Modifier{ir.ModifierTypeAlias}, mods["Same[T any]"])
+	assert.Empty(t, mods["Point"])
+	assert.Equal(t, []ir.Modifier{ir.ModifierTypeAlias}, mods["Pair"])
+	assert.Empty(t, mods["Closer"])
+	assert.Equal(t, []ir.Modifier{ir.ModifierTypeAlias}, mods["Any"])
 }
 
 func TestASTParser_FunctionTypesKeepTheirSignature(t *testing.T) {

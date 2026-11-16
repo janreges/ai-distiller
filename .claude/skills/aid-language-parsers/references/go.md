@@ -46,8 +46,10 @@
   embedded interface (`io.Reader`) or a whole type-set union
   (`~int | ~string`). The text prints them one per line before the methods.
 - Any other type declaration is a `DistilledTypeAlias`. Only a real alias
-  (`type Alias = int`) carries the modifier `type_alias` and prints with `=`;
-  a defined type (`type Named int`) prints without it.
+  (`type Alias = int`, also `type Pair = struct{...}` on the class and
+  `type Any = interface{...}` on the interface) carries the modifier
+  `type_alias` and prints with `=`; a defined type (`type Named int`) prints
+  without it. The structured formats show the modifier on all three kinds.
 - A function whose body contains a `go` statement gets the modifier `async`.
 - `--expand` matches a method by its own name, since no type contains it.
 

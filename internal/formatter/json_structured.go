@@ -278,6 +278,10 @@ func (f *JSONStructuredFormatter) interfaceToStructured(n *ir.DistilledInterface
 		"visibility": n.Visibility,
 	}
 
+	if len(n.Modifiers) > 0 {
+		iface["modifiers"] = n.Modifiers
+	}
+
 	if len(n.Extends) > 0 {
 		iface["extends"] = f.typeRefsToStrings(n.Extends)
 	}
@@ -381,6 +385,10 @@ func (f *JSONStructuredFormatter) typeAliasToStructured(n *ir.DistilledTypeAlias
 		"name":       n.Name,
 		"visibility": n.Visibility,
 		"type":       n.Type.Name,
+	}
+
+	if len(n.Modifiers) > 0 {
+		ta["modifiers"] = n.Modifiers
 	}
 
 	f.addCommonFields(ta, n)
