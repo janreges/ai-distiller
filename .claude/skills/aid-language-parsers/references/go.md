@@ -79,15 +79,18 @@
     const or var spans from its name to the end of its spec;
   - an import declaration's comments come with its imports
     (`internal/language/golang/ast_parser.go#ASTParser.importNodes`): its
-    doc, the groups before each import, the comment at the end of an
-    import's line right before it; a group after the last import of a block
-    is dropped;
+    doc (the group ending on the line directly above `import`, marked
+    `Extensions.Go.ImportDoc`, so the text prints it on the import block), the
+    groups before each import, the comment at the end of an import's line
+    right before it; a group after the last import of a block is dropped. A
+    comment set off from `import` by a blank line (a file header) is a free
+    comment;
   - any other comment inside a declaration (a function's parameters or body,
     a function literal or function type in a spec) is no node at all
     (`internal/language/golang/ast_parser.go#ASTParser.claimDeclComments`):
     the body in `Implementation` holds it;
   - the rest is inserted at file level by its line number.
-- `Extensions` is not used.
+- `Extensions` is used only for `Go.ImportDoc` on an import declaration's doc.
 
 ## Unused files
 

@@ -159,6 +159,11 @@ type GoExtensions struct {
 	IsEmptyInterface bool   `json:"is_empty_interface,omitempty"`
 	ReceiverType     string `json:"receiver_type,omitempty"`
 	IsMethod         bool   `json:"is_method,omitempty"`
+	// ImportDoc marks the comment that is the doc of the import
+	// declaration after it (it ends on the line directly above "import"),
+	// as opposed to a free comment before the imports, such as a file
+	// header set off by a blank line.
+	ImportDoc bool `json:"import_doc,omitempty"`
 }
 
 type PythonExtensions struct {

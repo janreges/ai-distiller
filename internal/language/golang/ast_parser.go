@@ -443,15 +443,21 @@ func (p *ASTParser) extractBuildConstraints(comments []*ast.CommentGroup) []stri
 }
 
 // importNodes returns the imports of an import declaration with their
-// comments, all of them line comments: the declaration's doc, then per
-// import the comment groups before it and the comment at the end of its
-// line, which goes right before it, inside its span (as in memberNodes), so
-// that the text prints it at the end of the import's line. A comment group
-// after the last import of a block ("import (" ... ")") is dropped: no
-// import follows it in the block, and after ")" it would read as a comment
-// on the next declaration. All of them are claimed.
+// comments, all of them line comments: the declaration's doc (the group that
+// ends on the line directly above "import"), marked as such (ImportDoc),
+// then per import the comment groups before it and the comment at the end
+// of its line, which goes right before it, inside its span (as in
+// memberNodes), so that the text prints it at the end of the import's line.
+// A comment group after the last import of a block ("import (" ... ")") is
+// dropped: no import follows it in the block, and after ")" it would read as
+// a comment on the next declaration. All of them are claimed. Any other
+// comment before the declaration, such as a file header set off by a blank
+// line, is a free comment (processComments).
 func (p *ASTParser) importNodes(decl *ast.GenDecl) []ir.DistilledNode {
 	nodes := p.appendCommentGroup(nil, decl.Doc)
+	if len(nodes) > 0 {
+		nodes[0].(*ir.DistilledComment).Extensions = &ir.NodeExtensions{Go: &ir.GoExtensions{ImportDoc: true}}
+	}
 	p.claim(decl.Doc)
 	var inBlock []*ast.CommentGroup // the groups between "(" and ")", in order
 	if decl.Lparen.IsValid() {

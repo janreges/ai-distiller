@@ -44,21 +44,26 @@ func goIndent(n int) string {
 //     goes in the import block, indented, so that the import filter drops it
 //     with its import; any other node closes the block;
 //   - the comments that sit on a declaration or on the import block
-//     (sitsOn) are held until it is written, and the blank line that sets it
-//     off from the node before goes above them, so that a doc stands
+//     (sitsOn: a doc) are held until it is written, and the blank line that
+//     sets it off from the node before, or that sets the first of them off
+//     from a comment it is apart from, goes above them, so that a doc stands
 //     directly on its declaration;
 //   - any other comment is set off by a blank line from a node before it, or
 //     from a comment it is apart from in the source.
 func (f *GoFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, indent int) error {
 	var held, trailing []string
+	heldApart := false // the held comments are apart from the node before
 	write := func(text string) error {
 		if len(held) > 0 {
 			blank := ""
 			if strings.HasPrefix(text, "\n") {
 				blank, text = "\n", text[1:]
 			}
+			if heldApart {
+				blank = "\n"
+			}
 			text = blank + strings.Join(held, "") + text
-			held = nil
+			held, heldApart = nil, false
 		}
 		_, err := io.WriteString(w, text)
 		return err
@@ -96,6 +101,9 @@ func (f *GoFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, indent 
 		text := b.String()
 		switch {
 		case isComment && !inBlock && sitsOn(nodes, i):
+			if len(held) == 0 {
+				heldApart = prev != nil && apart(prev, c)
+			}
 			held = append(held, text)
 			continue
 		case isComment && !inBlock && prev != nil && apart(prev, c):
@@ -116,10 +124,11 @@ func (f *GoFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, indent 
 }
 
 // sitsOn reports whether the comment nodes[i] sits on the node after the
-// comments that follow it: on the import block, or on a declaration (the
-// package clause included) as one of the comments right above it, each a doc
-// comment or ending on the line above the next one. The comment at the end of
-// the declaration's line is skipped.
+// comments that follow it: on the import block as the import declaration's
+// doc (ImportDoc; a free comment before the imports, such as a file header,
+// does not), or on a declaration (the package clause included) as one of
+// the comments right above it, each a doc comment or ending on the line above
+// the next one. The comment at the end of the declaration's line is skipped.
 func sitsOn(nodes []ir.DistilledNode, i int) bool {
 	j := i + 1
 	for j < len(nodes) && nodes[j].GetNodeKind() == ir.KindComment {
@@ -130,7 +139,8 @@ func sitsOn(nodes []ir.DistilledNode, i int) bool {
 	}
 	switch nodes[j].(type) {
 	case *ir.DistilledImport:
-		return true
+		c, ok := nodes[i].(*ir.DistilledComment)
+		return ok && importDoc(c)
 	case *ir.DistilledPackage, *ir.DistilledField, *ir.DistilledClass, *ir.DistilledInterface,
 		*ir.DistilledFunction, *ir.DistilledTypeAlias:
 	default:
@@ -155,6 +165,11 @@ func sitsOn(nodes []ir.DistilledNode, i int) bool {
 		}
 	}
 	return true
+}
+
+// importDoc reports whether c is the doc of an import declaration.
+func importDoc(c *ir.DistilledComment) bool {
+	return c.Extensions != nil && c.Extensions.Go != nil && c.Extensions.Go.ImportDoc
 }
 
 // apart reports whether comment c is set off by a blank line from prev, the

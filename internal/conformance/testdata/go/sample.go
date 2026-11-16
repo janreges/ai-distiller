@@ -1,5 +1,7 @@
 package conf
 
+// CONF_FILE_NOTE
+
 import (
 	"io" // CONF_IMPORT_TRAILING
 	// CONF_IMPORT_DOC

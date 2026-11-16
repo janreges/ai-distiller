@@ -227,7 +227,13 @@ var fixtures = []fixture{
 		// names io or strings: the import filter drops both, and the block
 		// with them.
 		check{Cap: "no-empty-import-block", Flags: []string{"--public=0", "--internal=1"},
-			Contains: []string{"package conf\n\n// CONF_PRIVATE_DOC\n"}, NotContains: []string{"import"}})},
+			Contains: []string{"package conf\n\n// CONF_PRIVATE_DOC\n"}, NotContains: []string{"import"}},
+		// A free comment before the imports (not their declaration's doc)
+		// keeps its blank line and stays when the block goes.
+		check{Cap: "free-comment-before-imports", Flags: []string{"--comments=1"},
+			Contains: []string{"package conf\n\n// CONF_FILE_NOTE\n\nimport (\n"}},
+		check{Cap: "free-comment-outlives-import-block", Flags: []string{"--comments=1", "--public=0", "--internal=1"},
+			Contains: []string{"package conf\n\n// CONF_FILE_NOTE\n\n// CONF_LINE_COMMENT\n"}, NotContains: []string{"import"}})},
 	{Lang: "rust", File: "rust/sample.rs", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "conf_field", "conf_public", "conf_other"},
 		Private:   []string{"conf_private"},

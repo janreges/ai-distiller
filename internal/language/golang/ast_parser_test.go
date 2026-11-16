@@ -255,6 +255,7 @@ func TestASTParser_SpecLineCommentsBeforeTheirSpec(t *testing.T) {
 
 func TestASTParser_ImportComments(t *testing.T) {
 	src := "package p\n\n" +
+		"// header\n\n" +
 		"// decl doc\n" +
 		"import (\n" +
 		"\t// doc of fmt\n" +
@@ -269,12 +270,15 @@ func TestASTParser_ImportComments(t *testing.T) {
 	file, err := NewASTParser().ProcessSource(context.Background(), []byte(src), "p.go")
 	require.NoError(t, err)
 
-	var got []string
+	var got, docs []string
 	for _, node := range file.Children {
 		switch n := node.(type) {
 		case *ir.DistilledComment:
 			assert.Equal(t, ir.CommentLine, n.Format, n.Text)
 			got = append(got, "// "+n.Text)
+			if n.Extensions != nil && n.Extensions.Go != nil && n.Extensions.Go.ImportDoc {
+				docs = append(docs, n.Text)
+			}
 		case *ir.DistilledImport:
 			got = append(got, n.Module)
 		case *ir.DistilledFunction:
@@ -285,9 +289,12 @@ func TestASTParser_ImportComments(t *testing.T) {
 	// line right before it; a comment after the last import of a block is
 	// dropped, and no import comment follows the imports.
 	assert.Equal(t, []string{
-		"// decl doc", "// doc of fmt", "// printing", "fmt", "// free", "math",
+		"// header", "// decl doc", "// doc of fmt", "// printing", "fmt", "// free", "math",
 		"// cgo preamble", "// cgo", "C", "F",
 	}, got)
+	// Only the group that ends on the line directly above "import" is a
+	// declaration's doc; the header set off by a blank line is not.
+	assert.Equal(t, []string{"decl doc", "cgo preamble"}, docs)
 }
 
 func TestASTParser_PackageDocText(t *testing.T) {

@@ -151,9 +151,11 @@ func TestGoFormatter_ImportComments(t *testing.T) {
 	// )
 	// // after                  line 13
 	// var V int                 line 15
+	declDoc := comment(3, 1, "decl doc")
+	declDoc.Extensions = &ir.NodeExtensions{Go: &ir.GoExtensions{ImportDoc: true}}
 	nodes := []ir.DistilledNode{
 		&ir.DistilledPackage{BaseNode: span(1, 9), Name: "p"},
-		comment(3, 1, "decl doc"),
+		declDoc,
 		comment(5, 2, "doc of fmt"),
 		comment(6, 8, "printing"),
 		imp(6, "fmt"),
@@ -176,6 +178,31 @@ func TestGoFormatter_ImportComments(t *testing.T) {
 	b.Reset()
 	require.NoError(t, NewGoFormatter().(SiblingFormatter).FormatNodes(&b, nodes[:5], 0))
 	assert.True(t, strings.HasSuffix(b.String(), "\t\"fmt\" // printing\n)\n"), b.String())
+
+	// A comment before the imports that is not the declaration's doc (a
+	// file header set off by a blank line) stays a free comment, with its
+	// blank line, and is set off from the doc after it.
+	//   without a doc:          with one:
+	//   package p     line 1    package p      line 1
+	//   // header     line 3    // header      line 3
+	//   import "fmt"  line 5    // decl doc    line 5
+	//                           import (       line 6
+	//                           	"fmt"       line 7
+	for _, doc := range []bool{false, true} {
+		nodes = []ir.DistilledNode{&ir.DistilledPackage{BaseNode: span(1, 9), Name: "p"}, comment(3, 1, "header")}
+		want := "package p\n\n// header\n\nimport (\n\t\"fmt\"\n)\n"
+		if doc {
+			declDoc = comment(5, 1, "decl doc")
+			declDoc.Extensions = &ir.NodeExtensions{Go: &ir.GoExtensions{ImportDoc: true}}
+			nodes = append(nodes, declDoc, imp(7, "fmt"))
+			want = "package p\n\n// header\n\n// decl doc\nimport (\n\t\"fmt\"\n)\n"
+		} else {
+			nodes = append(nodes, &ir.DistilledImport{BaseNode: span(5, 8), Module: "fmt", Symbols: []ir.ImportedSymbol{{Name: "fmt"}}})
+		}
+		b.Reset()
+		require.NoError(t, NewGoFormatter().(SiblingFormatter).FormatNodes(&b, nodes, 0))
+		assert.Equal(t, want, b.String(), "with an import doc: %v", doc)
+	}
 }
 
 func TestGoFormatter_SpecLineComments(t *testing.T) {
@@ -237,6 +264,18 @@ func TestGoFormatter_DocSitsOnItsDeclaration(t *testing.T) {
 	// One blank line between declarations, a method included, above the doc;
 	// none between a doc and its declaration.
 	assert.Equal(t, "package p\n\n// F doc\nfunc F()\n\n// M doc\nfunc (r *R) M()\n\n// free\n\n// T doc\ntype T int\n", b.String())
+
+	// A comment set off from the package doc by a blank line (a copyright
+	// header) stays set off from it.
+	// // Copyright           line 1
+	// // Package p doc       line 3
+	// package p              line 4
+	header := &ir.DistilledComment{BaseNode: at(1), Text: "Copyright", Format: ir.CommentLine}
+	pkgDoc := &ir.DistilledComment{BaseNode: at(3), Text: "Package p doc"}
+	b.Reset()
+	require.NoError(t, NewGoFormatter().(SiblingFormatter).FormatNodes(&b,
+		[]ir.DistilledNode{header, pkgDoc, &ir.DistilledPackage{BaseNode: at(4), Name: "p"}}, 0))
+	assert.Equal(t, "// Copyright\n\n// Package p doc\npackage p\n", b.String())
 }
 
 func TestGoFormatter_DefinedTypeAndAlias(t *testing.T) {

@@ -1,6 +1,7 @@
 <file path="source.go">
 //go:build linux
 // go:build linux
+
 // cache_linux.go
 package cache
 
