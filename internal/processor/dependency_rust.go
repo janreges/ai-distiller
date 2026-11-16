@@ -227,7 +227,7 @@ func expandRustUsePart(prefix, part string) []string {
 
 // rustCrateFor parses the nearest Cargo.toml at or above dir, once per file.
 func (da *DependencyAnalyzer) rustCrateFor(dir string) *rustCrate {
-	manifest := findUp(dir, "Cargo.toml")
+	manifest := da.findUp(dir, "Cargo.toml")
 	if manifest == "" {
 		return nil
 	}

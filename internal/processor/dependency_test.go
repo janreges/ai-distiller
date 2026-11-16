@@ -66,3 +66,11 @@ func TestTSConfigMatchPrefersExactThenLongestPrefix(t *testing.T) {
 	cfg.baseURL = "/base"
 	assert.Equal(t, []string{"/base/react"}, cfg.match("react"))
 }
+
+func TestFollowScopePathHelpers(t *testing.T) {
+	assert.True(t, pathInside("/r/a/b.go", "/r"))
+	assert.True(t, pathInside("/r", "/r"))
+	assert.False(t, pathInside("/rx/b.go", "/r"))
+	assert.False(t, pathInside("/b.go", "/r"))
+	assert.True(t, pathInside("/r/..b/c.go", "/r"))
+}

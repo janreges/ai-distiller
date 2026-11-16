@@ -311,7 +311,7 @@ export class AidDistillerServer {
       "distill_with_dependencies",
       {
         title: "Dependency-Aware Code Distillation",
-        description: "EXPERIMENTAL (regex-based, may miss imports): returns the distilled target file followed by the distilled project files it imports, up to max_depth levels of imports. Each followed file is distilled whole with the same options; paths are relative to the target file's directory. Imports of the standard library and of installed packages are not followed, so a result holding only the target file means none of its imports resolved to a project file.\n\nUSAGE: context for one file together with the local code it depends on.",
+        description: "EXPERIMENTAL (regex-based, may miss imports): returns the distilled target file followed by the distilled project files it imports, up to max_depth levels of imports. Each followed file is distilled whole with the same options; paths are relative to the target file's directory. Imports of the standard library and of installed packages are not followed, so a result holding only the target file means none of its imports resolved to a project file. Never reads a file outside the repository (the nearest directory holding .git).\n\nUSAGE: context for one file together with the local code it depends on.",
         inputSchema: z.strictObject({
           file_path: z.string().describe("Target file to analyze" + IN_ROOT),
           max_depth: z.number().default(2).describe("Levels of imports to follow, 1 = only what the target file imports directly (default: 2)"),

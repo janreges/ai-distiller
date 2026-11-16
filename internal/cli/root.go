@@ -435,10 +435,10 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 	// Process the input
 	var result ir.DistilledNode
 	if procOpts.SymbolResolution {
-		var followed int
-		result, followed, err = proc.ProcessWithDependencies(absPath, procOpts)
-		if err == nil && followed == 0 {
-			printNothingFollowedNote(absPath, inputPath)
+		var stats processor.DependencyStats
+		result, stats, err = proc.ProcessWithDependencies(absPath, procOpts)
+		if err == nil && stats.Followed == 0 {
+			printNothingFollowedNote(absPath, inputPath, stats)
 		}
 	} else {
 		result, err = proc.ProcessPath(absPath, procOpts)
@@ -582,15 +582,24 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// printNothingFollowedNote tells on stderr that --dependency-aware added no
-// file, so an output holding only the input itself is not mistaken for a
-// complete dependency set.
-func printNothingFollowedNote(absPath, inputPath string) {
+// printNothingFollowedNote tells on stderr, in one line, that
+// --dependency-aware added no file, so an output holding only the input
+// itself is not mistaken for a complete dependency set, and how many imported
+// files it skipped because they lie outside the repository.
+func printNothingFollowedNote(absPath, inputPath string, stats processor.DependencyStats) {
+	var skipped []string
+	if stats.Outside > 0 {
+		skipped = append(skipped, fmt.Sprintf("%d outside the %s", stats.Outside, stats.BoundaryKind))
+	}
+	reason := ""
+	if len(skipped) > 0 {
+		reason = " (skipped " + strings.Join(skipped, ", ") + "; -v lists them)"
+	}
 	if info, err := os.Stat(absPath); err == nil && info.IsDir() {
-		fmt.Fprintf(os.Stderr, "Note: --dependency-aware followed no imports out of %s: none resolved to a file outside it that aid can distill\n", inputPath)
+		fmt.Fprintf(os.Stderr, "Note: --dependency-aware followed no imports out of %s: none resolved to a file outside it that aid can distill%s\n", inputPath, reason)
 		return
 	}
-	fmt.Fprintf(os.Stderr, "Note: --dependency-aware followed no imports of %s: none resolved to a project file aid can distill\n", inputPath)
+	fmt.Fprintf(os.Stderr, "Note: --dependency-aware followed no imports of %s: none resolved to a project file aid can distill%s\n", inputPath, reason)
 }
 
 func generateOutputFilename(path string, stripOptions []string, format string) string {

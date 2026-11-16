@@ -169,7 +169,7 @@ func (c *tsConfig) match(spec string) []string {
 // jsconfig.json at or above dir, or nil.
 func (da *DependencyAnalyzer) tsConfigFor(dir string) *tsConfig {
 	path := ""
-	for d := dir; ; {
+	for d := dir; da.scope.contains(d); {
 		if f := existingFile(filepath.Join(d, "tsconfig.json")); f != "" {
 			path = f
 			break
@@ -190,7 +190,7 @@ func (da *DependencyAnalyzer) tsConfigFor(dir string) *tsConfig {
 	if cfg, ok := da.tsConfigs[path]; ok {
 		return cfg
 	}
-	cfg := loadTSConfig(path, map[string]bool{})
+	cfg := da.loadTSConfig(path, map[string]bool{})
 	if cfg != nil && len(cfg.paths) == 0 && cfg.baseURL == "" {
 		cfg = nil
 	}
@@ -200,9 +200,10 @@ func (da *DependencyAnalyzer) tsConfigFor(dir string) *tsConfig {
 
 // loadTSConfig reads a tsconfig with its relative "extends" chain. When it
 // sets neither baseUrl nor paths, the first project in "references" that
-// does (a Vite tsconfig.app.json) is used instead.
-func loadTSConfig(path string, seen map[string]bool) *tsConfig {
-	if seen[path] || len(seen) > 16 {
+// does (a Vite tsconfig.app.json) is used instead. A config outside the
+// scope's boundary is not read.
+func (da *DependencyAnalyzer) loadTSConfig(path string, seen map[string]bool) *tsConfig {
+	if seen[path] || len(seen) > 16 || !da.scope.contains(path) {
 		return nil
 	}
 	seen[path] = true
@@ -241,7 +242,7 @@ func loadTSConfig(path string, seen map[string]bool) *tsConfig {
 		if existingFile(basePath) == "" && !strings.HasSuffix(basePath, ".json") {
 			basePath += ".json"
 		}
-		if base := loadTSConfig(basePath, seen); base != nil {
+		if base := da.loadTSConfig(basePath, seen); base != nil {
 			*cfg = *base
 		}
 	}
@@ -258,7 +259,7 @@ func loadTSConfig(path string, seen map[string]bool) *tsConfig {
 			if info, err := os.Stat(refPath); err == nil && info.IsDir() {
 				refPath = filepath.Join(refPath, "tsconfig.json")
 			}
-			if r := loadTSConfig(refPath, seen); r != nil && (len(r.paths) > 0 || r.baseURL != "") {
+			if r := da.loadTSConfig(refPath, seen); r != nil && (len(r.paths) > 0 || r.baseURL != "") {
 				return r
 			}
 		}

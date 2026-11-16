@@ -186,7 +186,9 @@ AI actions get it). That function:
    each file's imports (`DependencyAnalyzer.Imports`, one regex extractor per
    language behind `extractIncludeStatements`), breadth-first, one level per
    step up to `MaxDepth`, and keeps each resolved path once if it is an
-   existing file with a processor;
+   existing file with a processor and lies inside the boundary
+   (`internal/processor/dependency_scope.go`, see below); a skipped file is
+   not read;
 3. distils every followed file with `ProcessFile` and the same options and
    appends it to the result, a `DistilledDirectory`, with a path relative to
    the entry file's directory (or the input directory), `../` included
@@ -201,6 +203,14 @@ autoload of `composer.json` (`internal/processor/dependency_php.go`). The
 other extractors in `dependency.go` match paths next to the importing file.
 README's "What is followed, per language" table lists what each one follows
 and what was measured on real repositories.
+
+The boundary (`dependencyBoundary`) is the nearest directory at or above the
+input that holds `.git`, else the project root of `internal/project` when it
+holds the input, else the input's directory. `followScope.contains` compares
+real paths (symlinks resolved); the resolvers read no `go.mod`, `Cargo.toml`,
+`tsconfig.json`, `composer.json` or package listing outside it
+(`DependencyAnalyzer.findUp`). `-v` logs each skipped import; the `Note:`
+line counts them (`DependencyStats`).
 
 No symbol is resolved: a followed file is distilled whole. When nothing is
 followed, `runDistiller` prints one `Note:` line on stderr

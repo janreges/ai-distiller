@@ -1,6 +1,7 @@
 package conformance
 
 import (
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -176,6 +177,76 @@ func TestDependencyAwareFollowsPhpClasses(t *testing.T) {
 
 	out, _ = runDepAware(t, "php/src/Models/User.php", "--max-depth=1")
 	assert.Len(t, filePaths(out), 7)
+}
+
+// writeProject creates files (slash path -> content) under root.
+func writeProject(t *testing.T, root string, files map[string]string) {
+	t.Helper()
+	for name, content := range files {
+		path := filepath.Join(root, filepath.FromSlash(name))
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+		require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+	}
+}
+
+// Following never leaves the repository (the nearest directory holding .git
+// above the input): an import that resolves outside it, directly or through
+// a symlink, is not read, -v says so, and the stderr note counts it.
+func TestDependencyAwareStaysInsideTheRepository(t *testing.T) {
+	tmp := t.TempDir()
+	writeProject(t, tmp, map[string]string{
+		"repo/.git/HEAD": "ref: refs/heads/main\n",
+		"repo/app/main.js": "import { local } from './local.js';\n" +
+			"import { secret } from '../../outside/secret.js';\n" +
+			"import { linked } from './linked.js';\n" +
+			"export function main() { return [local, secret, linked]; }\n",
+		"repo/app/local.js": "export function local() { return 1; }\n",
+		"repo/app/only.js":  "import { secret } from '../../outside/secret.js';\nexport function only() { return secret; }\n",
+		"outside/secret.js": "export function secretOutsideTheRepository() { return 2; }\n",
+		"outside/target.js": "export function linkedOutsideTheRepository() { return 3; }\n",
+	})
+	require.NoError(t, os.Symlink(filepath.Join(tmp, "outside", "target.js"), filepath.Join(tmp, "repo", "app", "linked.js")))
+	repo := filepath.Join(tmp, "repo")
+
+	out, stderr, code := aidRun(t, repo, nil, "app/main.js", "--dependency-aware", "--stdout", "--summary-type=off", "-v")
+	require.Equal(t, 0, code, stderr)
+	assert.Equal(t, []string{"main.js", "local.js"}, filePaths(out))
+	assert.NotContains(t, out, "OutsideTheRepository")
+	assert.Regexp(t, `Not following \S+/outside/secret\.js \(imported by \S+/app/main\.js\): outside the repository \S+/repo\n`, stderr)
+	assert.Regexp(t, `Not following \S+/app/linked\.js \(imported by \S+/app/main\.js\): outside the repository`, stderr)
+
+	// The only candidate lies outside: the entry alone and the note.
+	out, stderr, code = aidRun(t, repo, nil, "app/only.js", "--dependency-aware", "--stdout", "--summary-type=off")
+	require.Equal(t, 0, code)
+	assert.Equal(t, []string{"only.js"}, filePaths(out))
+	assert.Equal(t, noImportsNote+" of app/only.js: none resolved to a project file aid can distill"+
+		" (skipped 1 outside the repository; -v lists them)\n", stderr)
+}
+
+// Without .git above the input, the boundary is the project root aid
+// detects from the working directory (here package.json).
+func TestDependencyAwareWithoutGitStaysInsideTheProjectRoot(t *testing.T) {
+	tmp := t.TempDir()
+	for d := tmp; ; d = filepath.Dir(d) {
+		if _, err := os.Stat(filepath.Join(d, ".git")); err == nil {
+			t.Skipf("%s holds .git, so the temporary directory is inside a repository", d)
+		}
+		if filepath.Dir(d) == d {
+			break
+		}
+	}
+	writeProject(t, tmp, map[string]string{
+		"proj/package.json": "{}\n",
+		"proj/src/main.js":  "import { util } from './util.js';\nimport { shared } from '../../shared/lib.js';\nexport function main() { return [util, shared]; }\n",
+		"proj/src/util.js":  "export function util() { return 1; }\n",
+		"shared/lib.js":     "export function sharedOutsideTheProject() { return 2; }\n",
+	})
+	proj := filepath.Join(tmp, "proj")
+	out, stderr, code := aidRun(t, proj, nil, "src/main.js", "--dependency-aware", "--stdout", "--summary-type=off", "-v")
+	require.Equal(t, 0, code, stderr)
+	assert.Equal(t, []string{"main.js", "util.js"}, filePaths(out))
+	assert.NotContains(t, out, "OutsideTheProject")
+	assert.Regexp(t, `Not following \S+/shared/lib\.js \(imported by \S+/src/main\.js\): outside the project root \S+/proj\n`, stderr)
 }
 
 func TestDependencyAwareSaysWhenNothingIsFollowed(t *testing.T) {

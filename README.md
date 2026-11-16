@@ -205,6 +205,10 @@ The tree-sitter grammars are compiled into the `aid` binary through cgo - zero e
 
 The analysis is heuristic: imports are found with regular expressions and resolved to files on disk. It does not work out which symbols the entry file uses, so a followed file is distilled whole. Imports of the standard library and of installed packages are not followed. When no import resolves to a project file aid can distill, aid prints the entry file alone and says so in one line on stderr.
 
+Following never leaves the repository: a file whose real path (symlinks resolved) lies outside the nearest directory above the input that holds `.git` is not read, and neither are the `go.mod`, `Cargo.toml`, `tsconfig.json` or `composer.json` files there. Without `.git`, the boundary is the [project root](#-smart-project-root-detection) aid detects from the working directory when it holds the input, else the input's directory.
+
+`-v` names every import skipped for this reason, and when nothing is followed the stderr note counts them.
+
 Given a directory, aid distils every file of it as without the flag and adds the files outside the directory that they import.
 
 ```bash

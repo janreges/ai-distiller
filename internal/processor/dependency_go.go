@@ -130,7 +130,7 @@ func goPathWithin(importPath, modulePath string) (string, bool) {
 
 // goModuleFor parses the nearest go.mod at or above dir, once per go.mod.
 func (da *DependencyAnalyzer) goModuleFor(dir string) *goModule {
-	modFile := findUp(dir, "go.mod")
+	modFile := da.findUp(dir, "go.mod")
 	if modFile == "" {
 		return nil
 	}
@@ -199,7 +199,7 @@ func (da *DependencyAnalyzer) goPackageFiles(dir string) []goFile {
 	}
 	var files []goFile
 	entries, err := os.ReadDir(dir)
-	if err == nil {
+	if err == nil && da.scope.contains(dir) {
 		for _, entry := range entries {
 			name := entry.Name()
 			if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {

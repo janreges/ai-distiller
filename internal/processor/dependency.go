@@ -18,26 +18,34 @@ import (
 // ProcessOptions.MaxDepth levels. Every followed file gets the distillation it
 // would get without the flag. Imports are found per language with regular
 // expressions and resolved to files on disk; an import that does not resolve
-// to an existing file aid has a processor for is not followed.
+// to an existing file aid has a processor for is not followed. Following
+// never leaves the repository (followScope).
+
+// DependencyStats counts what ProcessWithDependencies followed and skipped.
+type DependencyStats struct {
+	Followed     int    // followed files in the result
+	Outside      int    // imported files not read because they lie outside Boundary
+	Boundary     string // the directory following stays in, described ("the repository /x")
+	BoundaryKind string // "repository", "project root" or "input directory"
+}
 
 // ProcessWithDependencies distils path (a file, or every file a directory run
 // selects) and then the files it imports, up to opts.MaxDepth levels. The
 // result holds path's own files first, as a run without the flag prints them,
 // then the followed files in the order they were found, with paths relative
-// to the entry file's directory (or to the directory). followed is the number
-// of followed files in the result.
-func (p *Processor) ProcessWithDependencies(path string, opts ProcessOptions) (result *ir.DistilledDirectory, followed int, err error) {
+// to the entry file's directory (or to the directory).
+func (p *Processor) ProcessWithDependencies(path string, opts ProcessOptions) (result *ir.DistilledDirectory, stats DependencyStats, err error) {
 	dbg := debug.FromContext(p.ctx).WithSubsystem("dependency")
 	if opts.MaxDepth < 1 {
-		return nil, 0, fmt.Errorf("--max-depth must be 1 or more with --dependency-aware, got %d", opts.MaxDepth)
+		return nil, stats, fmt.Errorf("--max-depth must be 1 or more with --dependency-aware, got %d", opts.MaxDepth)
 	}
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to resolve path: %w", err)
+		return nil, stats, fmt.Errorf("failed to resolve path: %w", err)
 	}
 	info, err := os.Stat(absPath)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to stat path: %w", err)
+		return nil, stats, fmt.Errorf("failed to stat path: %w", err)
 	}
 
 	fileOpts := opts
@@ -48,7 +56,7 @@ func (p *Processor) ProcessWithDependencies(path string, opts ProcessOptions) (r
 	if info.IsDir() {
 		tasks, err := p.walkDirectory(absPath, fileOpts)
 		if err != nil {
-			return nil, 0, err
+			return nil, stats, err
 		}
 		result = p.processTasks(absPath, tasks, fileOpts)
 		for _, task := range tasks {
@@ -58,15 +66,20 @@ func (p *Processor) ProcessWithDependencies(path string, opts ProcessOptions) (r
 		baseDir = filepath.Dir(absPath)
 		entry, err := p.ProcessFile(absPath, fileOpts)
 		if err != nil {
-			return nil, 0, err
+			return nil, stats, err
 		}
 		result = &ir.DistilledDirectory{Path: baseDir, Children: []ir.DistilledNode{entry}}
 		starts = []string{absPath}
 	}
 
-	analyzer := NewDependencyAnalyzer(p.ctx)
-	deps := analyzer.Follow(starts, opts.MaxDepth)
-	dbg.Logf(debug.LevelBasic, "Followed %d files from %s (max depth %d)", len(deps), absPath, opts.MaxDepth)
+	scope := newFollowScope(baseDir)
+	stats.Boundary, stats.BoundaryKind = scope.describe(), scope.kind
+	dbg.Logf(debug.LevelBasic, "Following imports inside %s", stats.Boundary)
+	analyzer := NewDependencyAnalyzer(p.ctx, scope)
+	deps, outside := analyzer.Follow(starts, opts.MaxDepth)
+	stats.Outside = outside
+	dbg.Logf(debug.LevelBasic, "Followed %d files from %s (max depth %d); skipped %d outside %s",
+		len(deps), absPath, opts.MaxDepth, outside, stats.Boundary)
 	for _, dep := range deps {
 		file, err := p.ProcessFile(dep, fileOpts)
 		if err != nil {
@@ -75,9 +88,9 @@ func (p *Processor) ProcessWithDependencies(path string, opts ProcessOptions) (r
 		}
 		file.Path = dependencyDisplayPath(dep, baseDir, opts)
 		result.Children = append(result.Children, file)
-		followed++
+		stats.Followed++
 	}
-	return result, followed, nil
+	return result, stats, nil
 }
 
 // dependencyDisplayPath prints a followed file the way processFile prints the
@@ -103,9 +116,11 @@ func dependencyDisplayPath(file, baseDir string, opts ProcessOptions) string {
 
 // DependencyAnalyzer finds the files a source file imports. It caches the
 // project files it reads to resolve imports (go.mod, Cargo.toml,
-// tsconfig.json, composer.json, package listings).
+// tsconfig.json, composer.json, package listings), and reads none outside
+// its scope's boundary.
 type DependencyAnalyzer struct {
-	ctx context.Context
+	ctx   context.Context
+	scope *followScope // nil: no boundary and no selection rules
 
 	goModules  map[string]*goModule  // go.mod path -> parsed module, nil when unreadable
 	goPackages map[string][]goFile   // directory -> its non-test Go files
@@ -114,10 +129,12 @@ type DependencyAnalyzer struct {
 	composers  map[string][]psr4Root // composer.json path -> its PSR-4 roots, longest prefix first, nil when unreadable
 }
 
-// NewDependencyAnalyzer returns an analyzer that logs to ctx's debugger.
-func NewDependencyAnalyzer(ctx context.Context) *DependencyAnalyzer {
+// NewDependencyAnalyzer returns an analyzer that logs to ctx's debugger and
+// follows only what scope allows (everything when scope is nil).
+func NewDependencyAnalyzer(ctx context.Context, scope *followScope) *DependencyAnalyzer {
 	return &DependencyAnalyzer{
 		ctx:        ctx,
+		scope:      scope,
 		goModules:  map[string]*goModule{},
 		goPackages: map[string][]goFile{},
 		rustCrates: map[string]*rustCrate{},
@@ -128,9 +145,13 @@ func NewDependencyAnalyzer(ctx context.Context) *DependencyAnalyzer {
 
 // findUp returns the path of the nearest file called name in dir or one of
 // its parents, or "" when there is none. It stops after a directory that
-// holds .git, the top of a repository.
-func findUp(dir, name string) string {
+// holds .git, the top of a repository, and never looks outside the scope's
+// boundary.
+func (da *DependencyAnalyzer) findUp(dir, name string) string {
 	for {
+		if !da.scope.contains(dir) {
+			return ""
+		}
 		candidate := filepath.Join(dir, name)
 		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
 			return candidate
@@ -165,14 +186,16 @@ func stripSlashComments(code string) string {
 
 // Follow returns the files that starts import, breadth-first up to maxDepth
 // levels (1: what starts import directly), each once, without starts
-// themselves. Only existing files that aid has a processor for are returned.
-func (da *DependencyAnalyzer) Follow(starts []string, maxDepth int) []string {
+// themselves. Only existing files that aid has a processor for are returned,
+// and of those only the ones inside the scope's boundary (symlinks
+// resolved); outside counts the others, which are neither read nor followed
+// further. -v logs each of them.
+func (da *DependencyAnalyzer) Follow(starts []string, maxDepth int) (followed []string, outside int) {
 	dbg := debug.FromContext(da.ctx).WithSubsystem("dependency")
 	seen := make(map[string]bool, len(starts))
 	for _, s := range starts {
 		seen[filepath.Clean(s)] = true
 	}
-	var followed []string
 	frontier := starts
 	for depth := 1; depth <= maxDepth && len(frontier) > 0; depth++ {
 		var next []string
@@ -190,6 +213,11 @@ func (da *DependencyAnalyzer) Follow(starts []string, maxDepth int) []string {
 					dbg.Logf(debug.LevelDetailed, "Not following %s: no processor", dep)
 					continue
 				}
+				if !da.scope.contains(dep) {
+					dbg.Logf(debug.LevelBasic, "Not following %s (imported by %s): outside %s", dep, file, da.scope.describe())
+					outside++
+					continue
+				}
 				dbg.Logf(debug.LevelDetailed, "Following %s (depth %d, imported by %s)", dep, depth, file)
 				followed = append(followed, dep)
 				next = append(next, dep)
@@ -197,7 +225,7 @@ func (da *DependencyAnalyzer) Follow(starts []string, maxDepth int) []string {
 		}
 		frontier = next
 	}
-	return followed
+	return followed, outside
 }
 
 // Imports returns the files that filePath imports and that resolve to an

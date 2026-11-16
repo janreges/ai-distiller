@@ -195,7 +195,7 @@ func resolvePsr4(fqn string, roots []psr4Root) string {
 func (da *DependencyAnalyzer) psr4RootsFor(dir string) []psr4Root {
 	var roots []psr4Root
 	for {
-		composer := findUp(dir, "composer.json")
+		composer := da.findUp(dir, "composer.json")
 		if composer == "" {
 			return roots
 		}
