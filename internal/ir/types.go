@@ -173,6 +173,9 @@ type JavaScriptExtensions struct {
 	IsArrowFunction     bool `json:"is_arrow_function,omitempty"`
 	IsGeneratorFunction bool `json:"is_generator_function,omitempty"`
 	IsAbstractClass     bool `json:"is_abstract_class,omitempty"`
+	// IsFunctionExpression marks a variable whose value is a `function`
+	// expression (`const f = function (a) {...}`), not an arrow function.
+	IsFunctionExpression bool `json:"is_function_expression,omitempty"`
 }
 
 type TypeScriptExtensions struct {

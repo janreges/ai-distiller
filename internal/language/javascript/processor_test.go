@@ -474,3 +474,17 @@ func TestJS_VariableNamedValue(t *testing.T) {
 	assert.Equal(t, "{ a, b }", f.Children[1].(*ir.DistilledField).Name)
 	assert.Equal(t, ir.VisibilityPrivate, f.Children[2].(*ir.DistilledField).Visibility)
 }
+
+// A variable whose value is a function expression is a function marked as
+// one, so it prints with `function`; an arrow function is not marked.
+func TestJS_FunctionExpressionVariable(t *testing.T) {
+	f := parseJS(t, "const fe = function (a) { return a; };\nconst ge = function* () {};\nconst ar = (a) => a;\n")
+	isExpr := func(i int) bool {
+		fn := f.Children[i].(*ir.DistilledFunction)
+		return fn.Extensions != nil && fn.Extensions.JavaScript != nil && fn.Extensions.JavaScript.IsFunctionExpression
+	}
+	assert.True(t, isExpr(0))
+	assert.True(t, isExpr(1))
+	assert.Equal(t, "*ge", f.Children[1].(*ir.DistilledFunction).Name)
+	assert.False(t, isExpr(2))
+}

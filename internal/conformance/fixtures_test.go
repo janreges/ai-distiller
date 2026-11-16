@@ -148,7 +148,11 @@ var fixtures = []fixture{
 		check{Cap: "declaration-keyword", Contains: []string{
 			"export let confLetArrow = (confL)",
 			"export var confVarValue = 3"},
-			NotContains: []string{"function confLetArrow", "let confVarValue"}})},
+			NotContains: []string{"function confLetArrow", "let confVarValue"}},
+		check{Cap: "function-expression-constant", Contains: []string{
+			"export const confFnExpr = function (confQ)",
+			"export const confGenExpr = function* ()"},
+			NotContains: []string{"confFnExpr = (confQ)"}})},
 	{Lang: "go", File: "go/sample.go", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "ConfField", "ConfPublic", "ConfOther"},
 		Private:   []string{"confPrivate"},

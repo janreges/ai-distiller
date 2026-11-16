@@ -115,6 +115,7 @@ Distills to:
 - ⚠️ **Complex destructuring** - Shown as patterns, not fully expanded
 - ✅ **Arrow functions assigned to a variable** - printed with their keyword and parameters (`const createClient = (apiKey)`, `const quickGet = async (endpoint)`, `let f = (a)`); `=> body` only with `--implementation=1`
 - ✅ **Variables** print with the keyword they were declared with: `const`, `let` or `var`
+- ✅ **Function expressions assigned to a variable** - printed as function expressions (`const fe = function (a)`, `const ge = function* ()`, `const af = async function (x)`); the function's own name (`function named(x)`) is not printed
 - ✅ **Wrapped components and callbacks** - a constant initialised with a call that takes a function prints the call with each function's parameters and no body: `export const Button = forwardRef(({ variant = "a", ...props }, ref))`, `export const List = memo(function List({ items }))`; the whole initializer with `--implementation=1`
 - ⚠️ **Top-level visibility** - JavaScript has no visibility keyword for top-level declarations, so non-exported functions and constants are printed too
 

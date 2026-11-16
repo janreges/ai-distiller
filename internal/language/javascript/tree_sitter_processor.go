@@ -925,6 +925,8 @@ func (p *TreeSitterProcessor) processVariableDeclarator(node *sitter.Node, file 
 			if child.Kind() == "arrow_function" {
 				p.processArrowFunction(child, fn)
 			} else {
+				// Printed `const f = function (a)`, not as an arrow
+				fn.Extensions = &ir.NodeExtensions{JavaScript: &ir.JavaScriptExtensions{IsFunctionExpression: true}}
 				p.processFunctionExpression(child, fn)
 			}
 

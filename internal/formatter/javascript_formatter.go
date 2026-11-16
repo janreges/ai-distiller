@@ -147,13 +147,22 @@ func (f *JavaScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 
 		// Format based on context
 		if indent == 0 && keyword != "" {
-			// Top-level arrow function: `const f = async (a)`
-			isArrow = true
-			async := ""
+			// Top-level arrow function, `const f = async (a)`, or function
+			// expression, `const f = async function (a)`, `const g = function* ()`
+			head := "" // what comes between `=` and the parameters
 			if isAsync {
-				async = "async "
+				head = "async "
 			}
-			fmt.Fprintf(w, "%s%s%s %s = %s(%s)", indentStr, esExportPrefix(fn.Modifiers), keyword, functionName, async, f.formatParameters(fn.Parameters))
+			if fn.Extensions != nil && fn.Extensions.JavaScript != nil && fn.Extensions.JavaScript.IsFunctionExpression {
+				head += "function"
+				if isGenerator {
+					head += "*"
+				}
+				head += " "
+			} else {
+				isArrow = true
+			}
+			fmt.Fprintf(w, "%s%s%s %s = %s(%s)", indentStr, esExportPrefix(fn.Modifiers), keyword, functionName, head, f.formatParameters(fn.Parameters))
 		} else if indent == 0 {
 			// Top-level function declaration: `export async function* name(...)`
 			prefix := esExportPrefix(fn.Modifiers)

@@ -35,7 +35,9 @@
   are named `get x` and `set x`, generator methods `*name`; `static` and `async`
   become modifiers.
 - A variable whose value is an arrow function, a `function` expression or a
-  generator function becomes a `DistilledFunction`; other variables become
+  generator function becomes a `DistilledFunction`; a `function` or generator
+  expression has `Extensions.JavaScript.IsFunctionExpression`, so the formatter
+  prints `const f = function (a)` instead of an arrow. Other variables become
   `DistilledField`s. The keyword is a modifier: `const` is `final`, `let`
   and `var` are `let` and `var`. A field whose value is
   a call that takes a function (`forwardRef((props, ref) => ...)`) has the
@@ -63,7 +65,7 @@
   `/** */` is `doc`, `/* */` `block`, `//` and `///` `line`; a file-level doc with
   a file tag is `Inner`. JSDoc `@param {T} name` and `@returns {T}` also fill
   parameter and return types.
-- `Extensions` is not used.
+- `Extensions` holds only `JavaScript.IsFunctionExpression` (see above).
 
 ## Unused files
 

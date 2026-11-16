@@ -46,6 +46,22 @@ func TestJavaScriptFormatter_DeclarationKeyword(t *testing.T) {
 	assert.Equal(t, "let w = 4\n", jsFormat(t, &ir.DistilledField{Name: "w", DefaultValue: "4", Modifiers: []ir.Modifier{ir.ModifierLet}}, 0))
 }
 
+// A variable whose value is a function expression prints `function`, not
+// an arrow, and its body without `=>`.
+func TestJavaScriptFormatter_FunctionExpression(t *testing.T) {
+	expr := &ir.NodeExtensions{JavaScript: &ir.JavaScriptExtensions{IsFunctionExpression: true}}
+	params := []ir.Parameter{{Name: "a"}}
+	fe := func(name string, mods ...ir.Modifier) *ir.DistilledFunction {
+		return &ir.DistilledFunction{BaseNode: ir.BaseNode{Extensions: expr}, Name: name, Parameters: params, Modifiers: mods}
+	}
+	assert.Equal(t, "const fe = function (a)\n", jsFormat(t, fe("fe", ir.ModifierFinal), 0))
+	assert.Equal(t, "export let ge = function* (a)\n", jsFormat(t, fe("*ge", ir.ModifierLet, ir.ModifierExport), 0))
+	assert.Equal(t, "var af = async function* (a)\n", jsFormat(t, fe("*af", ir.ModifierVar, ir.ModifierAsync), 0))
+	withBody := fe("fe", ir.ModifierFinal)
+	withBody.Implementation = "{\n  return a;\n}"
+	assert.Equal(t, "const fe = function (a) {\n    return a;\n}\n", jsFormat(t, withBody, 0))
+}
+
 func TestJavaScriptFormatter_Comments(t *testing.T) {
 	var b strings.Builder
 	f := NewJavaScriptFormatter()

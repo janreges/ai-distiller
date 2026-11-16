@@ -47,3 +47,5 @@ export const confWrapped = confWrap((confP) => {
 export const confAsyncArrow = async (confU) => confU;
 export let confLetArrow = (confL) => confL;
 export var confVarValue = 3;
+export const confFnExpr = function (confQ) {};
+export const confGenExpr = function* () {};
