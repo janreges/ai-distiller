@@ -3,6 +3,7 @@ package formatter
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/janreges/ai-distiller/internal/ir"
@@ -414,10 +415,18 @@ func (f *GoFormatter) insidePrintedBody(loc ir.Location) bool {
 	return afterStart && beforeEnd
 }
 
+// formatTypeAlias prints a type declaration that is neither a struct nor an
+// interface: an alias (modifier type_alias) as "type Alias = int", a defined
+// type, which is a new type and not another name for its underlying one, as
+// "type Named int".
 func (f *GoFormatter) formatTypeAlias(w io.Writer, alias *ir.DistilledTypeAlias, indent string) error {
 	// Type alias comments are handled separately
 
-	fmt.Fprintf(w, "\n%stype %s = %s\n", indent, alias.Name, alias.Type.Name)
+	if slices.Contains(alias.Modifiers, ir.ModifierTypeAlias) {
+		fmt.Fprintf(w, "\n%stype %s = %s\n", indent, alias.Name, alias.Type.Name)
+	} else {
+		fmt.Fprintf(w, "\n%stype %s %s\n", indent, alias.Name, alias.Type.Name)
+	}
 	return nil
 }
 

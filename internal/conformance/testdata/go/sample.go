@@ -45,3 +45,9 @@ type ConfReadCloser interface {
 type ConfNumber interface {
 	~int | ~int64
 }
+
+// ConfID is a defined type, a new type.
+type ConfID int
+
+// ConfName is an alias, another name for string.
+type ConfName = string

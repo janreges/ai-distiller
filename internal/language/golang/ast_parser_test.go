@@ -71,3 +71,21 @@ func TestASTParser_InterfaceEmbeddedElements(t *testing.T) {
 	assert.Equal(t, []ir.TypeRef{{Name: "~int | ~int64 | float64"}}, intfs["Number"].Extends)
 	assert.Equal(t, []ir.TypeRef{{Name: "fmt.Stringer"}, {Name: "~string | ~[]byte"}}, intfs["Mixed"].Extends)
 }
+
+func TestASTParser_DefinedTypeAndAlias(t *testing.T) {
+	src := "package p\n\ntype Named int\ntype Alias = int\ntype List[T any] []T\ntype Same[T any] = List[T]\n"
+	file, err := NewASTParser().ProcessSource(context.Background(), []byte(src), "p.go")
+	require.NoError(t, err)
+	mods := map[string][]ir.Modifier{}
+	for _, node := range file.Children {
+		if a, ok := node.(*ir.DistilledTypeAlias); ok {
+			mods[a.Name] = a.Modifiers
+		}
+	}
+
+	// Only a declaration with "=" is an alias; a defined type is a new type.
+	assert.Empty(t, mods["Named"])
+	assert.Equal(t, []ir.Modifier{ir.ModifierTypeAlias}, mods["Alias"])
+	assert.Empty(t, mods["List[T any]"])
+	assert.Equal(t, []ir.Modifier{ir.ModifierTypeAlias}, mods["Same[T any]"])
+}

@@ -105,3 +105,14 @@ func TestGoFormatter_InterfaceEmbedsAndMethods(t *testing.T) {
 		format(&ir.DistilledInterface{Name: "Number", Extends: []ir.TypeRef{{Name: "~int | ~string"}}}))
 	assert.Equal(t, "\ntype Any interface {}\n", format(&ir.DistilledInterface{Name: "Any"}))
 }
+
+func TestGoFormatter_DefinedTypeAndAlias(t *testing.T) {
+	format := func(a *ir.DistilledTypeAlias) string {
+		var b strings.Builder
+		require.NoError(t, NewGoFormatter().FormatNode(&b, a, 0))
+		return b.String()
+	}
+	assert.Equal(t, "\ntype Named int\n", format(&ir.DistilledTypeAlias{Name: "Named", Type: ir.TypeRef{Name: "int"}}))
+	assert.Equal(t, "\ntype Alias = int\n", format(&ir.DistilledTypeAlias{Name: "Alias", Type: ir.TypeRef{Name: "int"},
+		Modifiers: []ir.Modifier{ir.ModifierTypeAlias}}))
+}

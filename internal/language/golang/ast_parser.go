@@ -564,7 +564,8 @@ func (p *ASTParser) processTypeSpec(spec *ast.TypeSpec) ir.DistilledNode {
 	case *ast.InterfaceType:
 		return p.processInterfaceWithParams(spec.Name.Name, typeParams, t)
 	default:
-		// Type alias
+		// A defined type (type Named int) or, with "=", an alias
+		// (type Alias = int), which carries the modifier type_alias.
 		alias := &ir.DistilledTypeAlias{
 			BaseNode: ir.BaseNode{
 				Location: p.getLocation(spec.Pos(), spec.End()),
@@ -572,6 +573,9 @@ func (p *ASTParser) processTypeSpec(spec *ast.TypeSpec) ir.DistilledNode {
 			Name:       spec.Name.Name + typeParams,
 			Visibility: p.getVisibility(spec.Name.Name),
 			Type:       ir.TypeRef{Name: p.typeToString(spec.Type)},
+		}
+		if spec.Assign.IsValid() {
+			alias.Modifiers = []ir.Modifier{ir.ModifierTypeAlias}
 		}
 		return alias
 	}

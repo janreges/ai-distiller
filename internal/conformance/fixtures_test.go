@@ -94,7 +94,9 @@ var fixtures = []fixture{
 		check{Cap: "interface-embeds",
 			Contains:    []string{"type ConfReadCloser interface {\n\tio.Reader\n\tio.Closer\n\tConfExtra() int\n}\n"},
 			NotContains: []string{"io.Reader | io.Closer"}},
-		check{Cap: "type-set-union", Contains: []string{"type ConfNumber interface {\n\t~int | ~int64\n}\n"}})},
+		check{Cap: "type-set-union", Contains: []string{"type ConfNumber interface {\n\t~int | ~int64\n}\n"}},
+		check{Cap: "defined-type-vs-alias", Contains: []string{"type ConfID int\n", "type ConfName = string\n"},
+			NotContains: []string{"type ConfID = int"}})},
 	{Lang: "rust", File: "rust/sample.rs", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "conf_field", "conf_public", "conf_other"},
 		Private:   []string{"conf_private"},

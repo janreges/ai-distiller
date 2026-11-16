@@ -10,7 +10,7 @@ Go is a statically typed, compiled language with the following primary construct
 
 - **Packages**: Organizational units (`package main`)
 - **Imports**: Dependency management with aliasing support
-- **Types**: Structs, interfaces, type aliases
+- **Types**: Structs, interfaces, defined types (`type Named int`) and type aliases (`type Alias = int`)
 - **Functions**: Standalone functions and methods with receivers
 - **Variables/Constants**: Package and function-scoped declarations
 - **Interfaces**: Behavioral contracts with implicit satisfaction
