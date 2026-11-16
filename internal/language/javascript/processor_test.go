@@ -512,6 +512,24 @@ func TestJS_JSDocBracedTypes(t *testing.T) {
 	assert.Equal(t, "Promise<Map<string, number>>", fn.Returns.Name)
 }
 
+// A `{` that never closes leaves its own tag untyped; the next line that
+// starts with `@` starts the next tag, which is read.
+func TestJS_JSDocUnclosedBrace(t *testing.T) {
+	f := parseJS(t, "/**\n * @param {Object a - broken\n * @param {string} b\n * @returns {number}\n */\nexport function f(a, b) {}\n")
+	var fn *ir.DistilledFunction
+	for _, c := range f.Children {
+		if n, ok := c.(*ir.DistilledFunction); ok {
+			fn = n
+		}
+	}
+	require.NotNil(t, fn)
+	require.Len(t, fn.Parameters, 2)
+	assert.Equal(t, "", fn.Parameters[0].Type.Name)
+	assert.Equal(t, "string", fn.Parameters[1].Type.Name)
+	require.NotNil(t, fn.Returns)
+	assert.Equal(t, "number", fn.Returns.Name)
+}
+
 // A variable whose value is a function expression is a function marked as
 // one, so it prints with `function`; an arrow function is not marked.
 func TestJS_FunctionExpressionVariable(t *testing.T) {

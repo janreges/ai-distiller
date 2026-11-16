@@ -161,6 +161,14 @@ func TestESExportImportRequire(t *testing.T) {
 		distillES(t, "req.ts", src, esDefault))
 }
 
+// A JSDoc `{` that never closes leaves its own tag untyped, not the tags
+// after it.
+func TestESJSDocUnclosedBrace(t *testing.T) {
+	src := "/**\n * @param {Object a - broken\n * @param {string} b\n * @returns {number}\n */\nexport function f(a, b) {}\n"
+	lines := distillES(t, "jsdoc_open.js", src, esDefault)
+	assert.Equal(t, "export function f(a, b: string) -> number", lines[len(lines)-1])
+}
+
 // --expand NAME keeps the body of a getter, setter or generator called NAME.
 func TestESExpandMatchesAccessorsAndGenerators(t *testing.T) {
 	expand := func(patterns ...string) processor.ProcessOptions {

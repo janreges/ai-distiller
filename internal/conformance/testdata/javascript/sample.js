@@ -56,6 +56,12 @@ export class ConfGenerators {
 }
 /** @type {Map<string, Set<number>>} */
 export const confTypedMap = new Map();
+/**
+ * @param {Object confBroken - the brace never closes
+ * @param {string} confFine
+ * @returns {number}
+ */
+export function confJsdocOpen(confBroken, confFine) { return 1; }
 export function ConfJsxView() {
     return <div className="conf" />;
 }

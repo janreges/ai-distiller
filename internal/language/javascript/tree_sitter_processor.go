@@ -175,7 +175,9 @@ func (p *TreeSitterProcessor) parseJSDoc(text string) *JSDocInfo {
 	hasTypeInfo := false
 
 	// A tag runs on over the next lines while its braced type is open, so
-	// `@type {Array<{a: number,` + `b: string}>}` is read whole.
+	// `@type {Array<{a: number,` + `b: string}>}` is read whole. A line that
+	// starts with `@` starts the next tag even then: a `{` that never closes
+	// leaves its own tag untyped, not the tags after it.
 	var tags []string
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -188,7 +190,7 @@ func (p *TreeSitterProcessor) parseJSDoc(text string) *JSDocInfo {
 			continue
 		}
 
-		if n := len(tags); n > 0 && jsdocTypeOpen(tags[n-1]) {
+		if n := len(tags); n > 0 && jsdocTypeOpen(tags[n-1]) && !strings.HasPrefix(line, "@") {
 			tags[n-1] += " " + line
 		} else if strings.HasPrefix(line, "@") {
 			tags = append(tags, line)

@@ -184,7 +184,9 @@ var fixtures = []fixture{
 			"    *confGenMethod() {}"}},
 		check{Cap: "jsx-keeps-react", Contains: []string{"import React from 'react'", "export function ConfJsxView()"}},
 		check{Cap: "jsdoc-braced-type", Contains: []string{
-			"export const confTypedMap: Map<string, Set<number>> = new Map()"}})},
+			"export const confTypedMap: Map<string, Set<number>> = new Map()"}},
+		check{Cap: "jsdoc-unclosed-brace-ends-at-next-tag", Contains: []string{
+			"export function confJsdocOpen(confBroken, confFine: string) -> number"}})},
 	{Lang: "go", File: "go/sample.go", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "ConfField", "ConfPublic", "ConfOther"},
 		Private:   []string{"confPrivate"},

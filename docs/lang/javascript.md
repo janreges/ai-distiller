@@ -49,7 +49,7 @@ This appears in the distilled output with type annotations (the JSDoc block itse
 - `function createUser(name: string, age: number) -> User`
 - `async function fetchData(options: Object) -> Promise<Data>`
 
-A type is read whole, nested braces and spaces included, also when it goes on over lines: `@type {WeakMap<object, Set<Function>>}` gives `const listeners: WeakMap<object, Set<Function>>`, and `@param {number} [timeout=5000]` types the optional parameter `timeout`. A `@typedef` declares a type name and does not type the declaration after it.
+A type is read whole, nested braces and spaces included, also when it goes on over lines: `@type {WeakMap<object, Set<Function>>}` gives `const listeners: WeakMap<object, Set<Function>>`, and `@param {number} [timeout=5000]` types the optional parameter `timeout`. A `{` that never closes leaves only its own tag untyped: the next line that starts with `@` is the next tag. A `@typedef` declares a type name and does not type the declaration after it.
 
 ### Function Parameter Extraction
 
