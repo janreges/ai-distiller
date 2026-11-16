@@ -103,8 +103,9 @@ Distills to:
 - ✅ **Async/generator detection** with proper prefixes for functions, class methods and object-literal methods
 - ✅ **Object literal analysis** including methods and spread syntax
 - ✅ **ES6 classes** with constructors, methods, getters/setters
-- ✅ **Exported declarations** are printed (ES6 and CommonJS); the `export` keyword of a declaration and `module.exports` are not shown
+- ✅ **Exported declarations** are printed with their `export` or `export default` keyword, as in TypeScript (`export const createClient = (apiKey)`, `export default class:` for an anonymous class); `module.exports = ...` is shown only with `--comments=1`
 - ✅ **Re-exports and export lists** print as written: `export * from './a'`, `export { x, y as z } from './c'`, `export { q }`, `export default Inner`
+- ✅ **Generator functions** print `function* name()` (`async function* name()`)
 - ✅ **JSDoc type extraction** for parameters and return values
 - ✅ **Private members** detection: `#private` names, and class members whose name starts with `_` unless their JSDoc says `@public`
 - ✅ **JSDoc blocks** printed by default above the declaration they document; `//` and `/* */` comments with `--comments=1`
@@ -285,6 +286,7 @@ const useUsers = ()
  * @param {Function} props.onUserClick - Click handler
  */
 function UserList({ title, onUserClick })
+export default UserList
 </file>
 ```
     
@@ -350,8 +352,9 @@ class ApiClient:
     constructor(apiKey)
     async get(endpoint)
     async post(endpoint, data)
-const createClient = (apiKey)
-const quickGet = (endpoint)
+export const createClient = (apiKey)
+export const quickGet = (endpoint)
+export default ApiClient
 </file>
 ```
     

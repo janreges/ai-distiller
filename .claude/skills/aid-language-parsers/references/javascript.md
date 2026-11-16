@@ -37,8 +37,10 @@
 - A variable whose value is an arrow function, a `function` expression or a
   generator function becomes a `DistilledFunction`; other variables become
   `DistilledField`s. `const` adds the modifier `final`.
-- `export class/function/const ...` is parsed as the declaration itself; no
-  modifier records the export.
+- `export class/function/const ...` is parsed as the declaration itself and
+  gets the modifier `export`, and `default` after `export default`
+  (`internal/language/javascript/tree_sitter_processor.go#TreeSitterProcessor.processExport`);
+  `export default class {}` is a class without a name.
 
 ## IR specifics
 

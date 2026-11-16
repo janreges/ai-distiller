@@ -84,9 +84,9 @@ class MemoryPool:
      */
     getStats() -> object
 const delay = (ms)
-* function counterTask()
-* function dataFetcherTask(task)
-* function complexIteratorTask()
+function* counterTask()
+function* dataFetcherTask(task)
+function* complexIteratorTask()
 const scheduler = new CooperativeScheduler()
 const objectPool = new MemoryPool(() => ({ data: null, reset() { this.data = null; } }))
 </file>

@@ -111,6 +111,11 @@ var fixtures = []fixture{
 		check{Cap: "import-default-and-named", Flags: []string{"--filter-imports=false"},
 			Contains: []string{"import ConfReact, { confHook as confUseHook } from 'conf-react'"}},
 		check{Cap: "import-alias-used", Contains: []string{"import ConfReact, { confHook as confUseHook } from 'conf-react'"}},
+		check{Cap: "export-keyword", Contains: []string{
+			"export class ConfWidget:",
+			"export function confWithHook(hook = confUseHook)",
+			"export async function* confGen(n)",
+			"export const confExported = 3"}},
 		check{Cap: "reexport-forms", Contains: []string{
 			"export * from './conf-all'",
 			"export { confPicked as ConfRenamed } from './conf-picked'",

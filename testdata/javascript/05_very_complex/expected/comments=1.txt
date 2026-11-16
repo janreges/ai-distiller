@@ -77,9 +77,9 @@ class MemoryPool:
 // A helper function that returns a promise, for tasks to yield.
 const delay = (ms)
 // Define some tasks as generator functions
-* function counterTask()
-* function dataFetcherTask(task)
-* function complexIteratorTask()
+function* counterTask()
+function* dataFetcherTask(task)
+function* complexIteratorTask()
 const scheduler = new CooperativeScheduler()
 // After some time, we can register another task dynamically.
 // Create memory pool example

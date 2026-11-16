@@ -54,3 +54,18 @@ func TestJavaScriptFormatter_Comments(t *testing.T) {
 	}
 	assert.Equal(t, "/** K doc */\nclass K:\n    // inner\n    /**\n     * First.\n     * Second.\n     */\n    m()\n    /* static initialization block */\n// module.exports = K\n", b.String())
 }
+
+// An exported declaration prints `export` or `export default`, like
+// TypeScript; a generator function prints `function*`.
+func TestJavaScriptFormatter_Export(t *testing.T) {
+	export := []ir.Modifier{ir.ModifierExport}
+	exportDefault := []ir.Modifier{ir.ModifierExport, ir.ModifierDefault}
+	assert.Equal(t, "\nexport class K:\n", jsFormat(t, &ir.DistilledClass{Name: "K", Modifiers: export}, 0))
+	assert.Equal(t, "\nexport default class:\n", jsFormat(t, &ir.DistilledClass{Modifiers: exportDefault}, 0))
+	assert.Equal(t, "export default function main()\n", jsFormat(t, &ir.DistilledFunction{Name: "main", Modifiers: exportDefault}, 0))
+	assert.Equal(t, "export async function* gen(n)\n",
+		jsFormat(t, &ir.DistilledFunction{Name: "*gen", Modifiers: []ir.Modifier{ir.ModifierAsync, ir.ModifierExport}, Parameters: []ir.Parameter{{Name: "n"}}}, 0))
+	assert.Equal(t, "function* gen()\n", jsFormat(t, &ir.DistilledFunction{Name: "*gen"}, 0))
+	assert.Equal(t, "export const c = 1\n", jsFormat(t, &ir.DistilledField{Name: "c", DefaultValue: "1", Modifiers: []ir.Modifier{ir.ModifierFinal, ir.ModifierExport}}, 0))
+	assert.Equal(t, "export const f = (x)\n", jsFormat(t, &ir.DistilledFunction{Name: "f", Modifiers: []ir.Modifier{ir.ModifierFinal, ir.ModifierExport}, Parameters: []ir.Parameter{{Name: "x"}}}, 0))
+}

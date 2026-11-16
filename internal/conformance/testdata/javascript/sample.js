@@ -39,3 +39,5 @@ export * from "./conf-all";
 export { confPicked as ConfRenamed } from "./conf-picked";
 export { confArrow };
 export default ConfWidget;
+export async function* confGen(n) {}
+export const confExported = 3;

@@ -413,3 +413,41 @@ func TestJS_ExportStatements(t *testing.T) {
 	assert.True(t, exports[4].IsDefault)
 	assert.Equal(t, "q", exports[4].Value)
 }
+
+// An exported declaration carries the modifier export, and default after
+// `export default`; `export default class {}` is a class without a name.
+func TestJS_ExportedDeclarations(t *testing.T) {
+	f := parseJS(t, "export class K {}\nexport default class {}\nexport function* g() {}\nexport const c = 1, d = 2;\nexport var v = 3;\nfunction plain() {}\n")
+	mods := map[string][]ir.Modifier{}
+	for _, c := range f.Children {
+		switch d := c.(type) {
+		case *ir.DistilledClass:
+			mods["class "+d.Name] = d.Modifiers
+		case *ir.DistilledFunction:
+			mods[d.Name] = d.Modifiers
+		case *ir.DistilledField:
+			mods[d.Name] = d.Modifiers
+		}
+	}
+	export := []ir.Modifier{ir.ModifierExport}
+	assert.Equal(t, map[string][]ir.Modifier{
+		"class K": export,
+		"class ":  {ir.ModifierExport, ir.ModifierDefault},
+		"*g":      export,
+		"c":       {ir.ModifierFinal, ir.ModifierExport},
+		"d":       {ir.ModifierFinal, ir.ModifierExport},
+		"v":       export,
+		"plain":   {},
+	}, mods)
+}
+
+// A default value that is a name does not replace the parameter's name, and
+// a destructuring pattern with a default keeps its pattern.
+func TestJS_ParameterDefaults(t *testing.T) {
+	f := parseJS(t, "function f(hook = useHook, { a } = {}, n = 1) {}\n")
+	assert.Equal(t, []ir.Parameter{
+		{Name: "hook", DefaultValue: "useHook"},
+		{Name: "{ a }", DefaultValue: "{}"},
+		{Name: "n", DefaultValue: "1"},
+	}, f.Children[0].(*ir.DistilledFunction).Parameters)
+}

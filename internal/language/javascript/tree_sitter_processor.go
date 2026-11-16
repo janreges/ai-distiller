@@ -401,23 +401,43 @@ func (p *TreeSitterProcessor) processNamedImports(node *sitter.Node, imp *ir.Dis
 }
 
 // processExport processes export statements: an exported declaration is
-// parsed as the declaration; a re-export, an export list or `export default
-// <expression>` becomes a DistilledExport (esutil.Export).
+// parsed as the declaration and gets the modifier export (and default after
+// `export default`; `export default class {}` is a class without a name); a
+// re-export, an export list or `export default <expression>` becomes a
+// DistilledExport (esutil.Export).
 func (p *TreeSitterProcessor) processExport(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) {
 	if exp := esutil.Export(node, p.source); exp != nil {
 		p.addNode(file, parent, exp)
 		return
 	}
-	// Process the exported declaration
+	mods := []ir.Modifier{ir.ModifierExport}
+	before := len(file.Children)
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(uint(i))
 		switch child.Kind() {
-		case "class_declaration":
+		case "default":
+			mods = append(mods, ir.ModifierDefault)
+		case "class_declaration", "class":
 			p.processClass(child, file, parent)
-		case "function_declaration":
+		case "function_declaration", "generator_function_declaration":
 			p.processFunction(child, file, parent, false)
 		case "lexical_declaration":
 			p.processLexicalDeclaration(child, file, parent)
+		case "variable_declaration":
+			p.processVariableDeclaration(child, file, parent)
+		}
+	}
+	if parent != nil {
+		return
+	}
+	for _, n := range file.Children[before:] {
+		switch d := n.(type) {
+		case *ir.DistilledClass:
+			d.Modifiers = append(d.Modifiers, mods...)
+		case *ir.DistilledFunction:
+			d.Modifiers = append(d.Modifiers, mods...)
+		case *ir.DistilledField:
+			d.Modifiers = append(d.Modifiers, mods...)
 		}
 	}
 }
@@ -788,16 +808,11 @@ func (p *TreeSitterProcessor) processParameters(node *sitter.Node, fn *ir.Distil
 			}
 
 		case "assignment_pattern":
-			// param = defaultValue
-			var paramName, defaultValue string
-			for j := 0; j < int(child.ChildCount()); j++ {
-				grandchild := child.Child(uint(j))
-				if grandchild.Kind() == "identifier" {
-					paramName = p.getNodeText(grandchild)
-				} else if grandchild.Kind() != "=" {
-					defaultValue = p.getNodeText(grandchild)
-				}
-			}
+			// param = defaultValue; the parameter is the left side as written
+			// (a name or a destructuring pattern), the default the right side,
+			// which may itself be a name.
+			paramName := p.getNodeText(child.ChildByFieldName("left"))
+			defaultValue := p.getNodeText(child.ChildByFieldName("right"))
 			param := ir.Parameter{
 				Name:         paramName,
 				DefaultValue: defaultValue,

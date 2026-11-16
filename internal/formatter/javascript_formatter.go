@@ -76,7 +76,10 @@ func (f *JavaScriptFormatter) formatClass(w io.Writer, class *ir.DistilledClass,
 	if !f.afterComment {
 		fmt.Fprintln(w)
 	}
-	fmt.Fprintf(w, "%sclass %s", indentStr, class.Name)
+	fmt.Fprintf(w, "%s%sclass", indentStr, esExportPrefix(class.Modifiers))
+	if class.Name != "" {
+		fmt.Fprintf(w, " %s", class.Name)
+	}
 
 	// Add extends clause
 	if len(class.Extends) > 0 {
@@ -152,21 +155,18 @@ func (f *JavaScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 		if indent == 0 && isConst {
 			// Top-level const arrow function
 			isArrow = true
-			fmt.Fprintf(w, "%sconst %s = (%s)", indentStr, functionName, f.formatParameters(fn.Parameters))
+			fmt.Fprintf(w, "%s%sconst %s = (%s)", indentStr, esExportPrefix(fn.Modifiers), functionName, f.formatParameters(fn.Parameters))
 		} else if indent == 0 {
-			// Top-level function declaration
-			prefixParts := []string{}
+			// Top-level function declaration: `export async function* name(...)`
+			prefix := esExportPrefix(fn.Modifiers)
 			if isAsync {
-				prefixParts = append(prefixParts, "async")
+				prefix += "async "
 			}
+			keyword := "function "
 			if isGenerator {
-				prefixParts = append(prefixParts, "*")
+				keyword = "function* "
 			}
-			prefix := ""
-			if len(prefixParts) > 0 {
-				prefix = strings.Join(prefixParts, " ") + " "
-			}
-			fmt.Fprintf(w, "%s%sfunction %s(%s)", indentStr, prefix, functionName, f.formatParameters(fn.Parameters))
+			fmt.Fprintf(w, "%s%s%s%s(%s)", indentStr, prefix, keyword, functionName, f.formatParameters(fn.Parameters))
 		} else {
 			// Method inside a class
 			prefixParts := []string{}
@@ -232,7 +232,7 @@ func (f *JavaScriptFormatter) formatField(w io.Writer, field *ir.DistilledField,
 			varType = "const"
 		}
 
-		fmt.Fprintf(w, "%s %s", varType, field.Name)
+		fmt.Fprintf(w, "%s%s %s", esExportPrefix(field.Modifiers), varType, field.Name)
 
 		// Add type annotation if available (from JSDoc)
 		if field.Type != nil && field.Type.Name != "" {

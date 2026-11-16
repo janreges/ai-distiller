@@ -173,7 +173,7 @@ class MemoryPool:
         };
     }
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
-* function counterTask() {
+function* counterTask() {
     console.log('Counter task started.');
     for (let i = 1; i <= 5; i++) {
         console.log(`Counter: ${i}`);
@@ -181,7 +181,7 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
     }
     console.log('Counter task finished.');
 }
-* function dataFetcherTask(task) {
+function* dataFetcherTask(task) {
     console.log('Data fetcher task started.');
     console.log(`Fetching data for task ID ${task.id} with metadata:`, Reflect.get(task, TASK_METADATA));
     yield delay(500); // Simulate network request
@@ -191,7 +191,7 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
     yield; // Yield control for one tick
     console.log('Data fetcher finished.');
 }
-* function complexIteratorTask() {
+function* complexIteratorTask() {
     console.log('Complex iterator task started.');
 
     // Custom iterator that yields prime numbers
