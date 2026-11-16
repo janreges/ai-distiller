@@ -21,6 +21,28 @@ func TestExpandRustUseTree(t *testing.T) {
 	}
 }
 
+func TestPhpImportedClasses(t *testing.T) {
+	cases := map[string][]string{
+		`App\Models\User`:            {`App\Models\User`},
+		`\App\Models\User as Member`: {`App\Models\User`},
+		`App\A, App\B as C`:          {`App\A`, `App\B`},
+		"App\\Contracts\\{\n    Arrayable,\n    Jsonable as Json,\n}": {`App\Contracts\Arrayable`, `App\Contracts\Jsonable`},
+		`App\{Models\User, function helper, const LIMIT}`:             {`App\Models\User`},
+		`function App\Support\helper`:                                 nil,
+		`const App\LIMIT`:                                             nil,
+	}
+	for body, want := range cases {
+		assert.Equal(t, want, phpImportedClasses(body, map[string]string{}), body)
+	}
+
+	aliases := map[string]string{}
+	phpImportedClasses(`App\Contracts\{Arrayable, Jsonable as Json}`, aliases)
+	assert.Equal(t, []string{`App\Contracts\Jsonable`}, phpCandidates("Json", `App\Models`, aliases))
+	assert.Equal(t, []string{`App\Contracts\Arrayable\Nested`}, phpCandidates(`Arrayable\Nested`, `App\Models`, aliases))
+	assert.Equal(t, []string{`App\Models\Model`, "Model"}, phpCandidates("Model", `App\Models`, aliases))
+	assert.Equal(t, []string{`Other\Model`}, phpCandidates(`\Other\Model`, `App\Models`, aliases))
+}
+
 func TestStripJSONC(t *testing.T) {
 	in := "{\n  // a comment\n  \"a\": \"http://x/*y*/\", /* block */\n  \"b\": [1, 2,],\n  \"c\": {\"d\": 1, // last\n  },\n}\n"
 	assert.JSONEq(t, `{"a": "http://x/*y*/", "b": [1, 2], "c": {"d": 1}}`, string(stripJSONC([]byte(in))))

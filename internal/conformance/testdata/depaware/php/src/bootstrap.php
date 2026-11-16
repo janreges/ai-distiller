@@ -1,0 +1,5 @@
+<?php
+
+function boot(): void
+{
+}

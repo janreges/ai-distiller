@@ -52,7 +52,11 @@ processor registers under and the IR's `Language`.
    imports): the language switches in `internal/processor/dependency.go`
    (`DependencyAnalyzer.extractIncludeStatements`,
    `DependencyAnalyzer.detectLanguage`) and an extractor that returns the
-   files a source file imports.
+   files a source file imports. An extractor that reads project files to
+   resolve imports (a manifest such as `go.mod` or `composer.json`) gets its
+   own file, as `internal/processor/dependency_php.go` does, a CLI test in
+   `internal/conformance/dependency_aware_test.go` and a measured row in
+   README's "What is followed, per language" table.
 
 ## Tests
 

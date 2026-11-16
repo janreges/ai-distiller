@@ -1,0 +1,13 @@
+{
+    "name": "example/shop",
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "App\\Support\\": ["packages/support/src/"]
+        }
+    }
+}

@@ -153,6 +153,31 @@ func TestDependencyAwareFollowsTypeScriptImports(t *testing.T) {
 	assert.Equal(t, []string{"main.tsx", "app/index.tsx", "lib/format.ts", "lib/api.ts", "lazy/page.tsx"}, filePaths(out))
 }
 
+// PHP: classes named in use imports (grouped, aliased), trait use, extends
+// and implements, found through the PSR-4 autoload of every composer.json
+// from the file up to the repository top (a package's own and the root's),
+// and require_once __DIR__ . '...'. Not "use function", not vendor classes,
+// not a commented-out import.
+func TestDependencyAwareFollowsPhpClasses(t *testing.T) {
+	out, stderr := runDepAware(t, "php/src/Models/User.php")
+	assert.NotContains(t, stderr, noImportsNote)
+	assert.Equal(t, []string{
+		"User.php",
+		"../Contracts/Arrayable.php",         // use App\Contracts\{Arrayable, ...}
+		"../Contracts/Jsonable.php",          // ... Jsonable as Json}
+		"../../packages/support/src/Str.php", // use App\Support\Str (autoload-dev, a list)
+		"../bootstrap.php",                   // require_once __DIR__ . '/../bootstrap.php'
+		"Model.php",                          // extends Model: the file's namespace
+		"Concerns/HasName.php",               // use Concerns\HasName; inside the class
+		"../Text/Inflector.php",              // Str.php's import, mapped by the root composer.json: depth 2
+		"../Concerns/Timestamps.php",         // use \App\Concerns\Timestamps; in Model.php: depth 2
+	}, filePaths(out))
+	assert.Contains(t, out, "public static capitalize(string $value): string")
+
+	out, _ = runDepAware(t, "php/src/Models/User.php", "--max-depth=1")
+	assert.Len(t, filePaths(out), 7)
+}
+
 func TestDependencyAwareSaysWhenNothingIsFollowed(t *testing.T) {
 	// index.js imports only npm packages: nothing to follow, but the entry
 	// file is still printed and the run succeeds.

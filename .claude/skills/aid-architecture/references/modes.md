@@ -192,6 +192,16 @@ AI actions get it). That function:
    the entry file's directory (or the input directory), `../` included
    (`dependencyDisplayPath`; absolute with `--file-path-type=absolute`).
 
+Four languages resolve imports through their project files, each in its own
+file: Go through `go.mod` (`internal/processor/dependency_go.go`), Rust
+through `Cargo.toml` (`internal/processor/dependency_rust.go`), TypeScript and
+JavaScript through `tsconfig.json`/`jsconfig.json` paths
+(`internal/processor/dependency_javascript.go`) and PHP through the PSR-4
+autoload of `composer.json` (`internal/processor/dependency_php.go`). The
+other extractors in `dependency.go` match paths next to the importing file.
+README's "What is followed, per language" table lists what each one follows
+and what was measured on real repositories.
+
 No symbol is resolved: a followed file is distilled whole. When nothing is
 followed, `runDistiller` prints one `Note:` line on stderr
 (`internal/cli/root.go#printNothingFollowedNote`) and exits 0. Stdin never

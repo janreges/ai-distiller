@@ -103,7 +103,7 @@ func dependencyDisplayPath(file, baseDir string, opts ProcessOptions) string {
 
 // DependencyAnalyzer finds the files a source file imports. It caches the
 // project files it reads to resolve imports (go.mod, Cargo.toml,
-// tsconfig.json, package listings).
+// tsconfig.json, composer.json, package listings).
 type DependencyAnalyzer struct {
 	ctx context.Context
 
@@ -111,6 +111,7 @@ type DependencyAnalyzer struct {
 	goPackages map[string][]goFile   // directory -> its non-test Go files
 	rustCrates map[string]*rustCrate // Cargo.toml path -> parsed crate, nil when unreadable
 	tsConfigs  map[string]*tsConfig  // tsconfig/jsconfig path -> its effective paths, nil when unreadable
+	composers  map[string][]psr4Root // composer.json path -> its PSR-4 roots, longest prefix first, nil when unreadable
 }
 
 // NewDependencyAnalyzer returns an analyzer that logs to ctx's debugger.
@@ -121,6 +122,7 @@ func NewDependencyAnalyzer(ctx context.Context) *DependencyAnalyzer {
 		goPackages: map[string][]goFile{},
 		rustCrates: map[string]*rustCrate{},
 		tsConfigs:  map[string]*tsConfig{},
+		composers:  map[string][]psr4Root{},
 	}
 }
 
@@ -239,7 +241,7 @@ func (da *DependencyAnalyzer) extractIncludeStatements(ctx context.Context, file
 
 	switch language {
 	case "php":
-		return da.extractPhpIncludes(ctx, fileContent, filePath)
+		return da.extractPhpImports(ctx, fileContent, filePath)
 	case "python":
 		return da.extractPythonImports(ctx, fileContent, filePath)
 	case "go":
@@ -263,38 +265,6 @@ func (da *DependencyAnalyzer) extractIncludeStatements(ctx context.Context, file
 	default:
 		return []string{}, nil // No imports for unsupported languages
 	}
-}
-
-// extractPhpIncludes extracts PHP require/include statements
-func (da *DependencyAnalyzer) extractPhpIncludes(ctx context.Context, fileContent []byte, filePath string) ([]string, error) {
-	includes := []string{}
-
-	// Look for require_once 'file.php'
-	if strings.Contains(string(fileContent), "require_once") {
-		lines := strings.Split(string(fileContent), "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "require_once") {
-				// Extract quoted filename
-				start := strings.Index(line, "'")
-				if start == -1 {
-					start = strings.Index(line, "\"")
-				}
-				if start != -1 {
-					start++
-					end := strings.Index(line[start:], "'")
-					if end == -1 {
-						end = strings.Index(line[start:], "\"")
-					}
-					if end != -1 {
-						includes = append(includes, line[start:start+end])
-					}
-				}
-			}
-		}
-	}
-
-	return includes, nil
 }
 
 // extractPythonImports extracts Python import statements
