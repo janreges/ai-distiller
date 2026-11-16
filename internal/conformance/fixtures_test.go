@@ -245,6 +245,12 @@ var fixtures = []fixture{
 			NotContains: []string{"ConfCrate"}},
 		check{Cap: "crate-type-impls-with-internal", Flags: []string{"--internal=1"},
 			Contains: []string{"impl ConfCrate {\n    pub fn conf_crate_method(&self)\n}"}, NotContains: []string{"ConfHidden"}},
+		// The private ConfImported of conf_tests is another type than the
+		// imported one, and the pub use makes conf_engine's ConfEngine public.
+		check{Cap: "same-name-in-private-module",
+			Contains: []string{"impl ConfImported {\n    pub fn conf_imported_method(&self)\n}"}},
+		check{Cap: "reexported-type-impls",
+			Contains: []string{"impl ConfEngine {\n    pub fn conf_engine_start(&self)\n}"}},
 		check{Cap: "body-starts-after-brace",
 			Contains: []string{"impl ConfWidget {\n    pub fn conf_public(&self)", "pub trait ConfShape {\n    fn conf_area(&self) -> i32;"}})},
 	{Lang: "swift", File: "swift/sample.swift", Checks: append(standard(markers{

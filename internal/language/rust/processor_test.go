@@ -1464,10 +1464,11 @@ func TestRust_ImplsGoWithTheirRemovedType(t *testing.T) {
 		})
 		return names
 	}
+	// impl Twice names the private Twice of its own module, not again::Twice.
 	hidden := []string{"impl<'a> Hidden<'a>", "doc:hidden impl doc", "impl std::io::Read for Hidden<'_>",
-		"impl<'a> Tr for &'a mut Hidden<'a>", "impl PrivTrait for Shown"}
+		"impl<'a> Tr for &'a mut Hidden<'a>", "impl PrivTrait for Shown", "impl Twice"}
 	shown := []string{"impl Shown", "impl Tr for Shown", "impl InPublicMod", "impl<T: Clone> Tr for T",
-		"impl Tr for Vec<u8>", "impl External", "impl Twice"}
+		"impl Tr for Vec<u8>", "impl External"}
 
 	public := distill(rustPublicOnly)
 	for _, name := range append(append([]string{}, hidden...), "impl Crate", "impl private_mod::InPrivateMod") {
@@ -1492,6 +1493,75 @@ func TestRust_ImplsGoWithTheirRemovedType(t *testing.T) {
 	for _, name := range append(append(hidden, shown...), "impl Crate", "impl private_mod::InPrivateMod") {
 		assert.Contains(t, names, name)
 	}
+}
+
+// An impl block's type is looked up as Rust resolves it: a bare name in the
+// block's own module, a path through the inline modules it names. A type of
+// the same name elsewhere in the file, or one that a use declaration brings
+// in, never hides the block, and a pub use that stays makes a type of a
+// private module public, as in rustdoc.
+func TestRust_ImplsResolveTheirTypeInTheirModule(t *testing.T) {
+	src := `pub use crate::error::Error;
+impl Error { pub fn imported_code(&self) {} }
+impl std::fmt::Display for Error { fn fmt(&self) {} }
+#[cfg(test)]
+mod tests { struct Error; }
+
+pub mod m { struct In; impl In { pub fn in_m() {} } }
+pub mod up { impl super::Below { pub fn via_super() {} } }
+struct Below;
+
+mod imp { pub struct Engine; struct Secret; }
+pub use imp::Engine;
+impl Engine { pub fn start(&self) {} }
+impl imp::Engine { pub fn by_path(&self) {} }
+impl imp::Secret { pub fn secret(&self) {} }
+
+mod grp { pub struct A; pub struct B; pub struct C; }
+pub use grp::{A, B as Bee};
+impl grp::A { pub fn a_listed() {} }
+impl grp::B { pub fn b_renamed() {} }
+impl grp::C { pub fn c_not_exported() {} }
+
+mod gl { pub struct G; pub(crate) struct Gc; }
+pub use gl::*;
+impl gl::G { pub fn g_glob() {} }
+impl gl::Gc { pub fn gc_crate_only() {} }
+
+mod ch { mod deep { pub struct D; } pub use self::deep::D; }
+pub use ch::D;
+impl ch::deep::D { pub fn d_chained() {} }
+
+mod pc { pub struct P; }
+pub(crate) use pc::P;
+impl pc::P { pub fn p_crate_export() {} }
+
+mod pv { pub struct V; }
+use pv::V;
+impl V { pub fn v_private_import() {} }
+`
+	distill := func(opts processor.ProcessOptions) []string {
+		file, err := NewProcessor().ProcessWithOptions(context.Background(), strings.NewReader(src), "test.rs", opts)
+		require.NoError(t, err)
+		return allNames(file)
+	}
+	public := distill(rustPublicOnly)
+	for _, name := range []string{"imported_code", "impl std::fmt::Display for Error", "start", "by_path",
+		"a_listed", "b_renamed", "g_glob", "d_chained", "v_private_import"} {
+		assert.Contains(t, public, name)
+	}
+	for _, name := range []string{"in_m", "via_super", "secret", "c_not_exported", "gc_crate_only", "p_crate_export"} {
+		assert.NotContains(t, public, name)
+	}
+
+	// --internal=1: the pub(crate) re-export and the pub(crate) type show.
+	internal := rustPublicOnly
+	internal.IncludePrivate, internal.RemovePrivateOnly, internal.RemoveProtectedOnly = true, true, true
+	names := distill(internal)
+	for _, name := range []string{"p_crate_export", "gc_crate_only"} {
+		assert.Contains(t, names, name)
+	}
+	assert.NotContains(t, names, "secret")
 }
 
 // A type removed for another visibility than the module around it takes its

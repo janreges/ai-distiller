@@ -61,3 +61,24 @@ pub(crate) struct ConfCrate;
 impl ConfCrate {
     pub fn conf_crate_method(&self) {}
 }
+
+pub use crate::conf_errors::ConfImported;
+
+impl ConfImported {
+    pub fn conf_imported_method(&self) {}
+}
+
+mod conf_engine {
+    pub struct ConfEngine;
+}
+
+pub use conf_engine::ConfEngine;
+
+impl ConfEngine {
+    pub fn conf_engine_start(&self) {}
+}
+
+#[cfg(test)]
+mod conf_tests {
+    struct ConfImported;
+}

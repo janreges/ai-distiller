@@ -59,7 +59,7 @@ func (p *Processor) ProcessWithOptions(ctx context.Context, reader io.Reader, fi
 	if stripperOpts.HasAnyOption() {
 		s := stripper.New(stripperOpts)
 		// The impl blocks of a type the stripper removes go with it.
-		hideImplsOfRemovedTypes(file, tsp.impls, s)
+		hideImplsOfRemovedTypes(file, tsp.impls, tsp.uses, s)
 		stripped := file.Accept(s)
 		if strippedFile, ok := stripped.(*ir.DistilledFile); ok {
 			return strippedFile, nil

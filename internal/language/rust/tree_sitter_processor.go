@@ -16,8 +16,10 @@ import (
 // TreeSitterProcessor distils Rust source with the tree-sitter-rust grammar.
 type TreeSitterProcessor struct {
 	// impls are the impl blocks of the file of the last ProcessSource call,
-	// with what each implements.
+	// with what each implements, and uses its use declarations with what each
+	// binds.
 	impls map[*ir.DistilledClass]implTarget
+	uses  map[*ir.DistilledImport]useItem
 }
 
 // NewTreeSitterProcessor creates a new tree-sitter based processor
@@ -63,7 +65,8 @@ func (p *TreeSitterProcessor) ProcessSource(ctx context.Context, source []byte, 
 	defer cursor.Close()
 	var walkErr error
 	p.impls = map[*ir.DistilledClass]implTarget{}
-	w := &walker{ctx: ctx, source: source, file: file, cursor: cursor, err: &walkErr, impls: p.impls}
+	p.uses = map[*ir.DistilledImport]useItem{}
+	w := &walker{ctx: ctx, source: source, file: file, cursor: cursor, err: &walkErr, impls: p.impls, uses: p.uses}
 	w.items(root, nil, inFile)
 	if walkErr != nil {
 		return nil, walkErr
@@ -120,9 +123,11 @@ type walker struct {
 	// err is the first failure to parse a macro body, shared by the walkers
 	// of one file.
 	err *error
-	// impls collects the impl blocks of the file with their targets, shared
-	// by the walkers of one file.
+	// impls collects the impl blocks of the file with their targets, and uses
+	// its use declarations with what they bind, shared by the walkers of one
+	// file.
 	impls map[*ir.DistilledClass]implTarget
+	uses  map[*ir.DistilledImport]useItem
 }
 
 // macroBody links the walker of a macro body to the token tree it was cut
@@ -352,6 +357,7 @@ func (w *walker) expand(body *sitter.Node, parent *ir.DistilledClass, in contain
 		macro:     macro,
 		err:       w.err,
 		impls:     w.impls,
+		uses:      w.uses,
 	}
 
 	// A fresh parser and tree for this body; no node of them outlives this
@@ -1050,6 +1056,8 @@ func (w *walker) macroDefinition(node *sitter.Node, exported bool) ir.DistilledN
 // useDeclaration returns a use declaration. "use a::{b, c as d}" gives the
 // module a with the symbols b and c (alias d); any other tree is the module.
 // The import type is "use", after the visibility of a re-export ("pub use").
+// The declaration is recorded in w.uses with its visibility and the names it
+// binds (hideImplsOfRemovedTypes).
 func (w *walker) useDeclaration(node *sitter.Node) ir.DistilledNode {
 	arg := node.ChildByFieldName("argument")
 	if arg == nil {
@@ -1059,6 +1067,7 @@ func (w *walker) useDeclaration(node *sitter.Node) ir.DistilledNode {
 		BaseNode:   ir.BaseNode{Location: w.location(node)},
 		ImportType: w.importType(node, "use"),
 	}
+	w.uses[imp] = useItem{visibility: w.visibility(node), bindings: w.useBindings(arg, nil, nil)}
 	switch arg.Kind() {
 	case "scoped_use_list":
 		if path := arg.ChildByFieldName("path"); path != nil {
