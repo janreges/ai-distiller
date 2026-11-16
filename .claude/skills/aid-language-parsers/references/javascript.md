@@ -68,7 +68,10 @@
   read up to the brace that closes it, also over lines
   (`internal/language/javascript/tree_sitter_processor.go#jsdocType`). A
   `@typedef` types nothing.
-- `Extensions` holds only `JavaScript.IsFunctionExpression` (see above).
+- `Extensions` holds only `JavaScript.IsFunctionExpression` (see above) and,
+  on the `DistilledFile`, `JavaScript.HasJSX` when the source has JSX (noted in
+  the first pass, `internal/language/javascript/tree_sitter_processor.go#TreeSitterProcessor.collectJSDocComments`);
+  the import filter then keeps the React import.
 
 ## Unused files
 

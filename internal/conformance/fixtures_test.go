@@ -168,6 +168,7 @@ var fixtures = []fixture{
 		check{Cap: "generator-method-star", Contains: []string{
 			"    *confGenMethod()",
 			"    async *confAsyncGenMethod()"}},
+		check{Cap: "jsx-keeps-react", Contains: []string{"import React from 'react'", "export function ConfJsxView()"}},
 		check{Cap: "jsdoc-braced-type", Contains: []string{
 			"export const confTypedMap: Map<string, Set<number>> = new Map()"}})},
 	{Lang: "go", File: "go/sample.go", Checks: append(standard(markers{

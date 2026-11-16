@@ -80,6 +80,11 @@ func (p *ASTParser) ProcessSource(ctx context.Context, source []byte, filename s
 	if rootNode.Kind() == "program" {
 		p.parseProgram(rootNode, file)
 	}
+	// Only the TSX grammar parses JSX.
+	if isTSX && esutil.ContainsJSX(rootNode) {
+		file.Extensions = &ir.NodeExtensions{TypeScript: &ir.TypeScriptExtensions{
+			JavaScriptExtensions: ir.JavaScriptExtensions{HasJSX: true}}}
+	}
 
 	// FIXME: The current implementation is flawed and produces incorrect results.
 	// Disable until it can be made more robust.

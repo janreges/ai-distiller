@@ -3,7 +3,9 @@
 `internal/importfilter` removes import lines that look unused. It works on the
 formatted text of one file, with regular expressions: it does not parse the
 code and never sees the IR. So whether an import survives depends on what the
-text formatter printed, not on what the source uses.
+text formatter printed, not on what the source uses. The one exception is
+`internal/importfilter/filter.go#Source`: the file's path and whether its
+source has JSX, which the formatter passes along.
 
 ## When it runs
 
@@ -17,7 +19,9 @@ text formatter printed, not on what the source uses.
   `.claude/skills/aid-architecture/references/modes.md`).
 - `internal/formatter/language_aware_text_formatter.go#LanguageAwareTextFormatter.formatWithFiltering`
   renders one file into a buffer and calls
-  `internal/importfilter/filter.go#FilterImports` with the file's language.
+  `internal/importfilter/filter.go#FilterImportsOf` with the file's language
+  and its `Source` (the path, and `HasJSX` from the file's
+  `Extensions.JavaScript` or `Extensions.TypeScript`).
   In a directory run each `<file>` block is filtered on its own. A language
   without a registered filter gets its text back unchanged; a filter error
   writes the unfiltered text.
@@ -79,7 +83,7 @@ under the language name the processors use.
 | Language | File | Name searched in the text | Always kept |
 |---|---|---|---|
 | python | `internal/importfilter/python_filter.go` | each imported name or its alias; for `import m` also `m` | `from m import *` |
-| javascript, typescript | `internal/importfilter/javascript_filter.go` (one filter for both) | every name the import binds (`internal/importfilter/javascript_filter.go#jsLocalNames`): the default import's name, the namespace alias, each named import's alias or else its name; also for `import type`, `import x = require('m')` and the import alias `import G = ns.H` | side-effect imports (`import 'x'`); `export` lines are never read as imports |
+| javascript, typescript | `internal/importfilter/javascript_filter.go` (one filter for both) | every name the import binds (`internal/importfilter/javascript_filter.go#jsLocalNames`): the default import's name, the namespace alias, each named import's alias or else its name; also for `import type`, `import x = require('m')` and the import alias `import G = ns.H`; an import that binds `React` counts as used in a file with JSX and in a `.jsx` or `.tsx` file, since the classic JSX transform calls `React.createElement` (`internal/importfilter/javascript_filter.go#JavaScriptFilter.filterSource`) | side-effect imports (`import 'x'`); `export` lines are never read as imports |
 | go | `internal/importfilter/go_filter.go` | the alias, else the last path element (the one before a `/vN` suffix; a few standard paths are mapped) | blank imports and `"C"` |
 | java | `internal/importfilter/java_filter.go` | the class name (last element); for `import static`, the member | wildcard imports |
 | csharp (`c#`) | `internal/importfilter/csharp_filter.go` | the alias, else the last namespace element; for some `System.*` namespaces also typical type names (`internal/importfilter/csharp_filter.go#CSharpFilter.checkSystemNamespaceUsage`) | nothing |

@@ -114,7 +114,12 @@ func (f *LanguageAwareTextFormatter) formatWithFiltering(w io.Writer, file *ir.D
 
 	// Apply import filtering
 	content := buf.String()
-	filteredContent, removedImports, err := importfilter.FilterImports(content, file.Language, f.options.DebugLevel)
+	src := importfilter.Source{Path: file.Path}
+	if ext := file.Extensions; ext != nil {
+		src.HasJSX = (ext.JavaScript != nil && ext.JavaScript.HasJSX) ||
+			(ext.TypeScript != nil && ext.TypeScript.HasJSX)
+	}
+	filteredContent, removedImports, err := importfilter.FilterImportsOf(content, file.Language, f.options.DebugLevel, src)
 	if err != nil {
 		// On error, use original content
 		fmt.Fprint(w, content)

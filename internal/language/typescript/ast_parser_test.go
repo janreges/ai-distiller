@@ -541,3 +541,17 @@ func TestTS_MultiLineTypesOnOneLine(t *testing.T) {
 	assert.Equal(t, "{ value: T; }", fn.Returns.Name)
 	assert.Equal(t, "{ a: string; b: number; }", f.Children[1].(*ir.DistilledField).Type.Name)
 }
+
+// A .tsx file whose source holds JSX is marked HasJSX; a .tsx file without
+// JSX and a .ts file are not.
+func TestTS_HasJSX(t *testing.T) {
+	hasJSX := func(src, name string) bool {
+		f, err := NewProcessor().Process(context.Background(), strings.NewReader(src), name)
+		require.NoError(t, err)
+		return f.Extensions != nil && f.Extensions.TypeScript != nil && f.Extensions.TypeScript.HasJSX
+	}
+	assert.True(t, hasJSX("export function C() { return <div />; }\n", "c.tsx"))
+	assert.True(t, hasJSX("export const F = () => <><b>x</b></>;\n", "f.tsx"))
+	assert.False(t, hasJSX("export function C(): number { return 1; }\n", "c.tsx"))
+	assert.False(t, hasJSX("export const n = <number>x;\n", "n.ts"))
+}

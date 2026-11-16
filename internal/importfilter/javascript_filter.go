@@ -1,6 +1,7 @@
 package importfilter
 
 import (
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -19,7 +20,17 @@ func NewJavaScriptFilter() ImportFilter {
 
 // FilterUnusedImports removes unused imports from JavaScript/TypeScript code
 func (f *JavaScriptFilter) FilterUnusedImports(code string, debugLevel int) (string, []string, error) {
+	return f.filterSource(code, Source{}, debugLevel)
+}
+
+// filterSource removes the unused imports. In a file with JSX, or a .jsx or
+// .tsx file, the name React counts as used: the classic JSX transform
+// compiles `<div/>` to `React.createElement("div")`, so the file needs its
+// React import although the distilled text does not name it.
+func (f *JavaScriptFilter) filterSource(code string, src Source, debugLevel int) (string, []string, error) {
 	f.LogDebug(debugLevel, 1, "Starting JavaScript/TypeScript import filtering")
+	ext := strings.ToLower(filepath.Ext(src.Path))
+	jsx := src.HasJSX || ext == ".jsx" || ext == ".tsx"
 	f.LogDebug(debugLevel, 2, "Code length: %d bytes", len(code))
 
 	// Parse imports
@@ -62,6 +73,11 @@ func (f *JavaScriptFilter) FilterUnusedImports(code string, debugLevel int) (str
 		}
 		used := false
 		for _, name := range names {
+			if jsx && name == "React" {
+				f.LogDebug(debugLevel, 3, "Keeping React, which JSX uses")
+				used = true
+				break
+			}
 			if f.SearchForUsage(code, name, lastImportLine) {
 				f.LogDebug(debugLevel, 3, "Found usage of '%s'", name)
 				used = true

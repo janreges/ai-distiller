@@ -43,6 +43,26 @@ func unwrap(node *sitter.Node) *sitter.Node {
 	return node
 }
 
+// ContainsJSX reports whether the tree under node holds JSX: an element, a
+// self-closing element or a fragment.
+func ContainsJSX(node *sitter.Node) bool {
+	cursor := node.Walk()
+	defer cursor.Close()
+	for {
+		if strings.HasPrefix(cursor.Node().Kind(), "jsx_") {
+			return true
+		}
+		if cursor.GotoFirstChild() || cursor.GotoNextSibling() {
+			continue
+		}
+		for !cursor.GotoNextSibling() {
+			if !cursor.GotoParent() {
+				return false
+			}
+		}
+	}
+}
+
 // DeclarationModifier returns the modifier for the keyword of a
 // `lexical_declaration` or `variable_declaration`: `final` for `const`,
 // `let` for `let`, `var` for `var`, or "" for any other keyword.

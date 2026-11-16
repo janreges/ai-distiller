@@ -55,11 +55,32 @@ func GetFilter(language string) (ImportFilter, error) {
 
 // FilterImports is the main entry point for filtering imports
 func FilterImports(code string, language string, debugLevel int) (string, []string, error) {
+	return FilterImportsOf(code, language, debugLevel, Source{})
+}
+
+// Source is what the filter knows about the source file beyond the
+// distilled text.
+type Source struct {
+	Path   string // the file's path, for its extension
+	HasJSX bool   // the source contains JSX
+}
+
+// sourceFilter is a filter that also reads Source.
+type sourceFilter interface {
+	filterSource(code string, src Source, debugLevel int) (string, []string, error)
+}
+
+// FilterImportsOf filters imports like FilterImports, telling the filter
+// about the source file: a JavaScript or TypeScript file with JSX keeps its
+// React import, which the distilled text never names.
+func FilterImportsOf(code string, language string, debugLevel int, src Source) (string, []string, error) {
 	filter, err := GetFilter(language)
 	if err != nil {
 		// If no filter is registered, return code unchanged
 		return code, nil, nil
 	}
-
+	if sf, ok := filter.(sourceFilter); ok {
+		return sf.filterSource(code, src, debugLevel)
+	}
 	return filter.FilterUnusedImports(code, debugLevel)
 }

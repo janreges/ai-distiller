@@ -177,6 +177,8 @@ type JavaScriptExtensions struct {
 	// IsFunctionExpression marks a variable whose value is a `function`
 	// expression (`const f = function (a) {...}`), not an arrow function.
 	IsFunctionExpression bool `json:"is_function_expression,omitempty"`
+	// HasJSX marks a file (the DistilledFile) whose source contains JSX.
+	HasJSX bool `json:"has_jsx,omitempty"`
 }
 
 type TypeScriptExtensions struct {

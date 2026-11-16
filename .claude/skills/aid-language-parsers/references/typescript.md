@@ -95,6 +95,9 @@
 
 ## IR specifics
 
+- A `.tsx` file whose source has JSX has `Extensions.TypeScript.HasJSX` on its
+  `DistilledFile` (`internal/language/esutil/esutil.go#ContainsJSX`); the import
+  filter then keeps the React import.
 - Namespaces: `namespace X {}`, `module X {}` and `declare module "x" {}` are a
   `DistilledPackage` whose `Children` are the declarations of the body
   (`internal/language/typescript/ast_parser.go#ASTParser.parseNamespace`).

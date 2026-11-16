@@ -525,3 +525,14 @@ func TestJS_FunctionExpressionVariable(t *testing.T) {
 	assert.Equal(t, "*ge", f.Children[1].(*ir.DistilledFunction).Name)
 	assert.False(t, isExpr(2))
 }
+
+// A file whose source holds JSX, anywhere, is marked HasJSX.
+func TestJS_HasJSX(t *testing.T) {
+	hasJSX := func(src string) bool {
+		f := parseJS(t, src)
+		return f.Extensions != nil && f.Extensions.JavaScript != nil && f.Extensions.JavaScript.HasJSX
+	}
+	assert.True(t, hasJSX("export function App() {\n  if (x) { return <div className=\"a\" />; }\n}\n"))
+	assert.True(t, hasJSX("const F = () => <>x</>;\n"))
+	assert.False(t, hasJSX("export function f() { return 1 < 2; }\n"))
+}

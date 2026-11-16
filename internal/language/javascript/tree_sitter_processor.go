@@ -25,6 +25,9 @@ type TreeSitterProcessor struct {
 
 	// JSDoc information by line number
 	jsdocComments map[int]*JSDocInfo
+
+	// hasJSX is set when the first pass meets a JSX node
+	hasJSX bool
 }
 
 // JSDocInfo stores parsed JSDoc information
@@ -62,6 +65,7 @@ func (p *TreeSitterProcessor) ProcessSource(ctx context.Context, source []byte, 
 	p.currentClass = ""
 	p.insideClass = false
 	p.jsdocComments = make(map[int]*JSDocInfo)
+	p.hasJSX = false
 
 	// Parse with tree-sitter
 	tree, err := tsparse.Parse(ctx, p.parser, source)
@@ -85,8 +89,11 @@ func (p *TreeSitterProcessor) ProcessSource(ctx context.Context, source []byte, 
 		Errors:   []ir.DistilledError{},
 	}
 
-	// First pass: collect all JSDoc comments
+	// First pass: collect all JSDoc comments, and note JSX
 	p.collectJSDocComments(tree.RootNode())
+	if p.hasJSX {
+		file.Extensions = &ir.NodeExtensions{JavaScript: &ir.JavaScriptExtensions{HasJSX: true}}
+	}
 
 	// Second pass: process nodes with JSDoc info available
 	p.processNode(tree.RootNode(), file, nil)
@@ -101,6 +108,9 @@ func (p *TreeSitterProcessor) collectJSDocComments(node *sitter.Node) {
 	}
 
 	nodeType := node.Kind()
+	if strings.HasPrefix(nodeType, "jsx_") {
+		p.hasJSX = true
+	}
 
 	// Check if this is a JSDoc comment
 	if nodeType == "comment" {

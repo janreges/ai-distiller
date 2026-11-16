@@ -63,6 +63,19 @@ func TestSignature(t *testing.T) {
 	}
 }
 
+func TestContainsJSX(t *testing.T) {
+	for src, want := range map[string]bool{
+		"const a = <div />;":                           true,
+		"function f() { if (x) { return <A>t</A>; } }": true,
+		"const b = <>x</>;":                            true,
+		"const c = 1 < 2 && d > 3;":                    false,
+	} {
+		firstStatement(t, src, false, func(stmt *sitter.Node, _ []byte) {
+			assert.Equal(t, want, ContainsJSX(stmt), src)
+		})
+	}
+}
+
 func TestDeclarationModifier(t *testing.T) {
 	for src, want := range map[string]ir.Modifier{
 		"const a = 1;":     ir.ModifierFinal,

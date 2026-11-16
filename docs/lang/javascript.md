@@ -106,6 +106,7 @@ Distills to:
 - ✅ **Object literal analysis** including methods and spread syntax
 - ✅ **ES6 classes** with constructors, methods, getters/setters
 - ✅ **Exported declarations** are printed with their `export` or `export default` keyword, as in TypeScript (`export const createClient = (apiKey)`, `export default class:` for an anonymous class); `module.exports = ...` is shown only with `--comments=1`
+- ✅ **React import kept for JSX** - the unused-import filter keeps the import that binds `React` (`import React from 'react'`, `import * as React from 'react'`) in a file with JSX and in any `.jsx` file: the classic JSX transform compiles `<div />` to `React.createElement('div')`, although the distilled text never names `React`
 - ✅ **Re-exports and export lists** print as written: `export * from './a'`, `export { x, y as z } from './c'`, `export { q }`, `export default Inner`
 - ✅ **Generator functions** print `function* name()` (`async function* name()`), generator methods `*name()` (`async *name()`, `static *name()`)
 - ✅ **JSDoc type extraction** for parameters, return values and variables (`@type`)
@@ -279,6 +280,7 @@ export default UserList;
     
 ```
 <file path="UserList.jsx">
+import React, { useState, useEffect } from 'react'
 /**
  * Custom hook for fetching users
  * @returns {Array} List of users

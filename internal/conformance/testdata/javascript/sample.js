@@ -1,5 +1,6 @@
 import { sep } from "node:path";
 import ConfReact, { confHook as confUseHook } from "conf-react";
+import React from "react";
 
 // CONF_LINE_COMMENT
 
@@ -55,3 +56,6 @@ export class ConfGenerators {
 }
 /** @type {Map<string, Set<number>>} */
 export const confTypedMap = new Map();
+export function ConfJsxView() {
+    return <div className="conf" />;
+}

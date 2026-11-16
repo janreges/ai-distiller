@@ -3,6 +3,9 @@ package importfilter
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPythonFilter(t *testing.T) {
@@ -366,6 +369,30 @@ func Debug(v interface{}) {
 				}
 			}
 		})
+	}
+}
+
+// A file with JSX, or a .jsx or .tsx file, keeps the import that binds React,
+// which the classic JSX transform uses although the distilled text does not
+// name it; other unused imports still go.
+func TestJavaScriptFilterKeepsReactForJSX(t *testing.T) {
+	code := "<file path=\"x\">\nimport React from 'react'\nimport * as React from 'react'\nimport { gone } from './gone'\nexport function App()\n</file>"
+	for _, tc := range []struct {
+		src       Source
+		keepReact bool
+	}{
+		{Source{Path: "a.jsx"}, true},
+		{Source{Path: "src/A.TSX"}, true},
+		{Source{Path: "a.js", HasJSX: true}, true},
+		{Source{Path: "stdin", HasJSX: true}, true},
+		{Source{Path: "a.js"}, false},
+		{Source{Path: "a.ts"}, false},
+	} {
+		filtered, _, err := FilterImportsOf(code, "javascript", 0, tc.src)
+		require.NoError(t, err)
+		assert.Equal(t, tc.keepReact, strings.Contains(filtered, "import React from 'react'"), "%+v", tc.src)
+		assert.Equal(t, tc.keepReact, strings.Contains(filtered, "import * as React from 'react'"), "%+v", tc.src)
+		assert.NotContains(t, filtered, "gone", "%+v", tc.src)
 	}
 }
 
