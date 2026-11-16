@@ -84,6 +84,28 @@ func TestDependencyAwareDirectoryAddsOnlyFilesOutsideIt(t *testing.T) {
 	assert.Equal(t, []string{"mailer.py", "templates.py", "../models.py"}, filePaths(out))
 }
 
+// Go: the other files of the entry's package, then the packages of the
+// module (go.mod's module path) and of a module go.mod replaces with a local
+// directory; never _test.go files or a "package main" generator next to a
+// library.
+func TestDependencyAwareFollowsGoPackages(t *testing.T) {
+	out, stderr := runDepAware(t, "go/shop/cmd/shop/main.go")
+	assert.NotContains(t, stderr, noImportsNote)
+	assert.Equal(t, []string{
+		"main.go",
+		"flags.go",                // same package
+		"../../../kit/log/log.go", // replace example.com/kit => ../kit
+		"../../store/cache.go",    // example.com/shop/store
+		"../../store/store.go",    //
+		"../../internal/db/db.go", // imported by store.go: depth 2
+	}, filePaths(out))
+	assert.Contains(t, out, "func Dial(dsn string) *Conn")
+
+	out, _ = runDepAware(t, "go/shop/cmd/shop/main.go", "--max-depth=1")
+	assert.NotContains(t, filePaths(out), "../../internal/db/db.go")
+	assert.Len(t, filePaths(out), 5)
+}
+
 func TestDependencyAwareSaysWhenNothingIsFollowed(t *testing.T) {
 	// index.js imports only npm packages: nothing to follow, but the entry
 	// file is still printed and the run succeeds.

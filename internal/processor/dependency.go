@@ -101,14 +101,42 @@ func dependencyDisplayPath(file, baseDir string, opts ProcessOptions) string {
 	return rel
 }
 
-// DependencyAnalyzer finds the files a source file imports.
+// DependencyAnalyzer finds the files a source file imports. It caches the
+// project files it reads to resolve imports (go.mod, package listings).
 type DependencyAnalyzer struct {
 	ctx context.Context
+
+	goModules  map[string]*goModule // go.mod path -> parsed module, nil when unreadable
+	goPackages map[string][]goFile  // directory -> its non-test Go files
 }
 
 // NewDependencyAnalyzer returns an analyzer that logs to ctx's debugger.
 func NewDependencyAnalyzer(ctx context.Context) *DependencyAnalyzer {
-	return &DependencyAnalyzer{ctx: ctx}
+	return &DependencyAnalyzer{
+		ctx:        ctx,
+		goModules:  map[string]*goModule{},
+		goPackages: map[string][]goFile{},
+	}
+}
+
+// findUp returns the path of the nearest file called name in dir or one of
+// its parents, or "" when there is none. It stops after a directory that
+// holds .git, the top of a repository.
+func findUp(dir, name string) string {
+	for {
+		candidate := filepath.Join(dir, name)
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate
+		}
+		if exists(filepath.Join(dir, ".git")) {
+			return ""
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
 }
 
 // Follow returns the files that starts import, breadth-first up to maxDepth
@@ -307,73 +335,6 @@ func (da *DependencyAnalyzer) extractPythonImports(ctx context.Context, fileCont
 							includes = append(includes, resolved)
 							dbg.Logf(debug.LevelDetailed, "Found Python from-import: %s -> %s", moduleName, resolved)
 						}
-					}
-				}
-			}
-		}
-	}
-
-	return includes, nil
-}
-
-// extractGoImports extracts Go import statements
-func (da *DependencyAnalyzer) extractGoImports(ctx context.Context, fileContent []byte, filePath string) ([]string, error) {
-	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	includes := []string{}
-
-	lines := strings.Split(string(fileContent), "\n")
-	inImportBlock := false
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-
-		// Skip comments and empty lines
-		if strings.HasPrefix(line, "//") || line == "" {
-			continue
-		}
-
-		// Handle single import: import "package"
-		if strings.HasPrefix(line, "import \"") && !inImportBlock {
-			start := strings.Index(line, "\"")
-			if start != -1 {
-				start++
-				end := strings.Index(line[start:], "\"")
-				if end != -1 {
-					importPath := line[start : start+end]
-					resolved := da.resolveGoImport(importPath, filePath)
-					if resolved != "" {
-						includes = append(includes, resolved)
-						dbg.Logf(debug.LevelDetailed, "Found Go import: %s -> %s", importPath, resolved)
-					}
-				}
-			}
-			continue
-		}
-
-		// Handle import block start: import (
-		if line == "import (" {
-			inImportBlock = true
-			continue
-		}
-
-		// Handle import block end: )
-		if inImportBlock && line == ")" {
-			inImportBlock = false
-			continue
-		}
-
-		// Handle imports within block: "package"
-		if inImportBlock {
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "\"") {
-				start := 1
-				end := strings.Index(line[start:], "\"")
-				if end != -1 {
-					importPath := line[start : start+end]
-					resolved := da.resolveGoImport(importPath, filePath)
-					if resolved != "" {
-						includes = append(includes, resolved)
-						dbg.Logf(debug.LevelDetailed, "Found Go block import: %s -> %s", importPath, resolved)
 					}
 				}
 			}
@@ -597,41 +558,6 @@ func (da *DependencyAnalyzer) resolvePythonRelativeImport(moduleName, currentFil
 	return ""
 }
 
-// resolveGoImport resolves Go import paths to file locations
-func (da *DependencyAnalyzer) resolveGoImport(importPath, currentFile string) string {
-	// Go imports are more complex - they can be:
-	// 1. Standard library (skip these)
-	// 2. Local relative imports (./package or ../package)
-	// 3. Module imports (github.com/user/repo/package)
-
-	// Skip standard library packages (basic filtering)
-	if da.isGoStandardLibrary(importPath) {
-		return ""
-	}
-
-	// Handle relative imports
-	if strings.HasPrefix(importPath, "./") || strings.HasPrefix(importPath, "../") {
-		currentDir := filepath.Dir(currentFile)
-		resolved := filepath.Join(currentDir, importPath)
-
-		// Look for .go files in the target directory
-		if entries, err := os.ReadDir(resolved); err == nil {
-			for _, entry := range entries {
-				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".go") {
-					candidate := filepath.Join(resolved, entry.Name())
-					abs, _ := filepath.Abs(candidate)
-					return abs
-				}
-			}
-		}
-	}
-
-	// For module imports, we would need GOPATH/GOMOD resolution
-	// For now, skip these as they are typically external dependencies
-
-	return ""
-}
-
 // resolveJavaScriptImport resolves JavaScript/TypeScript imports
 func (da *DependencyAnalyzer) resolveJavaScriptImport(modulePath, currentFile string) string {
 	// Skip Node.js built-in modules and npm packages
@@ -664,20 +590,6 @@ func (da *DependencyAnalyzer) resolveJavaScriptImport(modulePath, currentFile st
 	}
 
 	return ""
-}
-
-// isGoStandardLibrary checks if an import is Go standard library
-func (da *DependencyAnalyzer) isGoStandardLibrary(importPath string) bool {
-	// Basic list of common Go standard library packages
-	stdLibPackages := map[string]bool{
-		"fmt": true, "os": true, "io": true, "strings": true, "strconv": true,
-		"time": true, "net": true, "net/http": true, "encoding/json": true,
-		"path": true, "path/filepath": true, "regexp": true, "sort": true,
-		"sync": true, "context": true, "errors": true, "log": true,
-		"math": true, "crypto": true, "database/sql": true, "html": true,
-		"bufio": true, "bytes": true, "container": true, "flag": true,
-	}
-	return stdLibPackages[importPath] || !strings.Contains(importPath, ".")
 }
 
 // isJavaScriptBuiltIn checks if a module is Node.js built-in

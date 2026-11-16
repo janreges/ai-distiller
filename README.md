@@ -230,7 +230,7 @@ Measured on public repositories (`git clone --depth 1`, 2026-11-16) with the def
 | Python | `import x`, `from x import y` (a module next to the importing file), relative `from .x import y` | not checked |
 | JavaScript | `import ... from './x'` and `require('./x')` on one line; `x.js`, `x.ts`, `x.jsx`, `x.tsx`, `x/index.js`, `x/index.ts` | react-redux-realworld-example-app `src/index.js`: 2 files at depth 1, 14 at depth 2 |
 | TypeScript | as JavaScript; `.tsx` files are not read for imports | zod `packages/zod/src/index.ts`, `v4/classic/schemas.ts` and bulletproof-react `apps/react-vite/src/main.tsx`: none |
-| Go | relative import paths (`./x`) only, which Go modules do not use | bubbletea `examples/simple/main.go`, chi `mux.go`: none |
+| Go | the other files of the package (same directory and `package` clause, no `_test.go`), then the packages of the file's module (the module path in the nearest `go.mod`) and of modules that `go.mod` replaces with a local directory | chi `mux.go`: 4 files (its package); `middleware/logger.go`: 30 at depth 1, 35 at depth 2; bubbletea `examples/simple/main.go`: the 36 files of bubbletea (`replace ... => ../`) |
 | Rust | `mod x;` and `use x::...` when `x.rs` lies next to the file | siteone-crawler `src/main.rs`: none |
 | PHP | `require_once 'x.php'` | laravel `src/Illuminate/Database/Eloquent/Model.php`: none |
 | Ruby | `require_relative`, `require` of a file next to the importing file | not checked |
