@@ -59,7 +59,9 @@
   braces included (`{ ... }`), comments inside it included.
 - Comments: the doc comments of functions and types are `doc`. The package doc
   comment and the `@build_constraint(...)` comment built from `//go:build` lines
-  have an empty `Format`, so they follow `--comments`, not `--docstrings`. Every
+  have an empty `Format`, so they follow `--comments`, not `--docstrings`. A
+  package doc line loses `//` and one space, any further indentation stays
+  (`internal/language/golang/ast_parser.go#packageDocText`). Every
   other comment (`//` or `/* */`) is `line` and is inserted at file level by its
   line number, also when it sits inside a function body, except the comments
   of a struct or interface body: they are children of their type

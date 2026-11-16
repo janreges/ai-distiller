@@ -88,7 +88,7 @@ func (p *ASTParser) ProcessSource(ctx context.Context, source []byte, filename s
 				BaseNode: ir.BaseNode{
 					Location: p.getLocation(comment.Pos(), comment.End()),
 				},
-				Text: strings.TrimPrefix(comment.Text, "//"),
+				Text: packageDocText(comment),
 			}
 			distilledFile.Children = append(distilledFile.Children, docComment)
 		}
@@ -780,6 +780,18 @@ func commentText(c *ast.Comment) string {
 		return strings.TrimSpace(c.Text[2 : len(c.Text)-2])
 	}
 	return strings.TrimSpace(strings.TrimPrefix(c.Text, "//"))
+}
+
+// packageDocText returns the text of a line of the package doc without "//"
+// and the one space after it, which the formatter prints again; further
+// indentation (a list item, a code block) stays. A block comment loses its
+// markers (commentText).
+func packageDocText(c *ast.Comment) string {
+	if !strings.HasPrefix(c.Text, "//") {
+		return commentText(c)
+	}
+	text := strings.TrimPrefix(c.Text, "//")
+	return strings.TrimRight(strings.TrimPrefix(text, " "), " \t")
 }
 
 // processFunction processes a function declaration

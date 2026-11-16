@@ -1,5 +1,5 @@
 <file path="source.go">
-//  storage.go
+// storage.go
 package storage
 // Storer defines a generic interface for key-value storage.
 

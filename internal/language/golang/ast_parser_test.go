@@ -187,3 +187,23 @@ func TestASTParser_MemberCommentsStayInTheirType(t *testing.T) {
 	assert.Equal(t, a.StartLine, end.StartLine)
 	assert.LessOrEqual(t, end.EndLine, a.EndLine)
 }
+
+func TestASTParser_PackageDocText(t *testing.T) {
+	src := "// Package p does things.\n" +
+		"//\n" +
+		"//   - a list item\n" +
+		"//\tcode()\n" +
+		"package p\n"
+	file, err := NewASTParser().ProcessSource(context.Background(), []byte(src), "p.go")
+	require.NoError(t, err)
+
+	var texts []string
+	for _, node := range file.Children {
+		if c, ok := node.(*ir.DistilledComment); ok {
+			texts = append(texts, c.Text)
+		}
+	}
+	// "//" and the one space after it go (the formatter prints "// "
+	// again); further indentation stays.
+	assert.Equal(t, []string{"Package p does things.", "", "  - a list item", "\tcode()"}, texts)
+}

@@ -1,7 +1,7 @@
 <file path="source.go">
 // go:build linux
 //go:build linux
-//  cache_linux.go
+// cache_linux.go
 package cache
 
 // Cache is a generic, thread-safe key-value store.

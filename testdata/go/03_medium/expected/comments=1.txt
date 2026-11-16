@@ -1,5 +1,5 @@
 <file path="source.go">
-//  server.go
+// server.go
 package server
 
 // Config holds server configuration.

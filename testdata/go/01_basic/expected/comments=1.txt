@@ -1,5 +1,5 @@
 <file path="source.go">
-//  user.go
+// user.go
 package user
 
 // User represents a user in the system.

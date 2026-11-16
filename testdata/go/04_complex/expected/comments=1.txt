@@ -1,5 +1,5 @@
 <file path="source.go">
-//  worker.go
+// worker.go
 package worker
 
 import (
