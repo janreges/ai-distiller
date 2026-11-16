@@ -208,7 +208,9 @@ func (f *TypeScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 	}
 
 	modifiers := ""
-	isConst := false
+	// A function declared as a variable (`const f = () => ...`) prints with
+	// its keyword: const, let or var.
+	declKeyword := esDeclarationKeyword(fn.Modifiers)
 
 	// Format visibility keyword (only for class methods, not top-level functions)
 	if indent > 0 {
@@ -224,8 +226,6 @@ func (f *TypeScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 			modifiers += "async "
 		} else if mod == ir.ModifierStatic {
 			modifiers += "static "
-		} else if mod == ir.ModifierFinal {
-			isConst = true
 		}
 	}
 
@@ -233,14 +233,14 @@ func (f *TypeScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 	if indent == 0 {
 		indentStr = ""
 		exportPrefix := esExportPrefix(fn.Modifiers)
-		// A top-level const arrow function prints as written without its
-		// body: `const name = async <T>(params): R`.
-		if isConst {
+		// A top-level arrow function constant prints as written without its
+		// body: `const name = async <T>(params): R`, `let f = (a: number)`.
+		if declKeyword != "" {
 			async := ""
 			if hasModifier(fn.Modifiers, ir.ModifierAsync) {
 				async = "async "
 			}
-			fmt.Fprintf(w, "%s%sconst %s = %s", indentStr, exportPrefix, fn.Name, async)
+			fmt.Fprintf(w, "%s%s%s %s = %s", indentStr, exportPrefix, declKeyword, fn.Name, async)
 		} else {
 			keyword, name := "function ", fn.Name
 			if strings.HasPrefix(name, "*") {
@@ -267,7 +267,7 @@ func (f *TypeScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 	case impl == "":
 		fmt.Fprintln(w)
 	case strings.HasPrefix(impl, "{"):
-		if indent == 0 && isConst {
+		if indent == 0 && declKeyword != "" {
 			fmt.Fprint(w, " =>")
 		}
 		fmt.Fprint(w, renderBody(fn.Implementation, indentStr))
@@ -326,12 +326,10 @@ func tsParams(params []ir.Parameter) string {
 func (f *TypeScriptFormatter) formatField(w io.Writer, field *ir.DistilledField, indent int) error {
 	// Handle top-level const/let/var declarations differently from class fields
 	if indent == 0 {
-		// Top-level variable declaration
-		varType := "let"
-		for _, mod := range field.Modifiers {
-			if mod == ir.ModifierFinal {
-				varType = "const"
-			}
+		// Top-level variable declaration, with its keyword as written
+		varType := esDeclarationKeyword(field.Modifiers)
+		if varType == "" {
+			varType = "let"
 		}
 
 		fmt.Fprintf(w, "%s%s %s", esExportPrefix(field.Modifiers), varType, field.Name)

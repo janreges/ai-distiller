@@ -63,6 +63,21 @@ func TestSignature(t *testing.T) {
 	}
 }
 
+func TestDeclarationModifier(t *testing.T) {
+	for src, want := range map[string]ir.Modifier{
+		"const a = 1;":     ir.ModifierFinal,
+		"let b = 2, c;":    ir.ModifierLet,
+		"var d = () => 1;": ir.ModifierVar,
+	} {
+		for _, js := range []bool{false, true} {
+			firstStatement(t, src, js, func(stmt *sitter.Node, _ []byte) {
+				assert.Equal(t, want, DeclarationModifier(stmt), src)
+			})
+		}
+	}
+	assert.Equal(t, ir.Modifier(""), DeclarationModifier(nil))
+}
+
 func TestTakesFunction(t *testing.T) {
 	for src, want := range map[string]bool{
 		"const a = forwardRef((p, r) => null);":         true,

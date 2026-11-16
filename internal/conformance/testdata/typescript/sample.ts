@@ -87,3 +87,5 @@ export function confMultiType(confM: {
 }): void {}
 enum ConfListedEnum { ConfL }
 export { ConfListedEnum };
+export let confLetArrow = (confL: number) => confL;
+export var confVarValue = 3;

@@ -107,6 +107,10 @@ var fixtures = []fixture{
 			"public set confSize(v: number)",
 			"public async *confIter(): AsyncGenerator<T>",
 			"export function* confGen(): Generator<number>"}},
+		check{Cap: "declaration-keyword", Contains: []string{
+			"export let confLetArrow = (confL: number)",
+			"export var confVarValue = 3"},
+			NotContains: []string{"function confLetArrow"}},
 		check{Cap: "heritage-as-written", Contains: []string{
 			"export interface ConfBased extends ConfGenericBase<string>, confNs.ConfQualified<number> {",
 			"export class ConfDerived extends confNs.ConfBaseClass<{ id: number }> implements ConfBased {"}},
@@ -140,7 +144,11 @@ var fixtures = []fixture{
 			"export * from './conf-all'",
 			"export { confPicked as ConfRenamed } from './conf-picked'",
 			"export { confArrow }",
-			"export default ConfWidget"}})},
+			"export default ConfWidget"}},
+		check{Cap: "declaration-keyword", Contains: []string{
+			"export let confLetArrow = (confL)",
+			"export var confVarValue = 3"},
+			NotContains: []string{"function confLetArrow", "let confVarValue"}})},
 	{Lang: "go", File: "go/sample.go", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "ConfField", "ConfPublic", "ConfOther"},
 		Private:   []string{"confPrivate"},

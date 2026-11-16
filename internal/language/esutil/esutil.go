@@ -43,6 +43,27 @@ func unwrap(node *sitter.Node) *sitter.Node {
 	return node
 }
 
+// DeclarationModifier returns the modifier for the keyword of a
+// `lexical_declaration` or `variable_declaration`: `final` for `const`,
+// `let` for `let`, `var` for `var`, or "" for any other keyword.
+func DeclarationModifier(node *sitter.Node) ir.Modifier {
+	if node == nil {
+		return ""
+	}
+	if node.Kind() == "variable_declaration" {
+		return ir.ModifierVar
+	}
+	for i := uint(0); i < node.ChildCount(); i++ {
+		switch node.Child(i).Kind() {
+		case "const":
+			return ir.ModifierFinal
+		case "let":
+			return ir.ModifierLet
+		}
+	}
+	return ""
+}
+
 // TakesFunction reports whether node is a call or `new` that passes a
 // function as an argument, directly or in a call it is chained to:
 // `forwardRef((p, r) => ...)`, `memo(function List() {...})`,

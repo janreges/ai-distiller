@@ -1175,6 +1175,8 @@ const maxConstValueLen = 80
 // initializer as written.
 func (p *ASTParser) parseVariableDeclaration(node *sitter.Node, isExported bool) []ir.DistilledNode {
 	var nodes []ir.DistilledNode
+	// The keyword as written: const is final, let and var are their own.
+	keyword := esutil.DeclarationModifier(node)
 
 	// Find variable declarators
 	for i := 0; i < int(node.ChildCount()); i++ {
@@ -1203,9 +1205,8 @@ func (p *ASTParser) parseVariableDeclaration(node *sitter.Node, isExported bool)
 				}
 				// fmt.Printf("Parsed arrow function %s with %d params\n", fn.Name, len(fn.Parameters))
 
-				// Check if it's const (makes it immutable)
-				if p.hasToken(node, "const") {
-					fn.Modifiers = append(fn.Modifiers, ir.ModifierFinal)
+				if keyword != "" {
+					fn.Modifiers = append(fn.Modifiers, keyword)
 				}
 
 				// Add export modifier if needed
@@ -1225,9 +1226,8 @@ func (p *ASTParser) parseVariableDeclaration(node *sitter.Node, isExported bool)
 				Modifiers:  []ir.Modifier{},
 			}
 
-			// Check if it's const
-			if p.hasToken(node, "const") {
-				field.Modifiers = append(field.Modifiers, ir.ModifierFinal)
+			if keyword != "" {
+				field.Modifiers = append(field.Modifiers, keyword)
 			}
 
 			// Add export modifier if needed
@@ -1529,16 +1529,6 @@ func (p *ASTParser) hasModifier(node *sitter.Node, modifier string) bool {
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(uint(i))
 		if child != nil && child.Kind() == modifier {
-			return true
-		}
-	}
-	return false
-}
-
-func (p *ASTParser) hasToken(node *sitter.Node, token string) bool {
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(uint(i))
-		if child != nil && p.nodeText(child) == token {
 			return true
 		}
 	}

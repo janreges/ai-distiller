@@ -96,6 +96,8 @@ const (
 	ModifierClass       Modifier = "class"
 	ModifierExport      Modifier = "export"
 	ModifierDefault     Modifier = "default" // JavaScript and TypeScript `export default`
+	ModifierLet         Modifier = "let"     // JavaScript and TypeScript `let` (a `const` is `final`)
+	ModifierVar         Modifier = "var"     // JavaScript and TypeScript `var`
 	ModifierAnnotation  Modifier = "annotation"
 	ModifierMacro       Modifier = "macro"
 	ModifierUnion       Modifier = "union"

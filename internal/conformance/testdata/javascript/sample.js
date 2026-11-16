@@ -45,3 +45,5 @@ export const confWrapped = confWrap((confP) => {
     return "CONF_WRAPPED_BODY";
 });
 export const confAsyncArrow = async (confU) => confU;
+export let confLetArrow = (confL) => confL;
+export var confVarValue = 3;

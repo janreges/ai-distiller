@@ -102,7 +102,7 @@ func (f *JavaScriptFormatter) formatClass(w io.Writer, class *ir.DistilledClass,
 
 func (f *JavaScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, indent int) error {
 	indentStr := strings.Repeat("    ", indent)
-	isArrow := false // top-level const function, printed in its "const f = (...)" form
+	isArrow := false // top-level variable function, printed in its "const f = (...)" form
 
 	// JavaScript methods don't have visibility keywords (except # for private)
 	// The # prefix is part of the method name itself
@@ -142,24 +142,18 @@ func (f *JavaScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 			}
 		}
 
-		// Check if it's a top-level const function
-		isConst := false
-		for _, mod := range fn.Modifiers {
-			if mod == ir.ModifierFinal {
-				isConst = true
-				break
-			}
-		}
+		// A function declared as a variable keeps its keyword: const, let or var
+		keyword := esDeclarationKeyword(fn.Modifiers)
 
 		// Format based on context
-		if indent == 0 && isConst {
-			// Top-level const arrow function
+		if indent == 0 && keyword != "" {
+			// Top-level arrow function: `const f = async (a)`
 			isArrow = true
 			async := ""
 			if isAsync {
 				async = "async "
 			}
-			fmt.Fprintf(w, "%s%sconst %s = %s(%s)", indentStr, esExportPrefix(fn.Modifiers), functionName, async, f.formatParameters(fn.Parameters))
+			fmt.Fprintf(w, "%s%s%s %s = %s(%s)", indentStr, esExportPrefix(fn.Modifiers), keyword, functionName, async, f.formatParameters(fn.Parameters))
 		} else if indent == 0 {
 			// Top-level function declaration: `export async function* name(...)`
 			prefix := esExportPrefix(fn.Modifiers)
@@ -220,20 +214,17 @@ func (f *JavaScriptFormatter) formatField(w io.Writer, field *ir.DistilledField,
 
 	// Check for modifiers
 	isStatic := false
-	isConst := false
 	for _, mod := range field.Modifiers {
 		if mod == ir.ModifierStatic {
 			isStatic = true
-		} else if mod == ir.ModifierFinal {
-			isConst = true
 		}
 	}
 
 	if indent == 0 {
-		// Top-level variable declaration
-		varType := "let"
-		if isConst {
-			varType = "const"
+		// Top-level variable declaration, with its keyword as written
+		varType := esDeclarationKeyword(field.Modifiers)
+		if varType == "" {
+			varType = "let"
 		}
 
 		fmt.Fprintf(w, "%s%s %s", esExportPrefix(field.Modifiers), varType, field.Name)

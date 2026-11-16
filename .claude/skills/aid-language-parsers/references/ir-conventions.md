@@ -61,7 +61,8 @@ public type whose members are all removed goes too
 `internal/ir/types.go#Modifier` values are plain words (`static`, `final`,
 `abstract`, `async`, `const`, `readonly`, `virtual`, `data`, `sealed`,
 `embedded`, `struct`, `enum`, `type_alias`, `export`, `default` (with `export`
-after `export default`), ...). Some processors
+after `export default`), `let` and `var` (JavaScript and TypeScript
+variables; their `const` is `final`), ...). Some processors
 reuse a word with their own meaning: Go marks methods with `abstract`, Swift
 marks actors with `async`, Kotlin objects and Ruby singleton methods are
 `static`, Rust marks `struct`, `union`, `enum`, `extern` (an extern block),

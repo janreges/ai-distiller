@@ -457,6 +457,28 @@ func TestTS_FunctionValuedVariables(t *testing.T) {
 	assert.Equal(t, "", field(4).Implementation)
 }
 
+// A variable keeps the keyword it was declared with: const is final, let and
+// var are their own modifiers, for arrow functions and fields alike.
+func TestTS_DeclarationKeyword(t *testing.T) {
+	f := parseTS(t, "let f = (a: number) => a;\nvar g = () => 1;\nconst h = () => 2;\nlet v = 3;\nvar w = 4;\n")
+	mods := map[string][]ir.Modifier{}
+	for _, c := range f.Children {
+		switch d := c.(type) {
+		case *ir.DistilledFunction:
+			mods["fn "+d.Name] = d.Modifiers
+		case *ir.DistilledField:
+			mods[d.Name] = d.Modifiers
+		}
+	}
+	assert.Equal(t, map[string][]ir.Modifier{
+		"fn f": {ir.ModifierLet},
+		"fn g": {ir.ModifierVar},
+		"fn h": {ir.ModifierFinal},
+		"v":    {ir.ModifierLet},
+		"w":    {ir.ModifierVar},
+	}, mods)
+}
+
 // A type annotation spread over lines is kept as written on one line, for
 // parameters, return types and variables alike.
 func TestTS_MultiLineTypesOnOneLine(t *testing.T) {

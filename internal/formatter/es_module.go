@@ -117,6 +117,23 @@ func esExportPrefix(mods []ir.Modifier) string {
 	return ""
 }
 
+// esDeclarationKeyword returns the keyword a variable was declared with,
+// `const` (the modifier `final`), `let` or `var`, or "" for a declaration
+// that is not a variable (a `function`).
+func esDeclarationKeyword(mods []ir.Modifier) string {
+	for _, m := range mods {
+		switch m {
+		case ir.ModifierFinal:
+			return "const"
+		case ir.ModifierLet:
+			return "let"
+		case ir.ModifierVar:
+			return "var"
+		}
+	}
+	return ""
+}
+
 // esSpecifier returns one specifier of an import or export list:
 // `A`, `B as C`, `type T`.
 func esSpecifier(sym ir.ImportedSymbol) string {

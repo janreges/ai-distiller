@@ -69,7 +69,10 @@
   (`internal/language/typescript/ast_parser.go#publishExportedNames`). A variable whose value
   is an arrow function and that has no type annotation becomes a
   `DistilledFunction` with the arrow's type parameters; any other variable is a
-  `DistilledField` (`const` adds the modifier `final`). When the field's value
+  `DistilledField`. Both carry the declaration's keyword: `const` is the
+  modifier `final`, `let` and `var` are `let` and `var`
+  (`internal/language/esutil/esutil.go#DeclarationModifier`); the formatter
+  prints a function with one of them as `let f = (a: number)`. When the field's value
   is a function expression, a typed arrow function or a call that takes a
   function (`forwardRef((props, ref) => ...)`, `new Pool(() => ...)`,
   `internal/language/esutil/esutil.go#TakesFunction`), `DefaultValue` is its

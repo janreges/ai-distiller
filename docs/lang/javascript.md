@@ -113,7 +113,8 @@ Distills to:
 ### Partially Supported Features
 - ⚠️ **Nested objects** - Only first level is analyzed
 - ⚠️ **Complex destructuring** - Shown as patterns, not fully expanded
-- ✅ **Arrow functions assigned to a constant** - printed with their parameters (`const createClient = (apiKey)`, `const quickGet = async (endpoint)`); `=> body` only with `--implementation=1`
+- ✅ **Arrow functions assigned to a variable** - printed with their keyword and parameters (`const createClient = (apiKey)`, `const quickGet = async (endpoint)`, `let f = (a)`); `=> body` only with `--implementation=1`
+- ✅ **Variables** print with the keyword they were declared with: `const`, `let` or `var`
 - ✅ **Wrapped components and callbacks** - a constant initialised with a call that takes a function prints the call with each function's parameters and no body: `export const Button = forwardRef(({ variant = "a", ...props }, ref))`, `export const List = memo(function List({ items }))`; the whole initializer with `--implementation=1`
 - ⚠️ **Top-level visibility** - JavaScript has no visibility keyword for top-level declarations, so non-exported functions and constants are printed too
 

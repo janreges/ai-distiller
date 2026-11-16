@@ -875,9 +875,14 @@ func (p *TreeSitterProcessor) processVariableDeclarator(node *sitter.Node, file 
 		Modifiers:  []ir.Modifier{},
 	}
 
-	// Add const modifier if applicable
-	if kind == "const" {
+	// The keyword as written: const is final, let and var are their own.
+	switch kind {
+	case "const":
 		field.Modifiers = append(field.Modifiers, ir.ModifierFinal)
+	case "let":
+		field.Modifiers = append(field.Modifiers, ir.ModifierLet)
+	case "var":
+		field.Modifiers = append(field.Modifiers, ir.ModifierVar)
 	}
 
 	// Check for JSDoc

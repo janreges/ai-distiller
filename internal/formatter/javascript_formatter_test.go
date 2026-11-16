@@ -36,6 +36,16 @@ func TestJavaScriptFormatter_FunctionBody(t *testing.T) {
 	})
 }
 
+// A variable prints with the keyword it was declared with; `let` and `var`
+// arrow functions keep their arrow-constant form.
+func TestJavaScriptFormatter_DeclarationKeyword(t *testing.T) {
+	params := []ir.Parameter{{Name: "a"}}
+	assert.Equal(t, "let f = (a) => a\n", jsFormat(t, &ir.DistilledFunction{Name: "f", Parameters: params, Modifiers: []ir.Modifier{ir.ModifierLet}, Implementation: "a"}, 0))
+	assert.Equal(t, "export var g = async (a)\n", jsFormat(t, &ir.DistilledFunction{Name: "g", Parameters: params, Modifiers: []ir.Modifier{ir.ModifierVar, ir.ModifierAsync, ir.ModifierExport}}, 0))
+	assert.Equal(t, "var v = 3\n", jsFormat(t, &ir.DistilledField{Name: "v", DefaultValue: "3", Modifiers: []ir.Modifier{ir.ModifierVar}}, 0))
+	assert.Equal(t, "let w = 4\n", jsFormat(t, &ir.DistilledField{Name: "w", DefaultValue: "4", Modifiers: []ir.Modifier{ir.ModifierLet}}, 0))
+}
+
 func TestJavaScriptFormatter_Comments(t *testing.T) {
 	var b strings.Builder
 	f := NewJavaScriptFormatter()

@@ -436,7 +436,7 @@ func TestJS_ExportedDeclarations(t *testing.T) {
 		"*g":      export,
 		"c":       {ir.ModifierFinal, ir.ModifierExport},
 		"d":       {ir.ModifierFinal, ir.ModifierExport},
-		"v":       export,
+		"v":       {ir.ModifierVar, ir.ModifierExport},
 		"plain":   {},
 	}, mods)
 }

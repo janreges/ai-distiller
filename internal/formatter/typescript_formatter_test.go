@@ -36,6 +36,18 @@ func TestTypeScriptFormatter_FunctionBody(t *testing.T) {
 	})
 }
 
+// A variable prints with the keyword it was declared with; `let` and `var`
+// arrow functions keep their arrow-constant form.
+func TestTypeScriptFormatter_DeclarationKeyword(t *testing.T) {
+	params := []ir.Parameter{{Name: "a", Type: ir.TypeRef{Name: "number"}}}
+	assert.Equal(t, "let f = (a: number) => a\n", tsFormat(t, &ir.DistilledFunction{Name: "f", Parameters: params, Modifiers: []ir.Modifier{ir.ModifierLet}, Implementation: "a"}, 0))
+	assert.Equal(t, "export var g = async (a: number) => {\n    return a;\n}\n",
+		tsFormat(t, &ir.DistilledFunction{Name: "g", Parameters: params, Modifiers: []ir.Modifier{ir.ModifierVar, ir.ModifierAsync, ir.ModifierExport}, Implementation: "{\n  return a;\n}"}, 0))
+	assert.Equal(t, "var v = 3\n", tsFormat(t, &ir.DistilledField{Name: "v", DefaultValue: "3", Modifiers: []ir.Modifier{ir.ModifierVar}}, 0))
+	assert.Equal(t, "let w: number\n", tsFormat(t, &ir.DistilledField{Name: "w", Type: &ir.TypeRef{Name: "number"}, Modifiers: []ir.Modifier{ir.ModifierLet}}, 0))
+	assert.Equal(t, "const c = 1\n", tsFormat(t, &ir.DistilledField{Name: "c", DefaultValue: "1", Modifiers: []ir.Modifier{ir.ModifierFinal}}, 0))
+}
+
 func TestTypeScriptFormatter_Enum(t *testing.T) {
 	e := &ir.DistilledEnum{Name: "Color", Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{ir.ModifierExport}, Children: []ir.DistilledNode{
 		&ir.DistilledField{Name: "Red"},
