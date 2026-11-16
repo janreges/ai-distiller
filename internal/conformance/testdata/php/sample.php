@@ -51,3 +51,24 @@ class ConfWidget extends ConfAliasBase implements ConfAliasShown {
 function conf_dnf((ConfA&ConfB)|null $confDnf): (ConfA&ConfB)|null {
     return $confDnf;
 }
+
+#[ConfMarker]
+enum ConfStatus: string implements ConfAliasShown {
+    use ConfTrait;
+
+    case ConfActive = 'active';
+
+    const CONF_DEFAULT = self::ConfActive;
+
+    public function confLabel(): string {
+        return 'a';
+    }
+}
+
+enum ConfPure {
+    case ConfOne;
+
+    public function confPure(): int {
+        return 1;
+    }
+}

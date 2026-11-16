@@ -15,7 +15,7 @@ PHP support in AI Distiller is designed to extract the essential structure of PH
 | **Classes** | ✅ Full | Including abstract, final, readonly (8.2+) |
 | **Interfaces** | ✅ Full | Multiple inheritance supported |
 | **Traits** | ⚠️ Partial | Printed with the `trait` keyword; a class's `use A, B;` prints as one `use` line per trait; an `{ ... as ... }` conflict-resolution block is not printed |
-| **Enums** | ⚠️ Partial | Pure and backed enums (8.1+) with their case values; enum constants and methods print after the enum at file level |
+| **Enums** | ✅ Full | Pure and backed enums (8.1+) with `implements` and attributes; cases with their values, constants, methods and trait uses print inside the enum |
 | **Functions** | ✅ Full | Global functions with type hints |
 | **Methods** | ✅ Full | Including magic methods, final, abstract |
 | **Properties** | ✅ Full | Typed, readonly and promoted properties; `@property` tags stay in the class docblock |
@@ -94,23 +94,31 @@ class User {
 
 ### 2. **Enum Support with Values**
 
-PHP 8.1+ enums are properly displayed with the `enum` keyword and their case values are always shown:
+PHP 8.1+ enums are displayed with the `enum` keyword, their backing type and `implements`; case values are always shown, and constants and methods print inside the enum like class members:
 
 ```php
 <?php
-enum Status: string {
+enum Status: string implements HasLabel {
     case DRAFT = 'draft';
     case PUBLISHED = 'published';
     case ARCHIVED = 'archived';
+
+    const DEFAULT = self::DRAFT;
+
+    public function label(): string {
+        return ucfirst($this->value);
+    }
 }
 ```
 
 ```
 <file path="status.php">
-enum Status: string {
+enum Status: string implements HasLabel {
     case DRAFT = 'draft';
     case PUBLISHED = 'published';
     case ARCHIVED = 'archived';
+    public const DEFAULT = self::DRAFT;
+    public label(): string
 }
 </file>
 ```
@@ -592,9 +600,9 @@ class Repository {
 
 ### Critical Issues
 
-1. **Interface and enum members** (🔴 Bug)
-   - **Issue**: Interface constants are not printed; an enum's constants and methods are printed after the enum, at file level and without visibility
-   - **Example**: `enum E: int { case A = 1; const D = self::A; public function label(): string {} }` prints `enum E: int { case A = 1; }` followed by `const D = self::A` and `label(): string`
+1. **Interface constants** (🔴 Bug)
+   - **Issue**: Interface constants are not printed
+   - **Example**: `interface I { const LIMIT = 10; public function f(): void; }` prints `interface I { public f(): void }`
 
 2. **Empty constructors hidden** (🟢 Intentional)
    - **Behavior**: Constructors without parameters are not shown
@@ -912,7 +920,7 @@ Docblocks print by default. Check that the command does not pass `--docstrings=0
 - [ ] Closure and arrow function type extraction
 - [ ] `@template` as API-defining tag
 - [ ] Trait conflict resolution (`as`, `insteadof`)
-- [ ] Interface constants, and enum constants and methods inside the enum
+- [ ] Interface constants
 - [ ] Property hooks (PHP 8.4+)
 
 ## Contributing

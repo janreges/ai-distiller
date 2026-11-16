@@ -444,23 +444,81 @@ interface Shape {
 
 /** ENUM_DOC */
 enum Suit: string {
+    /** ENUM_USE_DOC */
+    use Labels;
+
     /** ENUM_CASE_DOC */
     case Hearts = 'H';
+
+    /** ENUM_CONST_DOC */
+    const DEFAULT = self::Hearts;
 
     /** ENUM_METHOD_DOC */
     public function label(): string { return 'x'; }
 }
 `
 	out := distillPHP(t, src, nil)
-	for _, want := range []string{"IFACE_DOC", "IFACE_METHOD_DOC", "ENUM_DOC", "ENUM_CASE_DOC"} {
+	for _, want := range []string{"IFACE_DOC", "IFACE_METHOD_DOC", "ENUM_DOC", "ENUM_CASE_DOC", "ENUM_CONST_DOC", "ENUM_METHOD_DOC"} {
 		assert.Contains(t, out, want)
 	}
 	assert.Less(t, strings.Index(out, "IFACE_METHOD_DOC"), strings.Index(out, "area()"))
 	assert.Less(t, strings.Index(out, "ENUM_CASE_DOC"), strings.Index(out, "case Hearts"))
-	assert.NotContains(t, out, "ENUM_METHOD_DOC", "the doc of a member that is not printed must not move to the next one")
+	assert.Less(t, strings.Index(out, "ENUM_CONST_DOC"), strings.Index(out, "const DEFAULT"))
+	assert.Less(t, strings.Index(out, "ENUM_METHOD_DOC"), strings.Index(out, "label()"))
+	// A trait use prints above the members, away from its place in the body.
+	assert.NotContains(t, out, "ENUM_USE_DOC", "the doc of a member printed elsewhere must not move to the next one")
 
 	off := distillPHP(t, src, func(o *processor.ProcessOptions) { o.IncludeDocstrings = false })
 	assert.NotContains(t, off, "_DOC")
+}
+
+// An enum's members are its children in the IR, with or without a constant
+// (a constant used to break the parse, a method was never read), and its
+// header keeps attributes and implements.
+func TestPHP_EnumMembersAreInsideTheEnum(t *testing.T) {
+	src := `<?php
+enum E: int { case A = 1; public function label(): string {} }
+
+#[Marker]
+enum Status: string implements HasName, \JsonSerializable {
+    use Greets;
+    case Active = 'active';
+    const DEFAULT = self::Active;
+    public function name(): string { return $this->value; }
+    private function hidden(): void {}
+}
+`
+	file, err := NewProcessor().ProcessWithOptions(context.Background(), strings.NewReader(src), "test.php", processor.DefaultProcessOptions())
+	require.NoError(t, err)
+	require.Len(t, file.Children, 2, "nothing of an enum may land at file level")
+
+	members := func(c *ir.DistilledClass) []string {
+		var names []string
+		for _, child := range c.Children {
+			switch n := child.(type) {
+			case *ir.DistilledField:
+				names = append(names, "field "+n.Name)
+			case *ir.DistilledFunction:
+				names = append(names, "function "+n.Name)
+			}
+		}
+		return names
+	}
+
+	e := file.Children[0].(*ir.DistilledClass)
+	assert.Equal(t, []string{"field A", "function label"}, members(e))
+
+	status := file.Children[1].(*ir.DistilledClass)
+	assert.Equal(t, []string{"field Active", "field DEFAULT", "function name", "function hidden"}, members(status))
+	assert.Equal(t, []ir.TypeRef{{Name: "HasName"}, {Name: `\JsonSerializable`}}, status.Implements)
+	assert.Equal(t, []ir.TypeRef{{Name: "Greets"}}, status.Mixins)
+	assert.Equal(t, []string{"Marker"}, status.Decorators)
+	assert.Equal(t, "string", status.Extensions.PHP.EnumBackingType)
+
+	out := distillPHP(t, src, nil)
+	assert.Contains(t, out, "enum E: int {\n    case A = 1;\n    public label(): string\n}\n")
+	assert.Contains(t, out, "#[Marker]\nenum Status: string implements HasName, \\JsonSerializable {\n    use Greets;\n"+
+		"    case Active = 'active';\n    public const DEFAULT = self::Active;\n    public name(): string\n}\n")
 }
 
 // Every parameter and return type form prints as written: variadics, by

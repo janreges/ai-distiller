@@ -5,9 +5,10 @@
 - Wired: `internal/language/php/processor.go#Processor.ProcessWithOptions`
   creates `NewTreeSitterProcessor()` per call and runs
   `internal/language/php/tree_sitter_processor.go#TreeSitterProcessor.ProcessSource`.
-- Grammar: `github.com/tree-sitter/tree-sitter-php/bindings/go`, the `php`
-  grammar (`LanguagePHP()`, which includes the HTML text around `<?php`),
-  wrapped with `sitter.NewLanguage`. Tree: `go run ./cmd/ast-dump --lang php`.
+- Grammar: `github.com/tree-sitter/tree-sitter-php/bindings/go` (v0.25.1 in
+  `go.mod`, ABI 15; before v0.24 a `const` in an enum body was a syntax
+  error), the `php` grammar (`LanguagePHP()`, which includes the HTML text
+  around `<?php`), wrapped with `sitter.NewLanguage`. Tree: `go run ./cmd/ast-dump --lang php`.
 - Extensions: `.php`, `.phtml`, `.php3`, `.php4`, `.php5`, `.php7`, `.phps`,
   `.inc`.
 - Before the walk,
@@ -38,9 +39,13 @@
   inside a class to `Mixins`.
 - A trait is a `DistilledClass` with `Extensions.PHP.IsTrait`.
 - An enum is a `DistilledClass` with the modifier `final` and
-  `Extensions.PHP.IsEnum` (backing type in `EnumBackingType`); each `case` is a
-  `static` `final` field with `Extensions.PHP.IsEnumCase` and the value as
-  `DefaultValue`.
+  `Extensions.PHP.IsEnum` (backing type in `EnumBackingType`); its header
+  fills `Implements` and `Decorators` as a class's does. Its members are its
+  children
+  (`internal/language/php/tree_sitter_processor.go#TreeSitterProcessor.processEnumBody`):
+  each `case` is a `static` `final` field with `Extensions.PHP.IsEnumCase` and
+  the value as `DefaultValue`, constants and methods as in a class, and
+  `use Trait;` goes to `Mixins`.
 - Class constants are `static` `final` fields.
 - The class docblock is parsed into the class
   (`internal/language/php/tree_sitter_processor.go#TreeSitterProcessor.parseClassDocblock`):
@@ -57,9 +62,10 @@
   `formatCommentedNodes`, so a docblock is dropped with a member it skips.
   `processPromotedProperties` puts the promoted fields ahead of the constructor's
   docblock.
-  Interface methods and enum cases get their docblocks the same way
-  (`commentPrints` keeps a docblock only when the next declaration is one the
-  formatter prints). Enum methods are not processed or printed at all.
+  Interface methods and enum members get their docblocks the same way
+  (`commentPrints` keeps a docblock only when the next declaration is of a
+  kind the formatter prints in place: not a trait use, which prints above the
+  members).
 
 ## IR specifics
 

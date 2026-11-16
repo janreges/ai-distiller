@@ -692,17 +692,7 @@ func (p *TreeSitterProcessor) processClass(node *sitter.Node, file *ir.Distilled
 			}
 
 		case "class_interface_clause":
-			// Implements clause
-			for j := 0; j < int(child.ChildCount()); j++ {
-				grandchild := child.Child(uint(j))
-				if grandchild.Kind() == "qualified_name" || grandchild.Kind() == "name" {
-					// Don't resolve the full name, just use the short name or alias
-					// The imports are already tracked separately
-					class.Implements = append(class.Implements, ir.TypeRef{
-						Name: p.getNodeText(grandchild),
-					})
-				}
-			}
+			p.processImplements(child, class)
 
 		case "declaration_list":
 			// Class body
@@ -725,6 +715,17 @@ func (p *TreeSitterProcessor) processClass(node *sitter.Node, file *ir.Distilled
 
 	// Restore previous class context
 	p.currentClass = prevClass
+}
+
+// processImplements adds the interfaces of an `implements` clause, as
+// written (short name or alias; the imports are tracked separately).
+func (p *TreeSitterProcessor) processImplements(clause *sitter.Node, class *ir.DistilledClass) {
+	for i := uint(0); i < clause.ChildCount(); i++ {
+		child := clause.Child(i)
+		if child.Kind() == "qualified_name" || child.Kind() == "name" {
+			class.Implements = append(class.Implements, ir.TypeRef{Name: p.getNodeText(child)})
+		}
+	}
 }
 
 // docblockComment turns the raw text of a /** */ comment into a doc comment
@@ -1273,10 +1274,13 @@ func (p *TreeSitterProcessor) processEnum(node *sitter.Node, file *ir.DistilledF
 	}
 	class.Extensions.PHP.IsEnum = true
 
-	// Process enum parts
+	// Process enum parts: the header like a class's, then the members
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(uint(i))
 		switch child.Kind() {
+		case "attribute_list":
+			p.processAttributes(child, &class.Decorators)
+
 		case "name":
 			class.Name = p.getNodeText(child)
 
@@ -1287,8 +1291,10 @@ func (p *TreeSitterProcessor) processEnum(node *sitter.Node, file *ir.DistilledF
 				class.Extensions.PHP.EnumBackingType = p.getNodeText(child)
 			}
 
+		case "class_interface_clause":
+			p.processImplements(child, class)
+
 		case "enum_declaration_list":
-			// Enum cases
 			p.processEnumBody(child, file, class)
 		}
 	}
@@ -1296,7 +1302,8 @@ func (p *TreeSitterProcessor) processEnum(node *sitter.Node, file *ir.DistilledF
 	p.addNode(file, parent, class)
 }
 
-// processEnumBody processes enum cases
+// processEnumBody adds the members of an enum to it, as a class body does:
+// cases, constants, methods and trait uses.
 func (p *TreeSitterProcessor) processEnumBody(node *sitter.Node, file *ir.DistilledFile, class *ir.DistilledClass) {
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(uint(i))
@@ -1304,8 +1311,16 @@ func (p *TreeSitterProcessor) processEnumBody(node *sitter.Node, file *ir.Distil
 		case "enum_case":
 			// Process enum case as a constant
 			p.processEnumCase(child, file, class)
+		case "const_declaration":
+			p.processConstant(child, file, class)
+		case "method_declaration":
+			p.processMethod(child, file, class)
+		case "use_declaration":
+			p.processTraitUse(child, file, class)
 		case "comment":
-			if p.commentPrints(node, i, "enum_case") {
+			// The formatter prints trait uses above the members, so a
+			// docblock of one would land above an unrelated member.
+			if p.commentPrints(node, i, "enum_case", "const_declaration", "method_declaration") {
 				p.processComment(child, file, class)
 			}
 		}
@@ -1314,16 +1329,17 @@ func (p *TreeSitterProcessor) processEnumBody(node *sitter.Node, file *ir.Distil
 
 // commentPrints reports whether the comment at index i of body is kept as a
 // node. A doc comment documents the next declaration, so it is kept only when
-// that declaration is one the formatter prints (kind); otherwise it would end
-// up above an unrelated member. Other comments keep their place.
-func (p *TreeSitterProcessor) commentPrints(body *sitter.Node, i int, kind string) bool {
+// that declaration is of a kind the formatter prints in place (kinds);
+// otherwise it would end up above an unrelated member. Other comments keep
+// their place.
+func (p *TreeSitterProcessor) commentPrints(body *sitter.Node, i int, kinds ...string) bool {
 	if !strings.HasPrefix(p.getNodeText(body.Child(uint(i))), "/**") {
 		return true
 	}
 	for j := i + 1; j < int(body.ChildCount()); j++ {
 		next := body.Child(uint(j))
 		if next.IsNamed() && next.Kind() != "comment" {
-			return next.Kind() == kind
+			return slices.Contains(kinds, next.Kind())
 		}
 	}
 	return false

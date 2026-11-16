@@ -172,5 +172,11 @@ var fixtures = []fixture{
 			"    public static confMake(int ...$confIds): static\n",
 			"    public &confRef(array &$confArr): array\n",
 			"    public confNever(): never\n",
-			"conf_dnf((ConfA&ConfB)|null $confDnf): (ConfA&ConfB)|null\n"}})},
+			"conf_dnf((ConfA&ConfB)|null $confDnf): (ConfA&ConfB)|null\n"}},
+		// An enum's members print inside it, with or without a constant, and
+		// its header keeps attributes and implements.
+		check{Cap: "enum-members", Contains: []string{
+			"#[ConfMarker]\nenum ConfStatus: string implements ConfAliasShown {\n    use ConfTrait;\n    case ConfActive = 'active';\n" +
+				"    public const CONF_DEFAULT = self::ConfActive;\n    public confLabel(): string\n}\n",
+			"enum ConfPure {\n    case ConfOne;\n    public confPure(): int\n}\n"}})},
 }
