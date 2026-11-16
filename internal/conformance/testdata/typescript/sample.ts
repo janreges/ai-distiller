@@ -115,3 +115,8 @@ export namespace ConfLate {
     export const confLate: ConfLateAlias = 1;
 }
 export as namespace ConfLib;
+export = {
+    confExportEqA: 'aaaaaaaaaaaaaaaaaaaa',
+    confExportEqB: 'bbbbbbbbbbbbbbbbbbbbbbbbbb',
+    confExportEqC: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+};

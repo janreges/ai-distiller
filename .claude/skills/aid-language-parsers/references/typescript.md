@@ -69,7 +69,10 @@
   name. Every other export statement (a re-export, an export list, `export
   default <expression>`, `export = x`, `export as namespace Lib` with
   `Namespace`) is a `DistilledExport`
-  (`internal/language/esutil/esutil.go#Export`). An import alias, `import G =
+  (`internal/language/esutil/esutil.go#Export`). `export default <value>` and
+  `export = <value>` are left out when the value holds no function and its
+  signature is longer than `internal/language/esutil/esutil.go#MaxValueLen`
+  (80). An import alias, `import G =
   ns.H`, is a `DistilledImport` with the import type `alias`, the entity name as
   `Module` and the symbol `*` aliased `G`; `export import G = ns.H` sets
   `IsExport` (`internal/language/typescript/ast_parser.go#ASTParser.parseImportAlias`).

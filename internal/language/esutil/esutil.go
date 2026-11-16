@@ -13,7 +13,7 @@ import (
 )
 
 // MaxValueLen is the longest expression printed for `export default <expr>`
-// when the expression holds no function.
+// and `export = <expr>` when the expression holds no function.
 const MaxValueLen = 80
 
 // IsFunction reports whether node is a function expression: an arrow
@@ -270,9 +270,9 @@ func (s *signer) writeBreak(next string) {
 //	export = <expression>           Value (TypeScript)
 //	export as namespace Lib         Namespace (TypeScript)
 //
-// The value of `export default` is left out (nil) when it holds no function
-// and its signature is longer than MaxValueLen: a long object literal or
-// configuration call.
+// The statement is left out (nil) when the value of `export default` or
+// `export =` holds no function and its signature is longer than
+// MaxValueLen: a long object literal or configuration call.
 func Export(node *sitter.Node, source []byte) *ir.DistilledExport {
 	if node.ChildByFieldName("declaration") != nil {
 		return nil
@@ -341,6 +341,9 @@ func Export(node *sitter.Node, source []byte) *ir.DistilledExport {
 				exp.Namespace = text(child, source)
 			case afterEquals && child.IsNamed() && exp.Value == "":
 				exp.Value = Signature(child, source)
+				if !IsFunction(child) && !TakesFunction(child) && len(exp.Value) > MaxValueLen {
+					return nil
+				}
 			}
 		}
 	}

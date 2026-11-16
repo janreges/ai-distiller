@@ -136,6 +136,10 @@ func TestExport(t *testing.T) {
 		{`export default function main() {}`, nil},
 		{`export default class {}`, nil},
 		{"export default {\n  a: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',\n  b: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',\n};", nil},
+		// `export =` has the same cap.
+		{"export = {\n  alpha: 'aaaaaaaaaaaaaaaaaaaa',\n  beta: 'bbbbbbbbbbbbbbbbbbbbbbbbbb',\n  gamma: 'cccccccccccccccccccccccccc',\n  delta: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],\n};", nil},
+		{"export = connect(\n  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n  bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,\n)(function V() {});",
+			&ir.DistilledExport{Value: "connect(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)(function V())"}},
 	} {
 		t.Run(tc.src, func(t *testing.T) {
 			firstStatement(t, tc.src, false, func(stmt *sitter.Node, source []byte) {

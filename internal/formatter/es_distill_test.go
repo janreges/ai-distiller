@@ -169,6 +169,19 @@ func TestESJSDocUnclosedBrace(t *testing.T) {
 	assert.Equal(t, "export function f(a, b: string) -> number", lines[len(lines)-1])
 }
 
+// `export =` and `export default` leave out a value over the cap that holds
+// no function.
+func TestESExportValueCap(t *testing.T) {
+	long := "{\n  alpha: 'aaaaaaaaaaaaaaaaaaaa',\n  beta: 'bbbbbbbbbbbbbbbbbbbbbbbbbb',\n" +
+		"  gamma: 'cccccccccccccccccccccccccc',\n  delta: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],\n};\n"
+	for _, stmt := range []string{"export = ", "export default "} {
+		assert.Equal(t, []string{"", "export interface Keep {", "}"},
+			distillES(t, "expeq.ts", "export interface Keep {}\n"+stmt+long, esDefault), stmt)
+	}
+	assert.Equal(t, []string{"", "export interface Keep {", "}", "export = { a: 1 }"},
+		distillES(t, "expeq.ts", "export interface Keep {}\nexport = { a: 1 };\n", esDefault))
+}
+
 // --expand NAME keeps the body of a getter, setter or generator called NAME.
 func TestESExpandMatchesAccessorsAndGenerators(t *testing.T) {
 	expand := func(patterns ...string) processor.ProcessOptions {
