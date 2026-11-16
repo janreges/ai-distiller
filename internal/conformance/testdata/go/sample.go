@@ -51,3 +51,16 @@ type ConfID int
 
 // ConfName is an alias, another name for string.
 type ConfName = string
+
+// ConfHandler is a defined function type.
+type ConfHandler func(w io.Writer, n int) error
+
+// ConfRouter holds a middleware stack.
+type ConfRouter struct {
+	ConfStack []func(io.Writer) io.Writer
+}
+
+// ConfMap takes function-typed parameters.
+func ConfMap(items []int, f func(int) (string, error), opts ...func(*ConfWidget)) []string {
+	return nil
+}

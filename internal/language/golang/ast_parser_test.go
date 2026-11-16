@@ -89,3 +89,35 @@ func TestASTParser_DefinedTypeAndAlias(t *testing.T) {
 	assert.Empty(t, mods["List[T any]"])
 	assert.Equal(t, []ir.Modifier{ir.ModifierTypeAlias}, mods["Same[T any]"])
 }
+
+func TestASTParser_FunctionTypesKeepTheirSignature(t *testing.T) {
+	src := "package p\n\n" +
+		"func F(a func(x, y int) (n int, err error), b func(), c ...func(func(int) bool) []func() error) func(string) {\n\treturn nil\n}\n\n" +
+		"type H func(w io.Writer, n int) error\n\n" +
+		"type S struct {\n\tf func(int) string\n}\n"
+	file, err := NewASTParser().ProcessSource(context.Background(), []byte(src), "p.go")
+	require.NoError(t, err)
+	var fn *ir.DistilledFunction
+	var alias *ir.DistilledTypeAlias
+	var field *ir.DistilledField
+	for _, node := range file.Children {
+		switch n := node.(type) {
+		case *ir.DistilledFunction:
+			fn = n
+		case *ir.DistilledTypeAlias:
+			alias = n
+		case *ir.DistilledClass:
+			field = n.Children[0].(*ir.DistilledField)
+		}
+	}
+
+	// Parameter, result, field and type definition all keep the whole
+	// function type, names and grouping as written.
+	require.Len(t, fn.Parameters, 3)
+	assert.Equal(t, "func(x, y int) (n int, err error)", fn.Parameters[0].Type.Name)
+	assert.Equal(t, "func()", fn.Parameters[1].Type.Name)
+	assert.Equal(t, "...func(func(int) bool) []func() error", fn.Parameters[2].Type.Name)
+	assert.Equal(t, "func(string)", fn.Returns.Name)
+	assert.Equal(t, "func(w io.Writer, n int) error", alias.Type.Name)
+	assert.Equal(t, "func(int) string", field.Type.Name)
+}

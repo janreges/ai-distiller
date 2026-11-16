@@ -929,7 +929,7 @@ func (p *ASTParser) typeToString(expr ast.Expr) string {
 			return "chan " + p.typeToString(t.Value)
 		}
 	case *ast.FuncType:
-		return "func" // Simplified
+		return "func" + p.signatureToString(t)
 	case *ast.InterfaceType:
 		if len(t.Methods.List) == 0 {
 			return "interface{}"
@@ -972,6 +972,42 @@ func (p *ASTParser) typeToString(expr ast.Expr) string {
 		return string(p.source[start:end])
 	}
 	return "unknown"
+}
+
+// signatureToString returns the parameters and results of a function type as
+// written, after "func": "(a int, b string) (string, error)". Grouped names
+// stay grouped ("a, b int"), as in the source.
+func (p *ASTParser) signatureToString(ft *ast.FuncType) string {
+	sig := "(" + p.fieldListToString(ft.Params) + ")"
+	if ft.Results == nil || len(ft.Results.List) == 0 {
+		return sig
+	}
+	if len(ft.Results.List) == 1 && len(ft.Results.List[0].Names) == 0 {
+		return sig + " " + p.typeToString(ft.Results.List[0].Type)
+	}
+	return sig + " (" + p.fieldListToString(ft.Results) + ")"
+}
+
+// fieldListToString returns the fields of a parameter or result list as
+// written, separated by ", ": "a, b int, s ...string" or "int, error".
+func (p *ASTParser) fieldListToString(fl *ast.FieldList) string {
+	if fl == nil {
+		return ""
+	}
+	parts := make([]string, 0, len(fl.List))
+	for _, field := range fl.List {
+		typ := p.typeToString(field.Type)
+		if len(field.Names) == 0 {
+			parts = append(parts, typ)
+			continue
+		}
+		names := make([]string, len(field.Names))
+		for i, name := range field.Names {
+			names[i] = name.Name
+		}
+		parts = append(parts, strings.Join(names, ", ")+" "+typ)
+	}
+	return strings.Join(parts, ", ")
 }
 
 // exprToString converts an expression to string (for default values)

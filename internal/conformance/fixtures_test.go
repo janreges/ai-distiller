@@ -96,7 +96,11 @@ var fixtures = []fixture{
 			NotContains: []string{"io.Reader | io.Closer"}},
 		check{Cap: "type-set-union", Contains: []string{"type ConfNumber interface {\n\t~int | ~int64\n}\n"}},
 		check{Cap: "defined-type-vs-alias", Contains: []string{"type ConfID int\n", "type ConfName = string\n"},
-			NotContains: []string{"type ConfID = int"}})},
+			NotContains: []string{"type ConfID = int"}},
+		check{Cap: "func-types", Contains: []string{
+			"type ConfHandler func(w io.Writer, n int) error\n",
+			"\tConfStack []func(io.Writer) io.Writer\n",
+			"func ConfMap(items []int, f func(int) (string, error), opts ...func(*ConfWidget)) []string\n"}})},
 	{Lang: "rust", File: "rust/sample.rs", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "conf_field", "conf_public", "conf_other"},
 		Private:   []string{"conf_private"},

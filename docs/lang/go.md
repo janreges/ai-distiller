@@ -92,7 +92,7 @@ func (l *Logger) Log(message string) {
 **Status**: Expanded  
 **Impact**: Low - Cosmetic difference
 
-Grouped parameters and fields are expanded:
+Grouped parameters and fields are expanded (the parameters inside a function type keep their grouping: `f func(x, y int)`):
 ```go
 // Original
 func Move(x, y int)
@@ -122,25 +122,19 @@ import (
 )
 ```
 
-### 3. Function-Typed Parameters
-**Status**: Signature dropped  
-**Impact**: Medium - the parameter's type is incomplete
-
-A parameter of function type prints as a bare `func`: `func Map[T, V any](input []T, f func(T) V) []V` prints as `func Map[T any, V any](input []T, f func) []V`.
-
-### 4. Empty Import Block
+### 3. Empty Import Block
 **Status**: Cosmetic  
 **Impact**: Low
 
 When the import filter drops every import of a file (the imports are used only in function bodies that are not printed), an empty `import (` `)` block remains.
 
-### 5. Generic Type Parameters
+### 4. Generic Type Parameters
 **Status**: Basic support  
 **Impact**: Medium - Complex constraints may not be fully preserved
 
 Type parameters and constraints are kept; grouped type parameters are expanded (`[T, V any]` prints as `[T any, V any]`).
 
-### 6. CGO Support
+### 5. CGO Support
 **Status**: Minimal  
 **Impact**: Low - C code blocks not properly preserved
 
@@ -437,7 +431,7 @@ type Node[T any] struct {
 // Map applies a function to each element of a slice, returning a new slice.
 // This is a generic function with a closure.
 
-func Map[T any, V any](input []T, f func) []V
+func Map[T any, V any](input []T, f func(T) V) []V
 // ProcessNumericChan processes a channel of generic Nodes.
 // It uses a type constraint.
 
@@ -484,7 +478,6 @@ The following improvements are planned:
 2. **Import Formatting**: Distinguish between single and multi-import blocks
 3. **Generic Type Parameters**: Complete support for complex generic constraints
 4. **CGO Support**: Handle C code blocks in CGO files
-5. **Function-Typed Parameters**: Print the full signature of a `func(...)` parameter
 
 ## Technical Implementation
 
