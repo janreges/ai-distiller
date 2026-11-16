@@ -39,7 +39,10 @@ function fixture() {
 // file system, a dangling symlink.
 const BYPASSES = ['nope/../leak.py', 'nope/../out/secret.py', 'main.go/../out/secret.py', 'loop/../out/secret.py',
   `${'a'.repeat(300)}/../out/secret.py`, 'dangling/../out/secret.py', 'nope/../out/inner', 'nope/../out/secret.js',
-  'nope/../out', 'nope/../../outside/secret.py'];
+  'nope/../out', 'nope/../../outside/secret.py',
+  // Other spellings of the same: an empty or "." part, a trailing slash, a
+  // ".." below a missing part, a "." in front, ".." last.
+  'nope//../out', 'nope/./../out', 'nope/../out/', './nope/../out', 'nope/x/../../out', 'leak.py/..'];
 
 const confine = (value, root, fromEnv = true) => confinePath(value, root, 'file_path', fromEnv);
 
@@ -104,6 +107,9 @@ test('".." after a part that does not resolve is refused, so it cannot cancel th
       return true;
     });
   }
+  // An absolute value, and one outside the root, the same way.
+  assert.throws(() => confine(`${root}/nope/../out/secret.py`, root), UncheckablePathError);
+  assert.throws(() => confine('/nope/../etc', root), UncheckablePathError);
   // Also when the rest would stay inside: the check cannot tell.
   assert.throws(() => confine('src/missing/../a.py', root), UncheckablePathError);
   // ".." among parts that exist is resolved by the operating system.
