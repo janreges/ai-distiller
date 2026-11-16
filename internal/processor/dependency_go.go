@@ -61,6 +61,11 @@ func (da *DependencyAnalyzer) extractGoImports(ctx context.Context, fileContent 
 		if pkgDir == "" {
 			continue
 		}
+		if !da.scope.contains(pkgDir) {
+			// Not read: Follow reports the directory as outside.
+			deps = append(deps, pkgDir)
+			continue
+		}
 		files := da.goPackageFiles(pkgDir)
 		pkg := dominantGoPackage(files)
 		for _, f := range files {
@@ -192,20 +197,28 @@ func parseGoMod(modFile string) *goModule {
 }
 
 // goPackageFiles lists the non-test .go files of dir, sorted, with their
-// package clauses, once per directory.
+// package clauses, once per directory. It lists no directory and reads no
+// file outside the scope's boundary.
 func (da *DependencyAnalyzer) goPackageFiles(dir string) []goFile {
 	if files, ok := da.goPackages[dir]; ok {
 		return files
 	}
 	var files []goFile
-	entries, err := os.ReadDir(dir)
-	if err == nil && da.scope.contains(dir) {
+	var entries []os.DirEntry
+	var err error
+	if da.scope.contains(dir) {
+		entries, err = os.ReadDir(dir)
+	}
+	if err == nil {
 		for _, entry := range entries {
 			name := entry.Name()
 			if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 				continue
 			}
 			path := filepath.Join(dir, name)
+			if !da.scope.contains(path) {
+				continue // a symlink out of the boundary
+			}
 			content, err := os.ReadFile(path)
 			if err != nil {
 				continue

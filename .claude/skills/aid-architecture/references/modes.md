@@ -208,10 +208,14 @@ The boundary (`dependencyBoundary`) is the nearest directory at or above the
 input that holds `.git`, else the project root of `internal/project` when it
 holds the input and is not the working-directory fallback
 (`RootInfo.IsFallback`, which the cached root keeps), else the input's
-directory. `followScope.contains` compares
-real paths (symlinks resolved); the resolvers read no `go.mod`, `Cargo.toml`,
-`tsconfig.json`, `composer.json` or package listing outside it
-(`DependencyAnalyzer.findUp`). `followScope.excludedBy` applies the walk's
+directory. With `AID_CONFINE_ROOT` set and below that directory,
+`newFollowScope` takes the confine root instead (kind `AID_CONFINE_ROOT
+directory`). `followScope.contains` compares
+real paths (symlinks resolved) and also checks
+`internal/project/confine.go#InConfineRoot`; the resolvers read no `go.mod`,
+`Cargo.toml`, `tsconfig.json`, `composer.json` or package listing outside it
+(`DependencyAnalyzer.findUp`), and a Go package directory outside it is
+reported by `Follow` without being listed. `followScope.excludedBy` applies the walk's
 rules to a followed file: every `.aidignore` from the boundary down to the
 file's directory, the default-ignored directories (`isDefaultIgnoredDir`) and
 `.aid`, and `--include`/`--exclude` (`matchPatterns`) on the path below the

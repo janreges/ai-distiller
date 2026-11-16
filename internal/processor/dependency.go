@@ -28,7 +28,7 @@ type DependencyStats struct {
 	Outside      int    // imported files not read because they lie outside Boundary
 	Excluded     int    // imported files left out by --include, --exclude, .aidignore or a default-ignored directory
 	Boundary     string // the directory following stays in, described ("the repository /x")
-	BoundaryKind string // "repository", "project root" or "input directory"
+	BoundaryKind string // "repository", "project root", "input directory" or "AID_CONFINE_ROOT directory"
 }
 
 // ProcessWithDependencies distils path (a file, or every file a directory run
@@ -208,7 +208,17 @@ func (da *DependencyAnalyzer) Follow(starts []string, maxDepth int) (followed []
 					continue
 				}
 				seen[dep] = true
-				if info, err := os.Stat(dep); err != nil || info.IsDir() {
+				info, err := os.Stat(dep)
+				if err != nil {
+					continue
+				}
+				if info.IsDir() {
+					// A Go package directory the resolver did not read
+					// because it lies outside.
+					if !da.scope.contains(dep) {
+						dbg.Logf(debug.LevelBasic, "Not following %s (imported by %s): outside %s", dep, file, da.scope.describe())
+						outside++
+					}
 					continue
 				}
 				if _, ok := GetByFilename(dep); !ok {

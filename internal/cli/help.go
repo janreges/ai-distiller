@@ -312,7 +312,8 @@ Diagnostics and Help:
 EXPERIMENTAL
     --dependency-aware         EXPERIMENTAL: after the input, distil the project files it imports, each whole
                                and with the same flags (regex-based); a directory adds the files outside
-                               it that it imports; never leaves the repository (.git), and followed
+                               it that it imports; never leaves the repository (.git) or
+                               AID_CONFINE_ROOT, and followed
                                files pass --include, --exclude and .aidignore; a note on stderr when
                                nothing can be followed (default: off; behaviour may change)
     --max-depth N              EXPERIMENTAL: levels of imports --dependency-aware follows (default: 2)

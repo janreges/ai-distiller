@@ -16,7 +16,7 @@ import (
 type followScope struct {
 	boundary     string // absolute path of the directory following stays in
 	realBoundary string // boundary with symlinks resolved
-	kind         string // what boundary is: "repository", "project root" or "input directory"
+	kind         string // what boundary is: "repository", "project root", "input directory" or "AID_CONFINE_ROOT directory"
 	inputDir     string // the input directory, or the entry file's directory
 	include      []string
 	exclude      []string
@@ -24,12 +24,18 @@ type followScope struct {
 }
 
 // newFollowScope returns the scope of a run on inputDir (the input directory,
-// or the directory of the entry file).
+// or the directory of the entry file). With AID_CONFINE_ROOT set, the
+// boundary is the deeper of dependencyBoundary and the confine root: both
+// hold the input, so the one nearer to it.
 func newFollowScope(inputDir string, opts ProcessOptions) *followScope {
 	boundary, kind := dependencyBoundary(inputDir)
 	real, err := filepath.EvalSymlinks(boundary)
 	if err != nil {
 		real = boundary
+	}
+	if confine, err := project.ConfineRoot(); err == nil && confine != "" &&
+		confine != real && pathInside(confine, real) {
+		boundary, real, kind = confine, confine, project.EnvConfineRoot+" directory"
 	}
 	return &followScope{
 		boundary:     boundary,
@@ -75,8 +81,9 @@ func pathInside(path, dir string) bool {
 }
 
 // contains reports whether the real path of path (symlinks resolved) lies
-// inside the boundary. A path that cannot be resolved is not inside. A nil
-// scope contains everything.
+// inside the boundary and, with AID_CONFINE_ROOT set, inside the confine
+// root (project.InConfineRoot). A path that cannot be resolved is not
+// inside. A nil scope contains everything.
 func (s *followScope) contains(path string) bool {
 	if s == nil {
 		return true
@@ -85,7 +92,7 @@ func (s *followScope) contains(path string) bool {
 	if err != nil {
 		return false
 	}
-	return pathInside(real, s.realBoundary)
+	return pathInside(real, s.realBoundary) && project.InConfineRoot(real)
 }
 
 // describe names the boundary for the log and the stderr note.

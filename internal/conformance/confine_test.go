@@ -3,6 +3,7 @@ package conformance
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -176,4 +177,78 @@ func TestConfineRootKeepsTheAidDirectoryInsideIt(t *testing.T) {
 	require.Equal(t, 0, code, stderr)
 	assert.FileExists(t, filepath.Join(proj, "sub", ".aid", "aid.main.py.txt"))
 	assert.False(t, strings.Contains(stderr, "Ignoring"), stderr)
+}
+
+// --dependency-aware stops at AID_CONFINE_ROOT when it lies below the
+// repository top: for every language it resolves through project files, an
+// import that leads out of the confine root (a relative path, a go.mod
+// replace, a Cargo path dependency, tsconfig paths, PSR-4 roots) is not
+// read and -v says so, and a go.mod or jsconfig.json above the confine root
+// is not read either. Unset, the same imports are followed up to the
+// repository top.
+func TestConfineRootBoundsDependencyAware(t *testing.T) {
+	tmp := t.TempDir()
+	writeProject(t, tmp, map[string]string{
+		"repo/.git/HEAD": "ref: refs/heads/main\n",
+
+		"repo/proj/py/app.py":   "from .local import thing\nfrom ...pyshared import helper\n\ndef app():\n    return thing, helper\n",
+		"repo/proj/py/local.py": "def thing():\n    return 1\n",
+		"repo/pyshared.py":      "def py_outside_the_confine_root():\n    return 2\n",
+
+		"repo/proj/go/go.mod":        "module example.com/app\n\ngo 1.22\n\nreplace example.com/kit => ../../shared/kit\n",
+		"repo/proj/go/main.go":       "package main\n\nimport (\n\t\"example.com/app/util\"\n\t\"example.com/kit/log\"\n)\n\nfunc main() { util.Util(); log.Log() }\n",
+		"repo/proj/go/util/util.go":  "package util\n\nfunc Util() {}\n",
+		"repo/shared/kit/log/log.go": "package log\n\nfunc GoOutsideTheConfineRoot() {}\n",
+
+		"repo/go.mod":                       "module example.com/repo\n\ngo 1.22\n",
+		"repo/proj/goup/main.go":            "package main\n\nimport \"example.com/repo/proj/goup/inner\"\n\nfunc main() { inner.Inner() }\n",
+		"repo/proj/goup/inner/inner.go":     "package inner\n\nfunc Inner() {}\n",
+		"repo/proj/rust/Cargo.toml":         "[package]\nname = \"app\"\n\n[dependencies]\nkit = { path = \"../../shared/kit-rs\" }\n",
+		"repo/proj/rust/src/main.rs":        "mod cli;\nuse kit::helper;\n\nfn main() {}\n",
+		"repo/proj/rust/src/cli.rs":         "pub fn run() {}\n",
+		"repo/shared/kit-rs/src/lib.rs":     "pub fn rust_outside_the_confine_root() {}\n",
+		"repo/proj/ts/tsconfig.json":        `{"compilerOptions": {"baseUrl": ".", "paths": {"@shared/*": ["../../shared/ts/*"], "@/*": ["src/*"]}}}` + "\n",
+		"repo/proj/ts/src/main.ts":          "import { local } from '@/local';\nimport { types } from '@shared/types';\nimport { rel } from '../../../shared/ts/rel';\nexport function main() { return [local, types, rel]; }\n",
+		"repo/proj/ts/src/local.ts":         "export function local() { return 1; }\n",
+		"repo/shared/ts/types.ts":           "export function tsOutsideTheConfineRoot() { return 2; }\n",
+		"repo/shared/ts/rel.ts":             "export function relOutsideTheConfineRoot() { return 3; }\n",
+		"repo/jsconfig.json":                `{"compilerOptions": {"baseUrl": ".", "paths": {"~/*": ["proj/js/*"]}}}` + "\n",
+		"repo/proj/js/app.js":               "import { inside } from '~/lib/inside.js';\nimport { local } from './local.js';\nexport function app() { return [inside, local]; }\n",
+		"repo/proj/js/local.js":             "export function local() { return 1; }\n",
+		"repo/proj/js/lib/inside.js":        "export function inside() { return 2; }\n",
+		"repo/proj/php/composer.json":       `{"autoload": {"psr-4": {"App\\": "src/", "Shared\\": "../../shared/php/"}}}` + "\n",
+		"repo/proj/php/src/User.php":        "<?php\nnamespace App;\n\nuse App\\Models\\Post;\nuse Shared\\Secret;\n\nrequire_once __DIR__ . '/../../../shared/php/lib.php';\n\nclass User {}\n",
+		"repo/proj/php/src/Models/Post.php": "<?php\nnamespace App\\Models;\n\nclass Post {}\n",
+		"repo/shared/php/Secret.php":        "<?php\nnamespace Shared;\n\nclass PhpOutsideTheConfineRoot {}\n",
+		"repo/shared/php/lib.php":           "<?php\nfunction lib_outside_the_confine_root() {}\n",
+	})
+	proj := filepath.Join(tmp, "repo", "proj")
+	confined := aidEnv("AID_CONFINE_ROOT=" + proj)
+
+	for _, tc := range []struct {
+		entry      string
+		confined   []string
+		unset      []string
+		outsideLog int // imports -v reports outside the confine root
+	}{
+		{"py/app.py", []string{"app.py", "local.py"}, []string{"app.py", "local.py", "../../pyshared.py"}, 1},
+		{"go/main.go", []string{"main.go", "util/util.go"}, []string{"main.go", "util/util.go", "../../shared/kit/log/log.go"}, 1},
+		{"goup/main.go", []string{"main.go"}, []string{"main.go", "inner/inner.go"}, 0},
+		{"rust/src/main.rs", []string{"main.rs", "cli.rs"}, []string{"main.rs", "cli.rs", "../../../shared/kit-rs/src/lib.rs"}, 1},
+		{"ts/src/main.ts", []string{"main.ts", "local.ts"}, []string{"main.ts", "local.ts", "../../../shared/ts/types.ts", "../../../shared/ts/rel.ts"}, 2},
+		{"js/app.js", []string{"app.js", "local.js"}, []string{"app.js", "lib/inside.js", "local.js"}, 0},
+		{"php/src/User.php", []string{"User.php", "Models/Post.php"}, []string{"User.php", "Models/Post.php", "../../../shared/php/Secret.php", "../../../shared/php/lib.php"}, 2},
+	} {
+		t.Run(tc.entry, func(t *testing.T) {
+			out, stderr, code := aidRunEnv(t, proj, confined, nil, tc.entry, "--dependency-aware", "--stdout", "--summary-type=off", "-v")
+			require.Equal(t, 0, code, stderr)
+			assert.Equal(t, tc.confined, filePaths(out))
+			assert.NotRegexp(t, `(?i)outside_?the_?confine_?root`, out)
+			assert.Len(t, regexp.MustCompile(`Not following \S+ \(imported by \S+\): outside the AID_CONFINE_ROOT directory \S+/proj\n`).FindAllString(stderr, -1), tc.outsideLog, stderr)
+
+			out, stderr, code = aidRunEnv(t, proj, aidEnv(), nil, tc.entry, "--dependency-aware", "--stdout", "--summary-type=off")
+			require.Equal(t, 0, code, stderr)
+			assert.Equal(t, tc.unset, filePaths(out))
+		})
+	}
 }
