@@ -1,0 +1,9 @@
+{
+  // The paths live in the base config, as in many monorepos.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "strict": true,
+    "jsx": "react-jsx", /* trailing commas are allowed */
+  },
+  "include": ["src"],
+}

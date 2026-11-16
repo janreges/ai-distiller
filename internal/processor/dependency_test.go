@@ -20,3 +20,27 @@ func TestExpandRustUseTree(t *testing.T) {
 		assert.Equal(t, want, expandRustUseTree(tree), tree)
 	}
 }
+
+func TestStripJSONC(t *testing.T) {
+	in := "{\n  // a comment\n  \"a\": \"http://x/*y*/\", /* block */\n  \"b\": [1, 2,],\n  \"c\": {\"d\": 1, // last\n  },\n}\n"
+	assert.JSONEq(t, `{"a": "http://x/*y*/", "b": [1, 2], "c": {"d": 1}}`, string(stripJSONC([]byte(in))))
+}
+
+func TestTSConfigMatchPrefersExactThenLongestPrefix(t *testing.T) {
+	cfg := &tsConfig{
+		pathsDir: "/p",
+		paths: map[string][]string{
+			"@/*":         {"src/*"},
+			"@/lib/*":     {"lib/*", "vendor/lib/*"},
+			"config":      {"src/config.ts"},
+			"*.generated": {"gen/*"},
+		},
+	}
+	assert.Equal(t, []string{"/p/lib/x", "/p/vendor/lib/x"}, cfg.match("@/lib/x"))
+	assert.Equal(t, []string{"/p/src/app"}, cfg.match("@/app"))
+	assert.Equal(t, []string{"/p/src/config.ts"}, cfg.match("config"))
+	assert.Empty(t, cfg.match("react"))
+
+	cfg.baseURL = "/base"
+	assert.Equal(t, []string{"/base/react"}, cfg.match("react"))
+}

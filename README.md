@@ -223,13 +223,12 @@ aid src/components --dependency-aware
 
 ### What is followed, per language
 
-Measured on public repositories (`git clone --depth 1`, 2026-11-16) with the default `--max-depth=2`; "followed" counts the files added to the entry file. Languages without a measurement have not been checked on a real project.
+"Measured" counts the files aid added to the entry file in public repositories (`git clone --depth 1`, 2026-11-16) at the given `--max-depth`; `-v` prints the count. A followed file whose distillation is empty prints no block. Languages without a measurement have not been checked on a real project.
 
 | Language | Imports that are followed | Measured |
 |---|---|---|
 | Python | `import x`, `from x import y` (a module next to the importing file), relative `from .x import y` | not checked |
-| JavaScript | `import ... from './x'` and `require('./x')` on one line; `x.js`, `x.ts`, `x.jsx`, `x.tsx`, `x/index.js`, `x/index.ts` | react-redux-realworld-example-app `src/index.js`: 2 files at depth 1, 14 at depth 2 |
-| TypeScript | as JavaScript; `.tsx` files are not read for imports | zod `packages/zod/src/index.ts`, `v4/classic/schemas.ts` and bulletproof-react `apps/react-vite/src/main.tsx`: none |
+| JavaScript, TypeScript | `import`/`export ... from` (also over several lines), `import 'x'`, `import('x')` and `require('x')` with a relative path or one that `compilerOptions.paths` or `baseUrl` of the nearest `tsconfig.json`/`jsconfig.json` maps (relative `extends` and `references` are read); `./x.js` finds `x.ts`, `./x` finds `x.ts`, `x.tsx`, ..., `x/index.*` | files at depth 1 / 2 / 3: react-redux-realworld-example-app `src/index.js` 2 / 15 / 30; bulletproof-react `apps/react-vite/src/main.tsx` 2 / 7 / 24 (`@/*` paths, lazy `import()`); zod `packages/zod/src/index.ts` 1 / 15 / 95, `v4/classic/schemas.ts` 9 / 24 / 86 |
 | Go | the other files of the package (same directory and `package` clause, no `_test.go`), then the packages of the file's module (the module path in the nearest `go.mod`) and of modules that `go.mod` replaces with a local directory | chi `mux.go`: 4 files (its package); `middleware/logger.go`: 30 at depth 1, 35 at depth 2; bubbletea `examples/simple/main.go`: the 36 files of bubbletea (`replace ... => ../`) |
 | Rust | `mod x;` (not under `#[cfg(test)]`), and paths starting with `crate::`, `super::`, `self::`, the crate's library name or a path dependency's name, in `use` and in code, to the deepest module that exists as `x.rs` or `x/mod.rs` (the nearest `Cargo.toml` names the crate) | siteone-crawler `src/main.rs`: 10 files at depth 1, 61 at depth 2, 156 at depth 3 |
 | PHP | `require_once 'x.php'` | laravel `src/Illuminate/Database/Eloquent/Model.php`: none |

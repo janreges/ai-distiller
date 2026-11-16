@@ -102,14 +102,15 @@ func dependencyDisplayPath(file, baseDir string, opts ProcessOptions) string {
 }
 
 // DependencyAnalyzer finds the files a source file imports. It caches the
-// project files it reads to resolve imports (go.mod, Cargo.toml, package
-// listings).
+// project files it reads to resolve imports (go.mod, Cargo.toml,
+// tsconfig.json, package listings).
 type DependencyAnalyzer struct {
 	ctx context.Context
 
 	goModules  map[string]*goModule  // go.mod path -> parsed module, nil when unreadable
 	goPackages map[string][]goFile   // directory -> its non-test Go files
 	rustCrates map[string]*rustCrate // Cargo.toml path -> parsed crate, nil when unreadable
+	tsConfigs  map[string]*tsConfig  // tsconfig/jsconfig path -> its effective paths, nil when unreadable
 }
 
 // NewDependencyAnalyzer returns an analyzer that logs to ctx's debugger.
@@ -119,6 +120,7 @@ func NewDependencyAnalyzer(ctx context.Context) *DependencyAnalyzer {
 		goModules:  map[string]*goModule{},
 		goPackages: map[string][]goFile{},
 		rustCrates: map[string]*rustCrate{},
+		tsConfigs:  map[string]*tsConfig{},
 	}
 }
 
@@ -140,6 +142,23 @@ func findUp(dir, name string) string {
 		}
 		dir = parent
 	}
+}
+
+// blockCommentAtLineStart is a /* */ comment that starts a line: a doc or
+// license block, not a "/*" inside a string such as a glob.
+var blockCommentAtLineStart = regexp.MustCompile(`(?ms)^[ \t]*/\*.*?\*/`)
+
+// stripSlashComments blanks the // and /* */ comments of C-like source that
+// start a line, so the examples in doc comments do not count as imports.
+func stripSlashComments(code string) string {
+	code = blockCommentAtLineStart.ReplaceAllString(code, "")
+	lines := strings.Split(code, "\n")
+	for i, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "//") {
+			lines[i] = ""
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // Follow returns the files that starts import, breadth-first up to maxDepth
@@ -347,61 +366,6 @@ func (da *DependencyAnalyzer) extractPythonImports(ctx context.Context, fileCont
 	return includes, nil
 }
 
-// extractJavaScriptImports extracts JavaScript/TypeScript import statements
-func (da *DependencyAnalyzer) extractJavaScriptImports(ctx context.Context, fileContent []byte, filePath string) ([]string, error) {
-	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	includes := []string{}
-
-	lines := strings.Split(string(fileContent), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-
-		// Skip comments and empty lines
-		if strings.HasPrefix(line, "//") || strings.HasPrefix(line, "/*") || line == "" {
-			continue
-		}
-
-		// Handle different import patterns:
-		// import something from 'module'
-		// import { something } from 'module'
-		// import * as something from 'module'
-		// const something = require('module')
-		// require('module')
-
-		if strings.HasPrefix(line, "import ") && strings.Contains(line, " from ") {
-			// ES6 import ... from 'module'
-			fromIndex := strings.LastIndex(line, " from ")
-			if fromIndex != -1 {
-				remaining := strings.TrimSpace(line[fromIndex+6:]) // +6 for " from "
-				modulePath := da.extractQuotedString(remaining)
-				if modulePath != "" {
-					resolved := da.resolveJavaScriptImport(modulePath, filePath)
-					if resolved != "" {
-						includes = append(includes, resolved)
-						dbg.Logf(debug.LevelDetailed, "Found JS ES6 import: %s -> %s", modulePath, resolved)
-					}
-				}
-			}
-		} else if strings.Contains(line, "require(") {
-			// CommonJS require('module')
-			start := strings.Index(line, "require(")
-			if start != -1 {
-				remaining := line[start+8:] // +8 for "require("
-				modulePath := da.extractQuotedString(remaining)
-				if modulePath != "" {
-					resolved := da.resolveJavaScriptImport(modulePath, filePath)
-					if resolved != "" {
-						includes = append(includes, resolved)
-						dbg.Logf(debug.LevelDetailed, "Found JS require: %s -> %s", modulePath, resolved)
-					}
-				}
-			}
-		}
-	}
-
-	return includes, nil
-}
-
 // resolveIncludePath resolves relative include path to absolute path
 func (da *DependencyAnalyzer) resolveIncludePath(includePath, currentFile string) string {
 	if filepath.IsAbs(includePath) {
@@ -561,53 +525,6 @@ func (da *DependencyAnalyzer) resolvePythonRelativeImport(moduleName, currentFil
 	return ""
 }
 
-// resolveJavaScriptImport resolves JavaScript/TypeScript imports
-func (da *DependencyAnalyzer) resolveJavaScriptImport(modulePath, currentFile string) string {
-	// Skip Node.js built-in modules and npm packages
-	if da.isJavaScriptBuiltIn(modulePath) || !strings.HasPrefix(modulePath, ".") {
-		return ""
-	}
-
-	currentDir := filepath.Dir(currentFile)
-
-	// Handle relative imports
-	if strings.HasPrefix(modulePath, "./") || strings.HasPrefix(modulePath, "../") {
-		// Try different file extensions
-		basePath := filepath.Join(currentDir, modulePath)
-
-		patterns := []string{
-			basePath + ".js",
-			basePath + ".ts",
-			basePath + ".jsx",
-			basePath + ".tsx",
-			basePath + "/index.js",
-			basePath + "/index.ts",
-		}
-
-		for _, pattern := range patterns {
-			if _, err := os.Stat(pattern); err == nil {
-				abs, _ := filepath.Abs(pattern)
-				return abs
-			}
-		}
-	}
-
-	return ""
-}
-
-// isJavaScriptBuiltIn checks if a module is Node.js built-in
-func (da *DependencyAnalyzer) isJavaScriptBuiltIn(modulePath string) bool {
-	// Node.js built-in modules
-	builtInModules := map[string]bool{
-		"fs": true, "path": true, "os": true, "util": true, "events": true,
-		"stream": true, "http": true, "https": true, "url": true, "crypto": true,
-		"buffer": true, "process": true, "child_process": true, "cluster": true,
-		"net": true, "dgram": true, "dns": true, "tls": true, "readline": true,
-		"zlib": true, "assert": true, "querystring": true, "string_decoder": true,
-	}
-	return builtInModules[modulePath]
-}
-
 // extractQuotedString extracts a quoted string from text
 func (da *DependencyAnalyzer) extractQuotedString(text string) string {
 	text = strings.TrimSpace(text)
@@ -699,9 +616,9 @@ func (da *DependencyAnalyzer) detectLanguage(filePath string) string {
 		return "python"
 	case ".go":
 		return "go"
-	case ".js":
+	case ".js", ".jsx", ".mjs", ".cjs":
 		return "javascript"
-	case ".ts":
+	case ".ts", ".tsx", ".mts", ".cts":
 		return "typescript"
 	case ".rb":
 		return "ruby"

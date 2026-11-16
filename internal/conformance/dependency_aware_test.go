@@ -130,6 +130,29 @@ func TestDependencyAwareFollowsRustModules(t *testing.T) {
 	assert.Equal(t, []string{"mod.rs", "disk.rs", "../report.rs"}, filePaths(out))
 }
 
+// TypeScript and JavaScript: import/export ... from (also over several
+// lines), dynamic import() and require(), relative or through
+// compilerOptions.paths of tsconfig.json (with comments, trailing commas and
+// "extends"); "./x.js" finds x.ts, "./app" finds app/index.tsx. Not CSS, not
+// npm packages, not an import inside a doc comment.
+func TestDependencyAwareFollowsTypeScriptImports(t *testing.T) {
+	out, stderr := runDepAware(t, "ts/src/main.tsx")
+	assert.NotContains(t, stderr, noImportsNote)
+	assert.Equal(t, []string{
+		"main.tsx",
+		"app/index.tsx",         // './app'
+		"lib/format.ts",         // '@/lib/format', a multi-line import
+		"lib/api.ts",            // export ... from '@/lib/api.js'
+		"lazy/page.tsx",         // import('./lazy/page')
+		"components/button.jsx", // imported by app/index.tsx: depth 2
+		"lib/http.cjs",          // require('./http.cjs') in lib/api.ts: depth 2
+	}, filePaths(out))
+	assert.Contains(t, out, "export function formatPrice(price: Price): string")
+
+	out, _ = runDepAware(t, "ts/src/main.tsx", "--max-depth=1")
+	assert.Equal(t, []string{"main.tsx", "app/index.tsx", "lib/format.ts", "lib/api.ts", "lazy/page.tsx"}, filePaths(out))
+}
+
 func TestDependencyAwareSaysWhenNothingIsFollowed(t *testing.T) {
 	// index.js imports only npm packages: nothing to follow, but the entry
 	// file is still printed and the run succeeds.

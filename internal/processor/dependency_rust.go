@@ -19,14 +19,13 @@ type rustCrate struct {
 }
 
 var (
-	rustModDecl      = regexp.MustCompile(`(?m)^[ \t]*((?:#\[[^\]\n]*\][ \t]*\n?[ \t]*)*)(?:pub(?:\s*\([^)]*\))?\s+)?mod\s+([A-Za-z_]\w*)\s*;`)
-	rustUseStmt      = regexp.MustCompile(`\buse\s+([^;]+);`)
-	rustPathExpr     = regexp.MustCompile(`\b([A-Za-z_]\w*)((?:\s*::\s*[A-Za-z_]\w*)+)`)
-	rustUseAlias     = regexp.MustCompile(`\s+as\s+[A-Za-z_]\w*`)
-	rustBlockComment = regexp.MustCompile(`(?s)/\*.*?\*/`)
-	tomlTable        = regexp.MustCompile(`^\[\[?\s*([^\]]+?)\s*\]\]?$`)
-	tomlString       = regexp.MustCompile(`^([A-Za-z0-9_-]+)\s*=\s*"([^"]*)"`)
-	tomlInlinePath   = regexp.MustCompile(`^([A-Za-z0-9_-]+)\s*=\s*\{[^}]*\bpath\s*=\s*"([^"]+)"`)
+	rustModDecl    = regexp.MustCompile(`(?m)^[ \t]*((?:#\[[^\]\n]*\][ \t]*\n?[ \t]*)*)(?:pub(?:\s*\([^)]*\))?\s+)?mod\s+([A-Za-z_]\w*)\s*;`)
+	rustUseStmt    = regexp.MustCompile(`\buse\s+([^;]+);`)
+	rustPathExpr   = regexp.MustCompile(`\b([A-Za-z_]\w*)((?:\s*::\s*[A-Za-z_]\w*)+)`)
+	rustUseAlias   = regexp.MustCompile(`\s+as\s+[A-Za-z_]\w*`)
+	tomlTable      = regexp.MustCompile(`^\[\[?\s*([^\]]+?)\s*\]\]?$`)
+	tomlString     = regexp.MustCompile(`^([A-Za-z0-9_-]+)\s*=\s*"([^"]*)"`)
+	tomlInlinePath = regexp.MustCompile(`^([A-Za-z0-9_-]+)\s*=\s*\{[^}]*\bpath\s*=\s*"([^"]+)"`)
 )
 
 // extractRustImports returns the module files a Rust file uses: the files of
@@ -37,7 +36,7 @@ var (
 // that exists as x.rs or x/mod.rs; crates.io crates and std are not followed.
 func (da *DependencyAnalyzer) extractRustImports(ctx context.Context, fileContent []byte, filePath string) ([]string, error) {
 	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-	code := stripRustComments(string(fileContent))
+	code := stripSlashComments(string(fileContent))
 	crate := da.rustCrateFor(filepath.Dir(filePath))
 	selfDir := rustModuleDir(filePath, crate)
 
@@ -224,19 +223,6 @@ func expandRustUsePart(prefix, part string) []string {
 		}
 	}
 	return paths
-}
-
-// stripRustComments removes /* */ blocks and lines that are only a // comment
-// (doc comments too, whose examples would name paths the code does not use).
-func stripRustComments(code string) string {
-	code = rustBlockComment.ReplaceAllString(code, "")
-	lines := strings.Split(code, "\n")
-	for i, line := range lines {
-		if strings.HasPrefix(strings.TrimSpace(line), "//") {
-			lines[i] = ""
-		}
-	}
-	return strings.Join(lines, "\n")
 }
 
 // rustCrateFor parses the nearest Cargo.toml at or above dir, once per file.
