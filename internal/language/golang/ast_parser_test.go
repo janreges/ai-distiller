@@ -48,3 +48,26 @@ func TestASTParser_BodyIsVerbatim(t *testing.T) {
 	assert.Equal(t, "{}", fns["Noop"].Implementation)
 	assert.Equal(t, "", fns["Decl"].Implementation, "a function without a body has no implementation")
 }
+
+func TestASTParser_InterfaceEmbeddedElements(t *testing.T) {
+	src := "package p\n\n" +
+		"type Two interface {\n\tio.Reader\n\tio.Closer\n\tExtra() int\n}\n\n" +
+		"type Number interface {\n\t~int | ~int64 | float64\n}\n\n" +
+		"type Mixed interface {\n\tfmt.Stringer\n\t~string | ~[]byte\n}\n"
+	file, err := NewASTParser().ProcessSource(context.Background(), []byte(src), "p.go")
+	require.NoError(t, err)
+	intfs := map[string]*ir.DistilledInterface{}
+	for _, node := range file.Children {
+		if intf, ok := node.(*ir.DistilledInterface); ok {
+			intfs[intf.Name] = intf
+		}
+	}
+
+	// Each embedded element is one entry, a type-set union stays whole, and
+	// the methods are still the children.
+	assert.Equal(t, []ir.TypeRef{{Name: "io.Reader"}, {Name: "io.Closer"}}, intfs["Two"].Extends)
+	require.Len(t, intfs["Two"].Children, 1)
+	assert.Equal(t, "Extra", intfs["Two"].Children[0].(*ir.DistilledFunction).Name)
+	assert.Equal(t, []ir.TypeRef{{Name: "~int | ~int64 | float64"}}, intfs["Number"].Extends)
+	assert.Equal(t, []ir.TypeRef{{Name: "fmt.Stringer"}, {Name: "~string | ~[]byte"}}, intfs["Mixed"].Extends)
+}

@@ -86,3 +86,22 @@ func TestGoFormatter_IndentsWithTabs(t *testing.T) {
 		"\ntype S struct {\n\tR io.Reader\n}\n"+
 		"\ntype I interface {\n\tClose() error\n}\n", b.String())
 }
+
+func TestGoFormatter_InterfaceEmbedsAndMethods(t *testing.T) {
+	format := func(intf *ir.DistilledInterface) string {
+		var b strings.Builder
+		require.NoError(t, NewGoFormatter().FormatNode(&b, intf, 0))
+		return b.String()
+	}
+	extra := &ir.DistilledFunction{Name: "Extra", Returns: &ir.TypeRef{Name: "int"}}
+
+	// Embedded elements one per line, then the methods; none is lost.
+	assert.Equal(t, "\ntype Two interface {\n\tio.Reader\n\tio.Closer\n\tExtra() int\n}\n",
+		format(&ir.DistilledInterface{Name: "Two",
+			Extends:  []ir.TypeRef{{Name: "io.Reader"}, {Name: "io.Closer"}},
+			Children: []ir.DistilledNode{extra}}))
+	// A type-set union is one element and keeps its "|".
+	assert.Equal(t, "\ntype Number interface {\n\t~int | ~string\n}\n",
+		format(&ir.DistilledInterface{Name: "Number", Extends: []ir.TypeRef{{Name: "~int | ~string"}}}))
+	assert.Equal(t, "\ntype Any interface {}\n", format(&ir.DistilledInterface{Name: "Any"}))
+}

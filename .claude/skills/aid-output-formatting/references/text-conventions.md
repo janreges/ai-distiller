@@ -57,7 +57,7 @@ the signature's indentation (section 3 of `SKILL.md`).
 |---|---|---|---|---|
 | cpp | `// CONF_LINE_COMMENT` | `/** CONF_DOC_COMMENT */` | `class ConfWidget {` ... `};`; out-of-class definitions follow at file level; a namespace's members print without the namespace line | `#include <string>` prints `#include "string"` |
 | csharp | `// CONF_LINE_COMMENT` | `/// <summary>CONF_DOC_COMMENT</summary>` | `public class ConfWidget {` ... `}`; `namespace Conf;` | `using System.IO;` unchanged |
-| go | `// CONF_LINE_COMMENT` | `// CONF_DOC_COMMENT` | `type ConfWidget struct {` ... `}`; methods at file level with their receiver | `import "strings"` prints an `import (` block, one quoted path per line, then `)` |
+| go | `// CONF_LINE_COMMENT` | `// CONF_DOC_COMMENT` | `type ConfWidget struct {` ... `}`; methods at file level with their receiver; an interface prints its embedded types one per line (`io.Reader`, a type set `~int \| ~int64` as one line), then its methods | `import "strings"` prints an `import (` block, one quoted path per line, then `)` |
 | java | `// CONF_LINE_COMMENT` | `/**`, ` * CONF_DOC_COMMENT`, ` */` on three lines | `public class ConfWidget {` ... `}`; `package com.example.conf`; a nested `private enum ConfColor {` with constants as `public static final ConfColor CONF_RED;` | `import java.io.File;` prints `import java.io.File` |
 | javascript | `// CONF_LINE_COMMENT` | `/** CONF_DOC_COMMENT */` | `class ConfWidget:`, then the members indented, no closing line | `import { sep } from "node:path";` prints `import sep from 'node:path'` |
 | kotlin | `// CONF_LINE_COMMENT` | `/** CONF_DOC_COMMENT */` | `class ConfWidget {` ... `}`; no `package` line | `import java.io.File` unchanged |

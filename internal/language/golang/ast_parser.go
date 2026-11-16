@@ -638,19 +638,9 @@ func (p *ASTParser) processStruct(name string, structType *ast.StructType) *ir.D
 	return class
 }
 
-// collectUnionTypes recursively collects types from a type union expression
-func (p *ASTParser) collectUnionTypes(expr ast.Expr) []string {
-	if binExpr, ok := expr.(*ast.BinaryExpr); ok && binExpr.Op == token.OR {
-		var types []string
-		types = append(types, p.collectUnionTypes(binExpr.X)...)
-		types = append(types, p.collectUnionTypes(binExpr.Y)...)
-		return types
-	}
-	// Base case: a single type identifier
-	return []string{p.typeToString(expr)}
-}
-
-// processInterface processes an interface type
+// processInterface processes an interface type. Each embedded element (an
+// embedded interface such as io.Reader, or a type set such as ~int | ~string)
+// is one entry of Extends, as written; the methods are the children.
 func (p *ASTParser) processInterface(name string, interfaceType *ast.InterfaceType) *ir.DistilledInterface {
 	intf := &ir.DistilledInterface{
 		BaseNode: ir.BaseNode{
@@ -664,11 +654,8 @@ func (p *ASTParser) processInterface(name string, interfaceType *ast.InterfaceTy
 	// Process methods
 	for _, method := range interfaceType.Methods.List {
 		if len(method.Names) == 0 {
-			// Embedded interface or type union
-			types := p.collectUnionTypes(method.Type)
-			for _, t := range types {
-				intf.Extends = append(intf.Extends, ir.TypeRef{Name: t})
-			}
+			// Embedded element: one entry, a union stays whole
+			intf.Extends = append(intf.Extends, ir.TypeRef{Name: p.typeToString(method.Type)})
 		} else {
 			// Method declaration
 			for _, name := range method.Names {
@@ -951,6 +938,16 @@ func (p *ASTParser) typeToString(expr ast.Expr) string {
 		return "struct{...}"
 	case *ast.SelectorExpr:
 		return p.typeToString(t.X) + "." + t.Sel.Name
+	case *ast.BinaryExpr:
+		// A union of a type set: ~int | ~string
+		if t.Op == token.OR {
+			return p.typeToString(t.X) + " | " + p.typeToString(t.Y)
+		}
+	case *ast.UnaryExpr:
+		// An underlying-type term of a type set: ~int
+		if t.Op == token.TILDE {
+			return "~" + p.typeToString(t.X)
+		}
 	case *ast.Ellipsis:
 		return "..." + p.typeToString(t.Elt)
 	case *ast.IndexExpr:
@@ -963,15 +960,14 @@ func (p *ASTParser) typeToString(expr ast.Expr) string {
 			indices = append(indices, p.typeToString(index))
 		}
 		return p.typeToString(t.X) + "[" + strings.Join(indices, ", ") + "]"
-	default:
-		// Fallback: get the source text
-		start := p.fset.Position(expr.Pos()).Offset
-		end := p.fset.Position(expr.End()).Offset
-		if start >= 0 && end <= len(p.source) && start < end {
-			return string(p.source[start:end])
-		}
-		return "unknown"
 	}
+	// Fallback: get the source text
+	start := p.fset.Position(expr.Pos()).Offset
+	end := p.fset.Position(expr.End()).Offset
+	if start >= 0 && end <= len(p.source) && start < end {
+		return string(p.source[start:end])
+	}
+	return "unknown"
 }
 
 // exprToString converts an expression to string (for default values)

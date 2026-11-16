@@ -42,6 +42,9 @@
   `abstract` marks the function as a method.
 - A `struct` type is a `DistilledClass` whose children are its fields; an
   `interface` type is a `DistilledInterface` whose children are its methods.
+  Each embedded element of an interface is one `Extends` entry as written: an
+  embedded interface (`io.Reader`) or a whole type-set union
+  (`~int | ~string`). The text prints them one per line before the methods.
 - A function whose body contains a `go` statement gets the modifier `async`.
 - `--expand` matches a method by its own name, since no type contains it.
 

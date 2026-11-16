@@ -90,7 +90,11 @@ var fixtures = []fixture{
 		check{Cap: "tab-indent", Flags: []string{"--implementation=1", "--internal=1"},
 			Contains:    []string{"type ConfWidget struct {\n\tConfField int\n}\n", "\n\t\"strings\"\n"},
 			NotContains: []string{"    "}},
-		check{Cap: "body-nested-statement", Flags: []string{"--implementation=1"}, Contains: []string{"CONF_BODY_D"}})},
+		check{Cap: "body-nested-statement", Flags: []string{"--implementation=1"}, Contains: []string{"CONF_BODY_D"}},
+		check{Cap: "interface-embeds",
+			Contains:    []string{"type ConfReadCloser interface {\n\tio.Reader\n\tio.Closer\n\tConfExtra() int\n}\n"},
+			NotContains: []string{"io.Reader | io.Closer"}},
+		check{Cap: "type-set-union", Contains: []string{"type ConfNumber interface {\n\t~int | ~int64\n}\n"}})},
 	{Lang: "rust", File: "rust/sample.rs", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "conf_field", "conf_public", "conf_other"},
 		Private:   []string{"conf_private"},

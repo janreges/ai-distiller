@@ -261,34 +261,22 @@ func (f *GoFormatter) formatInterface(w io.Writer, intf *ir.DistilledInterface, 
 
 	fmt.Fprintf(w, "\n%stype %s interface", indentStr, intf.Name)
 
-	// Check for type constraints or embedded interfaces
-	if len(intf.Extends) > 0 {
-		fmt.Fprintln(w, " {")
-		// Format type constraints (for generic constraints)
-		for i, ext := range intf.Extends {
-			if i > 0 {
-				fmt.Fprintf(w, " | ")
-			} else {
-				fmt.Fprintf(w, "%s\t", indentStr)
-			}
-			fmt.Fprintf(w, "%s", ext.Name)
-		}
-		fmt.Fprintln(w)
-		fmt.Fprintf(w, "%s}\n", indentStr)
-	} else if len(intf.Children) > 0 {
-		fmt.Fprintln(w, " {")
-		// Format methods
-		for _, child := range intf.Children {
-			if fn, ok := child.(*ir.DistilledFunction); ok {
-				f.formatInterfaceMethod(w, fn, indent+1)
-			}
-		}
-		fmt.Fprintf(w, "%s}\n", indentStr)
-	} else {
-		// Empty interface
+	if len(intf.Extends) == 0 && len(intf.Children) == 0 {
 		fmt.Fprintln(w, " {}")
+		return nil
 	}
-
+	fmt.Fprintln(w, " {")
+	// Embedded elements first, one per line: an embedded interface
+	// (io.Reader) or a type set (~int | ~string), each as written.
+	for _, ext := range intf.Extends {
+		fmt.Fprintf(w, "%s%s\n", goIndent(indent+1), ext.Name)
+	}
+	for _, child := range intf.Children {
+		if fn, ok := child.(*ir.DistilledFunction); ok {
+			f.formatInterfaceMethod(w, fn, indent+1)
+		}
+	}
+	fmt.Fprintf(w, "%s}\n", indentStr)
 	return nil
 }
 

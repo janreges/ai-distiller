@@ -1,6 +1,9 @@
 package conf
 
-import "strings"
+import (
+	"io"
+	"strings"
+)
 
 // CONF_LINE_COMMENT
 
@@ -29,4 +32,16 @@ func (w *ConfWidget) ConfBranch(n int) string {
 		return "CONF_BODY_D"
 	}
 	return ""
+}
+
+// ConfReadCloser embeds two interfaces and declares a method.
+type ConfReadCloser interface {
+	io.Reader
+	io.Closer
+	ConfExtra() int
+}
+
+// ConfNumber is a type-set constraint.
+type ConfNumber interface {
+	~int | ~int64
 }
