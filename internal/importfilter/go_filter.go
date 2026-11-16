@@ -46,6 +46,7 @@ func (f *GoFilter) FilterUnusedImports(code string, debugLevel int) (string, []s
 	// Check usage and collect unused imports
 	var removedImports []string
 	var linesToRemove []lineRange
+	lines := strings.Split(code, "\n")
 
 	for _, imp := range imports {
 		// Always keep blank imports (side-effect imports)
@@ -82,15 +83,18 @@ func (f *GoFilter) FilterUnusedImports(code string, debugLevel int) (string, []s
 		}
 
 		if !used {
+			// The comment at the end of the import's line goes with the
+			// line, the comment lines directly above it (its doc) too
 			f.LogDebug(debugLevel, 2, "Removing unused import: %s", imp.FullLine)
 			removedImports = append(removedImports, imp.FullLine)
-			linesToRemove = append(linesToRemove, lineRange{imp.StartLine, imp.EndLine})
+			linesToRemove = append(linesToRemove, lineRange{commentsAbove(lines, imp.StartLine), imp.EndLine})
 		}
 	}
 
 	// A block whose imports all go is removed whole, "import (" and ")"
-	// included, with the blank line above it, so no empty block is left.
-	linesToRemove = f.removeEmptiedBlocks(strings.Split(code, "\n"), blocks, imports, linesToRemove)
+	// included, with the comments and the blank line above it, so no empty
+	// block is left.
+	linesToRemove = f.removeEmptiedBlocks(lines, blocks, imports, linesToRemove)
 
 	// Remove unused imports (in reverse order to maintain line numbers)
 	result := code
@@ -109,8 +113,9 @@ type lineRange struct{ start, end int }
 // removeEmptiedBlocks returns the line ranges to remove, in ascending order.
 // remove holds the ranges of the unused imports. A block in blocks none of
 // whose imports is kept goes whole instead: one range from its "import ("
-// line, or the blank line above it, to its ")" line, the comments in it
-// included. lines is the code, split into lines.
+// line, or the comment lines directly above it and the blank line above
+// those, to its ")" line, the comments in it included. lines is the code,
+// split into lines.
 func (f *GoFilter) removeEmptiedBlocks(lines []string, blocks []lineRange, imports []ImportStatement, remove []lineRange) []lineRange {
 	removed := make(map[int]bool, len(remove))
 	for _, r := range remove {
@@ -130,22 +135,31 @@ func (f *GoFilter) removeEmptiedBlocks(lines []string, blocks []lineRange, impor
 		if !emptied {
 			continue
 		}
-		start := b.start
+		start := commentsAbove(lines, b.start)
 		if start > 1 && strings.TrimSpace(lines[start-2]) == "" {
 			start--
 		}
 		out = append(out, lineRange{start, b.end})
-		for l := b.start; l <= b.end; l++ {
+		for l := start; l <= b.end; l++ {
 			delete(removed, l)
 		}
 	}
 	for _, r := range remove {
-		if removed[r.start] {
+		if removed[r.end] {
 			out = append(out, r)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].start < out[j].start })
 	return out
+}
+
+// commentsAbove returns the first line of the run of "//" comment lines
+// directly above line (1-based), or line itself when there is none.
+func commentsAbove(lines []string, line int) int {
+	for line > 1 && strings.HasPrefix(strings.TrimSpace(lines[line-2]), "//") {
+		line--
+	}
+	return line
 }
 
 // parseImports extracts import statements from Go code, and the line ranges

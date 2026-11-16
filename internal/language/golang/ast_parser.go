@@ -105,18 +105,15 @@ func (p *ASTParser) ProcessSource(ctx context.Context, source []byte, filename s
 		distilledFile.Children = append(distilledFile.Children, pkg)
 	}
 
-	// Process imports
-	for _, spec := range file.Imports {
-		imp := p.processImport(spec)
-		if imp != nil {
-			distilledFile.Children = append(distilledFile.Children, imp)
-		}
-	}
-
 	// Single-pass processing to preserve declaration order
 	typeMap := make(map[string]ir.DistilledNode) // Map from type name to the distilled node
 
 	for _, decl := range file.Decls {
+		if d, ok := decl.(*ast.GenDecl); ok && d.Tok == token.IMPORT {
+			// Imports, with their comments
+			distilledFile.Children = append(distilledFile.Children, p.importNodes(d)...)
+			continue
+		}
 		switch d := decl.(type) {
 		case *ast.FuncDecl:
 			// Extract function doc comments
@@ -425,6 +422,55 @@ func (p *ASTParser) extractBuildConstraints(comments []*ast.CommentGroup) []stri
 	}
 
 	return constraints
+}
+
+// importNodes returns the imports of an import declaration with their
+// comments, all of them line comments: the declaration's doc, then per
+// import the comment groups before it and the comment at the end of its
+// line, which goes right before it, inside its span (as in memberNodes), so
+// that the text prints it at the end of the import's line. A comment group
+// after the last import of a block ("import (" ... ")") is dropped: no
+// import follows it in the block, and after ")" it would read as a comment
+// on the next declaration. All of them are claimed.
+func (p *ASTParser) importNodes(decl *ast.GenDecl) []ir.DistilledNode {
+	nodes := p.appendCommentGroup(nil, decl.Doc)
+	p.claim(decl.Doc)
+	var inBlock []*ast.CommentGroup // the groups between "(" and ")", in order
+	if decl.Lparen.IsValid() {
+		for _, group := range p.comments {
+			if decl.Lparen < group.Pos() && group.Pos() < decl.Rparen {
+				inBlock = append(inBlock, group)
+				p.claim(group)
+			}
+		}
+	}
+	for _, s := range decl.Specs {
+		spec := s.(*ast.ImportSpec)
+		for len(inBlock) > 0 && inBlock[0].Pos() < spec.Pos() {
+			nodes = p.appendCommentGroup(nodes, inBlock[0])
+			inBlock = inBlock[1:]
+		}
+		if spec.Comment != nil {
+			for len(inBlock) > 0 && inBlock[0].Pos() <= spec.Comment.Pos() {
+				inBlock = inBlock[1:]
+			}
+			nodes = p.appendCommentGroup(nodes, spec.Comment)
+			p.claim(spec.Comment)
+		}
+		nodes = append(nodes, p.processImport(spec))
+	}
+	return nodes
+}
+
+// claim claims the comments of group, so that processComments does not add
+// them at file level. A nil group claims nothing.
+func (p *ASTParser) claim(group *ast.CommentGroup) {
+	if group == nil {
+		return
+	}
+	for _, c := range group.List {
+		p.claimed[c] = true
+	}
 }
 
 // processImport processes an import specification

@@ -15,9 +15,11 @@
   (`aid-testing-debugging`, section 7).
 - A syntax error is an error: `ParseFile` fails and the file produces no IR.
 - Extensions: `.go`.
-- Order: the package clause, then the imports, then `file.Decls` in source order
-  (functions through `internal/language/golang/ast_parser.go#ASTParser.processFunction`,
-  `type`/`var`/`const` through `internal/language/golang/ast_parser.go#ASTParser.processGenDecl`),
+- Order: the package clause, then `file.Decls` in source order: the imports
+  with their comments first
+  (`internal/language/golang/ast_parser.go#ASTParser.importNodes`), functions
+  through `internal/language/golang/ast_parser.go#ASTParser.processFunction`,
+  `type`/`var`/`const` through `internal/language/golang/ast_parser.go#ASTParser.processGenDecl`;
   then the comments that are not doc comments are inserted by line
   (`internal/language/golang/ast_parser.go#ASTParser.processComments`).
 
@@ -75,6 +77,11 @@
     way right before the spec's (last) node
     (`internal/language/golang/ast_parser.go#ASTParser.processGenDecl`); a
     const or var spans from its name to the end of its spec;
+  - an import declaration's comments come with its imports
+    (`internal/language/golang/ast_parser.go#ASTParser.importNodes`): its
+    doc, the groups before each import, the comment at the end of an
+    import's line right before it; a group after the last import of a block
+    is dropped;
   - any other comment inside a declaration (a function's parameters or body,
     a function literal or function type in a spec) is no node at all
     (`internal/language/golang/ast_parser.go#ASTParser.claimDeclComments`):

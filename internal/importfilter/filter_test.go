@@ -240,10 +240,38 @@ func TestGoFilterRemovesEmptiedImportBlock(t *testing.T) {
 	}
 
 	// A ")" in a comment inside the block does not end it.
-	code = "<file path=\"a.go\">\npackage user\n\nimport (\n\t\"fmt\"\n// fmt (printing)\n\t\"os\"\n)\n\nfunc F(f *os.File)\n</file>"
-	want = "<file path=\"a.go\">\npackage user\n\nimport (\n// fmt (printing)\n\t\"os\"\n)\n\nfunc F(f *os.File)\n</file>"
+	code = "<file path=\"a.go\">\npackage user\n\nimport (\n\t\"fmt\"\n\t// os (files)\n\t\"os\"\n)\n\nfunc F(f *os.File)\n</file>"
+	want = "<file path=\"a.go\">\npackage user\n\nimport (\n\t// os (files)\n\t\"os\"\n)\n\nfunc F(f *os.File)\n</file>"
 	if got := run(code); got != want {
 		t.Errorf("comment with a parenthesis:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestGoFilterRemovesTheCommentsOfARemovedImport(t *testing.T) {
+	filter := NewGoFilter()
+	run := func(code string) string {
+		t.Helper()
+		out, _, err := filter.FilterUnusedImports(code, 0)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		return out
+	}
+
+	// The comment at the end of a removed import's line and the comment
+	// lines directly above it go with it; those of a kept import stay.
+	code := "<file path=\"a.go\">\npackage p\n\nimport (\n\t// Standard library\n\t// (printing)\n\t\"fmt\" // fmt\n" +
+		"\t// files\n\t\"os\" // os\n)\n\nfunc F(f *os.File)\n</file>"
+	want := "<file path=\"a.go\">\npackage p\n\nimport (\n\t// files\n\t\"os\" // os\n)\n\nfunc F(f *os.File)\n</file>"
+	if got := run(code); got != want {
+		t.Errorf("removed import:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+
+	// A block that goes whole takes the comment lines directly above it.
+	code = "<file path=\"a.go\">\npackage p\n\n// Imports.\nimport (\n\t\"fmt\" // fmt\n)\n\nfunc F()\n</file>"
+	want = "<file path=\"a.go\">\npackage p\n\nfunc F()\n</file>"
+	if got := run(code); got != want {
+		t.Errorf("removed block:\ngot:\n%s\nwant:\n%s", got, want)
 	}
 }
 

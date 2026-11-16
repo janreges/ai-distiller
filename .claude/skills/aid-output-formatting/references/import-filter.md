@@ -65,8 +65,10 @@ usage between two import blocks; it skips `//` and `#` comment lines but not
 `#[...]` attributes, and also the `<file>` tags and `namespace` lines.
 
 The removed lines are cut out of the text; nothing else changes, except in
-Go: a block none of whose imports is kept goes whole, `import (`, `)`, the
-comments in it and the blank line above it
+Go: a removed import takes the `//` comment lines directly above it (the
+comment at the end of its line goes with the line), and a block none of
+whose imports is kept goes whole, `import (`, `)`, the comments in it, the
+comment lines directly above it and the blank line above those
 (`internal/importfilter/go_filter.go#GoFilter.removeEmptiedBlocks`).
 
 ## Languages

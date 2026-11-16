@@ -253,6 +253,43 @@ func TestASTParser_SpecLineCommentsBeforeTheirSpec(t *testing.T) {
 	assert.Equal(t, []string{"// one", "A", "B", "// two and three", "C", "// after F", "F", "// an id", "ID"}, got)
 }
 
+func TestASTParser_ImportComments(t *testing.T) {
+	src := "package p\n\n" +
+		"// decl doc\n" +
+		"import (\n" +
+		"\t// doc of fmt\n" +
+		"\t\"fmt\" // printing\n\n" +
+		"\t// free\n\n" +
+		"\tm \"math\"\n" +
+		"\t// after the last import\n" +
+		")\n\n" +
+		"// cgo preamble\n" +
+		"import \"C\" // cgo\n\n" +
+		"func F() {}\n"
+	file, err := NewASTParser().ProcessSource(context.Background(), []byte(src), "p.go")
+	require.NoError(t, err)
+
+	var got []string
+	for _, node := range file.Children {
+		switch n := node.(type) {
+		case *ir.DistilledComment:
+			assert.Equal(t, ir.CommentLine, n.Format, n.Text)
+			got = append(got, "// "+n.Text)
+		case *ir.DistilledImport:
+			got = append(got, n.Module)
+		case *ir.DistilledFunction:
+			got = append(got, n.Name)
+		}
+	}
+	// Each comment sits with the imports, the one at the end of an import's
+	// line right before it; a comment after the last import of a block is
+	// dropped, and no import comment follows the imports.
+	assert.Equal(t, []string{
+		"// decl doc", "// doc of fmt", "// printing", "fmt", "// free", "math",
+		"// cgo preamble", "// cgo", "C", "F",
+	}, got)
+}
+
 func TestASTParser_PackageDocText(t *testing.T) {
 	src := "// Package p does things.\n" +
 		"//\n" +

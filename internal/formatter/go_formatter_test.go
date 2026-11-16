@@ -55,9 +55,7 @@ func TestGoFormatter_IndentsWithTabs(t *testing.T) {
 			&ir.DistilledFunction{Name: "Close", Returns: &ir.TypeRef{Name: "error"}},
 		}},
 	}
-	for _, n := range nodes {
-		require.NoError(t, f.FormatNode(&b, n, 0))
-	}
+	require.NoError(t, f.(SiblingFormatter).FormatNodes(&b, nodes, 0))
 	assert.Equal(t, "\nimport (\n\t\"io\"\n\tm \"math\"\n)\n"+
 		"\ntype S struct {\n\tR io.Reader\n}\n"+
 		"\ntype I interface {\n\tClose() error\n}\n", b.String())
@@ -128,6 +126,55 @@ func TestGoFormatter_MemberComments(t *testing.T) {
 		}}
 	assert.Equal(t, "\ntype I interface {\n\t// doc of Reader\n\t// end of Writer\n\tio.Reader\n\tio.Writer\n"+
 		"\t// doc of Close\n\tClose() error // end\n}\n", format(i))
+}
+
+func TestGoFormatter_ImportComments(t *testing.T) {
+	span := func(line, col int) ir.BaseNode {
+		return ir.BaseNode{Location: ir.Location{StartLine: line, StartColumn: col, EndLine: line, EndColumn: col + 5}}
+	}
+	comment := func(line, col int, text string) *ir.DistilledComment {
+		return &ir.DistilledComment{BaseNode: span(line, col), Text: text, Format: ir.CommentLine}
+	}
+	imp := func(line int, module string) *ir.DistilledImport {
+		return &ir.DistilledImport{BaseNode: span(line, 2), Module: module, Symbols: []ir.ImportedSymbol{{Name: module}}}
+	}
+
+	// package p                 line 1
+	// // decl doc               line 3
+	// import (                  line 4
+	// 	// doc of fmt            line 5
+	// 	"fmt" // printing        line 6
+	//
+	// 	// free                  line 8
+	//
+	// 	"os"                     line 10
+	// )
+	// // after                  line 13
+	// var V int                 line 15
+	nodes := []ir.DistilledNode{
+		&ir.DistilledPackage{BaseNode: span(1, 9), Name: "p"},
+		comment(3, 1, "decl doc"),
+		comment(5, 2, "doc of fmt"),
+		comment(6, 8, "printing"),
+		imp(6, "fmt"),
+		comment(8, 2, "free"),
+		imp(10, "os"),
+		comment(13, 1, "after"),
+		&ir.DistilledField{BaseNode: span(15, 5), Name: "V", Type: &ir.TypeRef{Name: "int"}},
+	}
+	var b strings.Builder
+	require.NoError(t, NewGoFormatter().(SiblingFormatter).FormatNodes(&b, nodes, 0))
+	// The comments directly above an import and those between imports go in
+	// the block, the one at the end of an import's line stays there; a
+	// comment away from the imports stays out of the block.
+	assert.Equal(t, "package p\n// decl doc\n"+
+		"\nimport (\n\t// doc of fmt\n\t\"fmt\" // printing\n\t// free\n\t\"os\"\n)\n"+
+		"\n// after\n\nvar V int\n", b.String())
+
+	// A file that ends with its imports closes the block.
+	b.Reset()
+	require.NoError(t, NewGoFormatter().(SiblingFormatter).FormatNodes(&b, nodes[:5], 0))
+	assert.True(t, strings.HasSuffix(b.String(), "\t\"fmt\" // printing\n)\n"), b.String())
 }
 
 func TestGoFormatter_SpecLineComments(t *testing.T) {

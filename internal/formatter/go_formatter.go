@@ -12,21 +12,19 @@ import (
 // GoFormatter implements language-specific formatting for Go
 type GoFormatter struct {
 	BaseLanguageFormatter
-	isFirstImport bool
-	lastWasImport bool
+	// inImports is true while the "import (" block is open
+	inImports bool
 }
 
 // Reset resets the formatter state for a new file
 func (f *GoFormatter) Reset() {
-	f.isFirstImport = true
-	f.lastWasImport = false
+	f.inImports = false
 }
 
 // NewGoFormatter creates a new Go formatter
 func NewGoFormatter() LanguageFormatter {
 	return &GoFormatter{
 		BaseLanguageFormatter: NewBaseLanguageFormatter("go"),
-		isFirstImport:         true,
 	}
 }
 
@@ -36,64 +34,115 @@ func goIndent(n int) string {
 	return strings.Repeat("\t", n)
 }
 
-// FormatNodes implements SiblingFormatter. A comment that ends the line of
-// the declaration after it (the parser puts the comment at the end of a
-// const, var or type spec's line right before it) is written at the end of
-// that declaration's last line.
+// FormatNodes implements SiblingFormatter: it writes the top-level nodes of
+// a file, all imports in one "import (" block, and places a comment by the
+// nodes around it:
+//   - a comment that ends the line of the node after it (the parser puts the
+//     comment at the end of an import's or a const, var or type spec's line
+//     right before that node) is written at the end of the node's last line;
+//   - a comment between two imports, or directly above an import (its doc),
+//     goes in the import block, indented, so that the import filter drops it
+//     with its import; any other node closes the block.
 func (f *GoFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, indent int) error {
 	var trailing []string
 	for i, node := range nodes {
-		if c, ok := node.(*ir.DistilledComment); ok && i+1 < len(nodes) && endsLineOf(c, nodes[i+1]) {
+		c, isComment := node.(*ir.DistilledComment)
+		if isComment && i+1 < len(nodes) && endsLineOf(c, nodes[i+1]) {
 			trailing = append(trailing, c.Text)
 			continue
 		}
-		if len(trailing) == 0 {
-			if err := f.FormatNode(w, node, indent); err != nil {
-				return err
-			}
-			continue
+		_, isImport := node.(*ir.DistilledImport)
+		inBlock := isImport || isComment && f.inImportBlock(nodes, i)
+		if inBlock && !f.inImports {
+			fmt.Fprintf(w, "\n%simport (\n", goIndent(indent))
+			f.inImports = true
+		} else if !inBlock && f.inImports {
+			f.closeImports(w, indent, isComment)
 		}
-		var b strings.Builder
-		if err := f.FormatNode(&b, node, indent); err != nil {
+		nodeIndent := indent
+		if inBlock {
+			nodeIndent++
+		}
+		if err := f.formatWithTrailing(w, node, nodeIndent, trailing); err != nil {
 			return err
-		}
-		line := strings.TrimSuffix(b.String(), "\n")
-		for _, text := range trailing {
-			line += " // " + text
 		}
 		trailing = nil
-		if _, err := fmt.Fprintln(w, line); err != nil {
-			return err
-		}
+	}
+	if f.inImports {
+		f.closeImports(w, indent, false)
 	}
 	return nil
 }
 
-// FormatNode implements LanguageFormatter
+// inImportBlock reports whether the comment nodes[i] goes in the import
+// block: an import follows the comments after it, and either the block is
+// open (the comment lies between two imports) or the comment is one of the
+// run of comments directly above that import, each on the line above the
+// next, the last on the line above the import (a comment at the end of the
+// import's line is skipped).
+func (f *GoFormatter) inImportBlock(nodes []ir.DistilledNode, i int) bool {
+	j := i + 1
+	for j < len(nodes) && nodes[j].GetNodeKind() == ir.KindComment {
+		j++
+	}
+	if j == len(nodes) || nodes[j].GetNodeKind() != ir.KindImport {
+		return false
+	}
+	if f.inImports {
+		return true
+	}
+	imp := nodes[j].GetLocation()
+	below := imp.StartLine
+	for k := j - 1; k >= i; k-- {
+		loc := nodes[k].GetLocation()
+		if loc.StartLine >= imp.StartLine && loc.StartLine > 0 {
+			continue
+		}
+		if loc.StartLine <= 0 || loc.EndLine+1 != below {
+			return false
+		}
+		below = loc.StartLine
+	}
+	return true
+}
+
+// closeImports writes the ")" that closes the import block, and a blank line
+// when a comment comes next (a declaration writes its own).
+func (f *GoFormatter) closeImports(w io.Writer, indent int, beforeComment bool) {
+	fmt.Fprintf(w, "%s)\n", goIndent(indent))
+	if beforeComment {
+		fmt.Fprintln(w)
+	}
+	f.inImports = false
+}
+
+// formatWithTrailing writes node with the comments in trailing at the end of
+// its last line.
+func (f *GoFormatter) formatWithTrailing(w io.Writer, node ir.DistilledNode, indent int, trailing []string) error {
+	if len(trailing) == 0 {
+		return f.FormatNode(w, node, indent)
+	}
+	var b strings.Builder
+	if err := f.FormatNode(&b, node, indent); err != nil {
+		return err
+	}
+	line := strings.TrimSuffix(b.String(), "\n")
+	for _, text := range trailing {
+		line += " // " + text
+	}
+	_, err := fmt.Fprintln(w, line)
+	return err
+}
+
+// FormatNode implements LanguageFormatter. An import is one line of the
+// import block, which FormatNodes opens and closes.
 func (f *GoFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent int) error {
 	indentStr := goIndent(indent)
-
-	// Close import block if we're moving to non-import
-	// Close before doc comments that precede type declarations
-	if f.lastWasImport && node.GetNodeKind() != ir.KindImport {
-		// Check if this is a doc comment (not a build constraint or inline comment)
-		if comment, ok := node.(*ir.DistilledComment); ok && comment.Format == "doc" {
-			// This is a doc comment for a type/function - close import block
-			fmt.Fprintln(w, ")")
-			fmt.Fprintln(w, "")
-			f.lastWasImport = false
-		} else if node.GetNodeKind() != ir.KindComment {
-			// Any non-comment, non-import node closes the import block
-			fmt.Fprintln(w, ")")
-			f.lastWasImport = false
-		}
-	}
 
 	switch n := node.(type) {
 	case *ir.DistilledPackage:
 		return f.formatPackage(w, n, indentStr)
 	case *ir.DistilledImport:
-		f.lastWasImport = true
 		return f.formatImport(w, n, indentStr)
 	case *ir.DistilledComment:
 		// The comments inside a function body are not nodes: the body
@@ -129,25 +178,18 @@ func (f *GoFormatter) formatPackage(w io.Writer, pkg *ir.DistilledPackage, inden
 }
 
 func (f *GoFormatter) formatImport(w io.Writer, imp *ir.DistilledImport, indent string) error {
-	// Check if this is the first import to add import block
-	if f.isFirstImport {
-		fmt.Fprintf(w, "\n%simport (\n", indent)
-		f.isFirstImport = false
-	}
-
-	// Format individual import
 	if len(imp.Symbols) > 0 && imp.Symbols[0].Alias != "" {
 		// Aliased import
-		fmt.Fprintf(w, "%s\t%s \"%s\"", indent, imp.Symbols[0].Alias, imp.Module)
+		fmt.Fprintf(w, "%s%s \"%s\"", indent, imp.Symbols[0].Alias, imp.Module)
 	} else if len(imp.Symbols) > 0 && imp.Symbols[0].Name == "." {
 		// Dot import
-		fmt.Fprintf(w, "%s\t. \"%s\"", indent, imp.Module)
+		fmt.Fprintf(w, "%s. \"%s\"", indent, imp.Module)
 	} else if len(imp.Symbols) > 0 && imp.Symbols[0].Name == "_" {
 		// Blank import
-		fmt.Fprintf(w, "%s\t_ \"%s\"", indent, imp.Module)
+		fmt.Fprintf(w, "%s_ \"%s\"", indent, imp.Module)
 	} else {
 		// Standard import
-		fmt.Fprintf(w, "%s\t\"%s\"", indent, imp.Module)
+		fmt.Fprintf(w, "%s\"%s\"", indent, imp.Module)
 	}
 
 	// Comments are handled separately as DistilledComment nodes
@@ -297,11 +339,12 @@ func (f *GoFormatter) formatMembers(w io.Writer, children []ir.DistilledNode, in
 
 // endsLineOf reports whether comment c is written at the end of member's
 // (last) line: one line of text that starts on that line, after the member
-// starts. A member is a field, an interface method, a const, var or type.
+// starts. A member is a field, an interface method, a const, var or type, or
+// an import.
 func endsLineOf(c *ir.DistilledComment, member ir.DistilledNode) bool {
 	switch member.(type) {
 	case *ir.DistilledField, *ir.DistilledFunction, *ir.DistilledTypeAlias,
-		*ir.DistilledClass, *ir.DistilledInterface:
+		*ir.DistilledClass, *ir.DistilledInterface, *ir.DistilledImport:
 	default:
 		return false
 	}

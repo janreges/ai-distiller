@@ -179,6 +179,13 @@ var fixtures = []fixture{
 			Contains:    []string{"const ConfLimit = 10 // CONF_CONST_TRAILING\n", "type ConfKind int // CONF_TYPE_TRAILING\n"},
 			NotContains: []string{"CONF_HIDDEN_CONST_NOTE"}},
 		check{Cap: "spec-comments-hidden-by-default", NotContains: []string{"CONF_CONST_TRAILING", "CONF_TYPE_TRAILING"}},
+		// strings is used only in confPrivate's body: the import filter
+		// drops it in the public output, and its comments with it.
+		check{Cap: "import-comments-in-block", Flags: []string{"--comments=1", "--implementation=1", "--internal=1"},
+			Contains: []string{"import (\n\t\"io\" // CONF_IMPORT_TRAILING\n\t// CONF_IMPORT_DOC\n\t\"strings\" // CONF_DROPPED_IMPORT_NOTE\n)\n"}},
+		check{Cap: "dropped-import-comments-go", Flags: []string{"--comments=1"},
+			Contains:    []string{"import (\n\t\"io\" // CONF_IMPORT_TRAILING\n)\n"},
+			NotContains: []string{"CONF_IMPORT_DOC", "CONF_DROPPED_IMPORT_NOTE"}},
 		// Only confPrivate, confSecret and confHiddenMax print, and none
 		// names io or strings: the import filter drops both, and the block
 		// with them.

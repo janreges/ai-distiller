@@ -97,11 +97,6 @@ func (f *LanguageAwareTextFormatter) formatDirect(w io.Writer, file *ir.Distille
 		}
 	}
 
-	// For Go formatter, ensure import block is closed
-	if goFormatter, ok := langFormatter.(*GoFormatter); ok && goFormatter.lastWasImport {
-		fmt.Fprintln(w, ")")
-	}
-
 	// Write file footer
 	fmt.Fprintln(w, "</file>")
 

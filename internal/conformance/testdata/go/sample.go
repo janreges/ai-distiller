@@ -1,8 +1,9 @@
 package conf
 
 import (
-	"io"
-	"strings"
+	"io" // CONF_IMPORT_TRAILING
+	// CONF_IMPORT_DOC
+	"strings" // CONF_DROPPED_IMPORT_NOTE
 )
 
 // CONF_LINE_COMMENT
