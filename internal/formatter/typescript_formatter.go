@@ -225,11 +225,12 @@ func (f *TypeScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 		}
 	}
 	for _, mod := range fn.Modifiers {
-		if mod == ir.ModifierAbstract {
+		switch mod {
+		case ir.ModifierAbstract:
 			modifiers += "abstract "
-		} else if mod == ir.ModifierAsync {
+		case ir.ModifierAsync:
 			modifiers += "async "
-		} else if mod == ir.ModifierStatic {
+		case ir.ModifierStatic:
 			modifiers += "static "
 		}
 	}

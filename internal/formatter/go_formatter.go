@@ -356,7 +356,9 @@ func (f *GoFormatter) formatStruct(w io.Writer, class *ir.DistilledClass, indent
 	// Fields with their comments; methods print at file level, in source
 	// order, as top-level functions
 	fmt.Fprintln(w, " {")
-	f.formatMembers(w, class.Children, indent+1)
+	if err := f.formatMembers(w, class.Children, indent+1); err != nil {
+		return err
+	}
 	fmt.Fprintf(w, "%s}\n", indentStr)
 	return nil
 }
@@ -380,11 +382,15 @@ func (f *GoFormatter) formatInterface(w io.Writer, intf *ir.DistilledInterface, 
 	if len(intf.Extends) > 0 {
 		split = embedCommentsEnd(intf.Children)
 	}
-	f.formatMembers(w, intf.Children[:split], indent+1)
+	if err := f.formatMembers(w, intf.Children[:split], indent+1); err != nil {
+		return err
+	}
 	for _, ext := range intf.Extends {
 		fmt.Fprintf(w, "%s%s\n", goIndent(indent+1), ext.Name)
 	}
-	f.formatMembers(w, intf.Children[split:], indent+1)
+	if err := f.formatMembers(w, intf.Children[split:], indent+1); err != nil {
+		return err
+	}
 	fmt.Fprintf(w, "%s}\n", indentStr)
 	return nil
 }
@@ -394,7 +400,7 @@ func (f *GoFormatter) formatInterface(w io.Writer, intf *ir.DistilledInterface, 
 // its place among them. A comment that ends a member's line in the source
 // (the parser puts it right before that member) is written at the end of
 // that member's line instead.
-func (f *GoFormatter) formatMembers(w io.Writer, children []ir.DistilledNode, indent int) {
+func (f *GoFormatter) formatMembers(w io.Writer, children []ir.DistilledNode, indent int) error {
 	indentStr := goIndent(indent)
 	var trailing []string
 	for i, child := range children {
@@ -404,7 +410,9 @@ func (f *GoFormatter) formatMembers(w io.Writer, children []ir.DistilledNode, in
 				trailing = append(trailing, n.Text)
 				continue
 			}
-			f.formatComment(w, n, indentStr)
+			if err := f.formatComment(w, n, indentStr); err != nil {
+				return err
+			}
 			continue
 		case *ir.DistilledField:
 			fmt.Fprint(w, indentStr+goFieldLine(n))
@@ -419,6 +427,7 @@ func (f *GoFormatter) formatMembers(w io.Writer, children []ir.DistilledNode, in
 		trailing = nil
 		fmt.Fprintln(w)
 	}
+	return nil
 }
 
 // endsLineOf reports whether comment c is written at the end of member's
