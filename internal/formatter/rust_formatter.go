@@ -27,8 +27,13 @@ func NewRustFormatter() LanguageFormatter {
 	}
 }
 
-// FormatNode implements LanguageFormatter
+// FormatNode implements LanguageFormatter. Every node is written through a
+// docWriter: a call with any other writer formats node as a list of one
+// (FormatNodes).
 func (f *RustFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent int) error {
+	if _, ok := w.(*docWriter); !ok {
+		return f.FormatNodes(w, []ir.DistilledNode{node}, indent)
+	}
 	indentStr := strings.Repeat("    ", indent)
 
 	switch n := node.(type) {
@@ -98,17 +103,35 @@ func (f *RustFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, inden
 // write. When that write starts with a blank line (the item is set off from
 // the one before it), the blank line goes before the comments, so that they
 // sit directly on the item they document instead of under the item before.
+// Right after the "{" that opens a body (openBody) there is no item before,
+// and that blank line is dropped.
 type docWriter struct {
 	w io.Writer
 	// pending is the text of the held comments; plain is true when one of
 	// them is not a doc comment.
 	pending []byte
 	plain   bool
+	// opened is true while nothing has been written after the "{" line of a
+	// body.
+	opened bool
 }
 
 func (d *docWriter) Write(p []byte) (int, error) {
+	n := len(p)
+	if d.opened && n > 0 {
+		d.opened = false
+		if p[0] == '\n' {
+			p = p[1:]
+			if len(p) == 0 {
+				return n, nil
+			}
+		}
+	}
 	if len(d.pending) == 0 || len(p) == 0 {
-		return d.w.Write(p)
+		if _, err := d.w.Write(p); err != nil {
+			return 0, err
+		}
+		return n, nil
 	}
 	out := make([]byte, 0, len(d.pending)+len(p))
 	if p[0] == '\n' {
@@ -120,7 +143,18 @@ func (d *docWriter) Write(p []byte) (int, error) {
 	if _, err := d.w.Write(out); err != nil {
 		return 0, err
 	}
-	return len(p), nil
+	return n, nil
+}
+
+// openBody writes the " {" that opens the body of an impl block, a trait, an
+// extern block or a module, whose members each start with a blank line: the
+// first member's blank line is dropped, so that the body starts on the next
+// line.
+func openBody(w io.Writer) {
+	fmt.Fprintln(w, " {")
+	if dw, ok := w.(*docWriter); ok {
+		dw.opened = true
+	}
 }
 
 // hold adds a comment's text to the held comments. A doc comment after a
@@ -143,15 +177,26 @@ func (d *docWriter) flush() error {
 		return nil
 	}
 	_, err := d.w.Write(d.pending)
-	d.pending, d.plain = d.pending[:0], false
+	d.pending, d.plain, d.opened = d.pending[:0], false, false
 	return err
 }
 
-// printsNothing reports whether node prints nothing: an extern block without
-// members.
+// printsNothing reports whether node prints nothing: an extern block or an
+// inherent impl block (not "impl Trait for Type") without members. Such a
+// block says nothing; rustdoc does not show an empty inherent impl either. An
+// empty trait impl prints: "impl Copy for X {}" states a fact.
 func printsNothing(node ir.DistilledNode) bool {
 	class, ok := node.(*ir.DistilledClass)
-	return ok && rustItemKind(class) == "extern" && len(class.Children) == 0
+	if !ok || len(class.Children) > 0 {
+		return false
+	}
+	switch rustItemKind(class) {
+	case "extern":
+		return true
+	case "impl":
+		return !strings.Contains(class.Name, " for ")
+	}
+	return false
 }
 
 // formatImport writes a use declaration, or an extern crate. ImportType is
@@ -335,7 +380,7 @@ func (f *RustFormatter) formatStruct(w io.Writer, class *ir.DistilledClass, inde
 			fmt.Fprintln(w, ";")
 			return nil
 		}
-		fmt.Fprintln(w, " {")
+		openBody(w)
 		if err := f.FormatNodes(w, class.Children, indent+1); err != nil {
 			return err
 		}
@@ -384,7 +429,7 @@ func (f *RustFormatter) formatMembers(w io.Writer, class *ir.DistilledClass, kin
 	memberIndent := indentStr + "    "
 	traitMembers := kind == "trait" || strings.Contains(class.Name, " for ")
 
-	fmt.Fprintln(w, " {")
+	openBody(w)
 	for _, child := range class.Children {
 		var err error
 		switch n := child.(type) {

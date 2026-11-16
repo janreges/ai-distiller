@@ -42,3 +42,22 @@ impl ConfShape for ConfWidget {
         1
     }
 }
+
+struct ConfHidden<'a> {
+    conf_hidden_field: &'a str,
+}
+
+/// CONF_HIDDEN_IMPL_DOC
+impl<'a> ConfHidden<'a> {
+    pub fn conf_hidden_method(&self) {}
+}
+
+impl ConfShape for ConfHidden<'_> {
+    fn conf_area(&self) -> i32 { 2 }
+}
+
+pub(crate) struct ConfCrate;
+
+impl ConfCrate {
+    pub fn conf_crate_method(&self) {}
+}

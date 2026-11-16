@@ -46,7 +46,8 @@ func (p *Processor) ProcessWithOptions(ctx context.Context, reader io.Reader, fi
 		return nil, fmt.Errorf("failed to read source: %w", err)
 	}
 
-	file, err := NewTreeSitterProcessor().ProcessSource(ctx, source, filename)
+	tsp := NewTreeSitterProcessor()
+	file, err := tsp.ProcessSource(ctx, source, filename)
 	if err != nil {
 		return nil, err
 	}
@@ -57,6 +58,8 @@ func (p *Processor) ProcessWithOptions(ctx context.Context, reader io.Reader, fi
 	// Only strip if there's something to strip
 	if stripperOpts.HasAnyOption() {
 		s := stripper.New(stripperOpts)
+		// The impl blocks of a type the stripper removes go with it.
+		hideImplsOfRemovedTypes(file, tsp.impls, s)
 		stripped := file.Accept(s)
 		if strippedFile, ok := stripped.(*ir.DistilledFile); ok {
 			return strippedFile, nil

@@ -8,7 +8,6 @@ pub struct Config { /* private fields */ }
 pub struct AnalysisService { /* private fields */ }
 
 impl AnalysisService {
-
     /// Create new analysis service
     pub fn new() -> Self
 
@@ -30,7 +29,6 @@ pub trait AsyncProcessor {
 
 /// Implementation for the analysis service
 impl AsyncProcessor for AnalysisService {
-
     type Item = String;
 
     type Error = &'static str;
@@ -43,7 +41,6 @@ impl AsyncProcessor for AnalysisService {
 pub union FFIData { /* private fields */ }
 
 impl FFIData {
-
     /// Safe constructor
     pub fn new_integer(value: i64) -> Self
 

@@ -427,6 +427,14 @@ func isPublicVisibility(v ir.Visibility) bool {
 	return v == ir.VisibilityPublic || v == ir.VisibilityOpen
 }
 
+// RemovesVisibility reports whether the options remove a declaration of this
+// explicit visibility because of it. A language processor asks it before
+// stripping to remove what stands or falls with a declaration, such as the
+// impl blocks of a Rust type (internal/language/rust/impls.go).
+func (s *Stripper) RemovesVisibility(visibility ir.Visibility) bool {
+	return s.shouldRemoveByVisibility("", visibility)
+}
+
 // shouldRemoveByVisibility checks if a node should be removed based on visibility settings
 func (s *Stripper) shouldRemoveByVisibility(name string, visibility ir.Visibility) bool {
 	// Check specific visibility removal options first

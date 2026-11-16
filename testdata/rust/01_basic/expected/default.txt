@@ -3,7 +3,6 @@
 /// A module to handle application settings.
 /// This tests the parser's ability to handle inline module definitions.
 pub mod settings {
-
     /// The public name of the application.
     pub const APP_NAME: &str = "AI Distiller";
 

@@ -12,7 +12,6 @@ pub struct SourceFile {
 /// A trait for items that can be summarized.
 // This tests the ability to parse trait definitions and their methods.
 pub trait Summarizable {
-
     fn summary(&self) -> String;
 
     /// Default implementation for short summary
@@ -21,7 +20,6 @@ pub trait Summarizable {
 
 // Implementation of methods for the SourceFile struct.
 impl SourceFile {
-
     /// Creates a new SourceFile, demonstrating ownership (takes ownership of path and content).
     pub fn new(path: String, content: String) -> Self
 
@@ -32,7 +30,6 @@ impl SourceFile {
 // Implementation of the Summarizable trait for SourceFile.
 // This is a critical pattern: `impl Trait for Struct`.
 impl Summarizable for SourceFile {
-
     fn summary(&self) -> String
 }
 
@@ -54,7 +51,6 @@ pub enum FileError {
 }
 
 impl FileOperations for SourceFile {
-
     type Error = FileError;
 
     fn read_content(&self) -> Result<&str, Self::Error>

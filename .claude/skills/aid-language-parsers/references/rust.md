@@ -94,10 +94,22 @@ items has its own visibility. A `macro_rules!` is `public` with
 
 - An `impl` block is a `DistilledClass` named after its header with white space
   collapsed: `impl Type`, `impl<T: Clone> Trait for Type<T>`, `impl !Send for
-  Type`. It is always `public`, and its children are the items of the block
+  Type`. It is `public`, and its children are the items of the block
   (`internal/language/rust/tree_sitter_processor.go#walker.implItem`). Methods
   are not moved into the struct; the struct and each of its `impl` blocks are
-  separate nodes.
+  separate nodes. The parser records what each block implements, the bare
+  names of its self type and trait
+  (`internal/language/rust/impls.go#walker.implTargetOf`: no path, generics,
+  lifetimes or `&`; none for a generic parameter of the block or a type
+  without a name of its own). Before stripping,
+  `internal/language/rust/impls.go#hideImplsOfRemovedTypes` gives a block
+  the visibility that removes its self type or trait, when that is a struct,
+  enum, union or trait declared in the file and every declaration of the name
+  is removed for its visibility or that of a module around it
+  (`internal/stripper/stripper.go#Stripper.RemovesVisibility`); the stripper
+  then removes the block with its docs, as rustdoc does. A kept block stays
+  `public`. The formatter prints nothing for an inherent impl without members
+  (`internal/formatter/rust_formatter.go#printsNothing`).
 - `struct` is a `DistilledClass` with the modifier `struct`, `union` one with
   the modifier `union`, and their fields are children. The fields of a tuple
   struct are named `0`, `1`, ... with their own visibility, and

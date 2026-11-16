@@ -68,12 +68,10 @@ pub trait Animal: Display + Clone {
 }
 
 pub trait Container<T> where T: Clone {
-
     fn get(&self, i: usize) -> Option<&T>;
 }
 
 impl Point {
-
     /// Creates a point.
     pub fn new(x: f64, y: f64) -> Self {
         Point { x, y, z: 0.0 }
@@ -81,21 +79,18 @@ impl Point {
 }
 
 impl<T: Clone> Container<T> for Vec<T> {
-
     fn get(&self, i: usize) -> Option<&T> {
         self.as_slice().get(i)
     }
 }
 
 impl<T> Bounded<T> where T: Clone + Default {
-
     pub fn reset(&mut self) {
         self.value = T::default();
     }
 }
 
 impl Iterator for Counter {
-
     type Item = u32;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -104,7 +99,6 @@ impl Iterator for Counter {
 }
 
 impl std::fmt::Display for Point {
-
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}, {})", self.x, self.y)
     }
@@ -133,7 +127,6 @@ pub fn multi_line_params(first: u32, second: String) -> bool {
 }
 
 pub mod inline_mod {
-
     pub fn inside() -> u8 { 1 }
 
     pub struct Inner;
@@ -154,7 +147,6 @@ pub trait Sized2: Sized {
 }
 
 impl<'a> Wrapper<'a> {
-
     pub fn get(&self) -> &'a str { "" }
 }
 

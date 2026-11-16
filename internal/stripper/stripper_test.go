@@ -72,6 +72,25 @@ func TestShouldRemoveByVisibility(t *testing.T) {
 	}
 }
 
+// RemovesVisibility answers for an explicit visibility as the stripper
+// decides it, per flag: --private=1 alone keeps private and removes internal.
+func TestRemovesVisibility(t *testing.T) {
+	privateOnly := New(Options{RemovePrivate: false, RemoveProtectedOnly: true, RemoveInternalOnly: true})
+	assert.False(t, privateOnly.RemovesVisibility(ir.VisibilityPrivate))
+	assert.True(t, privateOnly.RemovesVisibility(ir.VisibilityInternal))
+	assert.True(t, privateOnly.RemovesVisibility(ir.VisibilityProtected))
+	assert.False(t, privateOnly.RemovesVisibility(ir.VisibilityPublic))
+
+	defaults := New(Options{RemovePrivate: true})
+	assert.True(t, defaults.RemovesVisibility(ir.VisibilityPrivate))
+	assert.True(t, defaults.RemovesVisibility(ir.VisibilityInternal))
+	assert.False(t, defaults.RemovesVisibility(ir.VisibilityPublic))
+
+	// --public=0 removes public members by another rule, not for their
+	// visibility.
+	assert.False(t, New(Options{RemovePublic: true}).RemovesVisibility(ir.VisibilityPublic))
+}
+
 func TestVisit(t *testing.T) {
 	// Create a test file with various nodes
 	file := &ir.DistilledFile{

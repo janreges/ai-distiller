@@ -24,7 +24,6 @@ pub trait DataSource {
 pub struct AnalysisResult<T: Display> { /* private fields */ }
 
 impl<T: Display> AnalysisResult<T> {
-
     /// Create new analysis result
     pub fn new(source_id: String, result: T) -> Self
 }
@@ -35,18 +34,6 @@ pub fn analyze<'a, S>(source: &'a S) -> Result<AnalysisResult<String>, AnalysisE
 
 /// Advanced generic function with multiple lifetime parameters
 pub fn compare_sources<'a, 'b, S1, S2>(source1: &'a S1, source2: &'b S2) -> Result<bool, AnalysisError> where S1: DataSource + Debug, S2: DataSource + Debug
-
-impl DataSource for InMemorySource {
-
-    type Content = Vec<u8>;
-
-    fn get_content(&self) -> Result<Self::Content, AnalysisError>
-}
-
-impl Debug for InMemorySource {
-
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result
-}
 
 /// Generic trait with lifetime bounds
 pub trait Processor<'a, T> where T: Clone + 'a {
@@ -62,7 +49,6 @@ pub trait Processor<'a, T> where T: Clone + 'a {
 pub struct StringProcessor;
 
 impl<'a> Processor<'a, String> for StringProcessor {
-
     type Output = &'a str;
 
     fn process(&self, input: &'a String) -> Self::Output

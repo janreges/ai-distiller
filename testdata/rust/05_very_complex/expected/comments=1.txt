@@ -7,7 +7,6 @@
 // To make this file self-contained, we define a dummy trait.
 // A real parser would see `#[derive(Configurable)]` and need to handle it.
 pub trait Configurable {
-
     fn from_source<S: DataSource>(source: &S) -> Self;
 }
 // --- End of proc-macro simulation ---
@@ -42,7 +41,6 @@ pub struct ServerConfig {
 // A dummy implementation to make the code runnable.
 // A proc-macro would generate this automatically.
 impl Configurable for ServerConfig {
-
     fn from_source<S: DataSource>(source: &S) -> Self
 }
 
@@ -64,13 +62,11 @@ pub trait AdvancedContainer<const N: usize> {
 pub struct FixedArray<T: Clone, const N: usize> { /* private fields */ }
 
 impl<T: Clone, const N: usize> FixedArray<T, N> {
-
     /// Create new fixed array
     pub const fn new() -> Self
 }
 
 impl<T: Clone, const N: usize> AdvancedContainer<N> for FixedArray<T, N> {
-
     type Item<'a> = &'a T where T: 'a;
 
     type Iterator<'a> = std::iter::FilterMap< std::slice::Iter<'a, Option<T>>, fn(&'a Option<T>) -> Option<&'a T> > where T: 'a;

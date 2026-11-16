@@ -14,7 +14,11 @@ import (
 )
 
 // TreeSitterProcessor distils Rust source with the tree-sitter-rust grammar.
-type TreeSitterProcessor struct{}
+type TreeSitterProcessor struct {
+	// impls are the impl blocks of the file of the last ProcessSource call,
+	// with what each implements.
+	impls map[*ir.DistilledClass]implTarget
+}
 
 // NewTreeSitterProcessor creates a new tree-sitter based processor
 func NewTreeSitterProcessor() *TreeSitterProcessor {
@@ -58,7 +62,8 @@ func (p *TreeSitterProcessor) ProcessSource(ctx context.Context, source []byte, 
 	cursor := root.Walk()
 	defer cursor.Close()
 	var walkErr error
-	w := &walker{ctx: ctx, source: source, file: file, cursor: cursor, err: &walkErr}
+	p.impls = map[*ir.DistilledClass]implTarget{}
+	w := &walker{ctx: ctx, source: source, file: file, cursor: cursor, err: &walkErr, impls: p.impls}
 	w.items(root, nil, inFile)
 	if walkErr != nil {
 		return nil, walkErr
@@ -115,6 +120,9 @@ type walker struct {
 	// err is the first failure to parse a macro body, shared by the walkers
 	// of one file.
 	err *error
+	// impls collects the impl blocks of the file with their targets, shared
+	// by the walkers of one file.
+	impls map[*ir.DistilledClass]implTarget
 }
 
 // macroBody links the walker of a macro body to the token tree it was cut
@@ -343,6 +351,7 @@ func (w *walker) expand(body *sitter.Node, parent *ir.DistilledClass, in contain
 		depth:     depth,
 		macro:     macro,
 		err:       w.err,
+		impls:     w.impls,
 	}
 
 	// A fresh parser and tree for this body; no node of them outlives this
@@ -888,7 +897,8 @@ func (w *walker) traitItem(node *sitter.Node) ir.DistilledNode {
 // implItem returns an impl block: a public class named after its header
 // ("impl<T> Trait for Type<T>", white space collapsed) whose children are the
 // items of the block. The where clause of the header is kept apart from the
-// name.
+// name. The block is recorded in w.impls with what it implements, so that it
+// can go with a type the stripper removes (hideImplsOfRemovedTypes).
 func (w *walker) implItem(node *sitter.Node) ir.DistilledNode {
 	typ := node.ChildByFieldName("type")
 	if typ == nil {
@@ -920,6 +930,7 @@ func (w *walker) implItem(node *sitter.Node) ir.DistilledNode {
 	if w.hasKeyword(node, "unsafe") {
 		rustExtensions(&class.BaseNode).IsUnsafe = true
 	}
+	w.impls[class] = w.implTargetOf(node)
 	if body := node.ChildByFieldName("body"); body != nil {
 		w.items(body, class, in)
 	}

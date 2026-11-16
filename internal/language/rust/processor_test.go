@@ -1436,3 +1436,72 @@ func TestRust_PrivateFieldsAreCounted(t *testing.T) {
 	assert.Equal(t, 0, rustExt(findRustClass(t, file, "Pair")).PrivateFields, "a tuple struct has TupleArity instead")
 	assert.Equal(t, 1, rustExt(findRustClass(t, file, "U")).PrivateFields)
 }
+
+// The impl blocks of a type the stripper removes for its visibility go with
+// it, as in rustdoc: matched by the bare name of the self type or of the
+// trait, also when a module removes the type, never for a type not declared
+// in the file or a generic parameter.
+func TestRust_ImplsGoWithTheirRemovedType(t *testing.T) {
+	src := "struct Hidden<'a> { inner: &'a [u8] }\n" +
+		"/// hidden impl doc\nimpl<'a> Hidden<'a> { pub fn new() -> Self { todo!() } }\n" +
+		"impl std::io::Read for Hidden<'_> { fn read(&mut self) {} }\n" +
+		"impl<'a> Tr for &'a mut Hidden<'a> {}\n" +
+		"pub struct Shown;\nimpl Shown { pub fn shown() {} }\nimpl Tr for Shown {}\n" +
+		"pub(crate) enum Crate { A }\nimpl Crate { pub fn in_crate() {} }\n" +
+		"mod private_mod { pub struct InPrivateMod; }\nimpl private_mod::InPrivateMod { pub fn in_private_mod() {} }\n" +
+		"pub mod public_mod { pub struct InPublicMod; impl InPublicMod { pub fn in_public_mod() {} } }\n" +
+		"trait PrivTrait {}\nimpl PrivTrait for Shown {}\n" +
+		"pub trait Tr {}\nimpl<T: Clone> Tr for T {}\nimpl Tr for Vec<u8> {}\nimpl External { pub fn ext() {} }\n" +
+		"struct Twice;\npub mod again { pub struct Twice; }\nimpl Twice { pub fn twice() {} }\n"
+	distill := func(opts processor.ProcessOptions) []string {
+		file, err := NewProcessor().ProcessWithOptions(context.Background(), strings.NewReader(src), "test.rs", opts)
+		require.NoError(t, err)
+		names := allNames(file)
+		walkRust(file, func(node ir.DistilledNode) {
+			if c, ok := node.(*ir.DistilledComment); ok {
+				names = append(names, "doc:"+c.Text)
+			}
+		})
+		return names
+	}
+	hidden := []string{"impl<'a> Hidden<'a>", "doc:hidden impl doc", "impl std::io::Read for Hidden<'_>",
+		"impl<'a> Tr for &'a mut Hidden<'a>", "impl PrivTrait for Shown"}
+	shown := []string{"impl Shown", "impl Tr for Shown", "impl InPublicMod", "impl<T: Clone> Tr for T",
+		"impl Tr for Vec<u8>", "impl External", "impl Twice"}
+
+	public := distill(rustPublicOnly)
+	for _, name := range append(append([]string{}, hidden...), "impl Crate", "impl private_mod::InPrivateMod") {
+		assert.NotContains(t, public, name)
+	}
+	for _, name := range shown {
+		assert.Contains(t, public, name)
+	}
+
+	// --internal=1 shows pub(crate) types and their impls.
+	internal := rustPublicOnly
+	internal.IncludePrivate, internal.RemovePrivateOnly, internal.RemoveProtectedOnly = true, true, true
+	names := distill(internal)
+	assert.Contains(t, names, "impl Crate")
+	assert.NotContains(t, names, "impl<'a> Hidden<'a>")
+	assert.NotContains(t, names, "impl private_mod::InPrivateMod")
+
+	// --private=1 shows every block.
+	all := rustPublicOnly
+	all.IncludePrivate = true
+	names = distill(all)
+	for _, name := range append(append(hidden, shown...), "impl Crate", "impl private_mod::InPrivateMod") {
+		assert.Contains(t, names, name)
+	}
+}
+
+// A type removed for another visibility than the module around it takes its
+// impl blocks along: with --private=1 alone, a pub(crate) struct goes from a
+// private module that stays.
+func TestRust_ImplsGoWithATypeOfAnotherVisibility(t *testing.T) {
+	src := "mod m {\n    pub(crate) struct C;\n    impl C { pub fn c() {} }\n    struct P;\n    impl P { fn p() {} }\n}\n"
+	opts := rustPublicOnly
+	opts.IncludePrivate, opts.RemoveProtectedOnly, opts.RemoveInternalOnly = true, true, true
+	file, err := NewProcessor().ProcessWithOptions(context.Background(), strings.NewReader(src), "test.rs", opts)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"m", "P", "impl P", "p"}, allNames(file))
+}

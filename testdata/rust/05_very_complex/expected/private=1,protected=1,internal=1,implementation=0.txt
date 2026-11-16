@@ -1,7 +1,6 @@
 <file path="source.rs">
 
 pub trait Configurable {
-
     fn from_source<S: DataSource>(source: &S) -> Self;
 }
 
@@ -31,7 +30,6 @@ pub struct ServerConfig {
 }
 
 impl Configurable for ServerConfig {
-
     fn from_source<S: DataSource>(source: &S) -> Self
 }
 
@@ -55,7 +53,6 @@ pub struct FixedArray<T: Clone, const N: usize> {
 }
 
 impl<T: Clone, const N: usize> FixedArray<T, N> {
-
     /// Create new fixed array
     pub const fn new() -> Self
 
@@ -67,7 +64,6 @@ impl<T: Clone, const N: usize> FixedArray<T, N> {
 }
 
 impl<T: Clone, const N: usize> AdvancedContainer<N> for FixedArray<T, N> {
-
     type Item<'a> = &'a T where T: 'a;
 
     type Iterator<'a> = std::iter::FilterMap< std::slice::Iter<'a, Option<T>>, fn(&'a Option<T>) -> Option<&'a T> > where T: 'a;

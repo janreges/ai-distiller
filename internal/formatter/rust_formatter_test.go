@@ -34,12 +34,12 @@ func TestRustFormatter_TraitMembersHaveNoVisibility(t *testing.T) {
 
 	traitImpl := &ir.DistilledClass{Name: "impl Shape for P", Visibility: ir.VisibilityPublic,
 		Children: []ir.DistilledNode{area("")}}
-	assert.Equal(t, "\nimpl Shape for P {\n\n    fn area(&self) -> i32\n}\n", format(traitImpl))
+	assert.Equal(t, "\nimpl Shape for P {\n    fn area(&self) -> i32\n}\n", format(traitImpl))
 
 	// A default method of a trait is not abstract and still takes no keyword.
 	trait := &ir.DistilledClass{Name: "Shape", Visibility: ir.VisibilityPublic,
 		Modifiers: []ir.Modifier{ir.ModifierAbstract}, Children: []ir.DistilledNode{area("{ 1 }")}}
-	assert.Equal(t, "\npub trait Shape {\n\n    fn area(&self) -> i32 { 1 }\n}\n", format(trait))
+	assert.Equal(t, "\npub trait Shape {\n    fn area(&self) -> i32 { 1 }\n}\n", format(trait))
 
 	inherent := &ir.DistilledClass{Name: "impl P", Visibility: ir.VisibilityPublic,
 		Children: []ir.DistilledNode{area("")}}
@@ -72,7 +72,7 @@ func TestRustFormatter_InlineModPrintsEveryChild(t *testing.T) {
 
 	// A class without a kind modifier is a module, also when it holds only
 	// functions (the old enum fallback) or only nested items and imports.
-	assert.Equal(t, "\npub mod inline_mod {\n\n    pub fn inside() -> u8\n}\n", format(
+	assert.Equal(t, "\npub mod inline_mod {\n    pub fn inside() -> u8\n}\n", format(
 		&ir.DistilledFunction{Name: "inside", Visibility: pub, Returns: &ir.TypeRef{Name: "u8"}},
 	))
 	assert.Equal(t, "\npub mod inline_mod {\n"+
@@ -82,7 +82,7 @@ func TestRustFormatter_InlineModPrintsEveryChild(t *testing.T) {
 		"\n    pub fn inside() -> u8\n"+
 		"\n    pub type T = u8;\n"+
 		"\n    mod deeper {\n"+
-		"\n        pub const N: u8 = 1;\n"+
+		"        pub const N: u8 = 1;\n"+
 		"    }\n"+
 		"}\n", format(
 		&ir.DistilledImport{ImportType: "use", Module: "super::*"},
@@ -193,7 +193,7 @@ func TestRustFormatter_ExternBlock(t *testing.T) {
 			&ir.DistilledField{Name: "environ", Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{ir.ModifierStatic},
 				Type: &ir.TypeRef{Name: "*const u8"}},
 		}}
-	assert.Equal(t, "\nextern \"C\" {\n\n    fn validate(x: i32) -> bool;\n\n    pub fn other();\n\n    pub static environ: *const u8;\n}\n",
+	assert.Equal(t, "\nextern \"C\" {\n    fn validate(x: i32) -> bool;\n\n    pub fn other();\n\n    pub static environ: *const u8;\n}\n",
 		formatRust(t, block, 0))
 
 	// A block whose members were all removed is not printed, nor are the
@@ -204,7 +204,7 @@ func TestRustFormatter_ExternBlock(t *testing.T) {
 	withComments := rustDefault
 	withComments.IncludeComments = true
 	assert.Equal(t, []string{"", "pub mod m {", "    // note", "", "    pub fn after()", "}"}, distillRust(t, inMod, withComments))
-	assert.Equal(t, []string{"", "/// FFI doc.", "extern \"C\" {", "", "    fn abs(input: i32) -> i32;", "}", "", "pub fn after()"},
+	assert.Equal(t, []string{"", "/// FFI doc.", "extern \"C\" {", "    fn abs(input: i32) -> i32;", "}", "", "pub fn after()"},
 		distillRust(t, src, rustAll))
 }
 
@@ -220,7 +220,7 @@ func TestRustFormatter_MacroRules(t *testing.T) {
 		&ir.DistilledFunction{Name: "e", Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{ir.ModifierMacro},
 			Parameters: []ir.Parameter{{Name: "()"}}},
 	}}
-	assert.Equal(t, "\npub mod m {\n\n    macro_rules! e {\n        () => ...;\n    }\n}\n", formatRust(t, inMod, 0))
+	assert.Equal(t, "\npub mod m {\n    macro_rules! e {\n        () => ...;\n    }\n}\n", formatRust(t, inMod, 0))
 }
 
 func TestRustFormatter_ExternCrateAndPubUse(t *testing.T) {
@@ -287,14 +287,14 @@ func TestRustFormatter_TraitImplAssociatedItems(t *testing.T) {
 		&ir.DistilledField{Name: "Item", Visibility: pub, Modifiers: []ir.Modifier{ir.ModifierTypeAlias}, Type: &ir.TypeRef{Name: "u32"}},
 		&ir.DistilledField{Name: "X", Visibility: pub, Modifiers: []ir.Modifier{ir.ModifierFinal}, Type: &ir.TypeRef{Name: "u8"}, DefaultValue: "1"},
 	}
-	assert.Equal(t, "\nimpl Iterator for Counter {\n\n    type Item = u32;\n\n    const X: u8 = 1;\n}\n",
+	assert.Equal(t, "\nimpl Iterator for Counter {\n    type Item = u32;\n\n    const X: u8 = 1;\n}\n",
 		formatRust(t, &ir.DistilledClass{Name: "impl Iterator for Counter", Visibility: pub, Children: members}, 0))
-	assert.Equal(t, "\nimpl Counter {\n\n    pub type Item = u32;\n\n    pub const X: u8 = 1;\n}\n",
+	assert.Equal(t, "\nimpl Counter {\n    pub type Item = u32;\n\n    pub const X: u8 = 1;\n}\n",
 		formatRust(t, &ir.DistilledClass{Name: "impl Counter", Visibility: pub, Children: members}, 0))
 
 	// In the default output, through the real processor and stripper.
 	src := "impl Iterator for Counter {\n    type Item = u32;\n    fn next(&mut self) -> Option<u32> { None }\n}\n"
-	assert.Equal(t, []string{"", "impl Iterator for Counter {", "", "    type Item = u32;", "",
+	assert.Equal(t, []string{"", "impl Iterator for Counter {", "    type Item = u32;", "",
 		"    fn next(&mut self) -> Option<u32>", "}"}, distillRust(t, src, rustDefault))
 }
 
@@ -424,8 +424,8 @@ func TestRustFormatter_AttributesAndBodyDocs(t *testing.T) {
 		"#[macro_export]\nmacro_rules! m { () => {}; }\n" +
 		"#[cfg(test)]\nuse std::fmt;\n#![allow(dead_code)]\n"
 	assert.Equal(t, []string{
-		"", "pub trait T {", "", "    #[must_use]", "    fn f(&self) -> u8;", "    #[deprecated]", "    type X;", "}",
-		"", "impl S {", "", "    #[inline]", "    pub fn g()", "", "    #[allow(x)]", "    pub const C: u8 = 1;", "}",
+		"", "pub trait T {", "    #[must_use]", "    fn f(&self) -> u8;", "    #[deprecated]", "    type X;", "}",
+		"", "impl S {", "    #[inline]", "    pub fn g()", "", "    #[allow(x)]", "    pub const C: u8 = 1;", "}",
 		"", "#[macro_export]", "macro_rules! m {", "    () => ...;", "}",
 		"use std::fmt;",
 	}, distillRust(t, members, rustAll))
@@ -452,7 +452,6 @@ func TestRustFormatter_CommentsSitOnTheirItem(t *testing.T) {
 		"pub fn a()",
 		"",
 		"impl S {",
-		"",
 		"    /// m doc",
 		"    #[inline]",
 		"    pub fn m()",
@@ -504,4 +503,42 @@ func TestRustFormatter_RemovedPrivateFields(t *testing.T) {
 		"", "pub struct Marker;",
 		"", "pub union U {", "    i: u32,", "}",
 	}, distillRust(t, src, rustAll))
+}
+
+// The body of an impl block, a trait, an extern block and a module starts on
+// the line after its "{", also when its first member has a doc, an attribute
+// or a plain comment; the members after it keep their blank line.
+func TestRustFormatter_BodyStartsOnTheLineAfterItsBrace(t *testing.T) {
+	src := "pub struct W;\nimpl W {\n    pub const fn new() -> Self { W }\n    pub fn len(&self) -> usize { 0 }\n}\n" +
+		"impl Display for W {\n    fn fmt(&self) {}\n}\n" +
+		"pub trait T {\n    fn f(&self);\n}\n" +
+		"pub mod sub { pub fn f() {} fn g() {} pub mod deeper { pub fn h() {} } }\n" +
+		"extern \"C\" {\n    pub fn abs(x: i32) -> i32;\n}\n"
+	assert.Equal(t, []string{
+		"", "pub struct W;",
+		"", "impl W {", "    pub const fn new() -> Self", "", "    pub fn len(&self) -> usize", "}",
+		"", "impl Display for W {", "    fn fmt(&self)", "}",
+		"", "pub trait T {", "    fn f(&self);", "}",
+		"", "pub mod sub {", "    pub fn f()", "", "    pub mod deeper {", "        pub fn h()", "    }", "}",
+		"", "extern \"C\" {", "    pub fn abs(x: i32) -> i32;", "}",
+	}, distillRust(t, src, rustDefault))
+
+	commented := "impl W {\n    // plain\n    pub fn a() {}\n}\npub mod m {\n    /// doc\n    #[inline]\n    pub fn b() {}\n}\n"
+	opts := rustDefault
+	opts.IncludeComments = true
+	assert.Equal(t, []string{
+		"", "impl W {", "    // plain", "    pub fn a()", "}",
+		"", "pub mod m {", "    /// doc", "    #[inline]", "    pub fn b()", "}",
+	}, distillRust(t, commented, opts))
+}
+
+// An inherent impl block without members prints nothing, nor does the doc
+// above it, as in rustdoc; a trait impl without members states a fact and
+// prints.
+func TestRustFormatter_EmptyInherentImplPrintsNothing(t *testing.T) {
+	src := "pub struct S;\n/// S impl doc\nimpl S {\n    fn helper() {}\n}\nimpl Copy for S {}\nimpl S {}\npub fn after() {}\n"
+	assert.Equal(t, []string{"", "pub struct S;", "", "impl Copy for S {", "}", "", "pub fn after()"},
+		distillRust(t, src, rustDefault))
+	assert.Equal(t, []string{"", "pub struct S;", "", "/// S impl doc", "impl S {", "    fn helper()", "}",
+		"", "impl Copy for S {", "}", "", "pub fn after()"}, distillRust(t, src, rustAll))
 }
