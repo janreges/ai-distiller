@@ -6,23 +6,23 @@ use std::pin::Pin;
 
 #[derive(Clone)]
 pub struct Config;
+
 /// A service that uses a shared, mutable cache.
 /// This tests `Arc<Mutex<T>>`, a very common concurrent pattern.
-
 pub struct AnalysisService;
 
 impl AnalysisService {
-    /// Create new analysis service
 
+    /// Create new analysis service
     pub fn new() -> Self {
         Self {
             cache: Arc::new(Mutex::new(Vec::new())),
             async_processor: None,
         }
     }
+
     /// Asynchronously validates a piece of code using the native FFI function.
     /// This tests `async fn` syntax and `unsafe` blocks.
-
     pub async fn validate_code(&self, code: &str) -> Result<bool, &'static str> {
         println!("Starting async validation...");
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
@@ -44,15 +44,15 @@ impl AnalysisService {
         Ok(is_valid)
     }
 }
-/// Advanced trait with async methods
 
+/// Advanced trait with async methods
 pub trait AsyncProcessor {
     type Item;
     type Error;
 
     async fn process_async(&self, item: Self::Item) -> Result<String, Self::Error>;
-    /// Default async implementation
 
+    /// Default async implementation
     async fn batch_process(&self, items: Vec<Self::Item>) -> Vec<Result<String, Self::Error>> {
         let mut results = Vec::new();
         for item in items {
@@ -61,8 +61,8 @@ pub trait AsyncProcessor {
         results
     }
 }
-/// Implementation for the analysis service
 
+/// Implementation for the analysis service
 impl AsyncProcessor for AnalysisService {
 
     type Item = String;
@@ -74,19 +74,19 @@ impl AsyncProcessor for AnalysisService {
         Ok(format!("Processed: {}", item))
     }
 }
-/// Union type for advanced FFI
 
+/// Union type for advanced FFI
 #[repr(C)]
 pub union FFIData;
 
 impl FFIData {
-    /// Safe constructor
 
+    /// Safe constructor
     pub fn new_integer(value: i64) -> Self {
         Self { integer: value }
     }
-    /// Unsafe getter
 
+    /// Unsafe getter
     pub unsafe fn get_integer(&self) -> i64 {
         self.integer
     }

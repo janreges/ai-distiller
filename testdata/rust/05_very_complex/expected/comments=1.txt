@@ -1,19 +1,19 @@
 <file path="source.rs">
+
 // 05_very_complex.rs
 // A test for procedural macros, GATs, and advanced generic concepts.
 // --- Assume this proc-macro is defined in a separate crate ---
 // use my_proc_macros::Configurable;
 // To make this file self-contained, we define a dummy trait.
 // A real parser would see `#[derive(Configurable)]` and need to handle it.
-
 pub trait Configurable {
 
     fn from_source<S: DataSource>(source: &S) -> Self;
 }
 // --- End of proc-macro simulation ---
+
 /// A trait with a Generic Associated Type (GAT).
 /// `Reader` has its own lifetime `'a`, which is tied to `&'a self`.
-
 pub trait DataSource {
     type Reader<'a>: std::io::Read where Self: 'a;
     type Config<T: Clone>: Clone;
@@ -21,14 +21,14 @@ pub trait DataSource {
     fn get_reader<'a>(&'a self) -> Self::Reader<'a>;
 
     fn get_config<T: Clone>(&self) -> Self::Config<T>;
-    /// Method with complex generic bounds
 
+    /// Method with complex generic bounds
     fn process_with_bounds<'a, T, U>(&'a self, input: T) -> U where T: AsRef<str> + 'a, U: From<&'a str> + Default, Self::Reader<'a>: std::io::BufRead;
 }
+
 /// A struct that would use a procedural derive macro in a real project.
 /// The parser must handle attributes on the struct and its fields.
 // #[derive(Configurable)] // This is what a real use-case would look like.
-
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
     // Field-level attributes are a key challenge for parsers.
@@ -37,19 +37,19 @@ pub struct ServerConfig {
     // #[config(validate_with = "validate_port")]
     pub port: u16,
 }
+
 // A dummy implementation to make the code runnable.
 // A proc-macro would generate this automatically.
-
 impl Configurable for ServerConfig {
 
     fn from_source<S: DataSource>(source: &S) -> Self
 }
+
 /// A function with a Higher-Rank Trait Bound (HRTB).
 /// The `F` closure must work for *any* lifetime `'a`.
-
 pub fn process_all_sources<F>(sources: Vec<&dyn DataSource>, mut processor: F) where F: for<'a> FnMut(Box<dyn std::io::Read + 'a>)
-/// Advanced trait with const generics and GATs
 
+/// Advanced trait with const generics and GATs
 pub trait AdvancedContainer<const N: usize> {
     type Item<'a>: Clone where Self: 'a;
     type Iterator<'a>: Iterator<Item = Self::Item<'a>> where Self: 'a;
@@ -58,13 +58,13 @@ pub trait AdvancedContainer<const N: usize> {
 
     fn process_batch<'a, F>(&'a self, f: F) -> [Option<Self::Item<'a>>; N] where F: Fn(usize) -> Option<Self::Item<'a>>;
 }
-/// Implementation with const generics
 
+/// Implementation with const generics
 pub struct FixedArray<T: Clone, const N: usize>;
 
 impl<T: Clone, const N: usize> FixedArray<T, N> {
-    /// Create new fixed array
 
+    /// Create new fixed array
     pub const fn new() -> Self
 }
 
@@ -78,15 +78,15 @@ impl<T: Clone, const N: usize> AdvancedContainer<N> for FixedArray<T, N> {
 
     fn process_batch<'a, F>(&'a self, f: F) -> [Option<Self::Item<'a>>; N] where F: Fn(usize) -> Option<Self::Item<'a>>
 }
-/// Advanced async trait with GATs
 
+/// Advanced async trait with GATs
 pub trait AsyncDataProcessor {
     type Output<'a>: Send where Self: 'a;
     type Error: std::error::Error + Send + Sync;
 
     async fn process_async<'a>(&'a self, data: &'a [u8]) -> Result<Self::Output<'a>, Self::Error>;
-    /// Default implementation with complex bounds
 
+    /// Default implementation with complex bounds
     async fn batch_process<'a, I>(&'a self, inputs: I) -> Vec<Result<Self::Output<'a>, Self::Error>> where I: IntoIterator<Item = &'a [u8]> + Send, I::IntoIter: Send
 }
 </file>

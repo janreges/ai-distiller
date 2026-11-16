@@ -8,17 +8,17 @@ use std::fmt::Display as Disp;
 pub use crate::inner::Thing;
 use std::sync::*;
 use std::{fs::File, path::{Path, PathBuf}};
-/// Max retries for the client.
 
+/// Max retries for the client.
 pub const MAX_RETRIES: u32 = 3;
 
 pub static GREETING: &str = "hello";
-/// Result alias.
 
+/// Result alias.
 pub type Res<T> = Result<T, io::Error>;
+
 /// Block doc comment
 /// on a struct.
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Point {
     /// The x coordinate.
@@ -36,8 +36,8 @@ pub struct Wrapper<'a, T: Display + 'a>;
 pub struct Bounded<T> where T: Clone {
     pub value: T,
 }
-/// A shape.
 
+/// A shape.
 #[derive(Debug)]
 pub enum Shape {
     /// A circle.
@@ -69,8 +69,8 @@ pub trait Container<T> where T: Clone {
 }
 
 impl Point {
-    /// Creates a point.
 
+    /// Creates a point.
     pub fn new(x: f64, y: f64) -> Self
 }
 
@@ -141,15 +141,15 @@ pub fn takes_closure<F: Fn(i32) -> i32>(f: F) -> i32
 pub fn tuple_param((a, b): (i32, i32)) -> i32
 
 pub struct Multi(pub u8, _);
+
 /// Doc one.
 ///
 /// Doc two after a blank doc line.
-
 pub fn documented()
 
 pub fn brace_on_next_line()
-/// A struct declared inside a macro call.
 
+/// A struct declared inside a macro call.
 pub struct InMacro {
     pub field: u8,
 }

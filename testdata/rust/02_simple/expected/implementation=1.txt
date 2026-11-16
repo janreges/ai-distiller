@@ -1,16 +1,16 @@
 <file path="source.rs">
-/// Represents a source file to be processed.
 
+/// Represents a source file to be processed.
 pub struct SourceFile {
     pub path: String,
 }
-/// A trait for items that can be summarized.
 
+/// A trait for items that can be summarized.
 pub trait Summarizable {
 
     fn summary(&self) -> String;
-    /// Default implementation for short summary
 
+    /// Default implementation for short summary
     fn short_summary(&self) -> String {
         let full = self.summary();
         if full.len() > 50 {
@@ -22,8 +22,8 @@ pub trait Summarizable {
 }
 
 impl SourceFile {
-    /// Creates a new SourceFile, demonstrating ownership (takes ownership of path and content).
 
+    /// Creates a new SourceFile, demonstrating ownership (takes ownership of path and content).
     pub fn new(path: String, content: String) -> Self {
         let lines_of_code = content.lines().count() as u32;
         Self {
@@ -32,8 +32,8 @@ impl SourceFile {
             lines_of_code,
         }
     }
-    /// A public method to access a derived property.
 
+    /// A public method to access a derived property.
     pub fn line_count(&self) -> u32 {
         self.lines_of_code
     }
@@ -49,8 +49,8 @@ impl Summarizable for SourceFile {
         )
     }
 }
-/// Additional trait for file operations
 
+/// Additional trait for file operations
 pub trait FileOperations {
     type Error;
 
@@ -58,8 +58,8 @@ pub trait FileOperations {
 
     fn write_content(&mut self, content: String) -> Result<(), Self::Error>;
 }
-/// Error type for file operations
 
+/// Error type for file operations
 #[derive(Debug)]
 pub enum FileError {
     NotFound,

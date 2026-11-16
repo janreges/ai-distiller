@@ -77,8 +77,8 @@ func TestRustFormatter_InlineModPrintsEveryChild(t *testing.T) {
 	))
 	assert.Equal(t, "\npub mod inline_mod {\n"+
 		"    use super::*;\n"+
-		"    /// Inner doc\n"+
-		"\n    pub struct Inner;\n"+
+		"\n    /// Inner doc\n"+
+		"    pub struct Inner;\n"+
 		"\n    pub fn inside() -> u8\n"+
 		"\n    pub type T = u8;\n"+
 		"\n    mod deeper {\n"+
@@ -204,7 +204,7 @@ func TestRustFormatter_ExternBlock(t *testing.T) {
 	withComments := rustDefault
 	withComments.IncludeComments = true
 	assert.Equal(t, []string{"", "pub mod m {", "    // note", "", "    pub fn after()", "}"}, distillRust(t, inMod, withComments))
-	assert.Equal(t, []string{"/// FFI doc.", "", "extern \"C\" {", "", "    fn abs(input: i32) -> i32;", "}", "", "pub fn after()"},
+	assert.Equal(t, []string{"", "/// FFI doc.", "extern \"C\" {", "", "    fn abs(input: i32) -> i32;", "}", "", "pub fn after()"},
 		distillRust(t, src, rustAll))
 }
 
@@ -362,23 +362,23 @@ func TestRustFormatter_DocCommentStyles(t *testing.T) {
 	opts := rustAll
 	opts.IncludeComments = true
 	assert.Equal(t, []string{
+		"",
 		"/// outer line",
 		"///",
 		"/// after an empty doc line",
-		"",
 		"fn a()",
+		"",
 		"/// outer block",
 		"/// second line",
 		"///",
 		"///   indented",
-		"",
 		"fn b()",
 		"//! inner line",
 		"//! inner block",
 		"//! more",
+		"",
 		"// plain line",
 		"// plain block",
-		"",
 		"fn c()",
 	}, distillRust(t, src, opts))
 
@@ -390,7 +390,7 @@ func TestRustFormatter_DocCommentStyles(t *testing.T) {
 
 func TestRustFormatter_AttributesAndBodyDocs(t *testing.T) {
 	src := "/// pub doc\n#[derive(Debug)]\npub struct A;\n/// priv doc\n#[derive(Debug)]\nstruct B;\n"
-	assert.Equal(t, []string{"/// pub doc", "", "#[derive(Debug)]", "pub struct A;"}, distillRust(t, src, rustDefault))
+	assert.Equal(t, []string{"", "/// pub doc", "#[derive(Debug)]", "pub struct A;"}, distillRust(t, src, rustDefault))
 
 	src = "/// S doc\n#[derive(Debug, Clone)]\n#[repr(C)]\npub struct S {\n" +
 		"    /// x doc\n    #[serde(rename = \"x\")]\n    pub x: u8,\n" +
@@ -400,7 +400,7 @@ func TestRustFormatter_AttributesAndBodyDocs(t *testing.T) {
 		"pub union U {\n    /// f doc\n    #[allow(dead_code)]\n    pub f: u32,\n}\n" +
 		"pub struct T(#[serde(skip)] pub u8);\n"
 	assert.Equal(t, []string{
-		"/// S doc", "", "#[derive(Debug, Clone)]", "#[repr(C)]", "pub struct S {",
+		"", "/// S doc", "#[derive(Debug, Clone)]", "#[repr(C)]", "pub struct S {",
 		"    /// x doc", "    #[serde(rename = \"x\")]", "    pub x: u8,",
 		"    /// z doc", "    pub z: u8,", "}",
 		"", "pub enum E {",
@@ -433,5 +433,39 @@ func TestRustFormatter_AttributesAndBodyDocs(t *testing.T) {
 	// Annotations off removes them.
 	noAttrs := rustDefault
 	noAttrs.IncludeAnnotations = false
-	assert.Equal(t, []string{"/// pub doc", "", "pub struct A;"}, distillRust(t, "/// pub doc\n#[derive(Debug)]\npub struct A;\n", noAttrs))
+	assert.Equal(t, []string{"", "/// pub doc", "pub struct A;"}, distillRust(t, "/// pub doc\n#[derive(Debug)]\npub struct A;\n", noAttrs))
+}
+
+// A doc or plain comment sits directly on the item it precedes, with the
+// item's blank line above the comment; a file header followed by an item's
+// doc keeps its own place, and so does an inner doc.
+func TestRustFormatter_CommentsSitOnTheirItem(t *testing.T) {
+	src := "// Copyright header\n\n/// Item doc\npub fn a() {}\n" +
+		"impl S {\n    /// m doc\n    #[inline]\n    pub fn m() {}\n    // plain\n    pub fn n() {}\n}\n" +
+		"pub mod inner {\n    //! Module doc\n    /// f doc\n    pub fn f() {}\n}\n"
+	opts := rustAll
+	opts.IncludeComments = true
+	assert.Equal(t, []string{
+		"// Copyright header",
+		"",
+		"/// Item doc",
+		"pub fn a()",
+		"",
+		"impl S {",
+		"",
+		"    /// m doc",
+		"    #[inline]",
+		"    pub fn m()",
+		"",
+		"    // plain",
+		"    pub fn n()",
+		"}",
+		"",
+		"pub mod inner {",
+		"    //! Module doc",
+		"",
+		"    /// f doc",
+		"    pub fn f()",
+		"}",
+	}, distillRust(t, src, opts))
 }

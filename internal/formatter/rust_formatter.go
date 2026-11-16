@@ -56,8 +56,16 @@ func (f *RustFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent in
 // FormatNodes implements SiblingFormatter: it formats sibling nodes with
 // FormatNode, except the outer doc comments right before an item that prints
 // nothing (an extern block whose members were all removed), which would
-// otherwise appear to document the next item.
+// otherwise appear to document the next item. The outermost call writes
+// through a docWriter, so the comments before an item sit directly on it.
 func (f *RustFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, indent int) error {
+	if _, nested := w.(*docWriter); !nested {
+		dw := &docWriter{w: w}
+		if err := f.FormatNodes(dw, nodes, indent); err != nil {
+			return err
+		}
+		return dw.flush()
+	}
 	// From the end: skip[i] when nodes[i] is an outer doc and the first node
 	// after it that is not a comment prints nothing.
 	skip := make([]bool, len(nodes))
@@ -73,11 +81,70 @@ func (f *RustFormatter) FormatNodes(w io.Writer, nodes []ir.DistilledNode, inden
 		if skip[i] {
 			continue
 		}
+		if printsNothing(node) {
+			// The plain comments above it keep their place.
+			if err := w.(*docWriter).flush(); err != nil {
+				return err
+			}
+		}
 		if err := f.FormatNode(w, node, indent); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// docWriter holds the comments written before an item until the item's first
+// write. When that write starts with a blank line (the item is set off from
+// the one before it), the blank line goes before the comments, so that they
+// sit directly on the item they document instead of under the item before.
+type docWriter struct {
+	w io.Writer
+	// pending is the text of the held comments; plain is true when one of
+	// them is not a doc comment.
+	pending []byte
+	plain   bool
+}
+
+func (d *docWriter) Write(p []byte) (int, error) {
+	if len(d.pending) == 0 || len(p) == 0 {
+		return d.w.Write(p)
+	}
+	out := make([]byte, 0, len(d.pending)+len(p))
+	if p[0] == '\n' {
+		out = append(append(append(out, '\n'), d.pending...), p[1:]...)
+	} else {
+		out = append(append(out, d.pending...), p...)
+	}
+	d.pending, d.plain = d.pending[:0], false
+	if _, err := d.w.Write(out); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+// hold adds a comment's text to the held comments. A doc comment after a
+// plain one (a file header above the doc of the first item) releases the
+// plain one first, so that the header keeps its own place.
+func (d *docWriter) hold(text string, doc bool) error {
+	if doc && d.plain {
+		if err := d.flush(); err != nil {
+			return err
+		}
+	}
+	d.pending = append(d.pending, text...)
+	d.plain = d.plain || !doc
+	return nil
+}
+
+// flush writes the held comments as they are.
+func (d *docWriter) flush() error {
+	if len(d.pending) == 0 {
+		return nil
+	}
+	_, err := d.w.Write(d.pending)
+	d.pending, d.plain = d.pending[:0], false
+	return err
 }
 
 // printsNothing reports whether node prints nothing: an extern block without
@@ -122,7 +189,9 @@ func (f *RustFormatter) formatImport(w io.Writer, imp *ir.DistilledImport, inden
 
 // formatComment writes a comment in its own style, one line per text line: an
 // outer doc as "/// text", an inner doc as "//! text" and any other comment
-// as "// text". An empty line has no trailing space.
+// as "// text". An empty line has no trailing space. Through a docWriter, a
+// comment other than an inner doc is held for the item after it; an inner doc
+// belongs to the enclosing module and is written at once.
 func (f *RustFormatter) formatComment(w io.Writer, comment *ir.DistilledComment, indent string) error {
 	marker := "//"
 	if comment.IsDoc() {
@@ -131,13 +200,23 @@ func (f *RustFormatter) formatComment(w io.Writer, comment *ir.DistilledComment,
 			marker = "//!"
 		}
 	}
+	var b strings.Builder
 	for _, line := range strings.Split(comment.Text, "\n") {
 		if line = strings.TrimRight(line, " \t\r"); line != "" {
 			line = " " + line
 		}
-		fmt.Fprintf(w, "%s%s%s\n", indent, marker, line)
+		fmt.Fprintf(&b, "%s%s%s\n", indent, marker, line)
 	}
-	return nil
+	if dw, ok := w.(*docWriter); ok {
+		if !comment.Inner {
+			return dw.hold(b.String(), comment.IsDoc())
+		}
+		if err := dw.flush(); err != nil {
+			return err
+		}
+	}
+	_, err := io.WriteString(w, b.String())
+	return err
 }
 
 // formatDecorators writes the outer attributes of an item, field or variant,

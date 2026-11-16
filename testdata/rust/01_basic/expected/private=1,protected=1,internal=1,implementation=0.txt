@@ -1,29 +1,29 @@
 <file path="source.rs">
-/// The main entry point of the application.
 
+/// The main entry point of the application.
 fn main()
+
 /// A module to handle application settings.
 /// This tests the parser's ability to handle inline module definitions.
-
 pub mod settings {
-    /// The public name of the application.
 
+    /// The public name of the application.
     pub const APP_NAME: &str = "AI Distiller";
 
     const MAJOR_VERSION: u8 = 1;
 
     const MINOR_VERSION: u8 = 0;
+
     /// Returns the full version string.
     /// This function is public and can be called from outside `settings`.
-
     pub fn get_version() -> String
 
     fn is_stable() -> bool
+
     /// Internal utility for debug builds
-
     pub(crate) fn debug_info() -> String
-    /// Private helper for version validation
 
+    /// Private helper for version validation
     fn validate_version() -> bool
 }
 </file>
