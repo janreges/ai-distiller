@@ -88,3 +88,17 @@ func TestTypeScriptFormatter_Comments(t *testing.T) {
 		assert.Equal(t, "namespace NS {\n    /**\n     * A.\n     * B.\n     */\n    export function f(): void\n}\n", tsFormat(t, ns, 0))
 	})
 }
+
+// Parameters print as written, in functions, methods and interface methods.
+func TestTypeScriptFormatter_Parameters(t *testing.T) {
+	params := []ir.Parameter{
+		{Name: "{ a, b = 1 }", Type: ir.TypeRef{Name: "P"}},
+		{Name: "c", Type: ir.TypeRef{Name: "string"}, IsOptional: true},
+		{Name: "d", Type: ir.TypeRef{Name: "number"}, DefaultValue: "0"},
+		{Name: "rest", Type: ir.TypeRef{Name: "U[]"}, IsVariadic: true},
+	}
+	want := "({ a, b = 1 }: P, c?: string, d: number = 0, ...rest: U[])"
+	assert.Equal(t, "function f"+want+"\n", tsFormat(t, &ir.DistilledFunction{Name: "f", Parameters: params}, 0))
+	intf := &ir.DistilledInterface{Name: "I", Children: []ir.DistilledNode{&ir.DistilledFunction{Name: "m", Parameters: params}}}
+	assert.Contains(t, tsFormat(t, intf, 0), "    method m"+want+"\n")
+}

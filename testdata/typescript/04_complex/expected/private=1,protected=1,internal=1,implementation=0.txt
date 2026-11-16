@@ -12,7 +12,7 @@ export interface IPlugin {
 export class PluginManager {
     private plugins: Map<string, IPlugin> = new Map()
     private settings: PluginSettings
-    public constructor(settings: PluginSettings)
+    public constructor(settings: PluginSettings = {})
     @LogExecution
     public registerPlugin(plugin: IPlugin): void
     public runAll(data: any): void

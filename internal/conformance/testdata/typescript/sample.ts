@@ -66,3 +66,8 @@ export default confListed;
 
 export interface ConfBased extends ConfGenericBase<string>, confNs.ConfQualified<number> {}
 export class ConfDerived extends confNs.ConfBaseClass<{ id: number }> implements ConfBased {}
+
+export function confParams({ confA, confB = 1 }: ConfOpts, [confX]: [number], confOpt?: string, confDef: number = 0, ...confRest: string[]): void {}
+export class ConfProps {
+    constructor(readonly confRo: number, private confHid: string) {}
+}

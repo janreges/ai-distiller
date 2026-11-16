@@ -9,7 +9,7 @@ export interface IPlugin {
 }
 
 export class PluginManager {
-    public constructor(settings: PluginSettings) {}
+    public constructor(settings: PluginSettings = {}) {}
     @LogExecution
     public registerPlugin(plugin: IPlugin): void {
         if (this.plugins.has(plugin.name)) {

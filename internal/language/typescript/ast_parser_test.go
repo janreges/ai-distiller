@@ -374,3 +374,43 @@ func TestTS_HeritageAsWritten(t *testing.T) {
 	assert.Equal(t, []string{"mixin(A, B)"}, typeNames(f.Children[2].(*ir.DistilledClass).Extends))
 	assert.Equal(t, []string{"Q"}, typeNames(f.Children[3].(*ir.DistilledClass).Extends))
 }
+
+// Parameters keep what the source says: destructuring patterns, rest,
+// optional, defaults and `this`.
+func TestTS_ParametersAsWritten(t *testing.T) {
+	f := parseTS(t, "function f({ a, b = 1 }: P, [x,\n  y]: [number, number], c?: string, d: number = 0, ...rest: U[]): void {}\n"+
+		"class K { m(this: K, e = () => { return 1; }) {} }\n")
+	params := f.Children[0].(*ir.DistilledFunction).Parameters
+	assert.Equal(t, []ir.Parameter{
+		{Name: "{ a, b = 1 }", Type: ir.TypeRef{Name: "P"}},
+		{Name: "[x, y]", Type: ir.TypeRef{Name: "[number, number]"}},
+		{Name: "c", Type: ir.TypeRef{Name: "string"}, IsOptional: true},
+		{Name: "d", Type: ir.TypeRef{Name: "number"}, DefaultValue: "0"},
+		{Name: "rest", Type: ir.TypeRef{Name: "U[]"}, IsVariadic: true},
+	}, params)
+	m := f.Children[1].(*ir.DistilledClass).Children[0].(*ir.DistilledFunction)
+	assert.Equal(t, []ir.Parameter{
+		{Name: "this", Type: ir.TypeRef{Name: "K"}},
+		{Name: "e", DefaultValue: "()"},
+	}, m.Parameters)
+}
+
+// A constructor parameter with an accessibility modifier or readonly is a
+// field with that visibility and readonly.
+func TestTS_ParameterProperties(t *testing.T) {
+	f := parseTS(t, "class K { constructor(private readonly s: S, readonly r: number, protected p: P, plain: Q) {} }\n")
+	fields := map[string]*ir.DistilledField{}
+	for _, c := range f.Children[0].(*ir.DistilledClass).Children {
+		if fd, ok := c.(*ir.DistilledField); ok {
+			fields[fd.Name] = fd
+		}
+	}
+	require.Len(t, fields, 3)
+	assert.Equal(t, ir.VisibilityPrivate, fields["s"].Visibility)
+	assert.Equal(t, []ir.Modifier{ir.ModifierReadonly}, fields["s"].Modifiers)
+	assert.Equal(t, ir.VisibilityPublic, fields["r"].Visibility)
+	assert.Equal(t, []ir.Modifier{ir.ModifierReadonly}, fields["r"].Modifiers)
+	assert.Equal(t, "number", fields["r"].Type.Name)
+	assert.Equal(t, ir.VisibilityProtected, fields["p"].Visibility)
+	assert.Empty(t, fields["p"].Modifiers)
+}

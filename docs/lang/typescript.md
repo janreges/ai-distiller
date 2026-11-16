@@ -23,7 +23,8 @@ TypeScript support in AI Distiller is designed to capture the rich type informat
 | **Enums** | ✅ Full | Members with their initialisers; `const enum` prints as `enum` |
 | **Decorators** | ⚠️ Partial | Method decorators are printed with their arguments; class and property decorators are dropped |
 | **Namespaces** | ✅ Full | `namespace X {}` and `declare module "x" {}` with their members |
-| **Parameter Properties** | ✅ Full | Constructor shorthand syntax (`readonly` and default values are dropped) |
+| **Parameters** | ✅ Full | As written: destructuring patterns (`{ a, b = 1 }: P`), rest (`...rest: U[]`), optional (`c?: string`), defaults (`d: number = 0`), `this: K` |
+| **Parameter Properties** | ✅ Full | Constructor shorthand syntax becomes fields with their visibility and `readonly`; the field does not repeat the parameter's `?` or default |
 
 ### Visibility Rules
 
@@ -112,10 +113,10 @@ class UserModel {
 ```
 # Output (--internal=1 --private=1 --protected=1)
 class UserModel {
-    public id: number
+    public readonly id: number
     private email: string
     protected lastLogin: Date
-    public constructor(id: number, email: string, lastLogin: Date)
+    public constructor(id: number, email: string, lastLogin?: Date)
 }
 ```
 
@@ -329,12 +330,11 @@ AI Distiller recognizes common TypeScript framework patterns:
 ## Known Limitations
 
 1. **Decorators**: Class decorators (`@Component({...})`) and property decorators (`@Input()`) are dropped; method decorators are printed with their arguments
-2. **Parameter Defaults and Rest Parameters**: Default values are not shown for any parameter (constructors, methods, functions and arrow functions: `greet(times: number = 1)` prints as `greet(times: number)`), a rest parameter (`...rest: string[]`) is dropped, and `readonly` is dropped from parameter properties
-3. **Index Signatures**: `[key: string]: T` members of interfaces are not printed
-4. **Triple-slash Directives**: Reference comments are ignored
-5. **Const Arrow Functions**: Displayed like a function signature (`export const handler(req: Request): Response`); the `=>` form is printed only with `--implementation=1`
-6. **`const enum`**: Printed as a plain `enum`
-7. **Optional and readonly markers**: The `?` of optional properties, methods and parameters and the `readonly` of interface members are dropped (`email?: string` prints as `property email: string`); class members keep `readonly` (`public readonly limit: number = 3`)
+2. **Index Signatures**: `[key: string]: T` members of interfaces are not printed
+3. **Triple-slash Directives**: Reference comments are ignored
+4. **Const Arrow Functions**: Displayed like a function signature (`export const handler(req: Request): Response`); the `=>` form is printed only with `--implementation=1`
+5. **`const enum`**: Printed as a plain `enum`
+6. **Optional and readonly markers on members**: The `?` of optional properties and methods and the `readonly` of interface members are dropped (`email?: string` prints as `property email: string`); class members keep `readonly` (`public readonly limit: number = 3`) and parameters keep their `?`
 
 ## Best Practices
 
@@ -432,6 +432,7 @@ class Service {
 1. **Imports** (✅ Fixed): printed as written (`import D, { A, B as C } from './m'`, `import * as ns`, `import type`) instead of a bare `import './m'`
 2. **Re-exports and default exports** (✅ Fixed): `export * from`, `export { x as y } from`, `export { q }`, `export default Inner` and `export = X` print, so a barrel file is no longer empty; `export default function main()` keeps its `default`
 3. **Generic and qualified bases** (✅ Fixed): `interface A extends B<string>`, `class X extends React.Component<P>` and `extends ns.Base<T>` lost their base
+4. **Parameters** (✅ Fixed): destructured parameters (`{ a }: P`, `[x, y]: T`) and rest parameters were dropped, defaults and the `?` of optional parameters were not shown, and parameter properties lost `readonly`
 
 ### Current Limitations
 
@@ -453,8 +454,7 @@ TypeScript parsing performance with tree-sitter:
 TypeScript support is actively maintained. Key areas for contribution:
 
 1. **Decorator Support**: Class and property decorators in `internal/language/typescript/ast_parser.go`
-2. **Parameter Defaults**: Capture default values and rest parameters
-3. **Index Signatures**: Print them in interfaces
-4. **Performance**: Optimize tree-sitter grammar loading
+2. **Index Signatures**: Print them in interfaces
+3. **Performance**: Optimize tree-sitter grammar loading
 
 See [CONTRIBUTING.md](../../CONTRIBUTING.md) for development setup.

@@ -1309,121 +1309,87 @@ func (p *ASTParser) parseArrowFunction(node *sitter.Node, isExported bool) *ir.D
 	return fn
 }
 
-// parseParameterProperties parses parameter properties from constructor parameters
+// parseParameterProperties returns the fields that the parameter properties
+// of a constructor's formal_parameters declare: a parameter with an
+// accessibility modifier or `readonly` (`private readonly s: S` is a private
+// readonly field s, `readonly t: T` a public one).
 func (p *ASTParser) parseParameterProperties(node *sitter.Node) []*ir.DistilledField {
 	var fields []*ir.DistilledField
-
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(uint(i))
-		if child == nil {
+	for i := uint(0); i < node.NamedChildCount(); i++ {
+		child := node.NamedChild(i)
+		if child.Kind() != "required_parameter" && child.Kind() != "optional_parameter" {
 			continue
 		}
-
-		switch child.Kind() {
-		case "required_parameter", "optional_parameter":
-			// Check if this parameter has visibility modifiers
-			var visibility ir.Visibility
-			var hasVisibility bool
-			var paramName string
-			var paramType *ir.TypeRef
-
-			for j := 0; j < int(child.ChildCount()); j++ {
-				subchild := child.Child(uint(j))
-				if subchild == nil {
-					continue
+		pattern := child.ChildByFieldName("pattern")
+		if pattern == nil || pattern.Kind() != "identifier" {
+			continue
+		}
+		field := &ir.DistilledField{
+			BaseNode:  ir.BaseNode{Location: p.nodeToLocation(child)},
+			Name:      p.nodeText(pattern),
+			Type:      p.typeFromAnnotation(child.ChildByFieldName("type")),
+			Modifiers: []ir.Modifier{},
+		}
+		isProperty := false
+		for j := uint(0); j < child.ChildCount(); j++ {
+			switch sub := child.Child(j); sub.Kind() {
+			case "accessibility_modifier":
+				isProperty = true
+				switch p.nodeText(sub) {
+				case "private":
+					field.Visibility = ir.VisibilityPrivate
+				case "protected":
+					field.Visibility = ir.VisibilityProtected
+				default:
+					field.Visibility = ir.VisibilityPublic
 				}
-
-				switch subchild.Kind() {
-				case "accessibility_modifier":
-					hasVisibility = true
-					switch p.nodeText(subchild) {
-					case "private":
-						visibility = ir.VisibilityPrivate
-					case "protected":
-						visibility = ir.VisibilityProtected
-					case "public":
-						visibility = ir.VisibilityPublic
-					}
-				case "identifier":
-					paramName = p.nodeText(subchild)
-				case "type_annotation":
-					// Get the actual type node
-					for k := 0; k < int(subchild.ChildCount()); k++ {
-						typeChild := subchild.Child(uint(k))
-						if typeChild != nil && typeChild.Kind() != ":" {
-							paramType = &ir.TypeRef{Name: p.nodeText(typeChild)}
-							break
-						}
-					}
-				}
-			}
-
-			// If this parameter has a visibility modifier, it's a parameter property
-			if hasVisibility && paramName != "" {
-				field := &ir.DistilledField{
-					BaseNode: ir.BaseNode{
-						Location: p.nodeToLocation(child),
-					},
-					Name:       paramName,
-					Visibility: visibility,
-					Type:       paramType,
-					Modifiers:  []ir.Modifier{},
-				}
-				fields = append(fields, field)
+			case "readonly":
+				isProperty = true
+				field.Modifiers = append(field.Modifiers, ir.ModifierReadonly)
 			}
 		}
+		if !isProperty {
+			continue
+		}
+		if field.Visibility == "" {
+			field.Visibility = ir.VisibilityPublic
+		}
+		fields = append(fields, field)
 	}
-
 	return fields
 }
 
-// parseParameters parses function parameters
+// parseParameters returns the parameters of a formal_parameters node as
+// written. A destructuring pattern is the parameter's name, as its source
+// text on one line (`{ a, b = 1 }`, `[x, y]`); `...rest` is variadic, `c?`
+// optional, `this` a parameter named this; a default value keeps its text
+// with function bodies left out. The accessibility and readonly modifiers of
+// a parameter property are not part of the parameter:
+// parseParameterProperties makes them fields.
 func (p *ASTParser) parseParameters(node *sitter.Node) []ir.Parameter {
 	var params []ir.Parameter
-
-	// Debug
-	// fmt.Printf("Parsing parameters, node has %d children\n", node.ChildCount())
-
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(uint(i))
-		if child == nil {
+	for i := uint(0); i < node.NamedChildCount(); i++ {
+		child := node.NamedChild(i)
+		if child.Kind() != "required_parameter" && child.Kind() != "optional_parameter" {
 			continue
 		}
-
-		// fmt.Printf("  Param child %d: type=%s\n", i, child.Kind())
-
-		switch child.Kind() {
-		case "required_parameter", "optional_parameter":
-			param := ir.Parameter{
-				IsOptional: child.Kind() == "optional_parameter",
-			}
-
-			// Parse parameter components
-			for j := 0; j < int(child.ChildCount()); j++ {
-				subchild := child.Child(uint(j))
-				if subchild == nil {
-					continue
-				}
-
-				switch subchild.Kind() {
-				case "identifier":
-					param.Name = p.nodeText(subchild)
-				case "type_annotation":
-					// Get the actual type node, which is the first child after the colon
-					for k := 0; k < int(subchild.ChildCount()); k++ {
-						typeChild := subchild.Child(uint(k))
-						if typeChild != nil && typeChild.Kind() != ":" {
-							param.Type = ir.TypeRef{Name: p.nodeText(typeChild)}
-							break
-						}
-					}
-				}
-			}
-
-			params = append(params, param)
+		param := ir.Parameter{IsOptional: child.Kind() == "optional_parameter"}
+		pattern := child.ChildByFieldName("pattern")
+		if pattern != nil && pattern.Kind() == "rest_pattern" {
+			param.IsVariadic = true
+			pattern = pattern.NamedChild(0)
 		}
+		if pattern != nil {
+			param.Name = esutil.Signature(pattern, p.source)
+		}
+		if t := p.typeFromAnnotation(child.ChildByFieldName("type")); t != nil {
+			param.Type = *t
+		}
+		if value := child.ChildByFieldName("value"); value != nil {
+			param.DefaultValue = esutil.Signature(value, p.source)
+		}
+		params = append(params, param)
 	}
-
 	return params
 }
 

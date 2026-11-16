@@ -214,20 +214,7 @@ func (f *TypeScriptFormatter) formatInterface(w io.Writer, intf *ir.DistilledInt
 				fmt.Fprintf(w, "<%s>", strings.Join(typeParams, ", "))
 			}
 
-			// Parameters
-			fmt.Fprintf(w, "(")
-			params := make([]string, 0, len(c.Parameters))
-			for _, param := range c.Parameters {
-				if param.Name == "" {
-					continue
-				}
-				paramStr := param.Name
-				if param.Type.Name != "" {
-					paramStr += ": " + param.Type.Name
-				}
-				params = append(params, paramStr)
-			}
-			fmt.Fprintf(w, "%s)", strings.Join(params, ", "))
+			fmt.Fprintf(w, "(%s)", tsParams(c.Parameters))
 
 			// Return type
 			if c.Returns != nil && c.Returns.Name != "" {
@@ -299,23 +286,7 @@ func (f *TypeScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 		fmt.Fprintf(w, "<%s>", strings.Join(typeParams, ", "))
 	}
 
-	// Parameters
-	fmt.Fprintf(w, "(")
-	params := make([]string, 0, len(fn.Parameters))
-	for _, param := range fn.Parameters {
-		if param.Name == "" {
-			continue
-		}
-		paramStr := param.Name
-		if param.Type.Name != "" {
-			paramStr += ": " + param.Type.Name
-		}
-		if param.DefaultValue != "" {
-			paramStr += " = " + param.DefaultValue
-		}
-		params = append(params, paramStr)
-	}
-	fmt.Fprintf(w, "%s)", strings.Join(params, ", "))
+	fmt.Fprintf(w, "(%s)", tsParams(fn.Parameters))
 
 	// Return type
 	if fn.Returns != nil && fn.Returns.Name != "" {
@@ -336,6 +307,32 @@ func (f *TypeScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 	}
 
 	return nil
+}
+
+// tsParams prints parameters as written, comma-separated: `...rest: U[]`,
+// `c?: string`, `{ a, b = 1 }: P`, `d: number = 0`.
+func tsParams(params []ir.Parameter) string {
+	out := make([]string, 0, len(params))
+	for _, param := range params {
+		if param.Name == "" {
+			continue
+		}
+		s := param.Name
+		if param.IsVariadic {
+			s = "..." + s
+		}
+		if param.IsOptional {
+			s += "?"
+		}
+		if param.Type.Name != "" {
+			s += ": " + param.Type.Name
+		}
+		if param.DefaultValue != "" {
+			s += " = " + param.DefaultValue
+		}
+		out = append(out, s)
+	}
+	return strings.Join(out, ", ")
 }
 
 func (f *TypeScriptFormatter) formatField(w io.Writer, field *ir.DistilledField, indent int) error {

@@ -30,9 +30,13 @@
   non-exported function or variable whose name starts with `_` is `private`.
 - Class members default to `public`; `private`, `protected` and `public`
   accessibility modifiers set it; a `#name` member is `private` and keeps the
-  `#` in its name. Constructor parameter properties (`constructor(private x: T)`)
-  become fields with the parameter's modifier
+  `#` in its name. Constructor parameter properties (`constructor(private x: T)`,
+  `constructor(readonly y: T)`) become fields with the parameter's modifier and
+  `readonly`
   (`internal/language/typescript/ast_parser.go#ASTParser.parseParameterProperties`).
+  A parameter's `Name` is its pattern as written, so a destructuring pattern
+  (`{ a, b = 1 }`) is the name; `...` sets `IsVariadic`, `?` `IsOptional`
+  (`internal/language/typescript/ast_parser.go#ASTParser.parseParameters`).
 - Interface members and enum members are `public`.
 - Inside a namespace, members follow the same export rule (`export` is
   `public`, the rest `internal`). Inside an ambient declaration (`declare

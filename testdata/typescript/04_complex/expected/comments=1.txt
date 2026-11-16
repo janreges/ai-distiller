@@ -10,7 +10,7 @@ export interface IPlugin {
 }
 
 export class PluginManager {
-    public constructor(settings: PluginSettings)
+    public constructor(settings: PluginSettings = {})
     @LogExecution
     public registerPlugin(plugin: IPlugin): void
     public runAll(data: any): void

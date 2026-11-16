@@ -84,6 +84,10 @@ var fixtures = []fixture{
 			"export type { ConfReType } from './conf-retype'"}},
 		check{Cap: "reexport-kept-without-imports", Flags: []string{"--imports=0"}, Contains: []string{"export * from './conf-all'"}},
 		check{Cap: "export-list-makes-public", Contains: []string{"const confListed = 2", "export { confListed }", "export default confListed"}},
+		check{Cap: "parameters-as-written", Contains: []string{
+			"export function confParams({ confA, confB = 1 }: ConfOpts, [confX]: [number], confOpt?: string, confDef: number = 0, ...confRest: string[]): void",
+			"public readonly confRo: number",
+			"public constructor(confRo: number, confHid: string)"}},
 		check{Cap: "heritage-as-written", Contains: []string{
 			"export interface ConfBased extends ConfGenericBase<string>, confNs.ConfQualified<number> {",
 			"export class ConfDerived extends confNs.ConfBaseClass<{ id: number }> implements ConfBased {"}},
