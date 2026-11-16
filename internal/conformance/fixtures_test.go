@@ -88,6 +88,7 @@ var fixtures = []fixture{
 			"export function confParams({ confA, confB = 1 }: ConfOpts, [confX]: [number], confOpt?: string, confDef: number = 0, ...confRest: string[]): void",
 			"public readonly confRo: number",
 			"public constructor(confRo: number, confHid: string)"}},
+		check{Cap: "multi-line-type-on-one-line", Contains: []string{"export function confMultiType(confM: { confK: string; }): void"}},
 		check{Cap: "wrapper-const-signature", Contains: []string{
 			"export const confWrapped = confWrap<string>((confP: string))",
 			"export const confGeneric = async <T>(confV: T): Promise<T>",

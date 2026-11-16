@@ -1144,8 +1144,9 @@ func (p *ASTParser) accessorName(node *sitter.Node, name string) string {
 
 // typeFromAnnotation returns the type of a type_annotation node, or of a
 // return-type type_predicate_annotation ("x is T") or asserts_annotation
-// ("asserts x is T"): its first child that is not the ":" token, or nil when
-// there is none.
+// ("asserts x is T"): its first child that is not the ":" token, as written
+// on one line (esutil.Signature: `{ a: string; }` for an object type spread
+// over lines), or nil when there is none.
 func (p *ASTParser) typeFromAnnotation(node *sitter.Node) *ir.TypeRef {
 	if node == nil {
 		return nil
@@ -1153,7 +1154,7 @@ func (p *ASTParser) typeFromAnnotation(node *sitter.Node) *ir.TypeRef {
 	for i := 0; i < int(node.ChildCount()); i++ {
 		c := node.Child(uint(i))
 		if c != nil && c.Kind() != ":" {
-			return &ir.TypeRef{Name: p.nodeText(c)}
+			return &ir.TypeRef{Name: esutil.Signature(c, p.source)}
 		}
 	}
 	return nil

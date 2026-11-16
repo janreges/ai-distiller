@@ -82,3 +82,6 @@ export const confWrapped = confWrap<string>((confP: string) => {
 });
 export const confGeneric = async <T,>(confV: T): Promise<T> => confV;
 export const confTypedArrow: ConfHandler = (confReq) => confReq;
+export function confMultiType(confM: {
+    confK: string;
+}): void {}

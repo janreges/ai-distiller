@@ -37,6 +37,9 @@
   A parameter's `Name` is its pattern as written, so a destructuring pattern
   (`{ a, b = 1 }`) is the name; `...` sets `IsVariadic`, `?` `IsOptional`
   (`internal/language/typescript/ast_parser.go#ASTParser.parseParameters`).
+  A type annotation (of a parameter, a return type, a variable or a field) is
+  its text on one line
+  (`internal/language/typescript/ast_parser.go#ASTParser.typeFromAnnotation`).
 - Interface members and enum members are `public`.
 - Inside a namespace, members follow the same export rule (`export` is
   `public`, the rest `internal`). Inside an ambient declaration (`declare

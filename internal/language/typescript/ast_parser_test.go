@@ -456,3 +456,14 @@ func TestTS_FunctionValuedVariables(t *testing.T) {
 	assert.Equal(t, "compose(a, b)", field(4).DefaultValue)
 	assert.Equal(t, "", field(4).Implementation)
 }
+
+// A type annotation spread over lines is kept as written on one line, for
+// parameters, return types and variables alike.
+func TestTS_MultiLineTypesOnOneLine(t *testing.T) {
+	f := parseTS(t, "function f({ children }: {\n  children: React.ReactNode;\n}): {\n  value: T;\n} { return x; }\n"+
+		"const c: {\n  a: string; // the a\n  b: number;\n} = make();\n")
+	fn := f.Children[0].(*ir.DistilledFunction)
+	assert.Equal(t, "{ children: React.ReactNode; }", fn.Parameters[0].Type.Name)
+	assert.Equal(t, "{ value: T; }", fn.Returns.Name)
+	assert.Equal(t, "{ a: string; b: number; }", f.Children[1].(*ir.DistilledField).Type.Name)
+}
