@@ -84,7 +84,8 @@ function isInside(target: string, dir: string): boolean {
  * looping symlink), so aid cannot follow a symlink in it either, and when it
  * holds no "..", it can only name a place below that prefix. A ".." in the
  * rest would cancel a part that the check never resolved ("nope/../out" with
- * a symlink out), so such a value is refused (UncheckablePathError). Throws
+ * a symlink out), so such a value is refused (UncheckablePathError), as is an
+ * empty value, which would otherwise name all of root. Throws
  * OutsideRootError for a path outside root; a path inside root that does not
  * exist passes, and aid or list_files report it.
  */
@@ -94,6 +95,11 @@ export function confinePath(value: string, root: string, param: string, rootFrom
   }
   const rootAbs = path.resolve(root);
   const rootReal = realPathOfLongestPrefix(rootAbs);
+  if (value === "") {
+    throw new UncheckablePathError(
+      `${param} is empty. Name a file or directory inside AID_ROOT (${rootReal}); a relative path is ` +
+      `resolved against it, and "." is AID_ROOT itself.`);
+  }
   // Not normalised before the OS resolves it: "link/.." is the parent of the
   // symlink's target, not the directory that holds the symlink.
   const joined = path.isAbsolute(value) ? value : rootAbs + path.sep + value;

@@ -19,7 +19,8 @@ Registered Tools", parameters per tool) and the root `README.md` (section
   names the parameter, `AID_ROOT` and how to widen it. A `..` in the rest
   (after a part that is missing, a file, a dangling or looping symlink) is
   an `UncheckablePathError`: it would cancel a part the check never
-  resolved (`nope/../out` with `out` a symlink out). There is no opt-out. The first argument is the checked real path relative to the
+  resolved (`nope/../out` with `out` a symlink out). An empty value is an
+  `UncheckablePathError` too, not the whole root (`.` is). There is no opt-out. The first argument is the checked real path relative to the
   real `AID_ROOT` (`.` for the root, `./-x` for a name that starts with
   `-`), and `aid` runs with `AID_ROOT` as its working directory. In the
   tables below `<file_path>` and `<target_path>` stand for that argument.

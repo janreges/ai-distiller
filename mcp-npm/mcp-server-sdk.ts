@@ -741,7 +741,7 @@ export class AidDistillerServer {
         })
       },
       async (params) => {
-        const basePath = confinePath(params.path || ".", this.root(), 'path', Boolean(process.env.AID_ROOT)).real;
+        const basePath = confinePath(params.path ?? ".", this.root(), 'path', Boolean(process.env.AID_ROOT)).real;
         const result = await listFiles(basePath, { pattern: params.pattern, recursive: params.recursive });
         
         return {

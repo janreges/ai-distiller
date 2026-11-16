@@ -48,7 +48,6 @@ test('a path inside the root becomes a path relative to the real root', () => {
   assert.equal(confine(path.join(root, 'src', 'a.py'), root).arg, path.join('src', 'a.py'));
   assert.equal(confine('src/../src/a.py', root).arg, path.join('src', 'a.py'));
   assert.equal(confine('.', root).arg, '.');
-  assert.equal(confine('', root).arg, '.');
   assert.equal(confine(root, root).arg, '.');
 });
 
@@ -145,6 +144,16 @@ test('without AID_ROOT the message says the working directory stands for it', ()
   });
 });
 
+test('an empty value is an input error, not all of the root', () => {
+  const { root } = fixture();
+  assert.throws(() => confine('', root), (e) => {
+    assert.ok(e instanceof UncheckablePathError);
+    assert.equal(e.message, `file_path is empty. Name a file or directory inside AID_ROOT (${root}); a relative ` +
+      'path is resolved against it, and "." is AID_ROOT itself.');
+    return true;
+  });
+});
+
 test('a NUL character is an input error, not a path', () => {
   const { root } = fixture();
   assert.throws(() => confine('src/a.py\0x', root), /contains a NUL character/);
@@ -199,6 +208,9 @@ test('every tool parameter that names a path rejects a path outside AID_ROOT', a
           assert.equal(bypass.isError, true, `${tool.name}.${p} ${value}`);
           assert.ok(textOf(bypass).startsWith(`${p} "${value}" has ".." after `), `${tool.name}: ${textOf(bypass)}`);
         }
+        const empty = await call('');
+        assert.equal(empty.isError, true, `${tool.name}.${p} empty`);
+        assert.ok(textOf(empty).startsWith(`${p} is empty.`), `${tool.name}: ${textOf(empty)}`);
         checked++;
       }
     }
