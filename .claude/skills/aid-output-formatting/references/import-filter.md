@@ -73,7 +73,10 @@ Go: a removed import takes the `//` comment lines directly above it (the
 comment at the end of its line goes with the line), and a block none of
 whose imports is kept goes whole, `import (`, `)`, the comments in it, the
 comment lines directly above it and the blank line above those
-(`internal/importfilter/go_filter.go#GoFilter.removeEmptiedBlocks`).
+(`internal/importfilter/go_filter.go#GoFilter.removeEmptiedBlocks`). A block
+that holds a line the filter cannot read as an import, a comment or a blank
+line (an alias with a letter outside ASCII, which `\w` does not match) is
+never emptied, and that line stays.
 
 ## Languages
 
@@ -84,7 +87,7 @@ under the language name the processors use.
 |---|---|---|---|
 | python | `internal/importfilter/python_filter.go` | each imported name or its alias; for `import m` also `m` | `from m import *` |
 | javascript, typescript | `internal/importfilter/javascript_filter.go` (one filter for both) | every name the import binds (`internal/importfilter/javascript_filter.go#jsLocalNames`): the default import's name, the namespace alias, each named import's alias or else its name; also for `import type`, `import x = require('m')` and the import alias `import G = ns.H`; an import that binds `React` counts as used in a file with JSX and in a `.jsx` or `.tsx` file, since the classic JSX transform calls `React.createElement` (`internal/importfilter/javascript_filter.go#JavaScriptFilter.filterSource`) | side-effect imports (`import 'x'`); `export` lines are never read as imports |
-| go | `internal/importfilter/go_filter.go` | the alias, else the last path element (the one before a `/vN` suffix; a few standard paths are mapped) | blank imports and `"C"` |
+| go | `internal/importfilter/go_filter.go` | the alias, else the last path element (the one before a `/vN` suffix; a few standard paths are mapped) | blank imports, dot imports (`. "math"`: their names are used unqualified) and `"C"` |
 | java | `internal/importfilter/java_filter.go` | the class name (last element); for `import static`, the member | wildcard imports |
 | csharp (`c#`) | `internal/importfilter/csharp_filter.go` | the alias, else the last namespace element; for some `System.*` namespaces also typical type names (`internal/importfilter/csharp_filter.go#CSharpFilter.checkSystemNamespaceUsage`) | nothing |
 | php | `internal/importfilter/php_filter.go` | the alias, else the last name element, of each name; a group is kept when one member is used. Only `use` lines at column 0 are imports (indented ones are trait uses in a class). Every other line is searched, `#[...]` attributes included; class and function names match case-insensitively | nothing |

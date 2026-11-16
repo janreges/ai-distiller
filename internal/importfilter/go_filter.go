@@ -55,6 +55,13 @@ func (f *GoFilter) FilterUnusedImports(code string, debugLevel int) (string, []s
 			continue
 		}
 
+		// Always keep dot imports: their names are used unqualified, so
+		// the filter cannot tell whether one is used
+		if imp.IsWildcard {
+			f.LogDebug(debugLevel, 3, "Keeping dot import: %s", imp.FullLine)
+			continue
+		}
+
 		// Always keep "C" import (cgo)
 		if imp.Module == "C" {
 			f.LogDebug(debugLevel, 3, "Keeping C import for cgo")
@@ -114,8 +121,10 @@ type lineRange struct{ start, end int }
 // remove holds the ranges of the unused imports. A block in blocks none of
 // whose imports is kept goes whole instead: one range from its "import ("
 // line, or the comment lines directly above it and the blank line above
-// those, to its ")" line, the comments in it included. lines is the code,
-// split into lines.
+// those, to its ")" line, the comments in it included. A block that holds a
+// line the filter could not read as an import, a comment or a blank line is
+// never emptied: that line may be an import the code uses. lines is the
+// code, split into lines.
 func (f *GoFilter) removeEmptiedBlocks(lines []string, blocks []lineRange, imports []ImportStatement, remove []lineRange) []lineRange {
 	removed := make(map[int]bool, len(remove))
 	for _, r := range remove {
@@ -123,13 +132,20 @@ func (f *GoFilter) removeEmptiedBlocks(lines []string, blocks []lineRange, impor
 			removed[l] = true
 		}
 	}
+	parsed := make(map[int]bool, len(imports))
+	for _, imp := range imports {
+		parsed[imp.StartLine] = true
+	}
 	var out []lineRange
 	for _, b := range blocks {
 		emptied := true
-		for _, imp := range imports {
-			if imp.StartLine > b.start && imp.StartLine < b.end && !removed[imp.StartLine] {
+		for l := b.start + 1; l < b.end && emptied; l++ {
+			trimmed := strings.TrimSpace(lines[l-1])
+			switch {
+			case parsed[l]:
+				emptied = removed[l]
+			case trimmed != "" && !strings.HasPrefix(trimmed, "//"):
 				emptied = false
-				break
 			}
 		}
 		if !emptied {
@@ -171,12 +187,16 @@ func (f *GoFilter) parseImports(code string, debugLevel int) ([]ImportStatement,
 
 	// Regex patterns for Go imports
 	// Note: These patterns now handle inline comments
+	// An alias with letters outside ASCII (\w is ASCII only) matches none
+	// of them: the line stays, and so does its block (removeEmptiedBlocks)
 	singleImportRe := regexp.MustCompile(`^\s*import\s+(?:(\w+)\s+)?"([^"]+)"`)
 	singleImportWithAlias := regexp.MustCompile(`^\s*import\s+(\w+)\s+"([^"]+)"`)
 	blankImportRe := regexp.MustCompile(`^\s*import\s+_\s+"([^"]+)"`)
+	dotImportRe := regexp.MustCompile(`^\s*import\s+\.\s+"([^"]+)"`)
 	importStartRe := regexp.MustCompile(`^\s*import\s*\(\s*$`)
 	importLineRe := regexp.MustCompile(`^\s*(?:(\w+)\s+)?"([^"]+)"`)
 	blankImportLineRe := regexp.MustCompile(`^\s*_\s+"([^"]+)"`)
+	dotImportLineRe := regexp.MustCompile(`^\s*\.\s+"([^"]+)"`)
 
 	i := 0
 	for i < len(lines) {
@@ -218,6 +238,13 @@ func (f *GoFilter) parseImports(code string, debugLevel int) ([]ImportStatement,
 				Aliases:      make(map[string]string),
 			}
 			imports = append(imports, imp)
+			i++
+			continue
+		}
+
+		// Check for dot import
+		if matches := dotImportRe.FindStringSubmatch(line); matches != nil {
+			imports = append(imports, dotImport(line, i+1, matches[1]))
 			i++
 			continue
 		}
@@ -284,6 +311,13 @@ func (f *GoFilter) parseImports(code string, debugLevel int) ([]ImportStatement,
 					continue
 				}
 
+				// Check for dot import line
+				if matches := dotImportLineRe.FindStringSubmatch(blockLine); matches != nil {
+					imports = append(imports, dotImport(blockLine, i+1, matches[1]))
+					i++
+					continue
+				}
+
 				// Check for regular import line
 				if matches := importLineRe.FindStringSubmatch(blockLine); matches != nil {
 					imp := ImportStatement{
@@ -317,6 +351,19 @@ func (f *GoFilter) parseImports(code string, debugLevel int) ([]ImportStatement,
 	}
 
 	return imports, blocks, nil
+}
+
+// dotImport returns the dot import (`. "path"`) on line n. Its names are
+// used unqualified, so it is a wildcard: the filter always keeps it.
+func dotImport(line string, n int, path string) ImportStatement {
+	return ImportStatement{
+		FullLine:   line,
+		StartLine:  n,
+		EndLine:    n,
+		Module:     path,
+		IsWildcard: true,
+		Aliases:    make(map[string]string),
+	}
 }
 
 // extractPackageName extracts the package name from an import path

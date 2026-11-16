@@ -250,6 +250,21 @@ func TestGoFilterRemovesEmptiedImportBlock(t *testing.T) {
 	if got := run(code); got != want {
 		t.Errorf("comment with a parenthesis:\ngot:\n%s\nwant:\n%s", got, want)
 	}
+
+	// A dot import is always kept: its names are used unqualified (Pi).
+	code = "<file path=\"a.go\">\npackage p\n\nimport (\n\t. \"math\"\n\t\"fmt\"\n)\n\nconst Tau = 2 * Pi\n</file>"
+	want = "<file path=\"a.go\">\npackage p\n\nimport (\n\t. \"math\"\n)\n\nconst Tau = 2 * Pi\n</file>"
+	if got := run(code); got != want {
+		t.Errorf("block with a dot import:\ngot:\n%s\nwant:\n%s", got, want)
+	}
+
+	// A line the filter cannot read (an alias with a letter outside ASCII)
+	// stays, and so does its block.
+	code = "<file path=\"a.go\">\npackage p\n\nimport (\n\tü \"example.com/u\"\n\t\"fmt\"\n)\n\nvar X = ü.New()\n</file>"
+	want = "<file path=\"a.go\">\npackage p\n\nimport (\n\tü \"example.com/u\"\n)\n\nvar X = ü.New()\n</file>"
+	if got := run(code); got != want {
+		t.Errorf("block with an unread line:\ngot:\n%s\nwant:\n%s", got, want)
+	}
 }
 
 func TestGoFilterRemovesTheCommentsOfARemovedImport(t *testing.T) {

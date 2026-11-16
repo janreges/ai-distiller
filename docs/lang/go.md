@@ -451,7 +451,7 @@ func ProcessNumericChan[T Number](ch <-chan *Node[T]) T
    - Lowercase first letter = Unexported (internal: `--internal=1` shows it; `--private=1` adds nothing for Go)
    - A method is as visible as the less visible of its own name and its receiver type
 
-2. **Import Organization**: Imports print as one `import ( ... )` block; in text output, an import that the printed code does not use is dropped (`--filter-imports=false` keeps it), and when none is left, so is the block.
+2. **Import Organization**: Imports print as one `import ( ... )` block; in text output, an import that the printed code does not use is dropped (`--filter-imports=false` keeps it), and when none is left, so is the block. Blank imports (`_ "embed"`), dot imports (`. "math"`, whose names are used unqualified) and `"C"` are always kept.
 
 3. **Generic Support**: Type parameters and constraints of Go 1.18+ generics are kept.
 
