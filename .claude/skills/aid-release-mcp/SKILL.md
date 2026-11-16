@@ -142,15 +142,16 @@ Release binaries are built with `CGO_ENABLED=1` and `-tags cgo`: the
 tree-sitter grammars are C code, and without cgo `aid` does not compile
 (`CLAUDE.md` section 2; what fails:
 `.claude/skills/aid-language-parsers/references/tree-sitter-cgo.md`). So each
-target needs a C compiler for that target:
+target needs a C compiler for that target (darwin builds also set
+`MACOSX_DEPLOYMENT_TARGET=14.0`, else they require the runner's macOS):
 
 | Target | Runner | C compiler (`CC`) |
 |---|---|---|
 | linux amd64 | ubuntu-latest | the runner's default |
 | linux arm64 | ubuntu-latest | `aarch64-linux-gnu-gcc` (apt `gcc-aarch64-linux-gnu`) |
 | windows amd64 | ubuntu-latest | `x86_64-w64-mingw32-gcc` (apt `gcc-mingw-w64-x86-64`) |
-| darwin arm64 | macos-14 | the runner's default, native |
-| darwin amd64 | macos-14 | `clang -arch x86_64`, cross-compiled on Apple Silicon |
+| darwin arm64 | macos-15 | the runner's default, native |
+| darwin amd64 | macos-15 | `clang -arch x86_64`, cross-compiled on Apple Silicon |
 
 There is no windows arm64 build: the matrix has no entry for it, and
 postinstall reports `windows-arm64` as unsupported. A new target needs a

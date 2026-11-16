@@ -77,12 +77,12 @@ jobs:
             apt: gcc-mingw-w64-x86-64
           - os: darwin
             arch: arm64
-            runner: macos-14   # Apple Silicon host -> native arm64 cgo build
+            runner: macos-15   # Apple Silicon host -> native arm64 cgo build
           - os: darwin
             arch: amd64
             # Cross-compile amd64 on the Apple Silicon runner (macOS clang is a
             # universal toolchain). Avoids the deprecated/scarce Intel runner.
-            runner: macos-14
+            runner: macos-15
             cc: "clang -arch x86_64"
     steps:
       - uses: actions/checkout@v7
@@ -106,6 +106,9 @@ jobs:
           CGO_ENABLED: '1'
           CGO_CFLAGS: "-O2 -w"
           CC: ${{ matrix.cc }}
+          # Without it the darwin binaries require the runner's macOS. 14.0 is
+          # the minimum of the releases built on macos-14 (up to v1.4.0).
+          MACOSX_DEPLOYMENT_TARGET: "14.0"
         run: |
           set -euo pipefail
 

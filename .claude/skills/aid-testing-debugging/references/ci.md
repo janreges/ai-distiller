@@ -7,7 +7,7 @@ parallel:
 | Job | Runner | What it runs |
 |---|---|---|
 | `test` | ubuntu-latest | builds `aid` into the runner's temp directory, then the full suite with `AID_TEST_BINARY` pointing at that binary, so the snapshot and conformance suites test it instead of building their own |
-| `build` | ubuntu-latest and macos-14 | builds `aid`, runs `aid --version` and checks that `aid testdata/python/01_basic/source.py --stdout` prints `is_valid_email`; no tests |
+| `build` | ubuntu-latest and macos-15 | builds `aid`, runs `aid --version` and checks that `aid testdata/python/01_basic/source.py --stdout` prints `is_valid_email`; on macOS checks that the binary's minimum macOS is 14.0 (`MACOSX_DEPLOYMENT_TARGET`); no tests |
 | `checks` | ubuntu-latest | `gofmt -s -l` over the tracked `cmd/` and `internal/` Go files except `testdata` and `internal/parser/grammars` (any output fails); `go vet` on the same package list as the suite; `golangci-lint` v2.12.2 via `golangci-lint-action` with `only-new-issues: true` (config in `.golangci.yml`, which exempts the `fmt` print functions from errcheck; runs with `CGO_ENABLED=1 CGO_CFLAGS="-O2 -w"`); `go mod tidy` must leave `go.mod` and `go.sum` unchanged; `scripts/version-drift.sh`; `scripts/tests/install_sh_test.sh`; `scripts/check-cgo.sh`; `scripts/tests/check_skill_anchors_test.sh` and `scripts/check-skill-anchors.sh`; `scripts/tests/readme_links_test.sh` |
 | `mcp` | ubuntu-latest, Node 24 | `npm ci` and `npm test` in `mcp-npm/` |
 
