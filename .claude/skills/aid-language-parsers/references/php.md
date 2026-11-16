@@ -49,7 +49,11 @@
   each `case` is a `static` `final` field with `Extensions.PHP.IsEnumCase` and
   the value as `DefaultValue`, constants and methods as in a class, and
   `use Trait;` goes to `Mixins`.
-- Class constants are `static` `final` fields.
+- Class constants are `static` `final` fields
+  (`internal/language/php/tree_sitter_processor.go#TreeSitterProcessor.processConstant`)
+  with the declaration's visibility (public without a modifier) and its
+  `type` field (`const int X = 1;`), shared by every constant of
+  `private const A = 1, B = 2;`.
 - The class docblock is parsed into the class
   (`internal/language/php/tree_sitter_processor.go#TreeSitterProcessor.parseClassDocblock`):
   its text becomes `Description`; `@property`, `@property-read` and

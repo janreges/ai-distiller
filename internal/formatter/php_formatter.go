@@ -509,6 +509,10 @@ func (f *PHPFormatter) formatField(field *ir.DistilledField, indent int) string 
 	// For constants, use const syntax
 	if isConst {
 		fieldDecl := "const " + field.Name
+		if field.Type != nil && field.Type.Name != "" {
+			// A typed class constant (PHP 8.3+): `const int LIMIT = 10;`
+			fieldDecl = "const " + field.Type.Name + " " + field.Name
+		}
 		if field.DefaultValue != "" {
 			fieldDecl += " = " + field.DefaultValue
 		}

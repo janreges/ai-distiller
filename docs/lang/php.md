@@ -19,7 +19,7 @@ PHP support in AI Distiller is designed to extract the essential structure of PH
 | **Functions** | ✅ Full | Global functions with type hints |
 | **Methods** | ✅ Full | Including magic methods, final, abstract |
 | **Properties** | ✅ Full | Typed, readonly and promoted properties; `@property` tags stay in the class docblock |
-| **Constants** | ⚠️ Partial | Class constants with visibility and value; interface constants are not printed |
+| **Constants** | ⚠️ Partial | Class and enum constants with their visibility (a `private const` is hidden by default), type (`const int LIMIT = 10;`, PHP 8.3+) and value; interface constants are not printed |
 | **Namespaces** | ✅ Full | `use` statements print as written: aliases (`use Foo\Bar as Baz;`), `use function`, `use const` and groups (`use Foo\{A, B as C};`); `use A, B;` prints one line per name, and `use function A\b, A\c;` one `use function` line per name |
 | **Attributes** | ✅ Full | PHP 8.0+ attributes on classes and methods |
 

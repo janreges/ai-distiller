@@ -17,6 +17,9 @@ class ConfWidget extends ConfAliasBase implements ConfAliasShown {
 
     public int $confField = 1;
 
+    private const CONF_SECRET = 1;
+    const int CONF_TYPED = 2;
+
     public function confPublic(): string {
         $a = "CONF_BODY_A";
         return $a;
@@ -60,6 +63,7 @@ enum ConfStatus: string implements ConfAliasShown {
     case ConfActive = 'active';
 
     const CONF_DEFAULT = self::ConfActive;
+    private const CONF_ENUM_SECRET = 'x';
 
     public function confLabel(): string {
         return 'a';

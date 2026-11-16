@@ -1389,16 +1389,38 @@ func (p *TreeSitterProcessor) processEnumCase(node *sitter.Node, file *ir.Distil
 	p.addNode(file, parent, field)
 }
 
-// processConstant processes constant declarations
+// processConstant processes constant declarations. The visibility and the
+// type are written once for every constant of the declaration
+// (`private const int A = 1, B = 2;`); without a modifier a constant is
+// public.
 func (p *TreeSitterProcessor) processConstant(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) {
+	visibility := ir.VisibilityPublic
+	typeName := ""
+	if t := node.ChildByFieldName("type"); t != nil {
+		typeName = p.getNodeText(t)
+	}
+	for i := uint(0); i < node.ChildCount(); i++ {
+		if child := node.Child(i); child.Kind() == "visibility_modifier" {
+			switch strings.ToLower(p.getNodeText(child)) {
+			case "private":
+				visibility = ir.VisibilityPrivate
+			case "protected":
+				visibility = ir.VisibilityProtected
+			}
+		}
+	}
+
 	// Process each constant in the declaration
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(uint(i))
 		if child.Kind() == "const_element" {
 			field := &ir.DistilledField{
 				BaseNode:   p.nodeLocation(child),
-				Visibility: ir.VisibilityPublic,
+				Visibility: visibility,
 				Modifiers:  []ir.Modifier{ir.ModifierStatic, ir.ModifierFinal},
+			}
+			if typeName != "" {
+				field.Type = &ir.TypeRef{Name: typeName}
 			}
 
 			// Get constant name and value

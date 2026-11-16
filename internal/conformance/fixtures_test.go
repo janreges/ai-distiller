@@ -338,5 +338,11 @@ var fixtures = []fixture{
 		// parses (tree-sitter-php v0.25.1 made it an ERROR).
 		check{Cap: "cast-named-class", Contains: []string{
 			"use Conf\\Types\\Integer;\n",
-			"#[ConfCast(Integer::class)]\nfinal class ConfDto {\n    public confCast(): int\n}\n"}})},
+			"#[ConfCast(Integer::class)]\nfinal class ConfDto {\n    public confCast(): int\n}\n"}},
+		// A constant keeps its visibility, in a class and in an enum, and its
+		// type.
+		check{Cap: "const-visibility", NotContains: []string{"CONF_SECRET", "CONF_ENUM_SECRET"},
+			Contains: []string{"    public const int CONF_TYPED = 2;\n"}},
+		check{Cap: "const-visibility-private", Flags: []string{"--private=1"}, Contains: []string{
+			"    private const CONF_SECRET = 1;\n", "    private const CONF_ENUM_SECRET = 'x';\n"}})},
 }

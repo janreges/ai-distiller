@@ -651,3 +651,43 @@ class RoutingResponseFactoryTest extends TestCase
 	assert.Contains(t, out, "#[Cast(Integer::class)]\nfinal class Dto {\n    public id(): int\n}\n")
 	assert.Contains(t, out, "class RoutingResponseFactoryTest extends TestCase {\n    public testStreamDownload()\n}\n")
 }
+
+// A constant keeps its visibility, in a class and in an enum, so a private
+// one is hidden by default; a typed constant (PHP 8.3+) keeps its type.
+func TestPHP_ConstantsKeepVisibilityAndType(t *testing.T) {
+	src := `<?php
+class C {
+    private const SECRET = 1;
+    protected const PROT = 2;
+    PUBLIC const PUB = 3;
+    const PLAIN = 4;
+    const int TYPED = 5;
+    private const string|int UNION = 'a', OTHER = 'b';
+}
+enum E: string {
+    case A = 'a';
+    private const ENUM_SECRET = 'x';
+    const D = self::A;
+}
+`
+	out := distillPHP(t, src, nil)
+	assert.Contains(t, out, "class C {\n    public const PUB = 3;\n    public const PLAIN = 4;\n    public const int TYPED = 5;\n}\n")
+	assert.Contains(t, out, "enum E: string {\n    case A = 'a';\n    public const D = self::A;\n}\n")
+	for _, hidden := range []string{"SECRET", "PROT", "UNION", "OTHER"} {
+		assert.NotContains(t, out, hidden)
+	}
+
+	all := distillPHP(t, src, func(o *processor.ProcessOptions) {
+		o.IncludePrivate = true
+		o.IncludeProtected = true
+	})
+	for _, want := range []string{
+		"    private const SECRET = 1;\n",
+		"    protected const PROT = 2;\n",
+		"    private const string|int UNION = 'a';\n",
+		"    private const string|int OTHER = 'b';\n",
+		"    private const ENUM_SECRET = 'x';\n",
+	} {
+		assert.Contains(t, all, want)
+	}
+}
