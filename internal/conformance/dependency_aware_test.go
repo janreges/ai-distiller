@@ -249,6 +249,65 @@ func TestDependencyAwareWithoutGitStaysInsideTheProjectRoot(t *testing.T) {
 	assert.Regexp(t, `Not following \S+/shared/lib\.js \(imported by \S+/src/main\.js\): outside the project root \S+/proj\n`, stderr)
 }
 
+// aidEnv returns the test's environment without AID_PROJECT_ROOT and
+// AID_CONFINE_ROOT, plus set ("NAME=value").
+func aidEnv(set ...string) []string {
+	var env []string
+	for _, kv := range os.Environ() {
+		if strings.HasPrefix(kv, "AID_PROJECT_ROOT=") || strings.HasPrefix(kv, "AID_CONFINE_ROOT=") {
+			continue
+		}
+		env = append(env, kv)
+	}
+	return append(env, set...)
+}
+
+// skipUnlessNoMarkerAbove skips the test when dir or a directory above it
+// holds a project-root marker, which would make aid find a project root.
+func skipUnlessNoMarkerAbove(t *testing.T, dir string) {
+	t.Helper()
+	markers := []string{".aidrc", "go.mod", "package.json", "Cargo.toml", "pyproject.toml", "setup.py", "pom.xml", "build.gradle", ".git"}
+	for d := dir; ; d = filepath.Dir(d) {
+		for _, m := range markers {
+			if _, err := os.Stat(filepath.Join(d, m)); err == nil {
+				t.Skipf("%s holds %s, so aid would find a project root above the temporary directory", d, m)
+			}
+		}
+		if filepath.Dir(d) == d {
+			break
+		}
+	}
+}
+
+// Without .git and without a project-root marker, aid falls back to the
+// working directory as the project root; that fallback is no boundary (run
+// from "/", it would be the whole disk), so following stays in the input's
+// directory. The output path asks for the project root first, so the
+// default-output run checks the cached root too.
+func TestDependencyAwareWithoutAnyMarkerStaysInTheInputDirectory(t *testing.T) {
+	tmp := t.TempDir()
+	skipUnlessNoMarkerAbove(t, tmp)
+	writeProject(t, tmp, map[string]string{
+		"loose/app/src/main.js": "import { util } from './util.js';\n" +
+			"import { secret } from '../../../outside/secret.js';\n" +
+			"export function main() { return [util, secret]; }\n",
+		"loose/app/src/util.js": "export function util() { return 1; }\n",
+		"outside/secret.js":     "export function secretOutsideTheInputDirectory() { return 2; }\n",
+	})
+
+	out, stderr, code := aidRunEnv(t, tmp, aidEnv(), nil, "loose/app/src/main.js", "--dependency-aware", "--stdout", "--summary-type=off", "-v")
+	require.Equal(t, 0, code, stderr)
+	assert.Equal(t, []string{"main.js", "util.js"}, filePaths(out))
+	assert.NotContains(t, out, "OutsideTheInputDirectory")
+	assert.Regexp(t, `Not following \S+/outside/secret\.js \(imported by \S+/src/main\.js\): outside the input directory \S+/loose/app/src\n`, stderr)
+
+	_, stderr, code = aidRunEnv(t, tmp, aidEnv(), nil, "loose/app/src/main.js", "--dependency-aware", "--summary-type=off")
+	require.Equal(t, 0, code, stderr)
+	saved, err := os.ReadFile(filepath.Join(tmp, ".aid", "aid.main.js.txt"))
+	require.NoError(t, err, stderr)
+	assert.Equal(t, []string{"main.js", "util.js"}, filePaths(string(saved)))
+}
+
 // Followed files pass the selection rules of a directory walk: --include,
 // --exclude, every .aidignore from the repository top down to the file's
 // directory, and the directories a walk skips by default. The patterns

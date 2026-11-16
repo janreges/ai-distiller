@@ -110,6 +110,16 @@ func TestFindRoot(t *testing.T) {
 		if !info.IsFallback {
 			t.Error("Expected IsFallback to be true")
 		}
+
+		// The cached result keeps IsFallback: a caller must still be able
+		// to tell the working directory from a detected root.
+		cached, err := FindRoot()
+		if err != nil {
+			t.Fatalf("FindRoot failed: %v", err)
+		}
+		if cached.Marker != "cached" || cached.Path != subDir || !cached.IsFallback {
+			t.Errorf("Expected the cached fallback root %s, got %+v", subDir, cached)
+		}
 	})
 
 	// Test 5: Cache functionality

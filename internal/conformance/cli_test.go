@@ -64,6 +64,13 @@ func conformanceData(t *testing.T) string {
 // aidRun runs the built binary in dir. stdin may be nil. It fails the test on timeout.
 func aidRun(t *testing.T, dir string, stdin io.Reader, args ...string) (stdout, stderr string, exitCode int) {
 	t.Helper()
+	return aidRunEnv(t, dir, nil, stdin, args...)
+}
+
+// aidRunEnv is aidRun with env as the child's whole environment; nil env
+// inherits the test's environment.
+func aidRunEnv(t *testing.T, dir string, env []string, stdin io.Reader, args ...string) (stdout, stderr string, exitCode int) {
+	t.Helper()
 	bin := aidBinary(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), aidRunTimeout)
@@ -71,6 +78,7 @@ func aidRun(t *testing.T, dir string, stdin io.Reader, args ...string) (stdout, 
 
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Dir = dir
+	cmd.Env = env
 	// A non-file stdin would be copied by an exec goroutine that cmd.Wait waits
 	// for even after the child exits, and that goroutine can block forever on a
 	// reader that is never written or closed. Hand the child a real OS pipe and

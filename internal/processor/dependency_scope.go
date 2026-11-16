@@ -45,7 +45,10 @@ func newFollowScope(inputDir string, opts ProcessOptions) *followScope {
 // dependencyBoundary returns the directory that --dependency-aware never
 // leaves for a run on dir: the repository top (the nearest directory at or
 // above dir that holds .git), else the project root aid detects
-// (internal/project) when it holds dir, else dir itself.
+// (internal/project) when it holds dir and was found by a marker or named by
+// AID_PROJECT_ROOT, else dir itself. The working directory that
+// internal/project falls back to when it finds neither (IsFallback) is no
+// boundary: run from "/", it would let following read the whole disk.
 func dependencyBoundary(dir string) (boundary, kind string) {
 	for d := dir; ; {
 		if exists(filepath.Join(d, ".git")) {
@@ -57,7 +60,7 @@ func dependencyBoundary(dir string) (boundary, kind string) {
 		}
 		d = parent
 	}
-	if root, err := project.FindRoot(); err == nil && root != nil && root.Path != "" {
+	if root, err := project.FindRoot(); err == nil && root != nil && root.Path != "" && !root.IsFallback {
 		if abs, err := filepath.Abs(root.Path); err == nil && pathInside(dir, abs) {
 			return abs, "project root"
 		}

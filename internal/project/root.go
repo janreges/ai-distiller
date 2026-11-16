@@ -35,7 +35,7 @@ var rootMarkers = []string{
 
 // rootCache caches the detected root for the process lifetime
 var (
-	rootCache     string
+	rootCache     *RootInfo
 	rootCacheMu   sync.RWMutex
 	rootCacheOnce sync.Once
 )
@@ -57,8 +57,8 @@ type RootInfo struct {
 func FindRoot() (*RootInfo, error) {
 	// Check cache first
 	rootCacheMu.RLock()
-	if rootCache != "" {
-		info := &RootInfo{Path: rootCache, Marker: "cached"}
+	if rootCache != nil {
+		info := cachedRoot()
 		rootCacheMu.RUnlock()
 		return info, nil
 	}
@@ -71,7 +71,8 @@ func FindRoot() (*RootInfo, error) {
 		info, err = findRootUncached()
 		if err == nil && info != nil {
 			rootCacheMu.Lock()
-			rootCache = info.Path
+			cached := *info
+			rootCache = &cached
 			rootCacheMu.Unlock()
 		}
 	})
@@ -79,11 +80,23 @@ func FindRoot() (*RootInfo, error) {
 	// For subsequent calls, return cached value
 	if info == nil && err == nil {
 		rootCacheMu.RLock()
-		info = &RootInfo{Path: rootCache, Marker: "cached"}
+		if rootCache != nil {
+			info = cachedRoot()
+		}
 		rootCacheMu.RUnlock()
+		if info == nil {
+			return nil, fmt.Errorf("project root detection failed earlier in this process")
+		}
 	}
 
 	return info, err
+}
+
+// cachedRoot returns a copy of the cached root, marked "cached"; it keeps
+// IsFallback, so a caller can still tell a working-directory fallback from a
+// detected root. The caller holds rootCacheMu.
+func cachedRoot() *RootInfo {
+	return &RootInfo{Path: rootCache.Path, Marker: "cached", IsFallback: rootCache.IsFallback}
 }
 
 // findRootUncached performs the actual root detection without caching
@@ -197,6 +210,6 @@ func EnsureAidDir() (string, error) {
 func ResetCache() {
 	rootCacheMu.Lock()
 	defer rootCacheMu.Unlock()
-	rootCache = ""
+	rootCache = nil
 	rootCacheOnce = sync.Once{}
 }
