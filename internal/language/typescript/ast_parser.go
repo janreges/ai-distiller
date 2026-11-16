@@ -240,7 +240,11 @@ func makePublic(node ir.DistilledNode) {
 	}
 }
 
-// parseImport parses import statements
+// parseImport parses an import statement. The symbols follow the convention
+// of ir.ImportedSymbol: a default import is the symbol "default" with the
+// local name as its alias, a namespace import the symbol "*" with its alias.
+// `import x = require("m")` is the import type "require" with the symbol "*"
+// aliased x.
 func (p *ASTParser) parseImport(node *sitter.Node) *ir.DistilledImport {
 	imp := &ir.DistilledImport{
 		BaseNode: ir.BaseNode{
@@ -250,15 +254,7 @@ func (p *ASTParser) parseImport(node *sitter.Node) *ir.DistilledImport {
 		Symbols:    []ir.ImportedSymbol{},
 	}
 
-	// Find the source module
-	sourceNode := p.findChild(node, "string")
-	if sourceNode != nil {
-		moduleText := p.nodeText(sourceNode)
-		// Remove quotes
-		if len(moduleText) >= 2 {
-			imp.Module = moduleText[1 : len(moduleText)-1]
-		}
-	}
+	imp.Module = p.moduleName(node.ChildByFieldName("source"))
 
 	// Check for type-only import
 	if p.findChild(node, "type") != nil {
@@ -266,12 +262,26 @@ func (p *ASTParser) parseImport(node *sitter.Node) *ir.DistilledImport {
 	}
 
 	// Parse import clause
-	importClause := p.findChild(node, "import_clause")
-	if importClause != nil {
+	if importClause := p.findChild(node, "import_clause"); importClause != nil {
 		p.parseImportClause(importClause, imp)
+	} else if require := p.findChild(node, "import_require_clause"); require != nil {
+		imp.ImportType = "require"
+		imp.Module = p.moduleName(require.ChildByFieldName("source"))
+		if name := p.findChild(require, "identifier"); name != nil {
+			imp.Symbols = append(imp.Symbols, ir.ImportedSymbol{Name: "*", Alias: p.nodeText(name)})
+		}
 	}
 
 	return imp
+}
+
+// moduleName returns the text of a module string without its quotes.
+func (p *ASTParser) moduleName(source *sitter.Node) string {
+	text := p.nodeText(source)
+	if len(text) >= 2 {
+		return text[1 : len(text)-1]
+	}
+	return ""
 }
 
 // parseImportClause parses the import clause
@@ -284,9 +294,10 @@ func (p *ASTParser) parseImportClause(node *sitter.Node, imp *ir.DistilledImport
 
 		switch child.Kind() {
 		case "identifier":
-			// Default import
+			// Default import: the module's "default" under a local name
 			imp.Symbols = append(imp.Symbols, ir.ImportedSymbol{
-				Name: p.nodeText(child),
+				Name:  "default",
+				Alias: p.nodeText(child),
 			})
 		case "namespace_import":
 			// import * as name
@@ -298,45 +309,32 @@ func (p *ASTParser) parseImportClause(node *sitter.Node, imp *ir.DistilledImport
 				})
 			}
 		case "named_imports":
-			p.parseNamedImports(child, imp)
+			imp.Symbols = append(imp.Symbols, p.specifiers(child, "import_specifier")...)
 		}
 	}
 }
 
-// parseNamedImports parses named imports
-func (p *ASTParser) parseNamedImports(node *sitter.Node, imp *ir.DistilledImport) {
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(uint(i))
-		if child == nil || child.Kind() != "import_specifier" {
+// specifiers returns the specifiers of a named_imports or export_clause node
+// (kind is import_specifier or export_specifier): name, alias, and whether
+// the specifier is written `type A`.
+func (p *ASTParser) specifiers(node *sitter.Node, kind string) []ir.ImportedSymbol {
+	var symbols []ir.ImportedSymbol
+	for i := 0; i < int(node.NamedChildCount()); i++ {
+		spec := node.NamedChild(uint(i))
+		if spec == nil || spec.Kind() != kind {
 			continue
 		}
-
-		name := ""
-		alias := ""
-
-		// Find name and alias
-		for j := 0; j < int(child.ChildCount()); j++ {
-			subchild := child.Child(uint(j))
-			if subchild == nil {
-				continue
-			}
-
-			if subchild.Kind() == "identifier" {
-				if name == "" {
-					name = p.nodeText(subchild)
-				} else {
-					alias = p.nodeText(subchild)
-				}
-			}
+		name := p.nodeText(spec.ChildByFieldName("name"))
+		if name == "" {
+			continue
 		}
-
-		if name != "" {
-			imp.Symbols = append(imp.Symbols, ir.ImportedSymbol{
-				Name:  name,
-				Alias: alias,
-			})
-		}
+		symbols = append(symbols, ir.ImportedSymbol{
+			Name:   name,
+			Alias:  p.nodeText(spec.ChildByFieldName("alias")),
+			IsType: p.findChild(spec, "type") != nil,
+		})
 	}
+	return symbols
 }
 
 // parseExport parses export statements

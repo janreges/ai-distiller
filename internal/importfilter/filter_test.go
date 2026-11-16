@@ -136,6 +136,43 @@ const app = express()
 			expected: []string{}, // Side-effect imports are kept
 		},
 	}
+	// The forms the JavaScript and TypeScript formatters print.
+	forms := []struct {
+		name string
+		line string
+		uses string // a printed line that uses the import; "" for none
+	}{
+		{"default", "import D from './d'", "function f(d: D)"},
+		{"named", "import { A } from './a'", "function f(a: A)"},
+		{"alias", "import { B as C } from './b'", "function f(c: C)"},
+		{"alias, original name only", "import { B as C } from './b'", ""},
+		{"default and named, default used", "import React, { useState } from 'react'", "class K extends React.Component"},
+		{"default and named, named used", "import React, { useState } from 'react'", "const s = useState"},
+		{"default and namespace", "import H, * as I from './h'", "function f(i: I.T)"},
+		{"namespace", "import * as z from 'zod'", "function f(x: z.infer)"},
+		{"type import", "import type { Foo } from './foo'", "function f(x: Foo)"},
+		{"type default import", "import type Def from './def'", "function f(x: Def)"},
+		{"inline type", "import { type T, V } from './x'", "function f(t: T)"},
+		{"default as", "import { A, default as B } from './m'", "function f(b: B)"},
+		{"import equals require", "import F = require('f')", "function f(x: F)"},
+	}
+	for _, form := range forms {
+		// B, the original name of the alias C, occurs in every file.
+		code := "<file path=\"x.ts\">\n" + form.line + "\n" + form.uses + "\nfunction B()\n</file>"
+		_, removed, err := filter.FilterUnusedImports(code, 0)
+		if err != nil {
+			t.Fatalf("%s: unexpected error: %v", form.name, err)
+		}
+		wantRemoved := form.uses == ""
+		if gotRemoved := len(removed) == 1; gotRemoved != wantRemoved {
+			t.Errorf("%s: %q removed=%v, want %v", form.name, form.line, gotRemoved, wantRemoved)
+		}
+	}
+	// A re-export is never an import to remove, even when nothing uses its names.
+	reexports := "<file path=\"x.ts\">\nimport { used } from './u'\nexport * from './a'\nexport { x, y as z } from './c'\nexport type { T } from './t'\nexport default used\n</file>"
+	if filtered, removed, _ := filter.FilterUnusedImports(reexports, 0); len(removed) != 0 || filtered != reexports {
+		t.Errorf("re-exports changed: removed %v", removed)
+	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

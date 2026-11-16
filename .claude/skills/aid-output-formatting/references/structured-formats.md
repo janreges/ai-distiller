@@ -72,7 +72,7 @@ Fields per kind (`internal/formatter/jsonl.go#JSONLFormatter.nodeToJSON`):
 
 | Kind | Fields |
 |---|---|
-| `import` | `import_type`, `module`, `symbols` (`name`, `alias`) |
+| `import` | `import_type`, `module`, `is_type`, `symbols` (`name`, `alias`, `is_type`) |
 | `class` | `visibility`, `modifiers`, `extends`, `implements` |
 | `interface` | `visibility`, `extends` |
 | `function` | `visibility`, `modifiers`, `parameters` (always, `[]` when empty; each `name`, `type`, `default`, `optional`, `variadic`, `reference`), `returns`, `implementation` |
@@ -162,7 +162,7 @@ Shape:
   Indented by two spaces.
 - `structure` groups the file's top-level nodes
   (`internal/formatter/json_structured.go#JSONStructuredFormatter.structureNodes`):
-  `packages` (`name`), `imports` (`type`, `module`, `symbols`), `classes`
+  `packages` (`name`), `imports` (`type`, `module`, `is_type`, `symbols`), `classes`
   (`name`, `visibility`, `modifiers`, `extends`, `implements`, `members`),
   `interfaces` (`name`, `visibility`, `extends`, `members`), `functions`
   (`name`, `visibility`, `modifiers`, `parameters` when there are any,
@@ -200,7 +200,7 @@ Shape:
 - One `<distilled>` root; one `<file path language version>` per file, with
   `<errors>` when there are any and the nodes under `<nodes>`, nested as in the
   IR (`internal/formatter/xml.go#XMLFormatter.formatNode`).
-- Elements: `<package name>`, `<import type module>` with `<symbol name alias>`,
+- Elements: `<package name>`, `<import type module is_type>` with `<symbol name alias is_type>`,
   `<class name visibility modifiers>`, `<interface name visibility>`,
   `<struct>`, `<enum>`, `<function name visibility modifiers returns>` with
   `<parameters>` (`<parameter name type default optional variadic reference>`) and

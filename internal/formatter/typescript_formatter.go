@@ -87,20 +87,9 @@ func (f *TypeScriptFormatter) formatNamespace(w io.Writer, pkg *ir.DistilledPack
 	return nil
 }
 
+// formatImport prints the import as written (esImportLine).
 func (f *TypeScriptFormatter) formatImport(w io.Writer, imp *ir.DistilledImport) error {
-	if imp.ImportType == "from" {
-		symbols := make([]string, len(imp.Symbols))
-		for i, sym := range imp.Symbols {
-			if sym.Alias != "" {
-				symbols[i] = fmt.Sprintf("%s as %s", sym.Name, sym.Alias)
-			} else {
-				symbols[i] = sym.Name
-			}
-		}
-		fmt.Fprintf(w, "import { %s } from '%s'\n", strings.Join(symbols, ", "), imp.Module)
-	} else {
-		fmt.Fprintf(w, "import '%s'\n", imp.Module)
-	}
+	fmt.Fprintln(w, esImportLine(imp))
 	return nil
 }
 

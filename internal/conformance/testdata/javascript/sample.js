@@ -1,4 +1,5 @@
 import { sep } from "node:path";
+import ConfReact, { confHook as confUseHook } from "conf-react";
 
 // CONF_LINE_COMMENT
 
@@ -29,3 +30,7 @@ export class ConfWidget {
 }
 
 const confArrow = (a) => a + 1;
+
+export function confWithHook(hook = confUseHook) {
+    return ConfReact.createElement(hook);
+}

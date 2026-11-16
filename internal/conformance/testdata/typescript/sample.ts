@@ -1,4 +1,8 @@
 import { sep } from "path";
+import ConfDefault, { confNamed as ConfAlias } from "./conf-mod";
+import type { ConfOnlyType } from "./conf-types";
+import * as confNs from "./conf-ns";
+import { confGone as ConfGoneAlias } from "./conf-gone";
 
 // CONF_LINE_COMMENT
 
@@ -26,6 +30,8 @@ export class ConfWidget {
 }
 
 export function confTopLevel(n: number): number { return n; }
+
+export function confImports(a: ConfDefault, b: ConfAlias, c: confNs.T): ConfOnlyType { return a; }
 
 export const confConst: number = 1;
 

@@ -16,7 +16,7 @@ declaration, so a parser has to fill them.
 |---|---|---|
 | `DistilledFile` | yes (`Children`, JSON `nodes`) | `Path`, `Language`, `Version`, `Errors` (`DistilledError`: `Message`, `Severity`) |
 | `DistilledPackage` | yes | `Name` |
-| `DistilledImport` | no | `ImportType` (`import`, `from`, `require`, `use`, `include`, `namespace`, ...), `Module`, `Symbols` (`Name`, `Alias`), `IsType` |
+| `DistilledImport` | no | `ImportType` (`import`, `from`, `require`, `use`, `include`, `namespace`, ...), `Module`, `Symbols` (`Name`, `Alias`, `IsType`; in JavaScript and TypeScript a default import is `Name` `default` with the local name as `Alias`, a namespace import `*` with its alias), `IsType` |
 | `DistilledClass` | yes | `Name`, `Visibility`, `Modifiers`, `Decorators`, `TypeParams`, `Extends`, `Implements`, `Mixins`, `Deprecated`, `Description`, `APIDocblock` |
 | `DistilledInterface` | yes | `Name`, `Visibility`, `Modifiers`, `TypeParams`, `Extends`, `Permits` |
 | `DistilledStruct` | yes | `Name`, `Visibility`, `TypeParams` |

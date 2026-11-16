@@ -257,3 +257,31 @@ func TestTS_DocOfStatementWithoutDeclarationIsDropped(t *testing.T) {
 		assert.Equal(t, []string{"Foo doc"}, docTexts(f.Children))
 	})
 }
+
+// Every import form keeps its bindings: a default import is the symbol
+// "default" aliased to its local name, a namespace import "*" with its alias.
+func TestTS_ImportForms(t *testing.T) {
+	src := "import { type A, B as C } from \"./x\";\n" +
+		"import D, { E } from \"./d\";\n" +
+		"import type { Foo } from \"./foo\";\n" +
+		"import * as z from \"zod\";\n" +
+		"import \"./side\";\n" +
+		"import F = require(\"f\");\n" +
+		"import H, * as I from \"./h\";\n"
+	f := parseTS(t, src)
+	require.Len(t, f.Children, 7)
+	imp := func(i int) *ir.DistilledImport { return f.Children[i].(*ir.DistilledImport) }
+
+	assert.Equal(t, "./x", imp(0).Module)
+	assert.Equal(t, []ir.ImportedSymbol{{Name: "A", IsType: true}, {Name: "B", Alias: "C"}}, imp(0).Symbols)
+	assert.Equal(t, []ir.ImportedSymbol{{Name: "default", Alias: "D"}, {Name: "E"}}, imp(1).Symbols)
+	assert.True(t, imp(2).IsType)
+	assert.Equal(t, []ir.ImportedSymbol{{Name: "Foo"}}, imp(2).Symbols)
+	assert.Equal(t, []ir.ImportedSymbol{{Name: "*", Alias: "z"}}, imp(3).Symbols)
+	assert.Equal(t, "./side", imp(4).Module)
+	assert.Empty(t, imp(4).Symbols)
+	assert.Equal(t, "require", imp(5).ImportType)
+	assert.Equal(t, "f", imp(5).Module)
+	assert.Equal(t, []ir.ImportedSymbol{{Name: "*", Alias: "F"}}, imp(5).Symbols)
+	assert.Equal(t, []ir.ImportedSymbol{{Name: "default", Alias: "H"}, {Name: "*", Alias: "I"}}, imp(6).Symbols)
+}

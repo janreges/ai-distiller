@@ -70,6 +70,13 @@ var fixtures = []fixture{
 		check{Cap: "arrow-expression-body", Flags: []string{"--implementation=1"}, Contains: []string{"confArrow(n: number) => n"}},
 		check{Cap: "type-guard-return", Contains: []string{"confIsNum(x: unknown): x is number"}},
 		check{Cap: "enum-computed-init", Contains: []string{"ConfShift = 1 << 2", "ConfNeg = -1"}},
+		check{Cap: "import-forms", Contains: []string{
+			"import ConfDefault, { confNamed as ConfAlias } from './conf-mod'",
+			"import type { ConfOnlyType } from './conf-types'",
+			"import * as confNs from './conf-ns'"}},
+		check{Cap: "import-filter-alias", NotContains: []string{"ConfGoneAlias"}},
+		check{Cap: "import-alias-kept-unfiltered", Flags: []string{"--filter-imports=false"},
+			Contains: []string{"import { confGone as ConfGoneAlias } from './conf-gone'"}},
 		check{Cap: "body-indent", Flags: []string{"--implementation=1"},
 			Contains: []string{"        const a = \"CONF_BODY_A\";\n        return a;\n    }\n"}})},
 	{Lang: "javascript", File: "javascript/sample.js", Checks: append(standard(markers{
@@ -80,7 +87,10 @@ var fixtures = []fixture{
 		Contains: []string{"        const a = \"CONF_BODY_A\";\n        return a;\n    }\n"}},
 		check{Cap: "underscore-method-hidden", NotContains: []string{"_confUnderscore"}},
 		check{Cap: "hash-method-hidden", NotContains: []string{"confHashMethod"}},
-		check{Cap: "arrow-expression-body", Flags: []string{"--implementation=1"}, Contains: []string{"=> a + 1"}})},
+		check{Cap: "arrow-expression-body", Flags: []string{"--implementation=1"}, Contains: []string{"=> a + 1"}},
+		check{Cap: "import-default-and-named", Flags: []string{"--filter-imports=false"},
+			Contains: []string{"import ConfReact, { confHook as confUseHook } from 'conf-react'"}},
+		check{Cap: "import-alias-used", Contains: []string{"import ConfReact, { confHook as confUseHook } from 'conf-react'"}})},
 	{Lang: "go", File: "go/sample.go", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "ConfField", "ConfPublic", "ConfOther"},
 		Private:   []string{"confPrivate"},

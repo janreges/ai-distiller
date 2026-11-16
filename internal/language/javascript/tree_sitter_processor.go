@@ -305,7 +305,9 @@ func (p *TreeSitterProcessor) processNode(node *sitter.Node, file *ir.DistilledF
 	}
 }
 
-// processImport processes import statements
+// processImport processes import statements. A default import is the symbol
+// "default" with the local name as its alias, a namespace import the symbol
+// "*" with its alias (ir.ImportedSymbol).
 func (p *TreeSitterProcessor) processImport(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) {
 	imp := &ir.DistilledImport{
 		BaseNode:   p.nodeLocation(node),
@@ -334,9 +336,10 @@ func (p *TreeSitterProcessor) processImportClause(node *sitter.Node, imp *ir.Dis
 		child := node.Child(uint(i))
 		switch child.Kind() {
 		case "identifier":
-			// Default import
+			// Default import: the module's "default" under a local name
 			imp.Symbols = append(imp.Symbols, ir.ImportedSymbol{
-				Name: p.getNodeText(child),
+				Name:  "default",
+				Alias: p.getNodeText(child),
 			})
 		case "named_imports":
 			// { a, b as c }

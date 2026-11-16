@@ -135,7 +135,14 @@ func TestProcessorImports(t *testing.T) {
 			name:  "default_import",
 			input: `import React from 'react';`,
 			expected: []importInfo{
-				{module: "react", symbols: []string{"React"}},
+				{module: "react", symbols: []string{"default"}, aliases: []string{"React"}},
+			},
+		},
+		{
+			name:  "default_and_named_imports",
+			input: `import React, { useState } from 'react';`,
+			expected: []importInfo{
+				{module: "react", symbols: []string{"default", "useState"}, aliases: []string{"React"}},
 			},
 		},
 		{
@@ -166,7 +173,7 @@ import React from 'react';
 import { render } from 'react-dom';
 import * as lodash from 'lodash';`,
 			expected: []importInfo{
-				{module: "react", symbols: []string{"React"}},
+				{module: "react", symbols: []string{"default"}, aliases: []string{"React"}},
 				{module: "react-dom", symbols: []string{"render"}},
 				{module: "lodash", symbols: []string{"*"}, aliases: []string{"lodash"}},
 			},

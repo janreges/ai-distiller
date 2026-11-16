@@ -54,44 +54,18 @@ func (f *JavaScriptFilter) FilterUnusedImports(code string, debugLevel int) (str
 			continue
 		}
 
-		// Check if any imported name is used
-		used := false
-
-		// For namespace imports (import * as ns from 'module')
-		if imp.IsWildcard && len(imp.Aliases) > 0 {
-			for _, alias := range imp.Aliases {
-				if f.SearchForUsage(code, alias, lastImportLine) {
-					f.LogDebug(debugLevel, 3, "Found usage of namespace '%s'", alias)
-					used = true
-					break
-				}
-			}
-		} else if len(imp.ImportedNames) > 0 {
-			// Check each imported name
-			for _, name := range imp.ImportedNames {
-				// Check if there's an alias
-				checkName := name
-				if alias, ok := imp.Aliases[name]; ok && alias != "" {
-					checkName = alias
-				}
-
-				if f.SearchForUsage(code, checkName, lastImportLine) {
-					f.LogDebug(debugLevel, 3, "Found usage of '%s'", checkName)
-					used = true
-					break
-				}
-			}
+		// The import is used when any name it binds occurs in the code
+		names := jsLocalNames(imp)
+		if len(names) == 0 {
+			f.LogDebug(debugLevel, 3, "Keeping import without a recognised name: %s", imp.FullLine)
+			continue
 		}
-
-		// For default imports
-		if imp.Module != "" && len(imp.ImportedNames) == 0 && len(imp.Aliases) == 1 {
-			// This is likely a default import
-			for _, alias := range imp.Aliases {
-				if f.SearchForUsage(code, alias, lastImportLine) {
-					f.LogDebug(debugLevel, 3, "Found usage of default import '%s'", alias)
-					used = true
-					break
-				}
+		used := false
+		for _, name := range names {
+			if f.SearchForUsage(code, name, lastImportLine) {
+				f.LogDebug(debugLevel, 3, "Found usage of '%s'", name)
+				used = true
+				break
 			}
 		}
 
@@ -136,8 +110,8 @@ func (f *JavaScriptFilter) parseImports(code string, debugLevel int) ([]ImportSt
 	sideEffectRe := regexp.MustCompile(`^\s*import\s+['"` + "`" + `](.+?)['"` + "`" + `]\s*;?\s*$`)
 	// Dynamic imports (we'll skip these as they're runtime)
 	dynamicImportRe := regexp.MustCompile(`import\s*\(`)
-	// CommonJS require (for completeness, though less common in modern code)
-	requireRe := regexp.MustCompile(`^\s*(?:const|let|var)\s+(.+?)\s*=\s*require\s*\(\s*['"` + "`" + `](.+?)['"` + "`" + `]\s*\)\s*;?\s*$`)
+	// CommonJS require, and TypeScript's `import x = require('m')`
+	requireRe := regexp.MustCompile(`^\s*(?:const|let|var|import)\s+(.+?)\s*=\s*require\s*\(\s*['"` + "`" + `](.+?)['"` + "`" + `]\s*\)\s*;?\s*$`)
 	// Type imports (TypeScript)
 	typeImportRe := regexp.MustCompile(`^\s*import\s+type\s+(.+?)\s+from\s+['"` + "`" + `](.+?)['"` + "`" + `]\s*;?\s*$`)
 
@@ -281,56 +255,63 @@ func (f *JavaScriptFilter) parseImports(code string, debugLevel int) ([]ImportSt
 	return imports, nil
 }
 
-// parseImportSpecifier parses the import specifier part of an ES6 import
+// jsLocalNames returns the names an import binds in the code: the default
+// binding, the namespace alias, and each named import's alias or, without
+// one, its name.
+func jsLocalNames(imp ImportStatement) []string {
+	var names []string
+	if d := imp.Aliases["default"]; d != "" {
+		names = append(names, d)
+	}
+	if ns := imp.Aliases["*"]; ns != "" {
+		names = append(names, ns)
+	}
+	for _, name := range imp.ImportedNames {
+		if alias := imp.Aliases[name]; alias != "" {
+			names = append(names, alias)
+		} else {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// jsNamespaceRe matches a namespace binding, `* as name`.
+var jsNamespaceRe = regexp.MustCompile(`^\*\s+as\s+([\w$]+)$`)
+
+// parseImportSpecifier reads the clause of an import between `import` (and
+// `type`) and `from`, in every form the formatters print: `D`, `* as ns`,
+// `{ A, B as C, type T }`, `D, { A }` and `D, * as ns`. The default binding
+// is recorded as Aliases["default"], a namespace binding as IsWildcard and
+// Aliases["*"], each named import as an ImportedNames entry with its alias
+// (empty without one) in Aliases.
 func (f *JavaScriptFilter) parseImportSpecifier(spec string, imp *ImportStatement) {
-	spec = strings.TrimSpace(spec)
-
-	// Handle namespace import: * as name
-	if strings.HasPrefix(spec, "*") {
-		if matches := regexp.MustCompile(`\*\s+as\s+(\w+)`).FindStringSubmatch(spec); matches != nil {
-			imp.IsWildcard = true
-			imp.Aliases["*"] = matches[1]
-			return
-		}
-	}
-
-	// Remove outer braces if present
-	hadBraces := false
-	if strings.HasPrefix(spec, "{") && strings.HasSuffix(spec, "}") {
-		spec = strings.TrimPrefix(spec, "{")
-		spec = strings.TrimSuffix(spec, "}")
-		hadBraces = true
-	}
-
-	// Split by comma
-	parts := f.splitImportParts(spec)
-
-	for _, part := range parts {
+	for _, part := range f.splitImportParts(strings.TrimSpace(spec)) {
 		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-
-		// Check for default import (no braces originally)
-		if !hadBraces && !strings.Contains(part, " as ") && len(parts) == 1 {
-			// This is a default import
-			imp.Aliases["default"] = part
-			continue
-		}
-
-		// Check for alias
-		if strings.Contains(part, " as ") {
-			asParts := strings.Split(part, " as ")
-			if len(asParts) == 2 {
-				name := strings.TrimSpace(asParts[0])
-				alias := strings.TrimSpace(asParts[1])
+		switch {
+		case part == "":
+		case strings.HasPrefix(part, "{"):
+			inner := strings.TrimSuffix(strings.TrimPrefix(part, "{"), "}")
+			for _, named := range strings.Split(inner, ",") {
+				named = strings.TrimSpace(named)
+				named = strings.TrimSpace(strings.TrimPrefix(named, "type "))
+				if named == "" {
+					continue
+				}
+				name, alias := named, ""
+				if i := strings.Index(named, " as "); i >= 0 {
+					name, alias = strings.TrimSpace(named[:i]), strings.TrimSpace(named[i+len(" as "):])
+				}
 				imp.ImportedNames = append(imp.ImportedNames, name)
 				imp.Aliases[name] = alias
 			}
-		} else {
-			// No alias
-			imp.ImportedNames = append(imp.ImportedNames, part)
-			imp.Aliases[part] = "" // No alias
+		case strings.HasPrefix(part, "*"):
+			if m := jsNamespaceRe.FindStringSubmatch(part); m != nil {
+				imp.IsWildcard = true
+				imp.Aliases["*"] = m[1]
+			}
+		default:
+			imp.Aliases["default"] = part
 		}
 	}
 }

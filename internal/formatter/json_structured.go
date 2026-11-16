@@ -187,20 +187,31 @@ func (f *JSONStructuredFormatter) importToStructured(n *ir.DistilledImport) map[
 		"module": n.Module,
 	}
 
+	if n.IsType {
+		imp["is_type"] = true
+	}
 	if len(n.Symbols) > 0 {
-		symbols := make([]map[string]string, len(n.Symbols))
-		for i, sym := range n.Symbols {
-			s := map[string]string{"name": sym.Name}
-			if sym.Alias != "" {
-				s["alias"] = sym.Alias
-			}
-			symbols[i] = s
-		}
-		imp["symbols"] = symbols
+		imp["symbols"] = symbolsToStructured(n.Symbols)
 	}
 
 	f.addCommonFields(imp, n)
 	return imp
+}
+
+// symbolsToStructured returns the symbols of an import or export.
+func symbolsToStructured(symbols []ir.ImportedSymbol) []map[string]interface{} {
+	out := make([]map[string]interface{}, len(symbols))
+	for i, sym := range symbols {
+		s := map[string]interface{}{"name": sym.Name}
+		if sym.Alias != "" {
+			s["alias"] = sym.Alias
+		}
+		if sym.IsType {
+			s["is_type"] = true
+		}
+		out[i] = s
+	}
+	return out
 }
 
 func (f *JSONStructuredFormatter) classToStructured(n *ir.DistilledClass) map[string]interface{} {

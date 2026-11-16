@@ -145,20 +145,11 @@ func (f *XMLFormatter) formatNode(w io.Writer, node ir.DistilledNode, depth int)
 		fmt.Fprintf(w, "%s<import", indent)
 		f.writeAttr(w, "type", n.ImportType)
 		f.writeAttr(w, "module", n.Module)
-		f.writeNodeAttrs(w, n)
-		if len(n.Symbols) > 0 {
-			fmt.Fprintln(w, ">")
-			for _, sym := range n.Symbols {
-				fmt.Fprintf(w, "%s  <symbol name=\"%s\"", indent, escapeXMLAttr(sym.Name))
-				if sym.Alias != "" {
-					f.writeAttr(w, "alias", sym.Alias)
-				}
-				fmt.Fprintln(w, "/>")
-			}
-			fmt.Fprintf(w, "%s</import>\n", indent)
-		} else {
-			fmt.Fprintln(w, "/>")
+		if n.IsType {
+			f.writeAttr(w, "is_type", "true")
 		}
+		f.writeNodeAttrs(w, n)
+		f.writeSymbols(w, indent, "</import>", n.Symbols)
 
 	case *ir.DistilledClass:
 		fmt.Fprintf(w, "%s<class", indent)
@@ -308,6 +299,25 @@ func (f *XMLFormatter) formatNodeChildren(w io.Writer, open, close string, child
 }
 
 // writeAttr writes an XML attribute
+// writeSymbols closes the open element of an import or export: with its
+// symbols as <symbol> children and the closing tag, or as an empty element.
+func (f *XMLFormatter) writeSymbols(w io.Writer, indent, closing string, symbols []ir.ImportedSymbol) {
+	if len(symbols) == 0 {
+		fmt.Fprintln(w, "/>")
+		return
+	}
+	fmt.Fprintln(w, ">")
+	for _, sym := range symbols {
+		fmt.Fprintf(w, "%s  <symbol name=\"%s\"", indent, escapeXMLAttr(sym.Name))
+		f.writeAttr(w, "alias", sym.Alias)
+		if sym.IsType {
+			f.writeAttr(w, "is_type", "true")
+		}
+		fmt.Fprintln(w, "/>")
+	}
+	fmt.Fprintf(w, "%s%s\n", indent, closing)
+}
+
 func (f *XMLFormatter) writeAttr(w io.Writer, name, value string) {
 	if value != "" {
 		fmt.Fprintf(w, ` %s="%s"`, name, escapeXMLAttr(value))

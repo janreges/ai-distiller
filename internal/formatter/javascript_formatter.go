@@ -56,58 +56,9 @@ func (f *JavaScriptFormatter) formatNode(w io.Writer, node ir.DistilledNode, ind
 	}
 }
 
+// formatImport prints the import as written (esImportLine).
 func (f *JavaScriptFormatter) formatImport(w io.Writer, imp *ir.DistilledImport) error {
-	if imp.ImportType == "from" || imp.ImportType == "import" {
-		// Handle different import styles
-		if len(imp.Symbols) == 0 {
-			// Side-effect import: import 'module'
-			fmt.Fprintf(w, "import '%s'\n", imp.Module)
-		} else {
-			// Check for namespace import (* as name)
-			hasNamespace := false
-			var namespaceAlias string
-			for _, sym := range imp.Symbols {
-				if sym.Name == "*" && sym.Alias != "" {
-					hasNamespace = true
-					namespaceAlias = sym.Alias
-					break
-				}
-			}
-
-			if hasNamespace {
-				fmt.Fprintf(w, "import * as %s from '%s'\n", namespaceAlias, imp.Module)
-			} else {
-				// Named imports or default import
-				defaultImport := ""
-				namedImports := []string{}
-
-				for _, sym := range imp.Symbols {
-					if sym.Alias != "" && sym.Name != "*" {
-						namedImports = append(namedImports, fmt.Sprintf("%s as %s", sym.Name, sym.Alias))
-					} else if sym.Name != "" && sym.Name != "*" {
-						// Check if it's likely a default import (single identifier without braces in original)
-						if len(imp.Symbols) == 1 && imp.ImportType == "import" {
-							defaultImport = sym.Name
-						} else {
-							namedImports = append(namedImports, sym.Name)
-						}
-					}
-				}
-
-				// Format the import statement
-				if defaultImport != "" && len(namedImports) == 0 {
-					fmt.Fprintf(w, "import %s from '%s'\n", defaultImport, imp.Module)
-				} else if defaultImport != "" && len(namedImports) > 0 {
-					fmt.Fprintf(w, "import %s, { %s } from '%s'\n", defaultImport, strings.Join(namedImports, ", "), imp.Module)
-				} else if len(namedImports) > 0 {
-					fmt.Fprintf(w, "import { %s } from '%s'\n", strings.Join(namedImports, ", "), imp.Module)
-				}
-			}
-		}
-	} else {
-		// CommonJS require() style - show as comment
-		fmt.Fprintf(w, "// require('%s')\n", imp.Module)
-	}
+	fmt.Fprintln(w, esImportLine(imp))
 	return nil
 }
 

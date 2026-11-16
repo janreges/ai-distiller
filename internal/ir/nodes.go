@@ -32,13 +32,18 @@ type DistilledImport struct {
 	ImportType string           `json:"import_type"` // "import", "from", "require", etc.
 	Module     string           `json:"module"`
 	Symbols    []ImportedSymbol `json:"symbols,omitempty"`
-	IsType     bool             `json:"is_type,omitempty"`
+	IsType     bool             `json:"is_type,omitempty"` // TypeScript `import type ...`
 }
 
-// ImportedSymbol represents an imported symbol
+// ImportedSymbol represents an imported symbol. Alias, when set, is the name
+// the code uses. In JavaScript and TypeScript a default import (`import D from
+// "m"`) is the symbol "default" with the alias D, a namespace import (`import *
+// as ns from "m"`) the symbol "*" with the alias ns, and IsType marks a
+// specifier written `type A` inside braces.
 type ImportedSymbol struct {
-	Name  string `json:"name"`
-	Alias string `json:"alias,omitempty"`
+	Name   string `json:"name"`
+	Alias  string `json:"alias,omitempty"`
+	IsType bool   `json:"is_type,omitempty"`
 }
 
 // GetNodeKind implements DistilledNode

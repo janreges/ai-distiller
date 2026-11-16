@@ -132,6 +132,9 @@ func (f *JSONLFormatter) nodeToJSON(filePath string, node ir.DistilledNode, path
 	case *ir.DistilledImport:
 		obj["import_type"] = n.ImportType
 		obj["module"] = n.Module
+		if n.IsType {
+			obj["is_type"] = true
+		}
 		if len(n.Symbols) > 0 {
 			obj["symbols"] = n.Symbols
 		}
