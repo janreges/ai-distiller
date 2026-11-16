@@ -91,12 +91,13 @@ func bodyStart(node *sitter.Node) (uint, bool) {
 
 // Signature returns the source text of node, an expression, as written but
 // with the body of every function in it left out: an arrow function keeps
-// its `async`, type parameters, parameters and return type, a function
+// its `async`, type parameters, parameters (a lone parameter written without
+// parentheses gets them: `x => x` reads `(x)`) and return type, a function
 // expression its keyword, name, parameters and return type. Comments are
 // left out, and whitespace that holds a line break becomes one space (none
 // after `(`, `[` or `<`, before `)`, `]`, `>`, `,` or `;`, and a trailing
-// comma before a closing bracket goes), so the result is one line. Strings and template
-// literals are kept verbatim.
+// comma before a closing bracket goes), so the result is one line. Strings
+// and template literals are kept verbatim.
 //
 //	forwardRef<B, P>(({ a = 1, ...rest }, ref) => { ... })
 //	  -> forwardRef<B, P>(({ a = 1, ...rest }, ref))
@@ -127,12 +128,24 @@ func (s *signer) walk(node *sitter.Node) {
 		return
 	}
 	cut, isFn := bodyStart(node)
+	// `x => ...` without parentheses: its parameter list reads `(x)`, so the
+	// function stays recognisable once its body is gone.
+	var bare *sitter.Node
+	if isFn && node.Kind() == "arrow_function" {
+		bare = node.ChildByFieldName("parameter")
+	}
 	for i := uint(0); i < node.ChildCount(); i++ {
 		child := node.Child(i)
 		if child == nil {
 			continue
 		}
 		if isFn && child.StartByte() >= cut {
+			continue
+		}
+		if bare != nil && child.StartByte() == bare.StartByte() && child.EndByte() == bare.EndByte() {
+			s.emit("(", child.StartByte(), child.StartByte())
+			s.walk(child)
+			s.emit(")", child.EndByte(), child.EndByte())
 			continue
 		}
 		s.walk(child)
@@ -163,10 +176,15 @@ func (s *signer) gap(start uint) {
 
 // token writes source[start:end] after the separator it needs.
 func (s *signer) token(start, end uint) {
+	s.emit(string(s.source[start:end]), start, end)
+}
+
+// emit writes text, which stands for source[start:end], after the separator
+// it needs.
+func (s *signer) emit(text string, start, end uint) {
 	if start < s.prevEnd {
 		return
 	}
-	text := string(s.source[start:end])
 	s.gap(start)
 	if s.b.Len() > 0 {
 		if s.broken {

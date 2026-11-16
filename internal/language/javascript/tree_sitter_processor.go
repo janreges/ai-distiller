@@ -893,57 +893,49 @@ func (p *TreeSitterProcessor) processVariableDeclarator(node *sitter.Node, file 
 		}
 	}
 
-	// Process declarator parts
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(uint(i))
-		switch child.Kind() {
-		case "identifier":
-			field.Name = p.getNodeText(child)
-			// Check for underscore prefix convention
-			if strings.HasPrefix(field.Name, "_") {
-				field.Visibility = ir.VisibilityPrivate
+	// The name: an identifier or a destructuring pattern. The value is read
+	// from its own field, so a value that is a plain name
+	// (`const encode = encodeURIComponent`) does not replace it.
+	if name := node.ChildByFieldName("name"); name != nil {
+		field.Name = p.getNodeText(name)
+		// Check for underscore prefix convention
+		if name.Kind() == "identifier" && strings.HasPrefix(field.Name, "_") {
+			field.Visibility = ir.VisibilityPrivate
+		}
+	}
+
+	if child := node.ChildByFieldName("value"); child != nil {
+		// Check if it's a function expression, generator function, or arrow function
+		if child.Kind() == "function_expression" || child.Kind() == "arrow_function" || child.Kind() == "generator_function" {
+			// Store as a function instead
+			fn := &ir.DistilledFunction{
+				BaseNode:   p.nodeLocation(child),
+				Name:       field.Name,
+				Visibility: field.Visibility,
+				Modifiers:  field.Modifiers,
+				Parameters: []ir.Parameter{},
 			}
 
-		case "object_pattern", "array_pattern":
-			// Destructuring
-			field.Name = p.getNodeText(child)
-
-		default:
-			// Initializer
-			if child.Kind() != "=" && field.DefaultValue == "" {
-				// Check if it's a function expression, generator function, or arrow function
-				if child.Kind() == "function_expression" || child.Kind() == "arrow_function" || child.Kind() == "generator_function" {
-					// Store as a function instead
-					fn := &ir.DistilledFunction{
-						BaseNode:   p.nodeLocation(child),
-						Name:       field.Name,
-						Visibility: field.Visibility,
-						Modifiers:  field.Modifiers,
-						Parameters: []ir.Parameter{},
-					}
-
-					// Process function expression
-					if child.Kind() == "arrow_function" {
-						p.processArrowFunction(child, fn)
-					} else {
-						p.processFunctionExpression(child, fn)
-					}
-
-					p.addNode(file, parent, fn)
-					return
-				} else if esutil.TakesFunction(child) {
-					// forwardRef((props, ref) => ...): the call with the
-					// signatures of its function arguments; the whole
-					// initializer is the implementation.
-					field.DefaultValue = esutil.Signature(child, p.source)
-					field.Implementation = p.getNodeText(child)
-				} else if child.Kind() == "object" {
-					// Simple object literal analysis
-					field.DefaultValue = p.processObjectLiteral(child)
-				} else {
-					field.DefaultValue = p.getNodeText(child)
-				}
+			// Process function expression
+			if child.Kind() == "arrow_function" {
+				p.processArrowFunction(child, fn)
+			} else {
+				p.processFunctionExpression(child, fn)
 			}
+
+			p.addNode(file, parent, fn)
+			return
+		} else if esutil.TakesFunction(child) {
+			// forwardRef((props, ref) => ...): the call with the
+			// signatures of its function arguments; the whole
+			// initializer is the implementation.
+			field.DefaultValue = esutil.Signature(child, p.source)
+			field.Implementation = p.getNodeText(child)
+		} else if child.Kind() == "object" {
+			// Simple object literal analysis
+			field.DefaultValue = p.processObjectLiteral(child)
+		} else {
+			field.DefaultValue = p.getNodeText(child)
 		}
 	}
 

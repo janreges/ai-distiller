@@ -464,3 +464,13 @@ func TestJS_WrapperConst(t *testing.T) {
 	assert.Equal(t, "make(1)", p.DefaultValue)
 	assert.Equal(t, "", p.Implementation)
 }
+
+// A variable whose value is a plain name keeps its own name.
+func TestJS_VariableNamedValue(t *testing.T) {
+	f := parseJS(t, "const encode = encodeURIComponent;\nconst { a, b } = obj;\nlet _hidden = 1;\n")
+	enc := f.Children[0].(*ir.DistilledField)
+	assert.Equal(t, "encode", enc.Name)
+	assert.Equal(t, "encodeURIComponent", enc.DefaultValue)
+	assert.Equal(t, "{ a, b }", f.Children[1].(*ir.DistilledField).Name)
+	assert.Equal(t, ir.VisibilityPrivate, f.Children[2].(*ir.DistilledField).Visibility)
+}
