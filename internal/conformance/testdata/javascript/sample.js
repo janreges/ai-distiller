@@ -34,3 +34,8 @@ const confArrow = (a) => a + 1;
 export function confWithHook(hook = confUseHook) {
     return ConfReact.createElement(hook);
 }
+
+export * from "./conf-all";
+export { confPicked as ConfRenamed } from "./conf-picked";
+export { confArrow };
+export default ConfWidget;

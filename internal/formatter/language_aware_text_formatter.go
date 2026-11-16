@@ -176,6 +176,8 @@ func (f *LanguageAwareTextFormatter) formatNodeGeneric(w io.Writer, node ir.Dist
 	switch n := node.(type) {
 	case *ir.DistilledImport:
 		fmt.Fprintf(w, "import %s\n", n.Module)
+	case *ir.DistilledExport:
+		fmt.Fprintln(w, esExportLine(n))
 	case *ir.DistilledClass:
 		// Format class with modifiers and extends
 		modifiers := ""

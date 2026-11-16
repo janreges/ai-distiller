@@ -103,7 +103,8 @@ Distills to:
 - ✅ **Async/generator detection** with proper prefixes for functions, class methods and object-literal methods
 - ✅ **Object literal analysis** including methods and spread syntax
 - ✅ **ES6 classes** with constructors, methods, getters/setters
-- ✅ **Exported declarations** are printed (ES6 and CommonJS); the `export` keyword and `module.exports` / `export default` statements themselves are not shown
+- ✅ **Exported declarations** are printed (ES6 and CommonJS); the `export` keyword of a declaration and `module.exports` are not shown
+- ✅ **Re-exports and export lists** print as written: `export * from './a'`, `export { x, y as z } from './c'`, `export { q }`, `export default Inner`
 - ✅ **JSDoc type extraction** for parameters and return values
 - ✅ **Private members** detection: `#private` names, and class members whose name starts with `_` unless their JSDoc says `@public`
 - ✅ **JSDoc blocks** printed by default above the declaration they document; `//` and `/* */` comments with `--comments=1`

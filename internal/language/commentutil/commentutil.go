@@ -73,10 +73,10 @@ func StripDoxygen(raw string) (text, format string, trailing bool) {
 
 // AppendStatement appends to list the nodes parsed from one statement that is
 // not itself a comment. A doc comment documents the statement after it; when
-// that statement yields nothing but comments (a re-export, `module.exports =
-// ...`, `export default {...}`, a call), the doc comments right before it and
-// among its own nodes are dropped, so they do not appear to document the next
-// declaration. Other comments keep their place.
+// that statement yields nothing but comments (`module.exports = ...`, a call),
+// the doc comments right before it and among its own nodes are dropped, so
+// they do not appear to document the next declaration. Other comments keep
+// their place.
 func AppendStatement(list, parsed []ir.DistilledNode) []ir.DistilledNode {
 	for _, node := range parsed {
 		if !isComment(node) {

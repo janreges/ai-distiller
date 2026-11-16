@@ -41,6 +41,9 @@ func (f *JavaScriptFormatter) formatNode(w io.Writer, node ir.DistilledNode, ind
 	switch n := node.(type) {
 	case *ir.DistilledImport:
 		return f.formatImport(w, n)
+	case *ir.DistilledExport:
+		fmt.Fprintf(w, "%s%s\n", strings.Repeat("    ", indent), esExportLine(n))
+		return nil
 	case *ir.DistilledClass:
 		return f.formatClass(w, n, indent)
 	case *ir.DistilledFunction:

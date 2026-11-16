@@ -7,6 +7,7 @@ import (
 
 	"github.com/janreges/ai-distiller/internal/ir"
 	"github.com/janreges/ai-distiller/internal/language/commentutil"
+	"github.com/janreges/ai-distiller/internal/language/esutil"
 	"github.com/janreges/ai-distiller/internal/language/tsparse"
 	sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_javascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
@@ -399,8 +400,14 @@ func (p *TreeSitterProcessor) processNamedImports(node *sitter.Node, imp *ir.Dis
 	}
 }
 
-// processExport processes export statements
+// processExport processes export statements: an exported declaration is
+// parsed as the declaration; a re-export, an export list or `export default
+// <expression>` becomes a DistilledExport (esutil.Export).
 func (p *TreeSitterProcessor) processExport(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) {
+	if exp := esutil.Export(node, p.source); exp != nil {
+		p.addNode(file, parent, exp)
+		return
+	}
 	// Process the exported declaration
 	for i := 0; i < int(node.ChildCount()); i++ {
 		child := node.Child(uint(i))
@@ -411,32 +418,7 @@ func (p *TreeSitterProcessor) processExport(node *sitter.Node, file *ir.Distille
 			p.processFunction(child, file, parent, false)
 		case "lexical_declaration":
 			p.processLexicalDeclaration(child, file, parent)
-		case "export_clause":
-			// Handle named exports
-			p.processExportClause(child, file, parent)
 		}
-	}
-}
-
-// processExportClause processes export { a, b as c }
-func (p *TreeSitterProcessor) processExportClause(node *sitter.Node, file *ir.DistilledFile, parent ir.DistilledNode) {
-	// For now, we'll add these as comments
-	// TODO: Add proper export tracking in IR
-	var exports []string
-	for i := 0; i < int(node.ChildCount()); i++ {
-		child := node.Child(uint(i))
-		if child.Kind() == "export_specifier" {
-			exports = append(exports, p.getNodeText(child))
-		}
-	}
-
-	if len(exports) > 0 {
-		comment := &ir.DistilledComment{
-			BaseNode: p.nodeLocation(node),
-			Text:     fmt.Sprintf("Exports: %s", strings.Join(exports, ", ")),
-			Format:   ir.CommentExport,
-		}
-		p.addNode(file, parent, comment)
 	}
 }
 

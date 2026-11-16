@@ -34,6 +34,7 @@ const (
 	KindDirectory  NodeKind = "directory"
 	KindPackage    NodeKind = "package"
 	KindImport     NodeKind = "import"
+	KindExport     NodeKind = "export"
 	KindClass      NodeKind = "class"
 	KindInterface  NodeKind = "interface"
 	KindStruct     NodeKind = "struct"
@@ -94,6 +95,7 @@ const (
 	ModifierNonMutating Modifier = "nonmutating"
 	ModifierClass       Modifier = "class"
 	ModifierExport      Modifier = "export"
+	ModifierDefault     Modifier = "default" // JavaScript and TypeScript `export default`
 	ModifierAnnotation  Modifier = "annotation"
 	ModifierMacro       Modifier = "macro"
 	ModifierUnion       Modifier = "union"

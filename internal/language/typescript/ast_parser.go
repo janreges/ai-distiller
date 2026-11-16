@@ -8,6 +8,7 @@ import (
 
 	"github.com/janreges/ai-distiller/internal/ir"
 	"github.com/janreges/ai-distiller/internal/language/commentutil"
+	"github.com/janreges/ai-distiller/internal/language/esutil"
 	"github.com/janreges/ai-distiller/internal/language/tsparse"
 	sitter "github.com/tree-sitter/go-tree-sitter"
 	typescript "tree-sitter-typescript"
@@ -96,12 +97,13 @@ func (p *ASTParser) parseProgram(node *sitter.Node, file *ir.DistilledFile) {
 		}
 		file.Children = appendStatement(file.Children, child, p.parseStatement(child, false))
 	}
+	publishExportedNames(file.Children)
 }
 
 // appendStatement appends to list the nodes parsed from statement. A comment
 // is appended as it is; for any other statement commentutil.AppendStatement
-// drops the doc comments of a statement that yields no declaration (a
-// re-export, `export default {...}`, an expression).
+// drops the doc comments of a statement that yields no declaration (an
+// expression such as a call or `exports.x = ...`).
 func appendStatement(list []ir.DistilledNode, statement *sitter.Node, parsed []ir.DistilledNode) []ir.DistilledNode {
 	if statement.Kind() == "comment" || !statement.IsNamed() {
 		return append(list, parsed...)
@@ -207,6 +209,7 @@ func (p *ASTParser) parseNamespace(node *sitter.Node) *ir.DistilledPackage {
 			pkg.Children = appendStatement(pkg.Children, statement, members)
 		}
 	}
+	publishExportedNames(pkg.Children)
 	return pkg
 }
 
@@ -337,13 +340,87 @@ func (p *ASTParser) specifiers(node *sitter.Node, kind string) []ir.ImportedSymb
 	return symbols
 }
 
-// parseExport parses export statements
+// parseExport parses an export statement. An exported declaration carries the
+// modifier export, and default too after `export default`; `export default
+// class {}` is a class without a name. Every other export (a re-export, an
+// export list, `export default <expression>`, `export = x`) is a
+// DistilledExport (esutil.Export).
 func (p *ASTParser) parseExport(node *sitter.Node) []ir.DistilledNode {
-	var nodes []ir.DistilledNode
-	for i := 0; i < int(node.NamedChildCount()); i++ {
-		nodes = append(nodes, p.parseStatement(node.NamedChild(uint(i)), true)...)
+	isDefault := p.findChild(node, "default") != nil
+	if decl := node.ChildByFieldName("declaration"); decl != nil {
+		nodes := p.parseStatement(decl, true)
+		if isDefault {
+			for _, n := range nodes {
+				addModifier(n, ir.ModifierDefault)
+			}
+		}
+		return nodes
 	}
-	return nodes
+	if value := node.ChildByFieldName("value"); value != nil && value.Kind() == "class" {
+		class := p.parseClass(value, true)
+		class.Modifiers = append(class.Modifiers, ir.ModifierDefault)
+		return []ir.DistilledNode{class}
+	}
+	if exp := esutil.Export(node, p.source); exp != nil {
+		return []ir.DistilledNode{exp}
+	}
+	return nil
+}
+
+// addModifier adds mod to a declaration that has modifiers.
+func addModifier(node ir.DistilledNode, mod ir.Modifier) {
+	switch n := node.(type) {
+	case *ir.DistilledFunction:
+		n.Modifiers = append(n.Modifiers, mod)
+	case *ir.DistilledField:
+		n.Modifiers = append(n.Modifiers, mod)
+	case *ir.DistilledClass:
+		n.Modifiers = append(n.Modifiers, mod)
+	case *ir.DistilledInterface:
+		n.Modifiers = append(n.Modifiers, mod)
+	case *ir.DistilledTypeAlias:
+		n.Modifiers = append(n.Modifiers, mod)
+	}
+}
+
+// publishExportedNames makes public the declarations in nodes that an export
+// list or `export default <name>` in the same nodes exports (`const q = 1;
+// export { q };`): they belong to the module's API although their own
+// statement has no `export`, so it is not added to them.
+func publishExportedNames(nodes []ir.DistilledNode) {
+	exported := map[string]bool{}
+	for _, n := range nodes {
+		if exp, ok := n.(*ir.DistilledExport); ok {
+			for _, name := range esutil.LocalNames(exp) {
+				exported[name] = true
+			}
+		}
+	}
+	if len(exported) == 0 {
+		return
+	}
+	for _, n := range nodes {
+		var name string
+		switch d := n.(type) {
+		case *ir.DistilledFunction:
+			name = d.Name
+		case *ir.DistilledField:
+			name = d.Name
+		case *ir.DistilledClass:
+			name = d.Name
+		case *ir.DistilledInterface:
+			name = d.Name
+		case *ir.DistilledTypeAlias:
+			name = d.Name
+		case *ir.DistilledEnum:
+			name = d.Name
+		default:
+			continue
+		}
+		if exported[name] {
+			makePublic(n)
+		}
+	}
 }
 
 // parseClass parses class declarations

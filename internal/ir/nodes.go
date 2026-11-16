@@ -61,6 +61,43 @@ func (n *DistilledImport) Accept(visitor Visitor) DistilledNode {
 	return visitor.Visit(n)
 }
 
+// DistilledExport is a JavaScript or TypeScript export statement that
+// declares nothing itself: a re-export (`export * from "m"`, `export * as ns
+// from "m"`, `export { a, b as c } from "m"`), an export list of names of
+// the file (`export { a }`), `export default <expression>` or TypeScript's
+// `export = <expression>`. An exported declaration carries ModifierExport
+// instead.
+type DistilledExport struct {
+	BaseNode
+	// Module is the module re-exported from; empty for names of this file.
+	Module string `json:"module,omitempty"`
+	// Symbols are the exported names: Name as the module or the file has
+	// it, Alias the name it is exported under. Name "*" exports every name
+	// of Module, as one namespace when it has an Alias.
+	Symbols []ImportedSymbol `json:"symbols,omitempty"`
+	// Value is the expression of `export default` (IsDefault) or of
+	// `export =`, as written, with the bodies of the functions in it left
+	// out.
+	Value     string `json:"value,omitempty"`
+	IsDefault bool   `json:"is_default,omitempty"`
+	IsType    bool   `json:"is_type,omitempty"` // `export type { T } ...`
+}
+
+// GetNodeKind implements DistilledNode
+func (n *DistilledExport) GetNodeKind() NodeKind {
+	return KindExport
+}
+
+// GetChildren implements DistilledNode
+func (n *DistilledExport) GetChildren() []DistilledNode {
+	return nil
+}
+
+// Accept implements DistilledNode
+func (n *DistilledExport) Accept(visitor Visitor) DistilledNode {
+	return visitor.Visit(n)
+}
+
 // Type nodes
 
 // DistilledClass represents a class/interface declaration

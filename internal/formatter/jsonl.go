@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/janreges/ai-distiller/internal/ir"
 )
@@ -139,6 +140,23 @@ func (f *JSONLFormatter) nodeToJSON(filePath string, node ir.DistilledNode, path
 			obj["symbols"] = n.Symbols
 		}
 
+	case *ir.DistilledExport:
+		if n.Module != "" {
+			obj["module"] = n.Module
+		}
+		if len(n.Symbols) > 0 {
+			obj["symbols"] = n.Symbols
+		}
+		if n.Value != "" {
+			obj["value"] = n.Value
+		}
+		if n.IsDefault {
+			obj["is_default"] = true
+		}
+		if n.IsType {
+			obj["is_type"] = true
+		}
+
 	case *ir.DistilledClass:
 		obj["visibility"] = n.Visibility
 		if len(n.Modifiers) > 0 {
@@ -210,6 +228,8 @@ func (f *JSONLFormatter) getNodeName(node ir.DistilledNode) string {
 		return n.Name
 	case *ir.DistilledImport:
 		return n.Module
+	case *ir.DistilledExport:
+		return exportName(n)
 	case *ir.DistilledClass:
 		return n.Name
 	case *ir.DistilledInterface:
@@ -286,4 +306,27 @@ func (f *JSONLFormatter) countNodes(nodes []ir.DistilledNode, stats map[string]i
 			f.countNodes(children, stats)
 		}
 	}
+}
+
+// exportName names an export line: the module re-exported from, else
+// "default" for `export default`, else the value of `export =`, else the
+// exported names.
+func exportName(n *ir.DistilledExport) string {
+	switch {
+	case n.Module != "":
+		return n.Module
+	case n.IsDefault:
+		return "default"
+	case n.Value != "":
+		return n.Value
+	}
+	names := make([]string, 0, len(n.Symbols))
+	for _, sym := range n.Symbols {
+		if sym.Alias != "" {
+			names = append(names, sym.Alias)
+		} else {
+			names = append(names, sym.Name)
+		}
+	}
+	return strings.Join(names, ", ")
 }

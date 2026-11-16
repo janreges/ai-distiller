@@ -19,7 +19,7 @@ TypeScript support in AI Distiller is designed to capture the rich type informat
 | **Type System** | ✅ Full | Union, intersection, conditional, mapped types |
 | **Generics** | ✅ Full | With constraints, defaults, inference |
 | **Type Aliases** | ✅ Full | Including complex utility types |
-| **Imports/Exports** | ✅ Full | ES6 modules, type-only imports, export modifiers |
+| **Imports/Exports** | ✅ Full | Imports as written (`import D, { A, B as C } from './m'`, `import type`, `import * as ns`); re-exports and export lists (`export * from './a'`, `export { x as y } from './c'`, `export { q }`, `export default Inner`); `export` and `export default` on declarations |
 | **Enums** | ✅ Full | Members with their initialisers; `const enum` prints as `enum` |
 | **Decorators** | ⚠️ Partial | Method decorators are printed with their arguments; class and property decorators are dropped |
 | **Namespaces** | ✅ Full | `namespace X {}` and `declare module "x" {}` with their members |

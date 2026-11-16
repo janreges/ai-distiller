@@ -63,6 +63,55 @@ func TestStructuredFormatsShowTypeImports(t *testing.T) {
 	assert.Equal(t, 2, strings.Count(out["xml"], `is_type="true"`), out["xml"])
 }
 
+func TestESExportLine(t *testing.T) {
+	sym := func(name, alias string) ir.ImportedSymbol { return ir.ImportedSymbol{Name: name, Alias: alias} }
+	for _, tc := range []struct {
+		exp  ir.DistilledExport
+		want string
+	}{
+		{ir.DistilledExport{Module: "./a", Symbols: []ir.ImportedSymbol{sym("*", "")}}, "export * from './a'"},
+		{ir.DistilledExport{Module: "./b", Symbols: []ir.ImportedSymbol{sym("*", "ns")}}, "export * as ns from './b'"},
+		{ir.DistilledExport{Module: "./c", Symbols: []ir.ImportedSymbol{sym("x", ""), sym("y", "z")}}, "export { x, y as z } from './c'"},
+		{ir.DistilledExport{Symbols: []ir.ImportedSymbol{sym("q", "")}}, "export { q }"},
+		{ir.DistilledExport{Module: "./t", IsType: true, Symbols: []ir.ImportedSymbol{sym("T", "")}}, "export type { T } from './t'"},
+		{ir.DistilledExport{Symbols: []ir.ImportedSymbol{{Name: "P", IsType: true}, sym("default", "")}}, "export { type P, default }"},
+		{ir.DistilledExport{IsDefault: true, Value: "Inner"}, "export default Inner"},
+		{ir.DistilledExport{Value: "Foo"}, "export = Foo"},
+	} {
+		t.Run(tc.want, func(t *testing.T) {
+			exp := tc.exp
+			assert.Equal(t, tc.want, esExportLine(&exp))
+			assert.Equal(t, tc.want+"\n", tsFormat(t, &exp, 0))
+			assert.Equal(t, tc.want+"\n", jsFormat(t, &exp, 0))
+		})
+	}
+}
+
+// Every structured format shows an export with all its parts.
+func TestStructuredFormatsShowExports(t *testing.T) {
+	file := &ir.DistilledFile{Path: "t.ts", Language: "typescript", Children: []ir.DistilledNode{
+		&ir.DistilledExport{Module: "./c", IsType: true, Symbols: []ir.ImportedSymbol{{Name: "y", Alias: "z"}}},
+		&ir.DistilledExport{IsDefault: true, Value: "Inner"},
+	}}
+	out := structuredOutputs(t, file)
+	assert.Contains(t, out["jsonl"], `{"file":"t.ts","is_type":true,"module":"./c","name":"./c","path":[],"symbols":[{"name":"y","alias":"z"}],"type":"export"}`)
+	assert.Contains(t, out["jsonl"], `{"file":"t.ts","is_default":true,"name":"default","path":[],"type":"export","value":"Inner"}`)
+	assert.Contains(t, out["json-structured"], `"exports": [`)
+	assert.Contains(t, out["json-structured"], `"value": "Inner"`)
+	assert.Contains(t, out["xml"], `<export module="./c" is_type="true">`)
+	assert.Contains(t, out["xml"], `<symbol name="y" alias="z"/>`)
+	assert.Contains(t, out["xml"], `<export value="Inner" is_default="true"/>`)
+}
+
+// An exported declaration prints `export` or `export default`.
+func TestTypeScriptFormatter_ExportDefault(t *testing.T) {
+	exportDefault := []ir.Modifier{ir.ModifierExport, ir.ModifierDefault}
+	assert.Equal(t, "export default function main(): void\n",
+		tsFormat(t, &ir.DistilledFunction{Name: "main", Modifiers: exportDefault, Returns: &ir.TypeRef{Name: "void"}}, 0))
+	assert.Equal(t, "\nexport default class {\n}\n", tsFormat(t, &ir.DistilledClass{Modifiers: exportDefault}, 0))
+	assert.Equal(t, "\nexport default interface I {\n}\n", tsFormat(t, &ir.DistilledInterface{Name: "I", Modifiers: exportDefault}, 0))
+}
+
 // The TypeScript and JavaScript formatters print an import the same way.
 func TestESImportFormatters(t *testing.T) {
 	imp := &ir.DistilledImport{ImportType: "import", Module: "react", Symbols: []ir.ImportedSymbol{{Name: "default", Alias: "React"}, {Name: "memo"}}}

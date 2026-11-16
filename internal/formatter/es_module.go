@@ -55,6 +55,67 @@ func esImportLine(imp *ir.DistilledImport) string {
 	return fmt.Sprintf("import %s%s from '%s'", typePrefix, strings.Join(clause, ", "), imp.Module)
 }
 
+// esExportLine returns an export statement that declares nothing as the
+// source wrote it, the module in single quotes like an import's:
+//
+//	export * from './a'
+//	export * as ns from './b'
+//	export { x, y as z } from './c'
+//	export { q }
+//	export type { T } from './t'
+//	export default Inner
+//	export = Foo
+func esExportLine(exp *ir.DistilledExport) string {
+	switch {
+	case exp.IsDefault:
+		return "export default " + exp.Value
+	case exp.Value != "":
+		return "export = " + exp.Value
+	}
+	typePrefix := ""
+	if exp.IsType {
+		typePrefix = "type "
+	}
+	var clause string
+	if len(exp.Symbols) == 1 && exp.Symbols[0].Name == "*" {
+		clause = "*"
+		if exp.Symbols[0].Alias != "" {
+			clause += " as " + exp.Symbols[0].Alias
+		}
+	} else {
+		named := make([]string, 0, len(exp.Symbols))
+		for _, sym := range exp.Symbols {
+			named = append(named, esSpecifier(sym))
+		}
+		clause = "{ " + strings.Join(named, ", ") + " }"
+	}
+	if exp.Module == "" {
+		return "export " + typePrefix + clause
+	}
+	return fmt.Sprintf("export %s%s from '%s'", typePrefix, clause, exp.Module)
+}
+
+// esExportPrefix returns "export ", "export default " or "" for a
+// declaration's modifiers.
+func esExportPrefix(mods []ir.Modifier) string {
+	export, def := false, false
+	for _, m := range mods {
+		switch m {
+		case ir.ModifierExport:
+			export = true
+		case ir.ModifierDefault:
+			def = true
+		}
+	}
+	switch {
+	case export && def:
+		return "export default "
+	case export:
+		return "export "
+	}
+	return ""
+}
+
 // esSpecifier returns one specifier of an import or export list:
 // `A`, `B as C`, `type T`.
 func esSpecifier(sym ir.ImportedSymbol) string {

@@ -45,11 +45,13 @@
 - No namespace node.
 - `Implementation` is the body's `statement_block` text with its braces; an
   arrow function with an expression body keeps the expression.
-- Exports that are not declarations are recorded as comments with format
-  `export` (`internal/ir/comment.go#CommentExport`): `export { a, b as c }`
-  becomes `Exports: a, b as c`, and `module.exports = X` becomes
-  `module.exports = X`. They are not `doc`, so they follow `--comments` and do
-  not appear by default.
+- Exports that are not declarations (`export * from "m"`, `export { a, b as
+  c } from "m"`, `export { a }`, `export default <expression>`) are
+  `DistilledExport` nodes, read by
+  `internal/language/esutil/esutil.go#Export`, the same function TypeScript
+  uses. `module.exports = X` is a comment with format `export`
+  (`internal/ir/comment.go#CommentExport`); it is not `doc`, so it follows
+  `--comments` and does not appear by default.
 - Comments go through `internal/language/commentutil/commentutil.go#StripJSStyle`:
   `/** */` is `doc`, `/* */` `block`, `//` and `///` `line`; a file-level doc with
   a file tag is `Inner`. JSDoc `@param {T} name` and `@returns {T}` also fill

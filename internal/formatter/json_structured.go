@@ -114,6 +114,7 @@ func (f *JSONStructuredFormatter) structureNodes(nodes []ir.DistilledNode) map[s
 	// Group nodes by type
 	packages := []interface{}{}
 	imports := []interface{}{}
+	exports := []interface{}{}
 	classes := []interface{}{}
 	interfaces := []interface{}{}
 	functions := []interface{}{}
@@ -127,6 +128,9 @@ func (f *JSONStructuredFormatter) structureNodes(nodes []ir.DistilledNode) map[s
 
 		case *ir.DistilledImport:
 			imports = append(imports, f.importToStructured(n))
+
+		case *ir.DistilledExport:
+			exports = append(exports, f.exportToStructured(n))
 
 		case *ir.DistilledClass:
 			classes = append(classes, f.classToStructured(n))
@@ -151,6 +155,9 @@ func (f *JSONStructuredFormatter) structureNodes(nodes []ir.DistilledNode) map[s
 	}
 	if len(imports) > 0 {
 		structure["imports"] = imports
+	}
+	if len(exports) > 0 {
+		structure["exports"] = exports
 	}
 	if len(classes) > 0 {
 		structure["classes"] = classes
@@ -196,6 +203,27 @@ func (f *JSONStructuredFormatter) importToStructured(n *ir.DistilledImport) map[
 
 	f.addCommonFields(imp, n)
 	return imp
+}
+
+func (f *JSONStructuredFormatter) exportToStructured(n *ir.DistilledExport) map[string]interface{} {
+	exp := map[string]interface{}{}
+	if n.Module != "" {
+		exp["module"] = n.Module
+	}
+	if len(n.Symbols) > 0 {
+		exp["symbols"] = symbolsToStructured(n.Symbols)
+	}
+	if n.Value != "" {
+		exp["value"] = n.Value
+	}
+	if n.IsDefault {
+		exp["is_default"] = true
+	}
+	if n.IsType {
+		exp["is_type"] = true
+	}
+	f.addCommonFields(exp, n)
+	return exp
 }
 
 // symbolsToStructured returns the symbols of an import or export.

@@ -7,6 +7,7 @@ import (
 
 	"github.com/janreges/ai-distiller/internal/ir"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // parseJS parses src with the real JavaScript processor and returns the raw IR.
@@ -361,10 +362,8 @@ func docTexts(nodes []ir.DistilledNode) []string {
 // declaration. Line comments keep their place.
 func TestJS_DocOfStatementWithoutDeclarationIsDropped(t *testing.T) {
 	for name, stmt := range map[string]string{
-		"re-export":      `export { foo } from "./foo";`,
 		"exports.x":      "exports.add = function (a) { return a; };",
 		"module.exports": "module.exports = { a: 1 };",
-		"export default": "export default { a: 1 };",
 		"call":           "main();",
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -380,4 +379,37 @@ func TestJS_DocOfStatementWithoutDeclarationIsDropped(t *testing.T) {
 		f := parseJS(t, "/** Foo doc */\nexport default class Foo {}\n")
 		assert.Equal(t, []string{"Foo doc"}, docTexts(f.Children))
 	})
+	// A re-export and `export default <expression>` are export nodes now:
+	// the doc above them documents them.
+	for name, stmt := range map[string]string{
+		"re-export":      `export { foo } from "./foo";`,
+		"export default": "export default { a: 1 };",
+	} {
+		t.Run(name+" keeps its doc", func(t *testing.T) {
+			f := parseJS(t, "/** export doc */\n"+stmt+"\n")
+			require.Len(t, f.Children, 2)
+			assert.Equal(t, "export doc", f.Children[0].(*ir.DistilledComment).Text)
+			assert.IsType(t, &ir.DistilledExport{}, f.Children[1])
+		})
+	}
+}
+
+// Statements that export without declaring become export nodes, in the
+// form ir.DistilledExport documents.
+func TestJS_ExportStatements(t *testing.T) {
+	f := parseJS(t, "export * from \"./a\";\nexport * as ns from \"./b\";\nexport { x, y as z } from \"./c\";\nconst q = 1;\nexport { q };\nexport default q;\n")
+	var exports []*ir.DistilledExport
+	for _, c := range f.Children {
+		if e, ok := c.(*ir.DistilledExport); ok {
+			exports = append(exports, e)
+		}
+	}
+	require.Len(t, exports, 5)
+	assert.Equal(t, &ir.DistilledExport{BaseNode: exports[0].BaseNode, Module: "./a", Symbols: []ir.ImportedSymbol{{Name: "*"}}}, exports[0])
+	assert.Equal(t, []ir.ImportedSymbol{{Name: "*", Alias: "ns"}}, exports[1].Symbols)
+	assert.Equal(t, []ir.ImportedSymbol{{Name: "x"}, {Name: "y", Alias: "z"}}, exports[2].Symbols)
+	assert.Equal(t, "", exports[3].Module)
+	assert.Equal(t, []ir.ImportedSymbol{{Name: "q"}}, exports[3].Symbols)
+	assert.True(t, exports[4].IsDefault)
+	assert.Equal(t, "q", exports[4].Value)
 }

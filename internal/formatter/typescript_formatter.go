@@ -42,6 +42,9 @@ func (f *TypeScriptFormatter) formatNode(w io.Writer, node ir.DistilledNode, ind
 		return nil
 	case *ir.DistilledImport:
 		return f.formatImport(w, n)
+	case *ir.DistilledExport:
+		fmt.Fprintf(w, "%s%s\n", strings.Repeat("    ", indent), esExportLine(n))
+		return nil
 	case *ir.DistilledClass:
 		return f.formatClass(w, n, indent)
 	case *ir.DistilledInterface:
@@ -96,20 +99,16 @@ func (f *TypeScriptFormatter) formatImport(w io.Writer, imp *ir.DistilledImport)
 func (f *TypeScriptFormatter) formatClass(w io.Writer, class *ir.DistilledClass, indent int) error {
 	// Format class declaration
 	modifiers := ""
-	hasExport := false
 	for _, mod := range class.Modifiers {
-		if mod == ir.ModifierExport {
-			hasExport = true
-		} else if mod == ir.ModifierAbstract {
+		if mod == ir.ModifierAbstract {
 			modifiers += "abstract "
 		}
 	}
 
 	f.writeBlankLine(w)
-	if hasExport {
-		fmt.Fprintf(w, "export %sclass %s", modifiers, class.Name)
-	} else {
-		fmt.Fprintf(w, "%sclass %s", modifiers, class.Name)
+	fmt.Fprintf(w, "%s%sclass", esExportPrefix(class.Modifiers), modifiers)
+	if class.Name != "" {
+		fmt.Fprintf(w, " %s", class.Name)
 	}
 
 	// Add generic type parameters
@@ -163,20 +162,8 @@ func (f *TypeScriptFormatter) writeBlankLine(w io.Writer) {
 }
 
 func (f *TypeScriptFormatter) formatInterface(w io.Writer, intf *ir.DistilledInterface, indent int) error {
-	hasExport := false
-	for _, mod := range intf.Modifiers {
-		if mod == ir.ModifierExport {
-			hasExport = true
-			break
-		}
-	}
-
 	f.writeBlankLine(w)
-	if hasExport {
-		fmt.Fprintf(w, "export interface %s", intf.Name)
-	} else {
-		fmt.Fprintf(w, "interface %s", intf.Name)
-	}
+	fmt.Fprintf(w, "%sinterface %s", esExportPrefix(intf.Modifiers), intf.Name)
 
 	// Add generic type parameters
 	if len(intf.TypeParams) > 0 {
@@ -265,7 +252,6 @@ func (f *TypeScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 
 	modifiers := ""
 	isConst := false
-	hasExport := false
 
 	// Format visibility keyword (only for class methods, not top-level functions)
 	if indent > 0 {
@@ -275,9 +261,7 @@ func (f *TypeScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 		}
 	}
 	for _, mod := range fn.Modifiers {
-		if mod == ir.ModifierExport {
-			hasExport = true
-		} else if mod == ir.ModifierAbstract {
+		if mod == ir.ModifierAbstract {
 			modifiers += "abstract "
 		} else if mod == ir.ModifierAsync {
 			modifiers += "async "
@@ -291,10 +275,7 @@ func (f *TypeScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 	// Top-level functions don't have indentation
 	if indent == 0 {
 		indentStr = ""
-		exportPrefix := ""
-		if hasExport {
-			exportPrefix = "export "
-		}
+		exportPrefix := esExportPrefix(fn.Modifiers)
 		// Top-level const arrow functions should be formatted as "const Name"
 		if isConst {
 			fmt.Fprintf(w, "%s%sconst %s", indentStr, exportPrefix, fn.Name)
@@ -362,21 +343,13 @@ func (f *TypeScriptFormatter) formatField(w io.Writer, field *ir.DistilledField,
 	if indent == 0 {
 		// Top-level variable declaration
 		varType := "let"
-		hasExport := false
 		for _, mod := range field.Modifiers {
 			if mod == ir.ModifierFinal {
 				varType = "const"
-			} else if mod == ir.ModifierExport {
-				hasExport = true
 			}
 		}
 
-		exportPrefix := ""
-		if hasExport {
-			exportPrefix = "export "
-		}
-
-		fmt.Fprintf(w, "%s%s %s", exportPrefix, varType, field.Name)
+		fmt.Fprintf(w, "%s%s %s", esExportPrefix(field.Modifiers), varType, field.Name)
 		if field.Type != nil && field.Type.Name != "" {
 			fmt.Fprintf(w, ": %s", field.Type.Name)
 		}
@@ -414,19 +387,7 @@ func (f *TypeScriptFormatter) formatField(w io.Writer, field *ir.DistilledField,
 }
 
 func (f *TypeScriptFormatter) formatTypeAlias(w io.Writer, alias *ir.DistilledTypeAlias) error {
-	hasExport := false
-	for _, mod := range alias.Modifiers {
-		if mod == ir.ModifierExport {
-			hasExport = true
-			break
-		}
-	}
-
-	if hasExport {
-		fmt.Fprintf(w, "export type %s", alias.Name)
-	} else {
-		fmt.Fprintf(w, "type %s", alias.Name)
-	}
+	fmt.Fprintf(w, "%stype %s", esExportPrefix(alias.Modifiers), alias.Name)
 
 	// Add generic type parameters
 	if len(alias.TypeParams) > 0 {

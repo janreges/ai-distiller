@@ -151,6 +151,19 @@ func (f *XMLFormatter) formatNode(w io.Writer, node ir.DistilledNode, depth int)
 		f.writeNodeAttrs(w, n)
 		f.writeSymbols(w, indent, "</import>", n.Symbols)
 
+	case *ir.DistilledExport:
+		fmt.Fprintf(w, "%s<export", indent)
+		f.writeAttr(w, "module", n.Module)
+		f.writeAttr(w, "value", n.Value)
+		if n.IsDefault {
+			f.writeAttr(w, "is_default", "true")
+		}
+		if n.IsType {
+			f.writeAttr(w, "is_type", "true")
+		}
+		f.writeNodeAttrs(w, n)
+		f.writeSymbols(w, indent, "</export>", n.Symbols)
+
 	case *ir.DistilledClass:
 		fmt.Fprintf(w, "%s<class", indent)
 		f.writeAttr(w, "name", n.Name)

@@ -639,6 +639,8 @@ func childLabels(nodes []ir.DistilledNode) []string {
 			out = append(out, "alias:"+v.Name)
 		case *ir.DistilledImport:
 			out = append(out, "import")
+		case *ir.DistilledExport:
+			out = append(out, "export")
 		case *ir.DistilledPackage:
 			out = append(out, "package:"+v.Name)
 		}
@@ -654,6 +656,21 @@ func TestDocCommentOfRemovedDeclarationIsRemoved(t *testing.T) {
 	}}
 	got := New(Options{RemovePrivate: true}).Visit(file).(*ir.DistilledFile)
 	assert.Equal(t, []string{"doc:Foo", "fn:Foo", "doc:T", "class:T"}, childLabels(got.Children))
+}
+
+// An export statement is public API: --imports=0 keeps it with its doc,
+// --public=0 removes both.
+func TestExportsFollowPublicNotImports(t *testing.T) {
+	file := func() *ir.DistilledFile {
+		return &ir.DistilledFile{Children: []ir.DistilledNode{
+			&ir.DistilledImport{Module: "x"},
+			doc("re-export"), &ir.DistilledExport{Module: "./a", Symbols: []ir.ImportedSymbol{{Name: "*"}}},
+		}}
+	}
+	got := New(Options{RemoveImports: true}).Visit(file()).(*ir.DistilledFile)
+	assert.Equal(t, []string{"doc:re-export", "export"}, childLabels(got.Children))
+	got = New(Options{RemovePublic: true}).Visit(file()).(*ir.DistilledFile)
+	assert.Equal(t, []string{"import"}, childLabels(got.Children))
 }
 
 func TestDocCommentBeforeTypeAliasIsKept(t *testing.T) {

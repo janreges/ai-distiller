@@ -55,3 +55,11 @@ declare module "conf-ambient" {
 declare namespace ConfDeclared {
     function confDeclaredFn(): void;
 }
+
+export * from "./conf-all";
+export * as confAllNs from "./conf-all-ns";
+export { confPicked, confOrig as ConfRenamed } from "./conf-picked";
+export type { ConfReType } from "./conf-retype";
+const confListed = 2;
+export { confListed };
+export default confListed;

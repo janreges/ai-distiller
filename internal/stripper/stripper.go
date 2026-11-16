@@ -152,6 +152,14 @@ func (s *Stripper) Visit(node ir.DistilledNode) ir.DistilledNode {
 		}
 		return n
 
+	case *ir.DistilledExport:
+		// A re-export or export list is the module's public API, not a
+		// dependency: --imports=0 keeps it, --public=0 removes it.
+		if s.options.RemovePublic {
+			return nil
+		}
+		return n
+
 	case *ir.DistilledFunction:
 		return s.visitFunction(n)
 
@@ -595,11 +603,13 @@ func keptOnItsOwn(c *ir.DistilledComment) bool {
 
 // isDeclaration reports whether a node is a declaration a doc comment can
 // document. A package clause or namespace counts: its doc stays with it and
-// goes when the namespace is removed.
+// goes when the namespace is removed. So does a JavaScript or TypeScript
+// export statement (a re-export documented in a barrel file).
 func isDeclaration(node ir.DistilledNode) bool {
 	switch node.(type) {
 	case *ir.DistilledFunction, *ir.DistilledField, *ir.DistilledClass, *ir.DistilledInterface,
-		*ir.DistilledStruct, *ir.DistilledEnum, *ir.DistilledTypeAlias, *ir.DistilledPackage:
+		*ir.DistilledStruct, *ir.DistilledEnum, *ir.DistilledTypeAlias, *ir.DistilledPackage,
+		*ir.DistilledExport:
 		return true
 	}
 	return false

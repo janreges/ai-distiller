@@ -37,6 +37,9 @@ Pipeline:
   each; what runs inside them is in the `aid-language-parsers` skill.
 - `internal/language/commentutil`: comment-stripping helpers shared by the
   processors.
+- `internal/language/esutil`: what the JavaScript and TypeScript processors
+  read alike: export statements that declare nothing, and an expression's
+  text with its function bodies left out.
 - `internal/language/tsparse`: creates tree-sitter parsers and runs a parse
   that honours the context, for the processors, `internal/semantic` and
   `cmd/ast-dump`, or one that also stops at a budget of parser work (the Rust

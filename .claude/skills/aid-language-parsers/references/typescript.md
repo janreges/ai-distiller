@@ -47,7 +47,14 @@
   `DistilledEnum`; `type X = ...` is a `DistilledTypeAlias`.
 - `parseClassBody` reorders the members: fields first, then the constructor,
   then the methods, then trailing comments.
-- An exported declaration carries the modifier `export`. A variable whose value
+- An exported declaration carries the modifier `export`, and `default` after
+  `export default`; `export default class {}` is a `DistilledClass` without a
+  name. Every other export statement (a re-export, an export list, `export
+  default <expression>`, `export = x`) is a `DistilledExport`
+  (`internal/language/esutil/esutil.go#Export`). A declaration that an export
+  list or `export default <name>` of the same file or namespace names is
+  `public`, without an `export` modifier
+  (`internal/language/typescript/ast_parser.go#publishExportedNames`). A variable whose value
   is an arrow function becomes a `DistilledFunction`; any other variable, one
   holding a `function` expression included, a `DistilledField` (`const` adds the
   modifier `final`).

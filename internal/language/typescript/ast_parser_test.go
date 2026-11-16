@@ -234,10 +234,8 @@ func docTexts(nodes []ir.DistilledNode) []string {
 // keep their place.
 func TestTS_DocOfStatementWithoutDeclarationIsDropped(t *testing.T) {
 	for name, stmt := range map[string]string{
-		"re-export":      `export { foo } from "./foo";`,
 		"exports.x":      "exports.add = function (a: number) { return a; };",
 		"module.exports": "module.exports = { a: 1 };",
-		"export default": "export default { a: 1 };",
 		"call":           "main();",
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -256,6 +254,71 @@ func TestTS_DocOfStatementWithoutDeclarationIsDropped(t *testing.T) {
 		f := parseTS(t, "/** Foo doc */\nexport default class Foo {}\n")
 		assert.Equal(t, []string{"Foo doc"}, docTexts(f.Children))
 	})
+	// A re-export and `export default <expression>` are export nodes now:
+	// the doc above them documents them.
+	for name, stmt := range map[string]string{
+		"re-export":      `export { foo } from "./foo";`,
+		"export default": "export default { a: 1 };",
+	} {
+		t.Run(name+" keeps its doc", func(t *testing.T) {
+			f := parseTS(t, "/** export doc */\n"+stmt+"\n")
+			require.Len(t, f.Children, 2)
+			assert.Equal(t, "export doc", f.Children[0].(*ir.DistilledComment).Text)
+			assert.IsType(t, &ir.DistilledExport{}, f.Children[1])
+		})
+	}
+}
+
+// Every export statement form survives: re-exports and export lists as
+// export nodes, exported declarations with their modifiers.
+func TestTS_ExportStatements(t *testing.T) {
+	src := "export * from \"./a\";\n" +
+		"export * as ns from \"./b\";\n" +
+		"export { x, y as z } from \"./c\";\n" +
+		"export type { T } from \"./t\";\n" +
+		"export { default as Btn, type P } from \"./btn\";\n" +
+		"export = Foo;\n" +
+		"export default function main(): void {}\n" +
+		"export default class {}\n"
+	f := parseTS(t, src)
+	require.Len(t, f.Children, 8)
+	exp := func(i int) *ir.DistilledExport { return f.Children[i].(*ir.DistilledExport) }
+	assert.Equal(t, "./a", exp(0).Module)
+	assert.Equal(t, []ir.ImportedSymbol{{Name: "*"}}, exp(0).Symbols)
+	assert.Equal(t, []ir.ImportedSymbol{{Name: "*", Alias: "ns"}}, exp(1).Symbols)
+	assert.Equal(t, []ir.ImportedSymbol{{Name: "x"}, {Name: "y", Alias: "z"}}, exp(2).Symbols)
+	assert.True(t, exp(3).IsType)
+	assert.Equal(t, []ir.ImportedSymbol{{Name: "default", Alias: "Btn"}, {Name: "P", IsType: true}}, exp(4).Symbols)
+	assert.Equal(t, "Foo", exp(5).Value)
+	assert.False(t, exp(5).IsDefault)
+	main := f.Children[6].(*ir.DistilledFunction)
+	assert.Equal(t, []ir.Modifier{ir.ModifierExport, ir.ModifierDefault}, main.Modifiers)
+	anon := f.Children[7].(*ir.DistilledClass)
+	assert.Equal(t, "", anon.Name)
+	assert.Contains(t, anon.Modifiers, ir.ModifierDefault)
+}
+
+// A declaration that an export list or `export default <name>` exports is
+// public, without an export modifier it does not have in the source.
+func TestTS_ExportedNamesArePublic(t *testing.T) {
+	f := parseTS(t, "const q = 1;\nconst hidden = 2;\nfunction _f(): void {}\nconst Inner = 3;\nexport { q, _f as f };\nexport default Inner;\n"+
+		"namespace N {\n  const n = 1;\n  export { n };\n}\n")
+	vis := map[string]ir.Visibility{}
+	for _, c := range f.Children {
+		switch d := c.(type) {
+		case *ir.DistilledField:
+			vis[d.Name] = d.Visibility
+			assert.NotContains(t, d.Modifiers, ir.ModifierExport)
+		case *ir.DistilledFunction:
+			vis[d.Name] = d.Visibility
+		case *ir.DistilledPackage:
+			vis["N.n"] = d.Children[0].(*ir.DistilledField).Visibility
+		}
+	}
+	assert.Equal(t, map[string]ir.Visibility{
+		"q": ir.VisibilityPublic, "hidden": ir.VisibilityInternal, "_f": ir.VisibilityPublic,
+		"Inner": ir.VisibilityPublic, "N.n": ir.VisibilityPublic,
+	}, vis)
 }
 
 // Every import form keeps its bindings: a default import is the symbol

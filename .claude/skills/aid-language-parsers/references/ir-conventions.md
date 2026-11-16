@@ -17,6 +17,7 @@ declaration, so a parser has to fill them.
 | `DistilledFile` | yes (`Children`, JSON `nodes`) | `Path`, `Language`, `Version`, `Errors` (`DistilledError`: `Message`, `Severity`) |
 | `DistilledPackage` | yes | `Name` |
 | `DistilledImport` | no | `ImportType` (`import`, `from`, `require`, `use`, `include`, `namespace`, ...), `Module`, `Symbols` (`Name`, `Alias`, `IsType`; in JavaScript and TypeScript a default import is `Name` `default` with the local name as `Alias`, a namespace import `*` with its alias), `IsType` |
+| `DistilledExport` | no | JavaScript and TypeScript only: an export statement that declares nothing. `Module` (empty for names of the file), `Symbols` (as an import's; `*` re-exports everything), `Value` (the expression of `export default` or `export =`, function bodies left out), `IsDefault`, `IsType`. Public API: `--imports=0` keeps it, `--public=0` removes it |
 | `DistilledClass` | yes | `Name`, `Visibility`, `Modifiers`, `Decorators`, `TypeParams`, `Extends`, `Implements`, `Mixins`, `Deprecated`, `Description`, `APIDocblock` |
 | `DistilledInterface` | yes | `Name`, `Visibility`, `Modifiers`, `TypeParams`, `Extends`, `Permits` |
 | `DistilledStruct` | yes | `Name`, `Visibility`, `TypeParams` |
@@ -59,7 +60,8 @@ public type whose members are all removed goes too
 
 `internal/ir/types.go#Modifier` values are plain words (`static`, `final`,
 `abstract`, `async`, `const`, `readonly`, `virtual`, `data`, `sealed`,
-`embedded`, `struct`, `enum`, `type_alias`, `export`, ...). Some processors
+`embedded`, `struct`, `enum`, `type_alias`, `export`, `default` (with `export`
+after `export default`), ...). Some processors
 reuse a word with their own meaning: Go marks methods with `abstract`, Swift
 marks actors with `async`, Kotlin objects and Ruby singleton methods are
 `static`, Rust marks `struct`, `union`, `enum`, `extern` (an extern block),
@@ -74,7 +76,8 @@ before relying on a modifier.
 - `block` (`internal/ir/comment.go#CommentBlock`): `/* x */`, Ruby `=begin`;
 - `doc` (`internal/ir/comment.go#CommentDoc`): documentation of the
   declaration that follows it;
-- `export` (`internal/ir/comment.go#CommentExport`): JavaScript export lists;
+- `export` (`internal/ir/comment.go#CommentExport`): JavaScript
+  `module.exports = ...`;
 - `docblock`: the legacy format of PHP `/** */` docblocks.
   `internal/ir/comment.go#DistilledComment.IsDoc` is true for `doc` and
   `docblock`.
