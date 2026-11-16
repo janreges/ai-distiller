@@ -447,12 +447,12 @@ func (f *GoFormatter) formatMembers(w io.Writer, children []ir.DistilledNode, in
 
 // endsLineOf reports whether comment c is written at the end of member's
 // (last) line: one line of text that starts on that line, after the member
-// starts. A member is a field, an interface method, a const, var or type, or
-// an import.
+// starts. A member is a field, an interface method or a function, a const,
+// var or type, an import, or the package clause.
 func endsLineOf(c *ir.DistilledComment, member ir.DistilledNode) bool {
 	switch member.(type) {
 	case *ir.DistilledField, *ir.DistilledFunction, *ir.DistilledTypeAlias,
-		*ir.DistilledClass, *ir.DistilledInterface, *ir.DistilledImport:
+		*ir.DistilledClass, *ir.DistilledInterface, *ir.DistilledImport, *ir.DistilledPackage:
 	default:
 		return false
 	}

@@ -91,7 +91,11 @@
     a function literal or function type in a spec) is no node at all
     (`internal/language/golang/ast_parser.go#ASTParser.claimDeclComments`):
     the body in `Implementation` holds it;
-  - the rest is inserted at file level by its line number.
+  - the rest is inserted at file level by its line number
+    (`internal/language/golang/ast_parser.go#ASTParser.insertCommentAtPosition`);
+    a one-line comment at the end of a node's last line (a one-line
+    function, the package clause) goes right before that node, inside its
+    line span, like a spec's.
 - `Extensions` is used only for `Go.ImportDoc` on an import declaration's doc.
 
 ## Unused files

@@ -89,3 +89,7 @@ const (
 )
 
 type ConfKind int // CONF_TYPE_TRAILING
+
+func ConfQuick() int { return 1 } // CONF_FUNC_TRAILING
+
+func confHiddenQuick() int { return 2 } // CONF_HIDDEN_FUNC_NOTE

@@ -379,7 +379,13 @@ func (p *ASTParser) claimWithin(start, end token.Pos) {
 	}
 }
 
-// insertCommentAtPosition inserts a comment at the correct position based on its location
+// insertCommentAtPosition inserts a comment at the correct position based on
+// its location. A one-line comment that starts on the last line of the node
+// before it, after that node (the comment at the end of a one-line
+// function's line, or of the package clause), goes right before that node,
+// inside its line span, like the comment at the end of a spec's line: the
+// text prints it at the end of the node's line, and the stripper drops it
+// with the node.
 func (p *ASTParser) insertCommentAtPosition(file *ir.DistilledFile, comment *ir.DistilledComment) {
 	// Find the appropriate position to insert the comment based on line numbers
 	commentLine := comment.Location.StartLine
@@ -391,6 +397,14 @@ func (p *ASTParser) insertCommentAtPosition(file *ir.DistilledFile, comment *ir.
 		if childLine > commentLine {
 			insertIndex = i
 			break
+		}
+	}
+	if insertIndex > 0 && comment.Location.EndLine == commentLine {
+		before := file.Children[insertIndex-1]
+		at := before.GetLocation()
+		if before.GetNodeKind() != ir.KindComment && at.EndLine == commentLine &&
+			comment.Location.StartColumn >= at.EndColumn {
+			insertIndex--
 		}
 	}
 

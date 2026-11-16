@@ -265,6 +265,25 @@ func TestGoFormatter_DocSitsOnItsDeclaration(t *testing.T) {
 	// none between a doc and its declaration.
 	assert.Equal(t, "package p\n\n// F doc\nfunc F()\n\n// M doc\nfunc (r *R) M()\n\n// free\n\n// T doc\ntype T int\n", b.String())
 
+	// The comment at the end of the package clause's or a one-line
+	// function's line (the parser puts it right before the node) prints at
+	// the end of that line, not as the next function's doc.
+	// package p // import "x"     line 1
+	// func A() int { ... } // a   line 3
+	// func B()                    line 4
+	at3 := func(line, col int) ir.BaseNode {
+		return ir.BaseNode{Location: ir.Location{StartLine: line, StartColumn: col, EndLine: line, EndColumn: col + 20}}
+	}
+	b.Reset()
+	require.NoError(t, NewGoFormatter().(SiblingFormatter).FormatNodes(&b, []ir.DistilledNode{
+		&ir.DistilledComment{BaseNode: at3(1, 11), Text: "import \"x\"", Format: ir.CommentLine},
+		&ir.DistilledPackage{BaseNode: at3(1, 9), Name: "p"},
+		&ir.DistilledComment{BaseNode: at3(3, 28), Text: "a", Format: ir.CommentLine},
+		&ir.DistilledFunction{BaseNode: at3(3, 1), Name: "A", Returns: &ir.TypeRef{Name: "int"}},
+		&ir.DistilledFunction{BaseNode: at3(4, 1), Name: "B"},
+	}, 0))
+	assert.Equal(t, "package p // import \"x\"\n\nfunc A() int // a\n\nfunc B()\n", b.String())
+
 	// A comment set off from the package doc by a blank line (a copyright
 	// header) stays set off from it.
 	// // Copyright           line 1

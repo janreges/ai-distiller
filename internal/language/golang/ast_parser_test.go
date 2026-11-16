@@ -297,6 +297,35 @@ func TestASTParser_ImportComments(t *testing.T) {
 	assert.Equal(t, []string{"decl doc", "cgo preamble"}, docs)
 }
 
+func TestASTParser_LineEndCommentBeforeItsNode(t *testing.T) {
+	src := "package p // import \"example.com/p\"\n\n" +
+		"func A() int { return 1 } // returns 1\n" +
+		"func B() int {\n" +
+		"\treturn 2\n" +
+		"} // B ends\n" +
+		"// C doc\n" +
+		"func C() {}\n"
+	file, err := NewASTParser().ProcessSource(context.Background(), []byte(src), "p.go")
+	require.NoError(t, err)
+
+	var got []string
+	for _, node := range file.Children {
+		switch n := node.(type) {
+		case *ir.DistilledComment:
+			got = append(got, "// "+n.Text)
+		case *ir.DistilledPackage:
+			got = append(got, "package "+n.Name)
+		case *ir.DistilledFunction:
+			got = append(got, n.Name)
+		}
+	}
+	// The comment at the end of the package clause's or a function's last
+	// line goes right before that node, not on the next one.
+	assert.Equal(t, []string{
+		"// import \"example.com/p\"", "package p", "// returns 1", "A", "// B ends", "B", "// C doc", "C",
+	}, got)
+}
+
 func TestASTParser_BlockCommentText(t *testing.T) {
 	src := "package p\n\n" +
 		"type R struct {\n" +

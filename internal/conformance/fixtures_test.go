@@ -223,9 +223,16 @@ var fixtures = []fixture{
 		check{Cap: "dropped-import-comments-go", Flags: []string{"--comments=1"},
 			Contains:    []string{"import (\n\t\"io\" // CONF_IMPORT_TRAILING\n)\n"},
 			NotContains: []string{"CONF_IMPORT_DOC", "CONF_DROPPED_IMPORT_NOTE"}},
-		// Only confPrivate, confSecret and confHiddenMax print, and none
-		// names io or strings: the import filter drops both, and the block
-		// with them.
+		// The comment at the end of a one-line function's line prints
+		// there, and goes with a hidden function.
+		check{Cap: "func-line-comment-on-its-line", Flags: []string{"--comments=1"},
+			Contains:    []string{"\nfunc ConfQuick() int // CONF_FUNC_TRAILING\n"},
+			NotContains: []string{"CONF_HIDDEN_FUNC_NOTE"}},
+		check{Cap: "func-line-comment-after-body", Flags: []string{"--comments=1", "--implementation=1"},
+			Contains: []string{"\nfunc ConfQuick() int { return 1 } // CONF_FUNC_TRAILING\n"}},
+		// Only confPrivate, confSecret, confHiddenMax and confHiddenQuick
+		// print, and none names io or strings: the import filter drops
+		// both, and the block with them.
 		check{Cap: "no-empty-import-block", Flags: []string{"--public=0", "--internal=1"},
 			Contains: []string{"package conf\n\n// CONF_PRIVATE_DOC\n"}, NotContains: []string{"import"}},
 		// A free comment before the imports (not their declaration's doc)
