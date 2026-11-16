@@ -452,6 +452,7 @@ class Service {
 12. **`--expand` on accessors and generators** (✅ Fixed): `--expand size` no longer matched `get size()` and `set size(v)`, nor `--expand items` the generator `*items()`, once they printed with their keyword and star; they match by their bare name again (the JavaScript processor names them the same way)
 13. **`export import fs = require('fs')`** (✅ Fixed): printed `export import fs = require`, with the module `require` in jsonl; it prints as written, with the module `fs`
 14. **Long object arguments in wrapper constants** (✅ Fixed): a constant initialised with a call that takes a function printed every method of an object literal argument, up to 1,320 characters on one line in zod (`core.$constructor<ZodType>("ZodType", (inst, def), { check(...chks), with(...chks), ... })`); an object literal argument longer than 80 characters prints as `{...}`, and the function arguments keep their signatures
+15. **Multi-line literals in signatures** (✅ Fixed): a template literal or a string continued over lines, in a parameter default, a wrapper call or the value of `export default`, printed over several lines and broke the one-line declaration; in a signature it prints as its quotes around three dots (``export function e(t = `...`): void``), and an `export default` or `export =` value without a function that holds one is left out, like a value over the cap
 
 ### Current Limitations
 

@@ -138,9 +138,11 @@ func bodyStart(node *sitter.Node) (uint, bool) {
 // left out, and whitespace that holds a line break becomes one space (none
 // after `(`, `[` or `<`, before `)`, `]`, `>`, `,` or `;`, and a trailing
 // comma before a closing bracket goes), so the result is one line. Strings
-// and template literals are kept verbatim. In the signature of a call that
-// takes a function (TakesFunction), an object literal passed to a call, at
-// any depth, reads `{...}` when its own signature is longer than
+// and template literals are kept verbatim, except one that spans lines: it
+// reads three dots between its own quote characters, as a value over the
+// cap is left out, so the signature stays on one line. In the signature of a call
+// that takes a function (TakesFunction), an object literal passed to a
+// call, at any depth, reads `{...}` when its own signature is longer than
 // MaxValueLen.
 //
 //	forwardRef<B, P>(({ a = 1, ...rest }, ref) => { ... })
@@ -148,9 +150,16 @@ func bodyStart(node *sitter.Node) (uint, bool) {
 //	core.$constructor("ZodType", (inst, def) => { ... }, { check(...chks) { ... }, ... })
 //	  -> core.$constructor("ZodType", (inst, def), {...})
 func Signature(node *sitter.Node, source []byte) string {
+	text, _ := signature(node, source)
+	return text
+}
+
+// signature returns Signature(node) and whether a string or template
+// literal in it spans lines.
+func signature(node *sitter.Node, source []byte) (string, bool) {
 	s := &signer{source: source, prevEnd: node.StartByte(), elideObjects: TakesFunction(node)}
 	s.walk(node)
-	return s.b.String()
+	return s.b.String(), s.multiLine
 }
 
 type signer struct {
@@ -161,6 +170,7 @@ type signer struct {
 	// elideObjects: an object literal argument longer than MaxValueLen
 	// reads {...}.
 	elideObjects bool
+	multiLine    bool // a string or template literal that spans lines was left out
 }
 
 func (s *signer) walk(node *sitter.Node) {
@@ -168,7 +178,17 @@ func (s *signer) walk(node *sitter.Node) {
 	case "comment":
 		s.skip(node.StartByte(), node.EndByte())
 		return
-	case "string", "template_string", "regex":
+	case "string", "template_string":
+		start, end := node.StartByte(), node.EndByte()
+		if text := string(s.source[start:end]); strings.Contains(text, "\n") {
+			quote := text[:1]
+			s.emit(quote+"..."+quote, start, end)
+			s.multiLine = true
+			return
+		}
+		s.token(start, end)
+		return
+	case "regex":
 		s.token(node.StartByte(), node.EndByte())
 		return
 	}
@@ -288,7 +308,8 @@ func (s *signer) writeBreak(next string) {
 //
 // The statement is left out (nil) when the value of `export default` or
 // `export =` holds no function and its signature is longer than
-// MaxValueLen: a long object literal or configuration call.
+// MaxValueLen (a long object literal or configuration call) or holds a
+// string or template literal that spans lines.
 func Export(node *sitter.Node, source []byte) *ir.DistilledExport {
 	if node.ChildByFieldName("declaration") != nil {
 		return nil
@@ -302,8 +323,7 @@ func Export(node *sitter.Node, source []byte) *ir.DistilledExport {
 			return nil
 		}
 		exp.IsDefault = true
-		exp.Value = Signature(value, source)
-		if !IsFunction(value) && !TakesFunction(value) && len(exp.Value) > MaxValueLen {
+		if !exportValue(exp, value, source) {
 			return nil
 		}
 		return exp
@@ -356,8 +376,7 @@ func Export(node *sitter.Node, source []byte) *ir.DistilledExport {
 			case asNamespace && child.Kind() == "identifier" && exp.Namespace == "":
 				exp.Namespace = text(child, source)
 			case afterEquals && child.IsNamed() && exp.Value == "":
-				exp.Value = Signature(child, source)
-				if !IsFunction(child) && !TakesFunction(child) && len(exp.Value) > MaxValueLen {
+				if !exportValue(exp, child, source) {
 					return nil
 				}
 			}
@@ -367,6 +386,15 @@ func Export(node *sitter.Node, source []byte) *ir.DistilledExport {
 		return nil
 	}
 	return exp
+}
+
+// exportValue sets exp.Value to the signature of value and reports whether
+// the export is printed: a value that holds no function is not when its
+// signature is longer than MaxValueLen or a literal in it spans lines.
+func exportValue(exp *ir.DistilledExport, value *sitter.Node, source []byte) bool {
+	text, multiLine := signature(value, source)
+	exp.Value = text
+	return IsFunction(value) || TakesFunction(value) || (len(text) <= MaxValueLen && !multiLine)
 }
 
 // LocalNames returns the names of this file that exp exports: the names of

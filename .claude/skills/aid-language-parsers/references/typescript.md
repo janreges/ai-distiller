@@ -72,7 +72,7 @@
   (`internal/language/esutil/esutil.go#Export`). `export default <value>` and
   `export = <value>` are left out when the value holds no function and its
   signature is longer than `internal/language/esutil/esutil.go#MaxValueLen`
-  (80). An import alias, `import G =
+  (80) or holds a string or template literal that spans lines. An import alias, `import G =
   ns.H`, is a `DistilledImport` with the import type `alias`, the entity name as
   `Module` and the symbol `*` aliased `G`; `export import G = ns.H` sets
   `IsExport` (`internal/language/typescript/ast_parser.go#ASTParser.parseImportAlias`).
@@ -95,7 +95,8 @@
   text with the function bodies left out
   (`internal/language/esutil/esutil.go#Signature`; in a call that takes a
   function, an object literal argument longer than 80 characters reads
-  `{...}`) and `Implementation` the
+  `{...}`, and a string or template literal that spans lines reads as its
+  quotes around `...`, also in a parameter default) and `Implementation` the
   whole initializer, which the stripper keeps only with `--implementation=1`
   (`internal/language/typescript/ast_parser.go#ASTParser.parseVariableDeclaration`).
 - Structural interface satisfaction

@@ -53,7 +53,10 @@ func TestSignature(t *testing.T) {
 			"connect(mapState, mapDispatch)(function View())"},
 		{"const a = styled.div(({ theme }) => ({ color: theme.c }));", "styled.div(({ theme }))"},
 		{"const a = { get() { return 1; }, b: 2 };", "{ get(), b: 2 }"},
-		{"const a = tag(`line one\n  line two`, (x) => x);", "tag(`line one\n  line two`, (x))"},
+		// A string or template literal that spans lines reads as its quotes
+		// around three dots, so the signature stays on one line.
+		{"const a = tag(`line one\n  line two`, (x) => x);", "tag(`...`, (x))"},
+		{"const a = wrap((t = `a\nb`, u = 'x\\\ny', v = `one line`) => t);", "wrap((t = `...`, u = '...', v = `one line`))"},
 		// In a call that takes a function, an object literal argument over
 		// MaxValueLen reads {...}, at any depth; a shorter one stays.
 		{"const a = core.$constructor<T>(\"T\", (inst, def) => { init(); }, {\n  check(...chks) { return 1; },\n  with(...chks) { return 2; },\n" +
@@ -146,6 +149,11 @@ func TestExport(t *testing.T) {
 		{`export default function main() {}`, nil},
 		{`export default class {}`, nil},
 		{"export default {\n  a: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',\n  b: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',\n};", nil},
+		// A value that spans lines and holds no function is left out like
+		// one over the cap; a function keeps its signature on one line.
+		{"export default `\n<b>x</b>\n`;", nil},
+		{"export = \"a\\\nb\";", nil},
+		{"export default (t = `multi\nline`) => t;", &ir.DistilledExport{IsDefault: true, Value: "(t = `...`)"}},
 		// `export =` has the same cap.
 		{"export = {\n  alpha: 'aaaaaaaaaaaaaaaaaaaa',\n  beta: 'bbbbbbbbbbbbbbbbbbbbbbbbbb',\n  gamma: 'cccccccccccccccccccccccccc',\n  delta: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],\n};", nil},
 		{"export = connect(\n  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n  bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,\n)(function V() {});",

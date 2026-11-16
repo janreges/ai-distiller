@@ -200,6 +200,17 @@ func TestESLongObjectArgumentInWrapperCall(t *testing.T) {
 		distillES(t, "schemas.js", js, esDefault))
 }
 
+// A string or template literal that spans lines keeps each declaration on
+// one line: in a signature it reads as its quotes around three dots, and an
+// `export default` value without a function that holds one is left out.
+func TestESMultiLineLiteralKeepsOneLine(t *testing.T) {
+	ts := "export function e(t = `multi\nline`): void {}\nexport default `\n<b>x</b>\n`;\n"
+	assert.Equal(t, []string{"export function e(t = `...`): void"}, distillES(t, "tmpl.ts", ts, esDefault))
+
+	js := "export const C = styled(Base)((p) => p.a, `\n  color: red;\n`);\nexport default `\nx\n`;\n"
+	assert.Equal(t, []string{"export const C = styled(Base)((p), `...`)"}, distillES(t, "tmpl.js", js, esDefault))
+}
+
 // --expand NAME keeps the body of a getter, setter or generator called NAME.
 func TestESExpandMatchesAccessorsAndGenerators(t *testing.T) {
 	expand := func(patterns ...string) processor.ProcessOptions {
