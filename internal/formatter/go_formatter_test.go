@@ -20,7 +20,7 @@ func TestGoFormatter_FunctionBody(t *testing.T) {
 
 	fn := &ir.DistilledFunction{Name: "Get", Returns: ret, Implementation: body,
 		Parameters: []ir.Parameter{{Name: "id", Type: ir.TypeRef{Name: "int"}}}}
-	assert.Equal(t, "\nfunc Get(id int) *int {\n    if id == 0 {\n        return nil\n    }\n    return &id\n}\n", format(fn))
+	assert.Equal(t, "\nfunc Get(id int) *int {\n\tif id == 0 {\n\t\treturn nil\n\t}\n\treturn &id\n}\n", format(fn))
 
 	method := &ir.DistilledFunction{Name: "One", Modifiers: []ir.Modifier{ir.ModifierAbstract},
 		Returns:        &ir.TypeRef{Name: "int"},
@@ -51,7 +51,7 @@ func TestGoFormatter_CommentInsidePrintedBody(t *testing.T) {
 	}
 
 	// The printed body already holds the inner comment; it is not repeated.
-	assert.Equal(t, "\nfunc Get() {\n    // inner\n    return\n}\n// after\n", format("{\n\t// inner\n\treturn\n}"))
+	assert.Equal(t, "\nfunc Get() {\n\t// inner\n\treturn\n}\n// after\n", format("{\n\t// inner\n\treturn\n}"))
 	// Without the body the comment node is the only place the text appears.
 	assert.Equal(t, "\nfunc Get()\n// inner\n// after\n", format(""))
 }
@@ -61,7 +61,28 @@ func TestGoFormatter_NestedBodyIndentation(t *testing.T) {
 	fn := &ir.DistilledFunction{Name: "Loop", Implementation: body}
 	var b strings.Builder
 	require.NoError(t, NewGoFormatter().FormatNode(&b, fn, 0))
-	out := b.String()
-	assert.NotContains(t, out, "\t")
-	assert.Contains(t, out, "\n            continue\n")
+	// The body keeps its source tabs: the output indents with tabs, as
+	// gofmt does, and is never larger than the source.
+	assert.Equal(t, "\nfunc Loop() "+body+"\n", b.String())
+}
+
+func TestGoFormatter_IndentsWithTabs(t *testing.T) {
+	var b strings.Builder
+	f := NewGoFormatter()
+	nodes := []ir.DistilledNode{
+		&ir.DistilledImport{Module: "io", Symbols: []ir.ImportedSymbol{{Name: "io"}}},
+		&ir.DistilledImport{Module: "math", Symbols: []ir.ImportedSymbol{{Name: "math", Alias: "m"}}},
+		&ir.DistilledClass{Name: "S", Children: []ir.DistilledNode{
+			&ir.DistilledField{Name: "R", Type: &ir.TypeRef{Name: "io.Reader"}},
+		}},
+		&ir.DistilledInterface{Name: "I", Children: []ir.DistilledNode{
+			&ir.DistilledFunction{Name: "Close", Returns: &ir.TypeRef{Name: "error"}},
+		}},
+	}
+	for _, n := range nodes {
+		require.NoError(t, f.FormatNode(&b, n, 0))
+	}
+	assert.Equal(t, "\nimport (\n\t\"io\"\n\tm \"math\"\n)\n"+
+		"\ntype S struct {\n\tR io.Reader\n}\n"+
+		"\ntype I interface {\n\tClose() error\n}\n", b.String())
 }

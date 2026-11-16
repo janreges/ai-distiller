@@ -11,21 +11,21 @@ type Cache[K comparable, V any] struct {}
 // New creates a new Cache.
 
 func New[K comparable, V any]() *Cache[K, V] {
-    return &Cache[K, V]{
-        data: make(map[K]V),
-    }
+	return &Cache[K, V]{
+		data: make(map[K]V),
+	}
 }
 // Set adds or updates a value in the cache.
 func (c *Cache[K, V]) Set(key K, value V) {
-    c.mu.Lock()
-    defer c.mu.Unlock()
-    c.data[key] = value
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.data[key] = value
 }
 // Get retrieves a value from the cache.
 func (c *Cache[K, V]) Get(key K) (V, bool) {
-    c.mu.RLock()
-    defer c.mu.RUnlock()
-    val, ok := c.data[key]
-    return val, ok
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	val, ok := c.data[key]
+	return val, ok
 }
 </file>

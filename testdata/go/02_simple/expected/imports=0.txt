@@ -3,13 +3,13 @@ package storage
 // Storer defines a generic interface for key-value storage.
 
 type Storer interface {
-    Get(key string) ([]byte, error)
-    Set(key string, value []byte) error
+	Get(key string) ([]byte, error)
+	Set(key string, value []byte) error
 }
 // PostgresStorer is a production implementation using a database.
 
 type PostgresStorer struct {
-    ConnectionString string
+	ConnectionString string
 }
 // Get retrieves a value from Postgres.
 func (ps *PostgresStorer) Get(key string) ([]byte, error)

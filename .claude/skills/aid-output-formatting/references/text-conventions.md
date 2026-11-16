@@ -26,8 +26,10 @@ done
 
 The examples in the tables are lines of that output. Where a fixture does not
 show a case, the cell names the formatter function it was read from. Members
-are indented four spaces per level in every language; a printed body keeps its
-own relative indentation under the signature.
+are indented four spaces per level in every language but Go, which indents
+with one tab per level as gofmt does (`internal/formatter/go_formatter.go#goIndent`)
+and prints bodies with their source tabs; a printed body keeps its own
+relative indentation under the signature.
 
 ## Declarations
 

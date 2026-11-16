@@ -86,7 +86,10 @@ var fixtures = []fixture{
 		Private:   []string{"confPrivate"},
 		ExpandSym: "ConfPublic",
 	}), check{Cap: "body-indent", Flags: []string{"--implementation=1"},
-		Contains: []string{"    a := \"CONF_BODY_A\"\n    return a\n}\n"}},
+		Contains: []string{"\ta := \"CONF_BODY_A\"\n\treturn a\n}\n"}},
+		check{Cap: "tab-indent", Flags: []string{"--implementation=1", "--internal=1"},
+			Contains:    []string{"type ConfWidget struct {\n\tConfField int\n}\n", "\n\t\"strings\"\n"},
+			NotContains: []string{"    "}},
 		check{Cap: "body-nested-statement", Flags: []string{"--implementation=1"}, Contains: []string{"CONF_BODY_D"}})},
 	{Lang: "rust", File: "rust/sample.rs", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "conf_field", "conf_public", "conf_other"},

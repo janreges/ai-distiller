@@ -8,7 +8,7 @@ import (
 // The distiller should identify this struct and its fields.
 
 type User struct {
-    ID string
+	ID string
 }
 // NewUser creates a new User.
 // This is a common Go pattern for a constructor.

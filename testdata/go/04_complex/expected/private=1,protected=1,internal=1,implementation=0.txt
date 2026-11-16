@@ -2,24 +2,24 @@
 package worker
 
 import (
-    "context"
-    "sync"
+	"context"
+	"sync"
 )
 
 type Job struct {
-    ID int
+	ID int
 }
 
 type Worker struct {
-    id int
-    jobChannel <-chan Job
-    wg *sync.WaitGroup
+	id int
+	jobChannel <-chan Job
+	wg *sync.WaitGroup
 }
 func (w *Worker) start(ctx context.Context)
 
 type Dispatcher struct {
-    JobChannel chan Job
-    maxWorkers int
+	JobChannel chan Job
+	maxWorkers int
 }
 
 func NewDispatcher(maxWorkers int) *Dispatcher

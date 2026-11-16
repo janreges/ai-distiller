@@ -116,18 +116,30 @@ func trimBlankEdges(lines []string) []string {
 	return lines[start:end]
 }
 
-// expandLeadingTabs expands the tabs that indent each line of a body to
-// 4-column stops, so a rendered body is indented with spaces only. Only the
-// leading whitespace changes.
-func expandLeadingTabs(impl string) string {
-	lines := strings.Split(impl, "\n")
-	for i, l := range lines {
-		ws := leadingSpace(l)
-		if strings.Contains(ws, "\t") {
-			lines[i] = expandTabs(ws) + l[len(ws):]
-		}
+// renderBodyVerbatim renders a body that carries its own braces ("{ ... }")
+// as the text that follows a signature, keeping every line as the source
+// wrote it: the first line goes on the signature line after a space, and the
+// lines after it keep their own indentation, tabs included, after indent (the
+// signature line's indentation). Go uses it: its functions are declared at
+// file level, so the source indentation of a body is already right under the
+// signature, and its output indents with tabs, as gofmt does. Blank lines
+// print empty. The result always ends with "\n".
+func renderBodyVerbatim(impl, indent string) string {
+	raw := strings.Split(strings.ReplaceAll(impl, "\r\n", "\n"), "\n")
+	raw = trimBlankEdges(raw)
+	if len(raw) == 0 {
+		return "\n"
 	}
-	return strings.Join(lines, "\n")
+	var b strings.Builder
+	b.WriteString(" " + strings.TrimSpace(raw[0]) + "\n")
+	for _, l := range raw[1:] {
+		if strings.TrimSpace(l) == "" {
+			b.WriteString("\n")
+			continue
+		}
+		b.WriteString(indent + l + "\n")
+	}
+	return b.String()
 }
 
 // renderBody renders a body that carries its own braces ("{ ... }") as the

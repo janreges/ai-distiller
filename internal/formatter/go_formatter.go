@@ -33,9 +33,15 @@ func NewGoFormatter() LanguageFormatter {
 	}
 }
 
+// goIndent returns the indentation of nesting level n. Go output indents with
+// one tab per level, as gofmt does, so it is never larger than the source.
+func goIndent(n int) string {
+	return strings.Repeat("\t", n)
+}
+
 // FormatNode implements LanguageFormatter
 func (f *GoFormatter) FormatNode(w io.Writer, node ir.DistilledNode, indent int) error {
-	indentStr := strings.Repeat("    ", indent)
+	indentStr := goIndent(indent)
 
 	// Close import block if we're moving to non-import
 	// Close before doc comments that precede type declarations
@@ -103,16 +109,16 @@ func (f *GoFormatter) formatImport(w io.Writer, imp *ir.DistilledImport, indent 
 	// Format individual import
 	if len(imp.Symbols) > 0 && imp.Symbols[0].Alias != "" {
 		// Aliased import
-		fmt.Fprintf(w, "%s    %s \"%s\"", indent, imp.Symbols[0].Alias, imp.Module)
+		fmt.Fprintf(w, "%s\t%s \"%s\"", indent, imp.Symbols[0].Alias, imp.Module)
 	} else if len(imp.Symbols) > 0 && imp.Symbols[0].Name == "." {
 		// Dot import
-		fmt.Fprintf(w, "%s    . \"%s\"", indent, imp.Module)
+		fmt.Fprintf(w, "%s\t. \"%s\"", indent, imp.Module)
 	} else if len(imp.Symbols) > 0 && imp.Symbols[0].Name == "_" {
 		// Blank import
-		fmt.Fprintf(w, "%s    _ \"%s\"", indent, imp.Module)
+		fmt.Fprintf(w, "%s\t_ \"%s\"", indent, imp.Module)
 	} else {
 		// Standard import
-		fmt.Fprintf(w, "%s    \"%s\"", indent, imp.Module)
+		fmt.Fprintf(w, "%s\t\"%s\"", indent, imp.Module)
 	}
 
 	// Comments are handled separately as DistilledComment nodes
@@ -181,7 +187,7 @@ func (f *GoFormatter) formatField(w io.Writer, field *ir.DistilledField, indent 
 }
 
 func (f *GoFormatter) formatStruct(w io.Writer, class *ir.DistilledClass, indent int) error {
-	indentStr := strings.Repeat("    ", indent)
+	indentStr := goIndent(indent)
 
 	// Class comments are handled separately
 
@@ -218,7 +224,7 @@ func (f *GoFormatter) formatStruct(w io.Writer, class *ir.DistilledClass, indent
 }
 
 func (f *GoFormatter) formatStructField(w io.Writer, field *ir.DistilledField, indent int) error {
-	indentStr := strings.Repeat("    ", indent)
+	indentStr := goIndent(indent)
 
 	// Check if this is an embedded field
 	isEmbedded := false
@@ -249,7 +255,7 @@ func (f *GoFormatter) formatStructField(w io.Writer, field *ir.DistilledField, i
 }
 
 func (f *GoFormatter) formatInterface(w io.Writer, intf *ir.DistilledInterface, indent int) error {
-	indentStr := strings.Repeat("    ", indent)
+	indentStr := goIndent(indent)
 
 	// Interface comments are handled separately
 
@@ -263,7 +269,7 @@ func (f *GoFormatter) formatInterface(w io.Writer, intf *ir.DistilledInterface, 
 			if i > 0 {
 				fmt.Fprintf(w, " | ")
 			} else {
-				fmt.Fprintf(w, "%s    ", indentStr)
+				fmt.Fprintf(w, "%s\t", indentStr)
 			}
 			fmt.Fprintf(w, "%s", ext.Name)
 		}
@@ -287,7 +293,7 @@ func (f *GoFormatter) formatInterface(w io.Writer, intf *ir.DistilledInterface, 
 }
 
 func (f *GoFormatter) formatInterfaceMethod(w io.Writer, fn *ir.DistilledFunction, indent int) error {
-	indentStr := strings.Repeat("    ", indent)
+	indentStr := goIndent(indent)
 
 	// Method comments are handled separately
 
@@ -345,7 +351,7 @@ func (f *GoFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, inde
 
 	// Implementation: the verbatim body, braces included
 	if fn.Implementation != "" {
-		fmt.Fprint(w, renderBody(expandLeadingTabs(fn.Implementation), indent))
+		fmt.Fprint(w, renderBodyVerbatim(fn.Implementation, indent))
 		f.printedBody = fn.Location
 	} else {
 		fmt.Fprintln(w)
@@ -396,7 +402,7 @@ func (f *GoFormatter) formatMethod(w io.Writer, fn *ir.DistilledFunction, receiv
 
 	// Implementation: the verbatim body, braces included
 	if fn.Implementation != "" {
-		fmt.Fprint(w, renderBody(expandLeadingTabs(fn.Implementation), indent))
+		fmt.Fprint(w, renderBodyVerbatim(fn.Implementation, indent))
 		f.printedBody = fn.Location
 	} else {
 		fmt.Fprintln(w)

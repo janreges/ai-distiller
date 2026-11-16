@@ -2,15 +2,15 @@
 package cache
 
 import (
-    "sync"
+	"sync"
 )
 
 // Cache is a generic, thread-safe key-value store.
 // This implementation is specific to Linux.
 
 type Cache[K comparable, V any] struct {
-    mu sync.RWMutex
-    data map[K]V
+	mu sync.RWMutex
+	data map[K]V
 }
 // New creates a new Cache.
 

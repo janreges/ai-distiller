@@ -3,17 +3,17 @@
 package worker
 
 import (
-    "context"
+	"context"
 )
 
 type Job struct {
-    ID int
+	ID int
 }
 
 type Worker struct {}
 
 type Dispatcher struct {
-    JobChannel chan Job
+	JobChannel chan Job
 }
 
 func NewDispatcher(maxWorkers int) *Dispatcher

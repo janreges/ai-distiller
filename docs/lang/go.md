@@ -25,6 +25,7 @@ The Go distiller focuses on extracting the essential structure that helps AI und
 3. **Visibility**: Uppercase = exported (public), lowercase = unexported (internal: shown with `--internal=1`)
 4. **Import Aliases**: Support for renamed imports (`import m "math"`)
 5. **Function Bodies**: With `--implementation=1`, bodies are printed verbatim from the source, comments inside them included
+6. **Tab Indentation**: The output indents with tabs, as gofmt does: bodies keep their source tabs, and struct fields, interface methods and imports are indented one tab per level
 
 ## Text Format Output
 
@@ -63,24 +64,24 @@ func (l *Logger) Log(message string) {
 package main
 
 import (
-    "fmt"
-    m "math"
+	"fmt"
+	m "math"
 )
 
 type Writer interface {
-    Write(p []byte) (int, error)
+	Write(p []byte) (int, error)
 }
 
 type Logger struct {
-    prefix string
-    writer Writer
+	prefix string
+	writer Writer
 }
 
 func NewLogger(prefix string) *Logger {
-    return &Logger{prefix: prefix}
+	return &Logger{prefix: prefix}
 }
 func (l *Logger) Log(message string) {
-    fmt.Printf("[%s] %s %f\n", l.prefix, message, m.Pi)
+	fmt.Printf("[%s] %s %f\n", l.prefix, message, m.Pi)
 }
 </file>
 ```
@@ -101,8 +102,8 @@ type Point struct { X, Y int }
 func Move(x int, y int)
 
 type Point struct {
-    X int
-    Y int
+	X int
+	Y int
 }
 ```
 
@@ -117,7 +118,7 @@ import "fmt"
 
 // Distilled
 import (
-    "fmt"
+	"fmt"
 )
 ```
 
@@ -218,8 +219,8 @@ func Add(x int, y int) int
 package basic
 
 import (
-    "fmt"
-    m "math"
+	"fmt"
+	m "math"
 )
 
 // Global constant Pi, a fundamental value.
@@ -236,12 +237,12 @@ var UserCount int64 = 100
 // It tests basic function declaration and parameter parsing.
 
 func Add(x int, y int) int { // Line comment on the function signature
-    // A comment inside the function body.
-    z := x + y // Short variable declaration
-    var result = z // Standard variable declaration
-    _ = m.Abs(-1) // Using an aliased import
-    fmt.Println(result)
-    return result
+	// A comment inside the function body.
+	z := x + y // Short variable declaration
+	var result = z // Standard variable declaration
+	_ = m.Abs(-1) // Using an aliased import
+	fmt.Println(result)
+	return result
 }
 </file>
 ```
@@ -306,7 +307,7 @@ import (
 // Writer defines a simple interface for writing data.
 
 type Writer interface {
-    Write(p []byte) (n int, err error)
+	Write(p []byte) (n int, err error)
 }
 // Data represents a container for a piece of data.
 // It demonstrates a basic struct with a single field.
@@ -332,34 +333,34 @@ func (d *Data) UpdateValue(v string)
 package simple
 
 import (
-    "io"
+	"io"
 )
 
 // Writer defines a simple interface for writing data.
 
 type Writer interface {
-    Write(p []byte) (n int, err error)
+	Write(p []byte) (n int, err error)
 }
 // Data represents a container for a piece of data.
 // It demonstrates a basic struct with a single field.
 
 type Data struct {
-    value string
+	value string
 }
 // NewData is a constructor-like function, a common Go idiom.
 
 func NewData(v string) *Data {
-    return &Data{value: v}
+	return &Data{value: v}
 }
 // ReadValue returns the current value. This is a value receiver method.
 // It can be called on both Data and *Data types.
 func (d Data) ReadValue() string {
-    return d.value
+	return d.value
 }
 // UpdateValue modifies the value. This is a pointer receiver method.
 // It can only be called on a *Data type.
 func (d *Data) UpdateValue(v string) {
-    d.value = v
+	d.value = v
 }
 // Ensure Data does not satisfy the io.Writer interface, but we use it
 // to test how the distiller handles imported interfaces.
@@ -425,13 +426,13 @@ package complex
 // Number is a constraint that permits any integer or floating-point type.
 
 type Number interface {
-    ~int | ~int64 | ~float32 | ~float64
+	~int | ~int64 | ~float32 | ~float64
 }
 // Node is a generic struct representing a node in a linked list.
 
 type Node[T any] struct {
-    Value T
-    Next *Node[T]
+	Value T
+	Next *Node[T]
 }
 // Map applies a function to each element of a slice, returning a new slice.
 // This is a generic function with a closure.
