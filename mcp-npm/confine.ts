@@ -25,23 +25,46 @@ export interface ConfinedPath {
 }
 
 /**
- * The real path of p: the operating system resolves the longest prefix of p
- * that exists (symlinks and every `..` after them), and the rest of p, which
- * does not exist, is appended and normalised. p is absolute.
+ * A path parameter that names nothing checkable: ".." after a part that does
+ * not resolve to an existing directory, or an empty value. Repeating the call
+ * fails the same way.
  */
-export function realPathOfLongestPrefix(p: string): string {
+export class UncheckablePathError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "UncheckablePathError";
+  }
+}
+
+/**
+ * Splits the absolute path p at its longest prefix that the operating system
+ * resolves: real is that prefix's real path (symlinks and every `..` in it
+ * resolved by the OS), rest the components after it, unresolved, in order.
+ * rest is empty when all of p resolves.
+ */
+function splitAtLongestPrefix(p: string): { real: string; rest: string[] } {
   let prefix = p;
   const rest: string[] = [];
   for (;;) {
     try {
-      return path.resolve(fs.realpathSync.native(prefix), ...rest);
+      return { real: fs.realpathSync.native(prefix), rest };
     } catch {
       const parent = path.dirname(prefix);
-      if (parent === prefix) return path.resolve(prefix, ...rest);
+      if (parent === prefix) return { real: prefix, rest };
       rest.unshift(path.basename(prefix));
       prefix = parent;
     }
   }
+}
+
+/**
+ * The real path of p, an absolute path without `..` after a part that does
+ * not resolve (a normalised AID_ROOT): the real path of its longest prefix
+ * that exists, with the rest appended.
+ */
+export function realPathOfLongestPrefix(p: string): string {
+  const { real, rest } = splitAtLongestPrefix(p);
+  return path.join(real, ...rest);
 }
 
 /** Whether target lies in dir or is dir; both are absolute real paths. */
@@ -54,8 +77,16 @@ function isInside(target: string, dir: string): boolean {
  * Resolves the value of the path parameter param against root (AID_ROOT, or
  * the server's working directory when it is not set) and checks that it lies
  * inside root, both with symlinks resolved. A relative value is relative to
- * root. Throws OutsideRootError for a path outside root; a path inside root
- * that does not exist passes, and aid or list_files report it.
+ * root.
+ *
+ * The operating system resolves the longest prefix of the value that it can;
+ * the rest does not resolve for anyone (a missing name, a file, a dangling or
+ * looping symlink), so aid cannot follow a symlink in it either, and when it
+ * holds no "..", it can only name a place below that prefix. A ".." in the
+ * rest would cancel a part that the check never resolved ("nope/../out" with
+ * a symlink out), so such a value is refused (UncheckablePathError). Throws
+ * OutsideRootError for a path outside root; a path inside root that does not
+ * exist passes, and aid or list_files report it.
  */
 export function confinePath(value: string, root: string, param: string, rootFromEnv: boolean): ConfinedPath {
   if (value.includes("\0")) {
@@ -66,7 +97,17 @@ export function confinePath(value: string, root: string, param: string, rootFrom
   // Not normalised before the OS resolves it: "link/.." is the parent of the
   // symlink's target, not the directory that holds the symlink.
   const joined = path.isAbsolute(value) ? value : rootAbs + path.sep + value;
-  const real = realPathOfLongestPrefix(joined);
+  const { real: prefixReal, rest } = splitAtLongestPrefix(joined);
+  const dotdot = rest.indexOf("..");
+  if (dotdot >= 0) {
+    const unresolved = path.join(prefixReal, ...rest.slice(0, dotdot));
+    throw new UncheckablePathError(
+      `${param} "${value}" has ".." after ${unresolved}, which is not an existing directory, so the server ` +
+      `cannot tell where the path leads and refuses it; this call fails the same way when repeated. Pass ` +
+      `the path without that "..", naming the file or directory you mean directly (a relative path is ` +
+      `resolved against AID_ROOT, ${rootReal}).`);
+  }
+  const real = path.join(prefixReal, ...rest);
   if (!isInside(real, rootReal)) {
     const where = rootFromEnv ? `AID_ROOT (${rootDescription(rootAbs, rootReal)})` :
       `AID_ROOT, which is not set, so the server's working directory (${rootDescription(rootAbs, rootReal)})`;

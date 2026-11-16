@@ -13,10 +13,13 @@ Registered Tools", parameters per tool) and the root `README.md` (section
 
 - The path parameter (`file_path`, `directory_path` or `target_path`) must
   lie inside `AID_ROOT`, checked by `mcp-npm/confine.ts#confinePath` with
-  symlinks resolved (the real path of its longest existing prefix, the rest
-  appended; SKILL.md section 5, the `AID_ROOT` row). A path outside fails
-  the call with an `OutsideRootError` before `aid` runs; its text names the
-  parameter, `AID_ROOT` and how to widen it. There is no opt-out. The first argument is the checked real path relative to the
+  symlinks resolved (the real path of its longest prefix that resolves, the
+  rest appended; SKILL.md section 5, the `AID_ROOT` row). A path outside
+  fails the call with an `OutsideRootError` before `aid` runs; its text
+  names the parameter, `AID_ROOT` and how to widen it. A `..` in the rest
+  (after a part that is missing, a file, a dangling or looping symlink) is
+  an `UncheckablePathError`: it would cancel a part the check never
+  resolved (`nope/../out` with `out` a symlink out). There is no opt-out. The first argument is the checked real path relative to the
   real `AID_ROOT` (`.` for the root, `./-x` for a name that starts with
   `-`), and `aid` runs with `AID_ROOT` as its working directory. In the
   tables below `<file_path>` and `<target_path>` stand for that argument.

@@ -5,27 +5,40 @@ const os = require('node:os');
 const path = require('node:path');
 const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
 const { InMemoryTransport } = require('@modelcontextprotocol/sdk/inMemory.js');
-const { confinePath, OutsideRootError } = require('../dist/confine.js');
+const { confinePath, OutsideRootError, UncheckablePathError } = require('../dist/confine.js');
 const { AidDistillerServer } = require('../dist/mcp-server-sdk.js');
 
-// A real project directory with a real outside directory, a symlink inside
-// the root that points outside, one that points inside, and the real path of
-// each (os.tmpdir() itself is a symlink on macOS).
+// A real project directory with a real outside directory, symlinks inside
+// the root that point outside (a directory, a file, a missing name), one that
+// loops, ones that point inside, and the real path of each (os.tmpdir()
+// itself is a symlink on macOS).
 function fixture() {
   const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'aid-confine-')));
   const root = path.join(base, 'root');
   const outside = path.join(base, 'outside');
   fs.mkdirSync(path.join(root, 'src', 'deep'), { recursive: true });
-  fs.mkdirSync(outside);
+  fs.mkdirSync(path.join(outside, 'inner'), { recursive: true });
   fs.writeFileSync(path.join(root, 'src', 'a.py'), 'x = 1\n');
   fs.writeFileSync(path.join(root, '-dash.py'), 'y = 2\n');
+  fs.writeFileSync(path.join(root, 'main.go'), 'package main\n');
   fs.writeFileSync(path.join(outside, 'secret.py'), 'token = 1\n');
+  fs.writeFileSync(path.join(outside, 'secret.js'), 'export const token = 1\n');
   fs.symlinkSync(outside, path.join(root, 'out'), 'dir');
+  fs.symlinkSync(path.join(outside, 'secret.py'), path.join(root, 'leak.py'), 'file');
+  fs.symlinkSync(path.join(outside, 'nothere'), path.join(root, 'dangling'), 'file');
+  fs.symlinkSync('loop', path.join(root, 'loop'), 'file');
   fs.symlinkSync(path.join(root, 'src'), path.join(root, 'in'), 'dir');
   fs.symlinkSync(path.join(root, 'src', 'deep'), path.join(root, 'deeplink'), 'dir');
   fs.symlinkSync(root, path.join(base, 'rootlink'), 'dir');
   return { base, root, outside };
 }
+
+// The values of the review that cancelled a part the check never resolved
+// with "..": a missing name, a file, a symlink loop, a name too long for the
+// file system, a dangling symlink.
+const BYPASSES = ['nope/../leak.py', 'nope/../out/secret.py', 'main.go/../out/secret.py', 'loop/../out/secret.py',
+  `${'a'.repeat(300)}/../out/secret.py`, 'dangling/../out/secret.py', 'nope/../out/inner', 'nope/../out/secret.js',
+  'nope/../out', 'nope/../../outside/secret.py'];
 
 const confine = (value, root, fromEnv = true) => confinePath(value, root, 'file_path', fromEnv);
 
@@ -72,15 +85,40 @@ test('a path outside the root is rejected with an error that names AID_ROOT and 
 
 test('a real symlink inside the root that points outside is rejected, also below a missing name', () => {
   const { root, outside } = fixture();
-  for (const value of ['out/secret.py', 'out', 'out/missing/deeper.py', 'in/../out/secret.py']) {
+  for (const value of ['out/secret.py', 'out', 'out/missing/deeper.py', 'in/../out/secret.py', 'leak.py']) {
     assert.throws(() => confine(value, root), (e) => {
       assert.ok(e instanceof OutsideRootError, value);
       assert.ok(e.message.includes(`resolves to ${outside}`), e.message);
       return true;
     });
   }
-  // A missing name followed by ".." cannot climb out either.
-  assert.throws(() => confine('nope/../../outside/secret.py', root), OutsideRootError);
+});
+
+test('".." after a part that does not resolve is refused, so it cannot cancel that part', () => {
+  const { root } = fixture();
+  for (const value of BYPASSES) {
+    assert.throws(() => confine(value, root), (e) => {
+      assert.ok(e instanceof UncheckablePathError, `${value}: ${e.message}`);
+      assert.match(e.message, /^file_path ".*" has "\.\." after .*, which is not an existing directory/);
+      assert.match(e.message, /fails the same way when repeated/);
+      return true;
+    });
+  }
+  // Also when the rest would stay inside: the check cannot tell.
+  assert.throws(() => confine('src/missing/../a.py', root), UncheckablePathError);
+  // ".." among parts that exist is resolved by the operating system.
+  assert.equal(confine('src/../src/a.py', root).arg, path.join('src', 'a.py'));
+  assert.equal(confine('src/..', root).arg, '.');
+  assert.equal(confine('deeplink/../a.py', root).arg, path.join('src', 'a.py'));
+  assert.throws(() => confine('..', root), OutsideRootError);
+});
+
+test('a symlink that resolves for nobody (dangling, looping) passes only without ".." after it', () => {
+  const { root } = fixture();
+  // aid follows them as the check did not and fails: the target does not exist.
+  assert.equal(confine('dangling', root).arg, 'dangling');
+  assert.equal(confine('loop', root).arg, 'loop');
+  assert.throws(() => confine('dangling/../leak.py', root), UncheckablePathError);
 });
 
 test('a root given through a symlink accepts its real paths and names both', () => {
@@ -88,10 +126,15 @@ test('a root given through a symlink accepts its real paths and names both', () 
   const rootLink = path.join(base, 'rootlink');
   assert.equal(confine('src/a.py', rootLink).arg, path.join('src', 'a.py'));
   assert.equal(confine(path.join(root, 'src', 'a.py'), rootLink).arg, path.join('src', 'a.py'));
+  assert.equal(confine('../root/main.go', rootLink).arg, 'main.go');
   assert.throws(() => confine('../outside', rootLink), (e) => {
     assert.ok(e.message.includes(`AID_ROOT (${rootLink}, real path ${root})`), e.message);
     return true;
   });
+  assert.throws(() => confine('../rootlink/../outside/secret.py', rootLink), OutsideRootError);
+  for (const value of ['zz/../leak.py', 'zz/../out']) {
+    assert.throws(() => confine(value, rootLink), UncheckablePathError);
+  }
 });
 
 test('without AID_ROOT the message says the working directory stands for it', () => {
@@ -142,12 +185,20 @@ test('every tool parameter that names a path rejects a path outside AID_ROOT', a
         if (/path|file|dir/i.test(p)) assert.ok(pathParams.includes(p), `${tool.name}.${p} is not confined`);
       }
       for (const p of props.filter((name) => pathParams.includes(name))) {
-        const args = { [p]: 'out/secret.py' };
-        if (tool.name === 'aid_analyze') args.ai_action = 'prompt-for-bug-hunting';
-        const result = await client.callTool({ name: tool.name, arguments: args });
+        const call = (value) => {
+          const args = { [p]: value };
+          if (tool.name === 'aid_analyze') args.ai_action = 'prompt-for-bug-hunting';
+          return client.callTool({ name: tool.name, arguments: args });
+        };
+        const result = await call('out/secret.py');
         assert.equal(result.isError, true, `${tool.name}.${p}`);
         assert.ok(textOf(result).includes(`${p} "out/secret.py" resolves to`), `${tool.name}: ${textOf(result)}`);
         assert.ok(textOf(result).includes(`outside AID_ROOT (${root})`), tool.name);
+        for (const value of ['nope/../out/secret.py', 'nope/../out']) {
+          const bypass = await call(value);
+          assert.equal(bypass.isError, true, `${tool.name}.${p} ${value}`);
+          assert.ok(textOf(bypass).startsWith(`${p} "${value}" has ".." after `), `${tool.name}: ${textOf(bypass)}`);
+        }
         checked++;
       }
     }
@@ -165,7 +216,8 @@ test('list_files lists inside AID_ROOT and refuses /etc and a symlink out of it'
     assert.notEqual(inside.isError, true, textOf(inside));
     const listing = JSON.parse(textOf(inside));
     assert.equal(listing.path, root);
-    assert.deepEqual(listing.files.map((f) => f.path).sort(), ['-dash.py', path.join('src', 'a.py')]);
+    // Symlinked files (leak.py, dangling, loop) are not listed.
+    assert.deepEqual(listing.files.map((f) => f.path).sort(), ['-dash.py', 'main.go', path.join('src', 'a.py')]);
 
     const sub = JSON.parse(textOf(await client.callTool({ name: 'list_files', arguments: { path: 'in' } })));
     assert.equal(sub.path, path.join(root, 'src'));
@@ -174,6 +226,11 @@ test('list_files lists inside AID_ROOT and refuses /etc and a symlink out of it'
       const result = await client.callTool({ name: 'list_files', arguments: { path: p } });
       assert.equal(result.isError, true, p);
       assert.match(textOf(result), /is outside AID_ROOT/);
+    }
+    for (const p of ['nope/../out', 'nope/../out/inner', 'main.go/../out']) {
+      const result = await client.callTool({ name: 'list_files', arguments: { path: p } });
+      assert.equal(result.isError, true, p);
+      assert.match(textOf(result), /has "\.\." after .*, which is not an existing directory/);
     }
   } finally {
     await close();

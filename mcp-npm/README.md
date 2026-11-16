@@ -125,7 +125,7 @@ AI Distiller (aid) **DOES NOT perform analysis** - it generates prompts with dis
 
 Required parameters are marked with `*`. `include_patterns` and `exclude_patterns` are comma-separated globs. A parameter that is not in this table fails the call with an error that names it (`Unrecognized key: "include_privat"`).
 
-Every path parameter (`file_path`, `directory_path`, `target_path`, and `path` of `list_files`) must lie inside `AID_ROOT`. A relative path is resolved against `AID_ROOT`; symlinks are resolved before the check, so a symlink inside the project that points outside it is refused too. A path outside fails the call before `aid` runs, with an error that names `AID_ROOT`; to work with files elsewhere, start the server with `AID_ROOT` set to a directory that contains them. There is no switch to turn the check off.
+Every path parameter (`file_path`, `directory_path`, `target_path`, and `path` of `list_files`) must lie inside `AID_ROOT`. A relative path is resolved against `AID_ROOT`; symlinks are resolved before the check, so a symlink inside the project that points outside it is refused too. A `..` after a part of the path that does not resolve to an existing directory (`nope/../src`) is refused as well, because the server cannot tell where it leads. A path outside fails the call before `aid` runs, with an error that names `AID_ROOT`; to work with files elsewhere, start the server with `AID_ROOT` set to a directory that contains them. There is no switch to turn the check off.
 
 | Tool | Parameters |
 |------|------------|
