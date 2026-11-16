@@ -297,6 +297,42 @@ func TestASTParser_ImportComments(t *testing.T) {
 	assert.Equal(t, []string{"decl doc", "cgo preamble"}, docs)
 }
 
+func TestASTParser_BlockCommentText(t *testing.T) {
+	src := "package p\n\n" +
+		"type R struct {\n" +
+		"\t/* Field block doc\n" +
+		"\t   line two */\n" +
+		"\tA int\n" +
+		"}\n\n" +
+		"/*\n" +
+		"F has a block doc.\n" +
+		"*/\n" +
+		"func F() {}\n\n" +
+		"/*\n" +
+		"\tExample:\n\n" +
+		"\t\tG()\n" +
+		"*/\n"
+	file, err := NewASTParser().ProcessSource(context.Background(), []byte(src), "p.go")
+	require.NoError(t, err)
+
+	var texts []string
+	for _, node := range file.Children {
+		switch n := node.(type) {
+		case *ir.DistilledComment:
+			texts = append(texts, n.Text)
+		case *ir.DistilledClass:
+			for _, child := range n.Children {
+				if c, ok := child.(*ir.DistilledComment); ok {
+					texts = append(texts, c.Text)
+				}
+			}
+		}
+	}
+	// No markers; the lines after the first lose the indentation they
+	// share, a deeper one stays.
+	assert.Equal(t, []string{"Field block doc\nline two", "F has a block doc.", "Example:\n\n\tG()"}, texts)
+}
+
 func TestASTParser_PackageDocText(t *testing.T) {
 	src := "// Package p does things.\n" +
 		"//\n" +

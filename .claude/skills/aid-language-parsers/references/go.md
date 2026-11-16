@@ -65,8 +65,10 @@
   comment and the `@build_constraint(...)` comment built from `//go:build` lines
   (located at the first of them) have an empty `Format`, so they follow `--comments`, not `--docstrings`. A
   package doc line loses `//` and one space, any further indentation stays
-  (`internal/language/golang/ast_parser.go#packageDocText`). Every other
-  comment (`//` or `/* */`) is `line`:
+  (`internal/language/golang/ast_parser.go#packageDocText`). A `/* */`
+  comment loses its markers and the indentation its lines share, a deeper
+  one stays (`internal/language/golang/ast_parser.go#blockCommentText`).
+  Every other comment (`//` or `/* */`) is `line`:
   - the comments of a struct or interface body are children of their type
     (`internal/language/golang/ast_parser.go#ASTParser.memberNodes`), one node
     per comment group, a field's doc before the field and the comment at the

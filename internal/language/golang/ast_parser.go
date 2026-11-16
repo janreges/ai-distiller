@@ -125,7 +125,7 @@ func (p *ASTParser) ProcessSource(ctx context.Context, source []byte, filename s
 			var docComments []ir.DistilledNode
 			if d.Doc != nil {
 				for _, comment := range d.Doc.List {
-					text := strings.TrimSpace(strings.TrimPrefix(comment.Text, "//"))
+					text := commentText(comment)
 					if text != "" {
 						docComment := &ir.DistilledComment{
 							BaseNode: ir.BaseNode{
@@ -556,7 +556,7 @@ func (p *ASTParser) processGenDecl(decl *ast.GenDecl) []ir.DistilledNode {
 	// Process declaration-level doc comments
 	if decl.Doc != nil {
 		for _, comment := range decl.Doc.List {
-			text := strings.TrimSpace(strings.TrimPrefix(comment.Text, "//"))
+			text := commentText(comment)
 			if text != "" {
 				docComment := &ir.DistilledComment{
 					BaseNode: ir.BaseNode{
@@ -576,7 +576,7 @@ func (p *ASTParser) processGenDecl(decl *ast.GenDecl) []ir.DistilledNode {
 			// Add type doc comment if present
 			if s.Doc != nil {
 				for _, comment := range s.Doc.List {
-					text := strings.TrimSpace(strings.TrimPrefix(comment.Text, "//"))
+					text := commentText(comment)
 					if text != "" {
 						docComment := &ir.DistilledComment{
 							BaseNode: ir.BaseNode{
@@ -600,7 +600,7 @@ func (p *ASTParser) processGenDecl(decl *ast.GenDecl) []ir.DistilledNode {
 			// Add value doc comment if present
 			if s.Doc != nil {
 				for _, comment := range s.Doc.List {
-					text := strings.TrimSpace(strings.TrimPrefix(comment.Text, "//"))
+					text := commentText(comment)
 					if text != "" {
 						docComment := &ir.DistilledComment{
 							BaseNode: ir.BaseNode{
@@ -894,12 +894,44 @@ func (p *ASTParser) appendCommentGroup(nodes []ir.DistilledNode, group *ast.Comm
 
 // commentText returns the text of a comment without its markers: "//" and
 // the spaces around the text of a line comment, "/*" and "*/" of a block
-// comment.
+// comment (blockCommentText).
 func commentText(c *ast.Comment) string {
 	if strings.HasPrefix(c.Text, "/*") && strings.HasSuffix(c.Text, "*/") {
-		return strings.TrimSpace(c.Text[2 : len(c.Text)-2])
+		return blockCommentText(c.Text[2 : len(c.Text)-2])
 	}
 	return strings.TrimSpace(strings.TrimPrefix(c.Text, "//"))
+}
+
+// blockCommentText returns the text between "/*" and "*/" with one line per
+// source line: the first without the spaces around it, the following ones
+// without the indentation they all share (the comment's indentation in the
+// source, which the formatter replaces with its own) and without trailing
+// spaces; indentation beyond the shared one (a code example) stays. Blank
+// lines at the start and the end go.
+func blockCommentText(text string) string {
+	lines := strings.Split(text, "\n")
+	lines[0] = strings.TrimSpace(lines[0])
+	shared, found := "", false
+	for _, line := range lines[1:] {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
+		if !found {
+			shared, found = indent, true
+			continue
+		}
+		for !strings.HasPrefix(indent, shared) {
+			shared = shared[:len(shared)-1]
+		}
+	}
+	for i := 1; i < len(lines); i++ {
+		lines[i] = strings.TrimRight(strings.TrimPrefix(lines[i], shared), " \t")
+		if strings.TrimSpace(lines[i]) == "" {
+			lines[i] = ""
+		}
+	}
+	return strings.Trim(strings.Join(lines, "\n"), "\n")
 }
 
 // packageDocText returns the text of a line of the package doc without "//"
