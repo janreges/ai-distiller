@@ -158,6 +158,8 @@ AI Distiller automatically detects your project root and centralizes all outputs
 
 Without a marker, `AID_PROJECT_ROOT` is used, and without that the current directory (with a warning). Details: [project-root-detection.md](docs/user/project-root-detection.md).
 
+`AID_CONFINE_ROOT` (the MCP server sets it to the real path of `AID_ROOT`; unset, it changes nothing) confines aid to one directory: aid reads no file whose real path lies outside it (a path argument outside it is an error, a directory walk skips symlinks that lead out), the search for markers stops at it, and without a marker inside it the root is `AID_PROJECT_ROOT` when that lies inside, else the confine root itself.
+
 ```bash
 # Mark a specific directory as project root (recommended)
 touch /my/project/.aidrc

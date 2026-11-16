@@ -10,8 +10,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/janreges/ai-distiller/internal/debug"
 	"github.com/janreges/ai-distiller/internal/ignore"
 	"github.com/janreges/ai-distiller/internal/ir"
+	"github.com/janreges/ai-distiller/internal/project"
 )
 
 // FileTask represents a file to be processed with its order index
@@ -95,6 +97,14 @@ func (p *Processor) walkDirectory(dir string, opts ProcessOptions) ([]FileTask, 
 			if !opts.Recursive && path != dir {
 				return filepath.SkipDir
 			}
+			return nil
+		}
+
+		// With AID_CONFINE_ROOT set, a file whose real path lies outside it
+		// (a symlink pointing out of the tree) is never read.
+		if !project.InConfineRoot(path) {
+			debug.FromContext(p.ctx).WithSubsystem("processor").Logf(debug.LevelBasic,
+				"Skipping %s: it does not resolve to a file inside %s", path, project.EnvConfineRoot)
 			return nil
 		}
 

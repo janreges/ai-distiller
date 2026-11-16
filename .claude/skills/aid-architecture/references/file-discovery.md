@@ -30,9 +30,13 @@ A directory:
 A file:
 
 1. `.aidignore` ignores it.
-2. Its base name contains `.aid.` (for example `x.aid.py`).
-3. It fails `--include`/`--exclude` (below).
-4. No processor handles its extension (`internal/processor/registry.go#GetByFilename`),
+2. With `AID_CONFINE_ROOT` set (below), its real path lies outside that
+   directory: skipped, and `-v` logs `Skipping <path>: it does not resolve to
+   a file inside AID_CONFINE_ROOT`. Unset, a symlink is read wherever it
+   points, as in v1.5.0.
+3. Its base name contains `.aid.` (for example `x.aid.py`).
+4. It fails `--include`/`--exclude` (below).
+5. No processor handles its extension (`internal/processor/registry.go#GetByFilename`),
    and `.aidignore` does not re-include it with a `!` pattern. With `--raw`
    this step is skipped and every remaining file is read as text
    (`modes.md`).
@@ -148,3 +152,27 @@ Examples on `proj/` with `lib/e.py`, `src/a.py`, `src/sub/b.py`:
 Tests: `internal/processor/exclude_test.go`,
 `internal/processor/walk_test.go#TestPatternsIgnoreDirectoriesAboveTheWalkRoot`,
 `internal/ignore/ignore_test.go`, `internal/processor/aidignore_test.go`.
+
+## AID_CONFINE_ROOT
+
+The MCP server starts every `aid` run with `AID_CONFINE_ROOT` set to the real
+path of its `AID_ROOT`; unset or empty, the variable changes nothing. The name
+is `internal/project/root.go#EnvConfineRoot`, and
+`internal/project/confine.go#ConfineRoot` is the one place that reads it.
+When it is set, aid reads no file whose real path (symlinks resolved) lies
+outside it (`internal/project/confine.go#InConfineRoot`):
+
+- a value that is not an existing directory, and a path argument whose real
+  path lies outside it, end the run with exit 1 before anything is read
+  (`internal/cli/root.go#checkConfineRoot`);
+- the walk skips such a file (file rule 2 above), `.aidignore` files outside
+  it are not loaded (`internal/ignore/ignore.go#New`), and the AI flow
+  actions' own walk (`internal/aiactions/source_files.go#collectSourceFiles`)
+  leaves them out;
+- `--dependency-aware` stops at it (`modes.md`);
+- the project root, where `.aid/` goes, is searched for no higher than it,
+  `AID_PROJECT_ROOT` counts only inside it, and the fallback is the confine
+  root instead of the working directory
+  (`internal/project/root.go#findRootUncached`).
+
+Tests: `internal/conformance/confine_test.go`.

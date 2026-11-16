@@ -193,7 +193,11 @@ rules say. The walk tests each entry in this order (details and examples:
 6. Files without a processor for their extension are skipped (not with
    `--raw`).
 
-The output keeps the walk's lexical order for any worker count.
+The output keeps the walk's lexical order for any worker count. With
+`AID_CONFINE_ROOT` set (the MCP server sets it), a file whose real path lies
+outside that directory is skipped as well, a path argument outside it is an
+error, and the project root for `.aid/` stays inside it
+(`references/file-discovery.md`, "AID_CONFINE_ROOT").
 
 ## 6. Stripper
 

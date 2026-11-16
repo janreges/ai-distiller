@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/janreges/ai-distiller/internal/processor"
+	"github.com/janreges/ai-distiller/internal/project"
 )
 
 // collectSourceFiles walks projectPath and returns the source files to analyze
@@ -74,9 +75,10 @@ func collectSourceFiles(projectPath string, includePatterns, excludePatterns []s
 			return nil
 		}
 
-		// Check if it's a source file
+		// Check if it's a source file; with AID_CONFINE_ROOT set, not one whose
+		// real path lies outside it
 		ext := strings.ToLower(filepath.Ext(path))
-		if sourceExtensions[ext] {
+		if sourceExtensions[ext] && project.InConfineRoot(path) {
 			relPath, err := filepath.Rel(projectPath, path)
 			if isRoot {
 				relPath, err = filepath.Base(path), nil

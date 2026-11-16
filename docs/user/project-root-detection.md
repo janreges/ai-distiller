@@ -100,6 +100,14 @@ AID_PROJECT_ROOT=/tmp/test-output aid src/
 
 A marker found by the upward search always wins over `AID_PROJECT_ROOT`.
 
+### Confinement: `AID_CONFINE_ROOT`
+
+The MCP server starts every `aid` run with `AID_CONFINE_ROOT` set to the real path of its `AID_ROOT`. Unset or empty, the variable changes nothing. Set, it confines aid to that directory:
+
+- aid reads no file whose real path (symlinks resolved) lies outside it: a path argument outside it ends the run with exit 1 before anything is read, and a directory walk skips a symlink that leads out of it (`-v` names it);
+- a value that is not an existing directory ends the run with exit 1;
+- the upward search for markers stops at the confine root, `AID_PROJECT_ROOT` counts only when it lies inside it, and without either the project root is the confine root itself, so `.aid/` files (also those of AI actions) stay inside it.
+
 ### Security Boundaries
 
 AI Distiller won't search above your home directory for security reasons:

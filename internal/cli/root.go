@@ -302,6 +302,12 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 	// Log startup info
 	dbg.Logf(debug.LevelBasic, "AI Distiller %s starting", Version)
 
+	// With AID_CONFINE_ROOT set, refuse an invalid value and a path argument
+	// outside it before anything is read.
+	if err := checkConfineRoot(args); err != nil {
+		return err
+	}
+
 	// Stdin is read in exactly two cases: the argument is "-", or there is no
 	// argument and stdin is not a character device. With any other argument
 	// stdin is never inspected, so an open but unwritten pipe cannot hijack or
@@ -579,6 +585,42 @@ func runDistiller(cmd *cobra.Command, args []string) error {
 		summary.Print(os.Stderr, stats, summaryOpts)
 	}
 
+	return nil
+}
+
+// checkConfineRoot fails when AID_CONFINE_ROOT is set but names no
+// directory, and when the real path (symlinks resolved) of a path argument
+// lies outside it. aid opens the argument as filepath.Abs cleans it, so that
+// is the path resolved here: "x/../link" is checked as "link".
+func checkConfineRoot(args []string) error {
+	root, err := project.ConfineRoot()
+	if err != nil {
+		return err
+	}
+	if root == "" {
+		return nil
+	}
+	for _, arg := range args {
+		if arg == "-" {
+			continue // stdin
+		}
+		abs, err := filepath.Abs(arg)
+		if err != nil {
+			return fmt.Errorf("failed to resolve path %s: %w", arg, err)
+		}
+		real, err := filepath.EvalSymlinks(abs)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("path does not exist: %s", arg)
+			}
+			return fmt.Errorf("cannot resolve %s: %w", arg, err)
+		}
+		if !project.Within(real, root) {
+			// The real path is not named: it would tell where a symlink
+			// inside the root points outside it.
+			return fmt.Errorf("%s is outside %s %s", arg, project.EnvConfineRoot, root)
+		}
+	}
 	return nil
 }
 

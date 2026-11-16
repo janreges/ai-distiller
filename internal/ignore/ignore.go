@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/janreges/ai-distiller/internal/project"
 )
 
 // IgnoreMatcher handles .aidignore file parsing and matching
@@ -42,8 +44,12 @@ func New(baseDir string) (*IgnoreMatcher, error) {
 		submatchers:  make(map[string]*IgnoreMatcher),
 	}
 
-	// Load .aidignore from base directory if it exists
+	// Load .aidignore from base directory if it exists. With AID_CONFINE_ROOT
+	// set, an .aidignore whose real path lies outside it is not read.
 	ignoreFile := filepath.Join(absBase, ".aidignore")
+	if !project.InConfineRoot(ignoreFile) {
+		return matcher, nil
+	}
 	if err := matcher.loadIgnoreFile(ignoreFile); err != nil && !os.IsNotExist(err) {
 		return nil, fmt.Errorf("failed to load .aidignore: %w", err)
 	}

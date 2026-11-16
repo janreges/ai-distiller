@@ -18,6 +18,13 @@ const (
 
 	// EnvProjectRoot is the environment variable for overriding project root detection
 	EnvProjectRoot = "AID_PROJECT_ROOT"
+
+	// EnvConfineRoot is the environment variable that confines what aid
+	// reads: when it is set, aid reads no file whose real path (symlinks
+	// resolved) lies outside that directory. The MCP server sets it to the
+	// real path of AID_ROOT. Unset or empty, it changes nothing. ConfineRoot
+	// is the one place that reads it.
+	EnvConfineRoot = "AID_CONFINE_ROOT"
 )
 
 // rootMarkers defines project root indicators in priority order
@@ -54,6 +61,10 @@ type RootInfo struct {
 // 1. Upward search for markers (.aidrc, go.mod, package.json, etc.)
 // 2. AID_PROJECT_ROOT environment variable (fallback if no markers found)
 // 3. Current working directory (final fallback)
+//
+// With AID_CONFINE_ROOT set, the search does not look above the confine root,
+// AID_PROJECT_ROOT counts only when it lies inside it, and the fallback is
+// the confine root instead of the working directory.
 func FindRoot() (*RootInfo, error) {
 	// Check cache first
 	rootCacheMu.RLock()
@@ -109,10 +120,25 @@ func findRootUncached() (*RootInfo, error) {
 
 	// 2. Check if we should stop at certain boundaries
 	homeDir, _ := os.UserHomeDir()
+	confine, err := ConfineRoot()
+	if err != nil {
+		return nil, err
+	}
+	if confine != "" {
+		// Compare real paths with the confine root, which is one.
+		if real, err := filepath.EvalSymlinks(cwd); err == nil {
+			cwd = real
+		}
+	}
 
 	// 3. Search upward for project markers
 	currentDir := cwd
 	for depth := 0; depth < MaxSearchDepth; depth++ {
+		// With AID_CONFINE_ROOT set, never look outside it.
+		if confine != "" && !Within(currentDir, confine) {
+			break
+		}
+
 		// Check each marker in priority order
 		for _, marker := range rootMarkers {
 			markerPath := filepath.Join(currentDir, marker)
@@ -149,19 +175,29 @@ func findRootUncached() (*RootInfo, error) {
 
 	// 4. Check environment variable as fallback (lower priority than markers)
 	if envRoot := os.Getenv(EnvProjectRoot); envRoot != "" {
-		absRoot, err := filepath.Abs(envRoot)
-		if err == nil {
-			if info, err := os.Stat(absRoot); err == nil && info.IsDir() {
-				return &RootInfo{
-					Path:   absRoot,
-					Marker: "AID_PROJECT_ROOT",
-				}, nil
-			}
+		absRoot, absErr := filepath.Abs(envRoot)
+		info, statErr := os.Stat(absRoot)
+		switch {
+		case absErr != nil || statErr != nil || !info.IsDir():
+			log.Printf("WARN: %s is set to '%s', but it is not a valid directory. Ignoring.", EnvProjectRoot, envRoot)
+		case confine != "" && !InConfineRoot(absRoot):
+			log.Printf("WARN: %s is set to '%s', which is outside %s. Ignoring.", EnvProjectRoot, envRoot, EnvConfineRoot)
+		default:
+			return &RootInfo{
+				Path:   absRoot,
+				Marker: "AID_PROJECT_ROOT",
+			}, nil
 		}
-		log.Printf("WARN: %s is set to '%s', but it is not a valid directory. Ignoring.", EnvProjectRoot, envRoot)
 	}
 
-	// 5. Fallback to current working directory
+	// 5. Fallback: the confine root when it is set, else the current
+	// working directory
+	if confine != "" {
+		return &RootInfo{
+			Path:   confine,
+			Marker: EnvConfineRoot,
+		}, nil
+	}
 	return &RootInfo{
 		Path:       cwd,
 		IsFallback: true,
@@ -206,10 +242,11 @@ func EnsureAidDir() (string, error) {
 	return aidDir, nil
 }
 
-// ResetCache clears the cached root (mainly for testing)
+// ResetCache clears the cached root and confine root (mainly for testing)
 func ResetCache() {
 	rootCacheMu.Lock()
 	defer rootCacheMu.Unlock()
 	rootCache = nil
 	rootCacheOnce = sync.Once{}
+	resetConfineRoot()
 }
