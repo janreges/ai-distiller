@@ -1,7 +1,7 @@
 package importfilter
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -40,7 +40,7 @@ func testLanguageImports(t *testing.T, language, langDir string) {
 	}
 
 	// Read all test files for this language
-	files, err := ioutil.ReadDir(langDir)
+	files, err := os.ReadDir(langDir)
 	if err != nil {
 		t.Fatalf("Failed to read test directory %s: %v", langDir, err)
 	}
@@ -64,7 +64,7 @@ func testLanguageImports(t *testing.T, language, langDir string) {
 
 func testSingleFile(t *testing.T, filter ImportFilter, filePath, language string) {
 	// Read the test file
-	content, err := ioutil.ReadFile(filePath)
+	content, err := os.ReadFile(filePath)
 	if err != nil {
 		t.Fatalf("Failed to read test file %s: %v", filePath, err)
 	}

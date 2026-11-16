@@ -5,6 +5,14 @@ run:
 linters:
   default: none
   enable: [errcheck, govet, ineffassign, staticcheck, unused, misspell, unconvert]
+  settings:
+    errcheck:
+      # The formatters print into a strings.Builder or bytes.Buffer, whose
+      # writes cannot fail, and the summaries print to stderr.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
   exclusions:
     paths:
       - internal/parser/grammars

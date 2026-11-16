@@ -1607,12 +1607,11 @@ func (p *TreeSitterProcessor) processAttributes(node *sitter.Node, attributes *[
 
 // Close frees the parser. Trees parsed by it are closed by ProcessSource; a
 // second Close does nothing.
-func (p *TreeSitterProcessor) Close() error {
+func (p *TreeSitterProcessor) Close() {
 	if p.parser != nil {
 		p.parser.Close()
 		p.parser = nil
 	}
-	return nil
 }
 
 // getPrecedingDocComment gets the docblock comment immediately preceding a node

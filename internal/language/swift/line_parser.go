@@ -533,9 +533,10 @@ func scanCode(line string, visit func(i int, c byte) bool) {
 		c := line[i]
 		switch {
 		case inString:
-			if c == '\\' {
+			switch c {
+			case '\\':
 				i++ // skip the escaped character
-			} else if c == '"' {
+			case '"':
 				inString = false
 			}
 		case c == '"':

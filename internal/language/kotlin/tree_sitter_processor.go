@@ -702,10 +702,8 @@ func (p *TreeSitterProcessor) extractInterfaceModifiers(node *sitter.Node, sourc
 			// TODO: Add functional interface support to IR if needed
 		}
 
-		// Handle annotations
-		if child.Kind() == "annotation" || child.Kind() == "user_type" {
-			// TODO: Add decorator support to interfaces in IR
-		}
+		// TODO: annotations on an interface are dropped:
+		// ir.DistilledInterface has no Decorators field.
 	}
 }
 
@@ -726,10 +724,8 @@ func (p *TreeSitterProcessor) extractEnumModifiers(node *sitter.Node, source []b
 			enum.Visibility = ir.VisibilityInternal
 		}
 
-		// Handle annotations
-		if child.Kind() == "annotation" || child.Kind() == "user_type" {
-			// TODO: Add decorator support to enums in IR if needed
-		}
+		// TODO: annotations on an enum are dropped: ir.DistilledEnum has no
+		// Decorators field.
 	}
 }
 

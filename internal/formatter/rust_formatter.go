@@ -247,9 +247,9 @@ func (f *RustFormatter) formatStruct(w io.Writer, class *ir.DistilledClass, inde
 
 	switch kind {
 	case "impl", "trait", "extern":
-		f.formatMembers(w, class, kind, indent)
+		return f.formatMembers(w, class, kind, indent)
 	case "enum":
-		f.formatEnumBody(w, class, indentStr)
+		return f.formatEnumBody(w, class, indentStr)
 	case "mod":
 		// A module prints every item it holds; one without any is "mod x;".
 		if len(class.Children) == 0 {
@@ -262,7 +262,7 @@ func (f *RustFormatter) formatStruct(w io.Writer, class *ir.DistilledClass, inde
 		}
 		fmt.Fprintf(w, "%s}\n", indentStr)
 	case "struct", "union":
-		f.formatStructBody(w, class, indent)
+		return f.formatStructBody(w, class, indent)
 	}
 	return nil
 }
@@ -300,13 +300,14 @@ func (f *RustFormatter) tupleFields(class *ir.DistilledClass, arity int) []strin
 // types print as "type X: Bound;" without a blank line before them. A
 // function without a body has no keyword either, except in an extern block,
 // where each foreign item has its own visibility.
-func (f *RustFormatter) formatMembers(w io.Writer, class *ir.DistilledClass, kind string, indent int) {
+func (f *RustFormatter) formatMembers(w io.Writer, class *ir.DistilledClass, kind string, indent int) error {
 	indentStr := strings.Repeat("    ", indent)
 	memberIndent := indentStr + "    "
 	traitMembers := kind == "trait" || strings.Contains(class.Name, " for ")
 
 	fmt.Fprintln(w, " {")
 	for _, child := range class.Children {
+		var err error
 		switch n := child.(type) {
 		case *ir.DistilledField:
 			if kind == "trait" && !hasModifier(n.Modifiers, ir.ModifierFinal) {
@@ -317,21 +318,25 @@ func (f *RustFormatter) formatMembers(w io.Writer, class *ir.DistilledClass, kin
 				}
 				fmt.Fprintln(w, ";")
 			} else {
-				f.formatFieldWithVisibility(w, n, memberIndent, !traitMembers)
+				err = f.formatFieldWithVisibility(w, n, memberIndent, !traitMembers)
 			}
 		case *ir.DistilledFunction:
 			withVisibility := !traitMembers && (kind == "extern" || !hasModifier(n.Modifiers, ir.ModifierAbstract))
-			f.formatFunction(w, n, memberIndent, withVisibility)
+			err = f.formatFunction(w, n, memberIndent, withVisibility)
 		default:
-			f.FormatNode(w, child, indent+1)
+			err = f.FormatNode(w, child, indent+1)
+		}
+		if err != nil {
+			return err
 		}
 	}
 	fmt.Fprintf(w, "%s}\n", indentStr)
+	return nil
 }
 
 // formatEnumBody writes the variants of an enum, one per line, or ";" for an
 // enum without any.
-func (f *RustFormatter) formatEnumBody(w io.Writer, class *ir.DistilledClass, indentStr string) {
+func (f *RustFormatter) formatEnumBody(w io.Writer, class *ir.DistilledClass, indentStr string) error {
 	variants := 0
 	for _, child := range class.Children {
 		if _, ok := child.(*ir.DistilledField); ok {
@@ -340,14 +345,16 @@ func (f *RustFormatter) formatEnumBody(w io.Writer, class *ir.DistilledClass, in
 	}
 	if variants == 0 {
 		fmt.Fprintln(w, ";")
-		return
+		return nil
 	}
 	fmt.Fprintln(w, " {")
 	for _, child := range class.Children {
 		field, ok := child.(*ir.DistilledField)
 		if !ok {
 			if comment, ok := child.(*ir.DistilledComment); ok {
-				f.formatComment(w, comment, indentStr+"    ")
+				if err := f.formatComment(w, comment, indentStr+"    "); err != nil {
+					return err
+				}
 			}
 			continue
 		}
@@ -371,11 +378,12 @@ func (f *RustFormatter) formatEnumBody(w io.Writer, class *ir.DistilledClass, in
 		fmt.Fprintln(w, ",")
 	}
 	fmt.Fprintf(w, "%s}\n", indentStr)
+	return nil
 }
 
 // formatStructBody writes the named fields of a struct or union, or ";" when
 // none is left, and the methods of a struct in an impl block after it.
-func (f *RustFormatter) formatStructBody(w io.Writer, class *ir.DistilledClass, indent int) {
+func (f *RustFormatter) formatStructBody(w io.Writer, class *ir.DistilledClass, indent int) error {
 	indentStr := strings.Repeat("    ", indent)
 	hasFields := false
 	for _, child := range class.Children {
@@ -388,11 +396,15 @@ func (f *RustFormatter) formatStructBody(w io.Writer, class *ir.DistilledClass, 
 	if hasFields {
 		fmt.Fprintln(w, " {")
 		for _, child := range class.Children {
+			var err error
 			switch n := child.(type) {
 			case *ir.DistilledField:
-				f.formatStructField(w, n, indent+1)
+				err = f.formatStructField(w, n, indent+1)
 			case *ir.DistilledComment:
-				f.formatComment(w, n, indentStr+"    ")
+				err = f.formatComment(w, n, indentStr+"    ")
+			}
+			if err != nil {
+				return err
 			}
 		}
 		fmt.Fprintf(w, "%s}\n", indentStr)
@@ -424,10 +436,13 @@ func (f *RustFormatter) formatStructBody(w io.Writer, class *ir.DistilledClass, 
 
 		fmt.Fprintln(w, " {")
 		for _, method := range methods {
-			f.formatImplMethod(w, method, indent+1)
+			if err := f.formatImplMethod(w, method, indent+1); err != nil {
+				return err
+			}
 		}
 		fmt.Fprintf(w, "%s}\n", indentStr)
 	}
+	return nil
 }
 
 func (f *RustFormatter) formatStructField(w io.Writer, field *ir.DistilledField, indent int) error {

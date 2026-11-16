@@ -604,10 +604,8 @@ func (p *TreeSitterProcessor) extractEnumModifiers(node *sitter.Node, source []b
 			enum.Visibility = ir.VisibilityPrivate
 		}
 
-		// Handle annotations as decorators
-		if child.Kind() == "marker_annotation" || child.Kind() == "annotation" {
-			// TODO: Add decorator support to enums in IR if needed
-		}
+		// TODO: annotations on an enum are dropped: ir.DistilledEnum has no
+		// Decorators field.
 	}
 }
 
@@ -628,10 +626,8 @@ func (p *TreeSitterProcessor) extractInterfaceModifiers(node *sitter.Node, sourc
 			iface.Modifiers = append(iface.Modifiers, ir.ModifierSealed)
 		}
 
-		// Handle annotations as decorators
-		if child.Kind() == "marker_annotation" || child.Kind() == "annotation" {
-			// TODO: Add decorator support to interfaces in IR
-		}
+		// TODO: annotations on an interface are dropped:
+		// ir.DistilledInterface has no Decorators field.
 	}
 }
 

@@ -453,7 +453,7 @@ func fillNonZero(v reflect.Value, depth int) {
 		v.SetBool(true)
 	case reflect.Int, reflect.Int64:
 		v.SetInt(7)
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if v.Type().Elem().Kind() == reflect.Struct {
 			v.Set(reflect.New(v.Type().Elem()))
 			fillNonZero(v.Elem(), depth+1)
