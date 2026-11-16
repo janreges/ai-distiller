@@ -195,63 +195,15 @@ func (f *GoFormatter) formatStruct(w io.Writer, class *ir.DistilledClass, indent
 	// Format struct declaration
 	fmt.Fprintf(w, "\n%stype %s struct", indentStr, class.Name)
 
-	// Check if there are fields
-	hasFields := false
-	for _, child := range class.Children {
-		if _, ok := child.(*ir.DistilledField); ok {
-			hasFields = true
-			break
-		}
-	}
-
-	if hasFields {
-		fmt.Fprintln(w, " {")
-		// Format fields
-		for _, child := range class.Children {
-			if field, ok := child.(*ir.DistilledField); ok {
-				f.formatStructField(w, field, indent+1)
-			}
-		}
-		fmt.Fprintf(w, "%s}\n", indentStr)
-	} else {
-		// Empty struct
+	if len(class.Children) == 0 {
 		fmt.Fprintln(w, " {}")
+		return nil
 	}
-
-	// Methods are now formatted as top-level functions in original order
-	// No need to format them here within the struct
-
-	return nil
-}
-
-func (f *GoFormatter) formatStructField(w io.Writer, field *ir.DistilledField, indent int) error {
-	indentStr := goIndent(indent)
-
-	// Check if this is an embedded field
-	isEmbedded := false
-	for _, mod := range field.Modifiers {
-		if mod == ir.ModifierEmbedded {
-			isEmbedded = true
-			break
-		}
-	}
-
-	if isEmbedded {
-		// Embedded field - just the type name
-		fmt.Fprintf(w, "%s%s", indentStr, field.Name)
-	} else {
-		// Regular field
-		fmt.Fprintf(w, "%s%s", indentStr, field.Name)
-		if field.Type != nil && field.Type.Name != "" {
-			fmt.Fprintf(w, " %s", field.Type.Name)
-		}
-	}
-
-	// TODO: Add struct tag support when Annotations are added to IR
-
-	// Comments are handled separately
-
-	fmt.Fprintln(w)
+	// Fields with their comments; methods print at file level, in source
+	// order, as top-level functions
+	fmt.Fprintln(w, " {")
+	f.formatMembers(w, class.Children, indent+1)
+	fmt.Fprintf(w, "%s}\n", indentStr)
 	return nil
 }
 
@@ -268,36 +220,122 @@ func (f *GoFormatter) formatInterface(w io.Writer, intf *ir.DistilledInterface, 
 	}
 	fmt.Fprintln(w, " {")
 	// Embedded elements first, one per line: an embedded interface
-	// (io.Reader) or a type set (~int | ~string), each as written.
+	// (io.Reader) or a type set (~int | ~string), each as written, under
+	// the comments written among them; then the methods with theirs.
+	split := 0
+	if len(intf.Extends) > 0 {
+		split = embedCommentsEnd(intf.Children)
+	}
+	f.formatMembers(w, intf.Children[:split], indent+1)
 	for _, ext := range intf.Extends {
 		fmt.Fprintf(w, "%s%s\n", goIndent(indent+1), ext.Name)
 	}
-	for _, child := range intf.Children {
-		if fn, ok := child.(*ir.DistilledFunction); ok {
-			f.formatInterfaceMethod(w, fn, indent+1)
-		}
-	}
+	f.formatMembers(w, intf.Children[split:], indent+1)
 	fmt.Fprintf(w, "%s}\n", indentStr)
 	return nil
 }
 
-func (f *GoFormatter) formatInterfaceMethod(w io.Writer, fn *ir.DistilledFunction, indent int) error {
+// formatMembers writes the children of a struct or interface body, one line
+// each at indent: a field, an interface method, or a comment, which keeps
+// its place among them. A comment that ends a member's line in the source
+// (the parser puts it right before that member) is written at the end of
+// that member's line instead.
+func (f *GoFormatter) formatMembers(w io.Writer, children []ir.DistilledNode, indent int) {
 	indentStr := goIndent(indent)
-
-	// Method comments are handled separately
-
-	// Format method signature
-	fmt.Fprintf(w, "%s%s(", indentStr, fn.Name)
-	f.formatParameters(w, fn.Parameters)
-	fmt.Fprintf(w, ")")
-
-	// Format return type
-	if fn.Returns != nil {
-		fmt.Fprintf(w, " %s", fn.Returns.Name)
+	var trailing []string
+	for i, child := range children {
+		switch n := child.(type) {
+		case *ir.DistilledComment:
+			if i+1 < len(children) && endsLineOf(n, children[i+1]) {
+				trailing = append(trailing, n.Text)
+				continue
+			}
+			f.formatComment(w, n, indentStr)
+			continue
+		case *ir.DistilledField:
+			fmt.Fprint(w, indentStr+goFieldLine(n))
+		case *ir.DistilledFunction:
+			fmt.Fprint(w, indentStr+f.interfaceMethodLine(n))
+		default:
+			continue
+		}
+		for _, text := range trailing {
+			fmt.Fprintf(w, " // %s", text)
+		}
+		trailing = nil
+		fmt.Fprintln(w)
 	}
+}
 
-	fmt.Fprintln(w)
-	return nil
+// endsLineOf reports whether comment c is written at the end of member's
+// (last) line: one line of text that starts on that line, after the member
+// starts.
+func endsLineOf(c *ir.DistilledComment, member ir.DistilledNode) bool {
+	switch member.(type) {
+	case *ir.DistilledField, *ir.DistilledFunction:
+	default:
+		return false
+	}
+	at, m := c.Location, member.GetLocation()
+	return at.StartLine > 0 && !strings.Contains(c.Text, "\n") && at.StartLine == m.EndLine &&
+		(at.StartLine > m.StartLine || at.StartColumn > m.StartColumn)
+}
+
+// embedCommentsEnd returns where the comments written among the embedded
+// types of an interface end in its children: before the first method and the
+// comments that belong to it, the one at the end of its line and the group
+// directly above it at its column. Without a method, every child is such a
+// comment. The embedded types themselves are in Extends, without a position.
+func embedCommentsEnd(children []ir.DistilledNode) int {
+	first := slices.IndexFunc(children, func(n ir.DistilledNode) bool {
+		_, ok := n.(*ir.DistilledFunction)
+		return ok
+	})
+	if first < 0 {
+		return len(children)
+	}
+	end := first
+	if c, ok := commentAt(children, end-1); ok && endsLineOf(c, children[first]) {
+		end--
+	}
+	method := children[first].GetLocation()
+	if c, ok := commentAt(children, end-1); ok &&
+		c.Location.EndLine+1 == method.StartLine && c.Location.StartColumn == method.StartColumn {
+		end--
+	}
+	return end
+}
+
+// commentAt returns children[i] when it is a comment.
+func commentAt(children []ir.DistilledNode, i int) (*ir.DistilledComment, bool) {
+	if i < 0 || i >= len(children) {
+		return nil, false
+	}
+	c, ok := children[i].(*ir.DistilledComment)
+	return c, ok
+}
+
+// goFieldLine returns a struct field as it prints, without indentation: an
+// embedded field as its type, any other as its name and type.
+func goFieldLine(field *ir.DistilledField) string {
+	// TODO: Add struct tag support when Annotations are added to IR
+	if slices.Contains(field.Modifiers, ir.ModifierEmbedded) || field.Type == nil || field.Type.Name == "" {
+		return field.Name
+	}
+	return field.Name + " " + field.Type.Name
+}
+
+// interfaceMethodLine returns an interface method as it prints, without
+// indentation: its name, parameters and results.
+func (f *GoFormatter) interfaceMethodLine(fn *ir.DistilledFunction) string {
+	var b strings.Builder
+	b.WriteString(fn.Name + "(")
+	f.formatParameters(&b, fn.Parameters)
+	b.WriteString(")")
+	if fn.Returns != nil && fn.Returns.Name != "" {
+		b.WriteString(" " + fn.Returns.Name)
+	}
+	return b.String()
 }
 
 func (f *GoFormatter) formatFunction(w io.Writer, fn *ir.DistilledFunction, indent string) error {

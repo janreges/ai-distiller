@@ -121,3 +121,69 @@ func TestASTParser_FunctionTypesKeepTheirSignature(t *testing.T) {
 	assert.Equal(t, "func(w io.Writer, n int) error", alias.Type.Name)
 	assert.Equal(t, "func(int) string", field.Type.Name)
 }
+
+func TestASTParser_MemberCommentsStayInTheirType(t *testing.T) {
+	src := "package p\n\n" +
+		"type S struct {\n" +
+		"\t// doc of A\n" +
+		"\t//\n" +
+		"\t// more\n" +
+		"\tA int // end of A\n" +
+		"\n" +
+		"\t// free\n" +
+		"\n" +
+		"\tInner struct {\n\t\tX int // nested\n\t}\n" +
+		"}\n\n" +
+		"type I interface {\n" +
+		"\tio.Reader // end of Reader\n" +
+		"\t// doc of Close\n" +
+		"\tClose() error // end of Close\n" +
+		"}\n"
+	file, err := NewASTParser().ProcessSource(context.Background(), []byte(src), "p.go")
+	require.NoError(t, err)
+
+	type child struct{ kind, text string }
+	describe := func(nodes []ir.DistilledNode) []child {
+		var out []child
+		for _, n := range nodes {
+			switch n := n.(type) {
+			case *ir.DistilledComment:
+				out = append(out, child{"comment", n.Text})
+			case *ir.DistilledField:
+				out = append(out, child{"field", n.Name})
+			case *ir.DistilledFunction:
+				out = append(out, child{"method", n.Name})
+			}
+		}
+		return out
+	}
+	var s *ir.DistilledClass
+	var i *ir.DistilledInterface
+	for _, node := range file.Children {
+		switch n := node.(type) {
+		case *ir.DistilledClass:
+			s = n
+		case *ir.DistilledInterface:
+			i = n
+		case *ir.DistilledComment:
+			t.Errorf("a comment of a type body is at file level: %q", n.Text)
+		}
+	}
+
+	// The doc group is one comment above its field, the comment at the end
+	// of a field's line comes right before that field, a free comment keeps
+	// its place, and a comment inside a nested struct type is dropped.
+	assert.Equal(t, []child{
+		{"comment", "doc of A\n\nmore"}, {"comment", "end of A"}, {"field", "A"},
+		{"comment", "free"}, {"field", "Inner"},
+	}, describe(s.Children))
+	assert.Equal(t, []child{
+		{"comment", "end of Reader"}, {"comment", "doc of Close"}, {"comment", "end of Close"}, {"method", "Close"},
+	}, describe(i.Children))
+
+	// The comment at the end of A's line lies within A's span, so the
+	// stripper removes it together with A.
+	a, end := s.Children[2].GetLocation(), s.Children[1].GetLocation()
+	assert.Equal(t, a.StartLine, end.StartLine)
+	assert.LessOrEqual(t, end.EndLine, a.EndLine)
+}

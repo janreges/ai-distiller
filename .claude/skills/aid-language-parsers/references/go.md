@@ -61,7 +61,12 @@
   comment and the `@build_constraint(...)` comment built from `//go:build` lines
   have an empty `Format`, so they follow `--comments`, not `--docstrings`. Every
   other comment (`//` or `/* */`) is `line` and is inserted at file level by its
-  line number, also when it sits inside a function body.
+  line number, also when it sits inside a function body, except the comments
+  of a struct or interface body: they are children of their type
+  (`internal/language/golang/ast_parser.go#ASTParser.memberNodes`), one node
+  per comment group, a field's doc before the field and the comment at the end
+  of its line right before it too, inside its line span, so the stripper drops
+  both with the field. The text prints the latter at the end of the field's line.
 - `Extensions` is not used.
 
 ## Unused files

@@ -100,7 +100,14 @@ var fixtures = []fixture{
 		check{Cap: "func-types", Contains: []string{
 			"type ConfHandler func(w io.Writer, n int) error\n",
 			"\tConfStack []func(io.Writer) io.Writer\n",
-			"func ConfMap(items []int, f func(int) (string, error), opts ...func(*ConfWidget)) []string\n"}})},
+			"func ConfMap(items []int, f func(int) (string, error), opts ...func(*ConfWidget)) []string\n"}},
+		check{Cap: "member-comments-in-place", Flags: []string{"--comments=1"}, Contains: []string{
+			"type ConfRecord struct {\n\t// CONF_FIELD_DOC\n\tConfNote string // CONF_FIELD_TRAILING\n}\n",
+			"\tio.Closer\n\t// CONF_METHOD_DOC\n\tConfExtra() int // CONF_METHOD_TRAILING\n}\n"},
+			NotContains: []string{"CONF_HIDDEN_FIELD_NOTE"}},
+		check{Cap: "member-comments-hidden-by-default", NotContains: []string{"CONF_FIELD_DOC", "CONF_METHOD_TRAILING"}},
+		check{Cap: "hidden-field-comment-shown", Flags: []string{"--comments=1", "--internal=1"},
+			Contains: []string{"\tconfSecret int // CONF_HIDDEN_FIELD_NOTE\n}\n"}})},
 	{Lang: "rust", File: "rust/sample.rs", Checks: append(standard(markers{
 		Public:    []string{"ConfWidget", "conf_field", "conf_public", "conf_other"},
 		Private:   []string{"conf_private"},

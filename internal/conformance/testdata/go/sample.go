@@ -38,7 +38,8 @@ func (w *ConfWidget) ConfBranch(n int) string {
 type ConfReadCloser interface {
 	io.Reader
 	io.Closer
-	ConfExtra() int
+	// CONF_METHOD_DOC
+	ConfExtra() int // CONF_METHOD_TRAILING
 }
 
 // ConfNumber is a type-set constraint.
@@ -63,4 +64,11 @@ type ConfRouter struct {
 // ConfMap takes function-typed parameters.
 func ConfMap(items []int, f func(int) (string, error), opts ...func(*ConfWidget)) []string {
 	return nil
+}
+
+// ConfRecord has commented fields.
+type ConfRecord struct {
+	// CONF_FIELD_DOC
+	ConfNote   string // CONF_FIELD_TRAILING
+	confSecret int    // CONF_HIDDEN_FIELD_NOTE
 }

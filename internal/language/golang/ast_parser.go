@@ -17,6 +17,11 @@ type ASTParser struct {
 	source   []byte
 	filename string
 	fset     *token.FileSet
+	// comments are the file's comment groups; claimed are the comments a
+	// struct or interface body took as its children (memberNodes), which
+	// processComments does not add at file level.
+	comments []*ast.CommentGroup
+	claimed  map[*ast.Comment]bool
 }
 
 // NewASTParser creates a new AST parser
@@ -41,6 +46,8 @@ func (p *ASTParser) ProcessSource(ctx context.Context, source []byte, filename s
 	if err != nil {
 		return nil, err
 	}
+	p.comments = file.Comments
+	p.claimed = make(map[*ast.Comment]bool)
 
 	// Dump raw AST at trace level
 	debug.Lazy(ctx, debug.LevelTrace, func(d debug.Debugger) {
@@ -257,7 +264,11 @@ func (p *ASTParser) processComments(file *ast.File, distilledFile *ir.DistilledF
 	// so we just need to handle inline and trailing comments that weren't
 	// already processed as doc comments
 
-	processedComments := make(map[*ast.Comment]bool)
+	// The comments of struct and interface bodies are children of their type
+	processedComments := make(map[*ast.Comment]bool, len(p.claimed))
+	for c := range p.claimed {
+		processedComments[c] = true
+	}
 
 	// Mark package doc comments as processed (already added)
 	if file.Doc != nil {
@@ -316,14 +327,7 @@ func (p *ASTParser) processComments(file *ast.File, distilledFile *ir.DistilledF
 		for _, c := range cg.List {
 			if !processedComments[c] {
 				// This is an inline or line comment
-				text := strings.TrimSpace(strings.TrimPrefix(c.Text, "//"))
-				if strings.HasPrefix(text, " ") {
-					text = strings.TrimSpace(text)
-				}
-				// Also handle /* */ style comments
-				if strings.HasPrefix(c.Text, "/*") && strings.HasSuffix(c.Text, "*/") {
-					text = strings.TrimSpace(c.Text[2 : len(c.Text)-2])
-				}
+				text := commentText(c)
 				if text != "" {
 					distilledComment := &ir.DistilledComment{
 						BaseNode: ir.BaseNode{
@@ -591,7 +595,8 @@ func (p *ASTParser) processInterfaceWithParams(name, typeParams string, interfac
 	return p.processInterface(name+typeParams, interfaceType)
 }
 
-// processStruct processes a struct type
+// processStruct processes a struct type. Its children are its fields and
+// the comments of its body, in source order (memberNodes).
 func (p *ASTParser) processStruct(name string, structType *ast.StructType) *ir.DistilledClass {
 	class := &ir.DistilledClass{
 		BaseNode: ir.BaseNode{
@@ -600,51 +605,45 @@ func (p *ASTParser) processStruct(name string, structType *ast.StructType) *ir.D
 		Name:       name,
 		Visibility: p.getVisibility(name),
 		Modifiers:  []ir.Modifier{},
-		Children:   []ir.DistilledNode{},
 	}
 
-	// Process fields
-	for _, field := range structType.Fields.List {
-		// Get field type
+	class.Children = p.memberNodes(structType.Fields, func(field *ast.Field) []ir.DistilledNode {
 		fieldType := p.typeToString(field.Type)
-
 		if len(field.Names) == 0 {
-			// Embedded field
-			embedField := &ir.DistilledField{
+			// Embedded field, named after its type
+			return []ir.DistilledNode{&ir.DistilledField{
 				BaseNode: ir.BaseNode{
 					Location: p.getLocation(field.Pos(), field.End()),
 				},
-				Name:       fieldType, // Use type name as field name
+				Name:       fieldType,
 				Type:       &ir.TypeRef{Name: fieldType},
 				Visibility: ir.VisibilityPublic,
-				Modifiers:  []ir.Modifier{ir.ModifierEmbedded}, // Mark as embedded
-			}
-			class.Children = append(class.Children, embedField)
-		} else {
-			// Named fields
-			for _, name := range field.Names {
-				distilledField := &ir.DistilledField{
-					BaseNode: ir.BaseNode{
-						Location: p.getLocation(name.Pos(), name.End()),
-					},
-					Name:       name.Name,
-					Type:       &ir.TypeRef{Name: fieldType},
-					Visibility: p.getVisibility(name.Name),
-				}
-
-				// TODO: Process tags when annotation support is added
-
-				class.Children = append(class.Children, distilledField)
-			}
+				Modifiers:  []ir.Modifier{ir.ModifierEmbedded},
+			}}
 		}
-	}
+		// Named fields; each spans from its name to the end of the field
+		var nodes []ir.DistilledNode
+		for _, name := range field.Names {
+			// TODO: Process tags when annotation support is added
+			nodes = append(nodes, &ir.DistilledField{
+				BaseNode: ir.BaseNode{
+					Location: p.getLocation(name.Pos(), field.End()),
+				},
+				Name:       name.Name,
+				Type:       &ir.TypeRef{Name: fieldType},
+				Visibility: p.getVisibility(name.Name),
+			})
+		}
+		return nodes
+	})
 
 	return class
 }
 
 // processInterface processes an interface type. Each embedded element (an
 // embedded interface such as io.Reader, or a type set such as ~int | ~string)
-// is one entry of Extends, as written; the methods are the children.
+// is one entry of Extends, as written; the children are the methods and the
+// comments of the body, in source order (memberNodes).
 func (p *ASTParser) processInterface(name string, interfaceType *ast.InterfaceType) *ir.DistilledInterface {
 	intf := &ir.DistilledInterface{
 		BaseNode: ir.BaseNode{
@@ -652,27 +651,135 @@ func (p *ASTParser) processInterface(name string, interfaceType *ast.InterfaceTy
 		},
 		Name:       name,
 		Visibility: p.getVisibility(name),
-		Children:   []ir.DistilledNode{},
 	}
 
-	// Process methods
-	for _, method := range interfaceType.Methods.List {
+	intf.Children = p.memberNodes(interfaceType.Methods, func(method *ast.Field) []ir.DistilledNode {
 		if len(method.Names) == 0 {
 			// Embedded element: one entry, a union stays whole
 			intf.Extends = append(intf.Extends, ir.TypeRef{Name: p.typeToString(method.Type)})
-		} else {
-			// Method declaration
-			for _, name := range method.Names {
-				if funcType, ok := method.Type.(*ast.FuncType); ok {
-					fn := p.processFuncType(name.Name, funcType)
-					fn.Visibility = ir.VisibilityPublic
-					intf.Children = append(intf.Children, fn)
-				}
+			return nil
+		}
+		var nodes []ir.DistilledNode
+		for _, name := range method.Names {
+			if funcType, ok := method.Type.(*ast.FuncType); ok {
+				fn := p.processFuncType(name.Name, funcType)
+				fn.Location = p.getLocation(name.Pos(), method.End())
+				fn.Visibility = ir.VisibilityPublic
+				nodes = append(nodes, fn)
 			}
+		}
+		return nodes
+	})
+
+	return intf
+}
+
+// memberNodes returns the children of a struct or interface body: for each
+// field (a struct field, an interface method or embedded element) in source
+// order, the comment group above it (its doc), the nodes build returns for
+// it, and the comment group at the end of its line. That trailing comment is
+// put right before the field's last node, inside that node's line span, so
+// that the stripper drops it with the node; the text formatter prints it at
+// the end of the node's line. The other comment groups of the body stay
+// where they are. A comment inside a field (in a nested struct type, which
+// prints as struct{...}) is dropped with the nested fields. All of them are
+// claimed, so that processComments does not add them at file level. Every
+// comment is a line comment: it follows --comments.
+func (p *ASTParser) memberNodes(list *ast.FieldList, build func(*ast.Field) []ir.DistilledNode) []ir.DistilledNode {
+	nodes := []ir.DistilledNode{}
+	if list == nil {
+		return nodes
+	}
+	attached := make(map[*ast.CommentGroup]bool)
+	for _, field := range list.List {
+		attached[field.Doc] = true
+		attached[field.Comment] = true
+	}
+	var free []*ast.CommentGroup // groups attached to no field, in order
+	for _, group := range p.comments {
+		if group.Pos() <= list.Opening || group.Pos() >= list.Closing {
+			continue
+		}
+		for _, c := range group.List {
+			p.claimed[c] = true
+		}
+		if !attached[group] && !insideField(list, group.Pos()) {
+			free = append(free, group)
 		}
 	}
 
-	return intf
+	next := 0
+	freeBefore := func(pos token.Pos) {
+		for next < len(free) && free[next].Pos() < pos {
+			nodes = p.appendCommentGroup(nodes, free[next])
+			next++
+		}
+	}
+	for _, field := range list.List {
+		start := field.Pos()
+		if field.Doc != nil {
+			start = field.Doc.Pos()
+		}
+		freeBefore(start)
+		nodes = p.appendCommentGroup(nodes, field.Doc)
+		members := build(field)
+		if len(members) == 0 {
+			nodes = p.appendCommentGroup(nodes, field.Comment)
+			continue
+		}
+		last := len(members) - 1
+		nodes = append(nodes, members[:last]...)
+		nodes = p.appendCommentGroup(nodes, field.Comment)
+		nodes = append(nodes, members[last])
+	}
+	freeBefore(list.Closing)
+	return nodes
+}
+
+// insideField reports whether pos lies within one of the fields of list,
+// between its first name (or type) and its end.
+func insideField(list *ast.FieldList, pos token.Pos) bool {
+	for _, field := range list.List {
+		if field.Pos() <= pos && pos < field.End() {
+			return true
+		}
+	}
+	return false
+}
+
+// appendCommentGroup appends a comment group as one line comment whose
+// location spans the group and whose text has one line per comment line
+// (an empty "//" line stays as an empty line). A nil or empty group adds
+// nothing.
+func (p *ASTParser) appendCommentGroup(nodes []ir.DistilledNode, group *ast.CommentGroup) []ir.DistilledNode {
+	if group == nil {
+		return nodes
+	}
+	lines := make([]string, 0, len(group.List))
+	for _, c := range group.List {
+		lines = append(lines, commentText(c))
+	}
+	text := strings.Trim(strings.Join(lines, "\n"), "\n")
+	if text == "" {
+		return nodes
+	}
+	return append(nodes, &ir.DistilledComment{
+		BaseNode: ir.BaseNode{
+			Location: p.getLocation(group.Pos(), group.End()),
+		},
+		Text:   text,
+		Format: ir.CommentLine,
+	})
+}
+
+// commentText returns the text of a comment without its markers: "//" and
+// the spaces around the text of a line comment, "/*" and "*/" of a block
+// comment.
+func commentText(c *ast.Comment) string {
+	if strings.HasPrefix(c.Text, "/*") && strings.HasSuffix(c.Text, "*/") {
+		return strings.TrimSpace(c.Text[2 : len(c.Text)-2])
+	}
+	return strings.TrimSpace(strings.TrimPrefix(c.Text, "//"))
 }
 
 // processFunction processes a function declaration

@@ -106,6 +106,54 @@ func TestGoFormatter_InterfaceEmbedsAndMethods(t *testing.T) {
 	assert.Equal(t, "\ntype Any interface {}\n", format(&ir.DistilledInterface{Name: "Any"}))
 }
 
+func TestGoFormatter_MemberComments(t *testing.T) {
+	at := func(line, col int) ir.BaseNode {
+		return ir.BaseNode{Location: ir.Location{StartLine: line, StartColumn: col, EndLine: line, EndColumn: col + 10}}
+	}
+	comment := func(line, col int, text string) *ir.DistilledComment {
+		return &ir.DistilledComment{BaseNode: at(line, col), Text: text, Format: ir.CommentLine}
+	}
+	format := func(n ir.DistilledNode) string {
+		var b strings.Builder
+		require.NoError(t, NewGoFormatter().FormatNode(&b, n, 0))
+		return b.String()
+	}
+
+	// type S struct {          line 1
+	// 	// doc of A            line 2
+	// 	A int // end of A      line 3
+	// 	// free                line 4
+	// }
+	s := &ir.DistilledClass{Name: "S", Children: []ir.DistilledNode{
+		comment(2, 2, "doc of A"),
+		comment(3, 8, "end of A"),
+		&ir.DistilledField{BaseNode: at(3, 2), Name: "A", Type: &ir.TypeRef{Name: "int"}},
+		comment(4, 2, "free"),
+	}}
+	assert.Equal(t, "\ntype S struct {\n\t// doc of A\n\tA int // end of A\n\t// free\n}\n", format(s))
+
+	// type I interface {           line 1
+	// 	// doc of Reader           line 2
+	// 	io.Reader                  line 3
+	// 	io.Writer // end of Writer line 4
+	// 	// doc of Close            line 5
+	// 	Close() error // end       line 6
+	// }
+	// The comments among the embedded types go above them, the method's
+	// own comments stay with it.
+	i := &ir.DistilledInterface{Name: "I",
+		Extends: []ir.TypeRef{{Name: "io.Reader"}, {Name: "io.Writer"}},
+		Children: []ir.DistilledNode{
+			comment(2, 2, "doc of Reader"),
+			comment(4, 12, "end of Writer"),
+			comment(5, 2, "doc of Close"),
+			comment(6, 16, "end"),
+			&ir.DistilledFunction{BaseNode: at(6, 2), Name: "Close", Returns: &ir.TypeRef{Name: "error"}},
+		}}
+	assert.Equal(t, "\ntype I interface {\n\t// doc of Reader\n\t// end of Writer\n\tio.Reader\n\tio.Writer\n"+
+		"\t// doc of Close\n\tClose() error // end\n}\n", format(i))
+}
+
 func TestGoFormatter_DefinedTypeAndAlias(t *testing.T) {
 	format := func(a *ir.DistilledTypeAlias) string {
 		var b strings.Builder
