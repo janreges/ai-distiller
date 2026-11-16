@@ -106,6 +106,30 @@ func TestDependencyAwareFollowsGoPackages(t *testing.T) {
 	assert.Len(t, filePaths(out), 5)
 }
 
+// Rust: "mod x;" files (not #[cfg(test)] ones), and the module files named
+// by crate::, super::, the crate's own library name and a path dependency's
+// name, in use declarations and in expressions; not paths in doc comments.
+func TestDependencyAwareFollowsRustModules(t *testing.T) {
+	out, stderr := runDepAware(t, "rust/app/src/main.rs")
+	assert.NotContains(t, stderr, noImportsNote)
+	assert.Equal(t, []string{
+		"main.rs",
+		"cli.rs",               // mod cli;
+		"store/mod.rs",         // use demo_app::store::Store
+		"../../kit/src/lib.rs", // use util_kit::slug (path dependency)
+		"report.rs",            // demo_app::report::summary(...)
+		"store/disk.rs",        // mod disk; in store/mod.rs: depth 2
+	}, filePaths(out))
+	assert.Contains(t, out, "pub fn normalize(path: &str) -> String")
+
+	out, _ = runDepAware(t, "rust/app/src/main.rs", "--max-depth=1")
+	assert.Equal(t, []string{"main.rs", "cli.rs", "store/mod.rs", "../../kit/src/lib.rs", "report.rs"}, filePaths(out))
+
+	// From a module file, super:: and crate:: lead back to the crate's files.
+	out, _ = runDepAware(t, "rust/app/src/store/mod.rs", "--max-depth=1")
+	assert.Equal(t, []string{"mod.rs", "disk.rs", "../report.rs"}, filePaths(out))
+}
+
 func TestDependencyAwareSaysWhenNothingIsFollowed(t *testing.T) {
 	// index.js imports only npm packages: nothing to follow, but the entry
 	// file is still printed and the run succeeds.

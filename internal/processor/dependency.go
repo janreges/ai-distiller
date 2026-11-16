@@ -102,12 +102,14 @@ func dependencyDisplayPath(file, baseDir string, opts ProcessOptions) string {
 }
 
 // DependencyAnalyzer finds the files a source file imports. It caches the
-// project files it reads to resolve imports (go.mod, package listings).
+// project files it reads to resolve imports (go.mod, Cargo.toml, package
+// listings).
 type DependencyAnalyzer struct {
 	ctx context.Context
 
-	goModules  map[string]*goModule // go.mod path -> parsed module, nil when unreadable
-	goPackages map[string][]goFile  // directory -> its non-test Go files
+	goModules  map[string]*goModule  // go.mod path -> parsed module, nil when unreadable
+	goPackages map[string][]goFile   // directory -> its non-test Go files
+	rustCrates map[string]*rustCrate // Cargo.toml path -> parsed crate, nil when unreadable
 }
 
 // NewDependencyAnalyzer returns an analyzer that logs to ctx's debugger.
@@ -116,6 +118,7 @@ func NewDependencyAnalyzer(ctx context.Context) *DependencyAnalyzer {
 		ctx:        ctx,
 		goModules:  map[string]*goModule{},
 		goPackages: map[string][]goFile{},
+		rustCrates: map[string]*rustCrate{},
 	}
 }
 
@@ -890,76 +893,6 @@ func (da *DependencyAnalyzer) resolveCSharpImport(className, currentFilePath str
 	}
 
 	return ""
-}
-
-// ========== RUST SUPPORT ==========
-
-// extractRustImports extracts Rust use and mod statements
-func (da *DependencyAnalyzer) extractRustImports(ctx context.Context, fileContent []byte, filePath string) ([]string, error) {
-	imports := []string{}
-	content := string(fileContent)
-
-	dbg := debug.FromContext(ctx).WithSubsystem("dependency")
-
-	// Look for 'mod module_name;' declarations
-	modRegex := regexp.MustCompile(`mod\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*;`)
-	modMatches := modRegex.FindAllStringSubmatch(content, -1)
-
-	for _, match := range modMatches {
-		if len(match) >= 2 {
-			moduleName := match[1]
-
-			// Look for module_name.rs in the same directory
-			dir := filepath.Dir(filePath)
-			moduleFile := filepath.Join(dir, moduleName+".rs")
-
-			if exists(moduleFile) {
-				imports = append(imports, moduleFile)
-				dbg.Logf(debug.LevelDetailed, "Found Rust mod import: %s -> %s", moduleName, moduleFile)
-			}
-		}
-	}
-
-	// Look for 'use module_name::' statements for cross-module function calls
-	useRegex := regexp.MustCompile(`use\s+([a-zA-Z_][a-zA-Z0-9_]*)::[^;]*;`)
-	useMatches := useRegex.FindAllStringSubmatch(content, -1)
-
-	for _, match := range useMatches {
-		if len(match) >= 2 {
-			moduleName := match[1]
-
-			// Skip std library and external crates
-			if da.isRustStandardLibrary(moduleName) {
-				continue
-			}
-
-			// Look for module_name.rs in the same directory
-			dir := filepath.Dir(filePath)
-			moduleFile := filepath.Join(dir, moduleName+".rs")
-
-			if exists(moduleFile) {
-				imports = append(imports, moduleFile)
-				dbg.Logf(debug.LevelDetailed, "Found Rust use import: %s -> %s", moduleName, moduleFile)
-			}
-		}
-	}
-
-	dbg.Logf(debug.LevelDetailed, "Found %d Rust imports in %s", len(imports), filePath)
-	return imports, nil
-}
-
-// Helper functions for Rust
-func (da *DependencyAnalyzer) isRustStandardLibrary(moduleName string) bool {
-	rustStdPrefixes := []string{
-		"std", "core", "alloc", "proc_macro",
-	}
-
-	for _, prefix := range rustStdPrefixes {
-		if strings.HasPrefix(moduleName, prefix) {
-			return true
-		}
-	}
-	return false
 }
 
 // ========== SWIFT SUPPORT ==========

@@ -231,7 +231,7 @@ Measured on public repositories (`git clone --depth 1`, 2026-11-16) with the def
 | JavaScript | `import ... from './x'` and `require('./x')` on one line; `x.js`, `x.ts`, `x.jsx`, `x.tsx`, `x/index.js`, `x/index.ts` | react-redux-realworld-example-app `src/index.js`: 2 files at depth 1, 14 at depth 2 |
 | TypeScript | as JavaScript; `.tsx` files are not read for imports | zod `packages/zod/src/index.ts`, `v4/classic/schemas.ts` and bulletproof-react `apps/react-vite/src/main.tsx`: none |
 | Go | the other files of the package (same directory and `package` clause, no `_test.go`), then the packages of the file's module (the module path in the nearest `go.mod`) and of modules that `go.mod` replaces with a local directory | chi `mux.go`: 4 files (its package); `middleware/logger.go`: 30 at depth 1, 35 at depth 2; bubbletea `examples/simple/main.go`: the 36 files of bubbletea (`replace ... => ../`) |
-| Rust | `mod x;` and `use x::...` when `x.rs` lies next to the file | siteone-crawler `src/main.rs`: none |
+| Rust | `mod x;` (not under `#[cfg(test)]`), and paths starting with `crate::`, `super::`, `self::`, the crate's library name or a path dependency's name, in `use` and in code, to the deepest module that exists as `x.rs` or `x/mod.rs` (the nearest `Cargo.toml` names the crate) | siteone-crawler `src/main.rs`: 10 files at depth 1, 61 at depth 2, 156 at depth 3 |
 | PHP | `require_once 'x.php'` | laravel `src/Illuminate/Database/Eloquent/Model.php`: none |
 | Ruby | `require_relative`, `require` of a file next to the importing file | not checked |
 | Java, C# | an imported class `X` as `X.java`/`X.cs` next to the file, plus every file of the same directory | not checked |
