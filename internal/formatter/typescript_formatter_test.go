@@ -132,3 +132,23 @@ func TestTypeScriptFormatter_Parameters(t *testing.T) {
 	intf := &ir.DistilledInterface{Name: "I", Children: []ir.DistilledNode{&ir.DistilledFunction{Name: "m", Parameters: params}}}
 	assert.Contains(t, tsFormat(t, intf, 0), "    method m"+want+"\n")
 }
+
+// Optional members print their `?`, interface members their `readonly`, and
+// an index signature prints as written.
+func TestTypeScriptFormatter_OptionalReadonlyIndex(t *testing.T) {
+	ro, opt := ir.ModifierReadonly, ir.ModifierOptional
+	str := &ir.TypeRef{Name: "string"}
+	intf := &ir.DistilledInterface{Name: "I", Children: []ir.DistilledNode{
+		&ir.DistilledField{Name: "id", Type: str, Modifiers: []ir.Modifier{ro}},
+		&ir.DistilledField{Name: "tags", Type: &ir.TypeRef{Name: "string[]"}, Modifiers: []ir.Modifier{ro, opt}},
+		&ir.DistilledField{Name: "[key: string]", Type: &ir.TypeRef{Name: "unknown"}},
+		&ir.DistilledFunction{Name: "run", Modifiers: []ir.Modifier{opt}, Returns: &ir.TypeRef{Name: "void"}},
+	}}
+	assert.Equal(t, "\ninterface I {\n    property readonly id: string\n    property readonly tags?: string[]\n    property [key: string]: unknown\n    method run?(): void\n}\n", tsFormat(t, intf, 0))
+	cls := &ir.DistilledClass{Name: "K", Children: []ir.DistilledNode{
+		&ir.DistilledField{Name: "name", Type: str, Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{opt}},
+		&ir.DistilledField{Name: "h", Type: str, Visibility: ir.VisibilityPrivate, Modifiers: []ir.Modifier{ro, opt}},
+		&ir.DistilledFunction{Name: "m", Visibility: ir.VisibilityPublic, Modifiers: []ir.Modifier{opt}},
+	}}
+	assert.Equal(t, "\nclass K {\n    public name?: string\n    private readonly h?: string\n    public m?()\n}\n", tsFormat(t, cls, 0))
+}

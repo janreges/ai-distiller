@@ -213,7 +213,7 @@ func TestTS_Comments(t *testing.T) {
 // The class body is reordered (fields, constructor, methods); a member's
 // comments move with it, so a doc stays directly before what it documents.
 func TestTS_ClassCommentsMoveWithTheirMember(t *testing.T) {
-	src := "class K {\n  /** m doc */\n  m(): void {}\n  /** ctor doc */\n  constructor(private a: number) {}\n  /** f doc */\n  f = 1;\n  /** index doc */\n  [key: string]: unknown;\n  // trailing\n}\n"
+	src := "class K {\n  /** m doc */\n  m(): void {}\n  /** ctor doc */\n  constructor(private a: number) {}\n  /** f doc */\n  f = 1;\n  /** index doc */\n  [key: string]: unknown;\n  /** block doc */\n  static {}\n  // trailing\n}\n"
 	cls := parseTS(t, src).Children[0].(*ir.DistilledClass)
 	var got []string
 	for _, c := range cls.Children {
@@ -226,8 +226,9 @@ func TestTS_ClassCommentsMoveWithTheirMember(t *testing.T) {
 			got = append(got, n.Name+"()")
 		}
 	}
-	// The doc of the index signature, which is not emitted, is dropped.
-	assert.Equal(t, []string{"a", "/f doc", "f", "/ctor doc", "constructor()", "/m doc", "m()", "/trailing"}, got)
+	// The doc of the static block, which is not emitted, is dropped; an
+	// index signature is a field and keeps its doc.
+	assert.Equal(t, []string{"a", "/f doc", "f", "/index doc", "[key: string]", "/ctor doc", "constructor()", "/m doc", "m()", "/trailing"}, got)
 }
 
 func TestTS_FileDocIsInner(t *testing.T) {
@@ -416,14 +417,15 @@ func TestTS_ParametersAsWritten(t *testing.T) {
 // A constructor parameter with an accessibility modifier or readonly is a
 // field with that visibility and readonly.
 func TestTS_ParameterProperties(t *testing.T) {
-	f := parseTS(t, "class K { constructor(private readonly s: S, readonly r: number, protected p: P, plain: Q) {} }\n")
+	f := parseTS(t, "class K { constructor(private readonly s: S, readonly r: number, protected p: P, plain: Q, public o?: O) {} }\n")
 	fields := map[string]*ir.DistilledField{}
 	for _, c := range f.Children[0].(*ir.DistilledClass).Children {
 		if fd, ok := c.(*ir.DistilledField); ok {
 			fields[fd.Name] = fd
 		}
 	}
-	require.Len(t, fields, 3)
+	require.Len(t, fields, 4)
+	assert.Equal(t, []ir.Modifier{ir.ModifierOptional}, fields["o"].Modifiers)
 	assert.Equal(t, ir.VisibilityPrivate, fields["s"].Visibility)
 	assert.Equal(t, []ir.Modifier{ir.ModifierReadonly}, fields["s"].Modifiers)
 	assert.Equal(t, ir.VisibilityPublic, fields["r"].Visibility)
@@ -431,6 +433,43 @@ func TestTS_ParameterProperties(t *testing.T) {
 	assert.Equal(t, "number", fields["r"].Type.Name)
 	assert.Equal(t, ir.VisibilityProtected, fields["p"].Visibility)
 	assert.Empty(t, fields["p"].Modifiers)
+}
+
+// The `?` of an optional member is the modifier optional, `readonly` is
+// kept on interface members too, and an index signature is a field named by
+// its brackets as written.
+func TestTS_OptionalReadonlyAndIndexSignatures(t *testing.T) {
+	f := parseTS(t, "interface I {\n  readonly id: string;\n  email?: string;\n  [key: string]: unknown;\n  readonly [i: number]: string;\n  run?(a: number): void;\n}\n"+
+		"class K {\n  [k: string]: any;\n  name?: string;\n  private readonly h?: boolean;\n  m?(): void;\n}\n")
+	type member struct {
+		mods []ir.Modifier
+		typ  string
+	}
+	members := func(children []ir.DistilledNode) map[string]member {
+		got := map[string]member{}
+		for _, c := range children {
+			switch n := c.(type) {
+			case *ir.DistilledField:
+				got[n.Name] = member{n.Modifiers, n.Type.Name}
+			case *ir.DistilledFunction:
+				got[n.Name+"()"] = member{n.Modifiers, ""}
+			}
+		}
+		return got
+	}
+	assert.Equal(t, map[string]member{
+		"id":            {[]ir.Modifier{ir.ModifierReadonly}, "string"},
+		"email":         {[]ir.Modifier{ir.ModifierOptional}, "string"},
+		"[key: string]": {[]ir.Modifier{}, "unknown"},
+		"[i: number]":   {[]ir.Modifier{ir.ModifierReadonly}, "string"},
+		"run()":         {[]ir.Modifier{ir.ModifierOptional}, ""},
+	}, members(f.Children[0].(*ir.DistilledInterface).Children))
+	assert.Equal(t, map[string]member{
+		"[k: string]": {[]ir.Modifier{}, "any"},
+		"name":        {[]ir.Modifier{ir.ModifierOptional}, "string"},
+		"h":           {[]ir.Modifier{ir.ModifierReadonly, ir.ModifierOptional}, "boolean"},
+		"m()":         {[]ir.Modifier{ir.ModifierOptional}, ""},
+	}, members(f.Children[1].(*ir.DistilledClass).Children))
 }
 
 // A const initialised with an untyped arrow function is a function with its

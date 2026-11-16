@@ -13,7 +13,7 @@ TypeScript support in AI Distiller is designed to capture the rich type informat
 | Construct | Support Level | Notes |
 |-----------|--------------|-------|
 | **Classes** | ✅ Full | Including abstract classes, inheritance, generics; every `extends` and `implements` base as written (`React.Component<Props>`, `ns.Base<string>`) |
-| **Interfaces** | ⚠️ Partial | With extends (as written, `extends Base<string>, ns.Other`) and generics; index signatures (`[key: string]: any`) are not printed |
+| **Interfaces** | ✅ Full | With extends (as written, `extends Base<string>, ns.Other`) and generics; members as written: `property readonly id: string`, `property email?: string`, `method run?(): void`, index signatures `property [key: string]: unknown` |
 | **Functions** | ✅ Full | Regular, async, arrow functions, overloads (every signature is printed) |
 | **Methods** | ✅ Full | Public, private, protected, abstract, static; accessors (`get size(): number`, `set size(v: number)`), generators (`async *iter()`, `function* gen()`) |
 | **Type System** | ✅ Full | Union, intersection, conditional, mapped types |
@@ -24,7 +24,7 @@ TypeScript support in AI Distiller is designed to capture the rich type informat
 | **Decorators** | ⚠️ Partial | Method decorators are printed with their arguments; class and property decorators are dropped |
 | **Namespaces** | ✅ Full | `namespace X {}` and `declare module "x" {}` with their members |
 | **Parameters** | ✅ Full | As written: destructuring patterns (`{ a, b = 1 }: P`), rest (`...rest: U[]`), optional (`c?: string`), defaults (`d: number = 0`), `this: K` |
-| **Parameter Properties** | ✅ Full | Constructor shorthand syntax becomes fields with their visibility and `readonly`; the field does not repeat the parameter's `?` or default |
+| **Parameter Properties** | ✅ Full | Constructor shorthand syntax becomes fields with their visibility, `readonly` and `?`; the field does not repeat the parameter's default |
 
 ### Visibility Rules
 
@@ -115,7 +115,7 @@ class UserModel {
 class UserModel {
     public readonly id: number
     private email: string
-    protected lastLogin: Date
+    protected lastLogin?: Date
     public constructor(id: number, email: string, lastLogin?: Date)
 }
 ```
@@ -301,6 +301,16 @@ interface StringIndex {
 }
 ```
 
+A type alias prints its type as written; interface and class members keep their index signatures, `readonly` and `?`:
+
+```
+# Output (--internal=1)
+interface StringIndex {
+    property [key: string]: any
+    property length: number
+}
+```
+
 ## Integration with AI Workflows
 
 ### Optimizing for Context Windows
@@ -330,12 +340,10 @@ AI Distiller recognizes common TypeScript framework patterns:
 ## Known Limitations
 
 1. **Decorators**: Class decorators (`@Component({...})`) and property decorators (`@Input()`) are dropped; method decorators are printed with their arguments
-2. **Index Signatures**: `[key: string]: T` members of interfaces are not printed
-3. **Triple-slash Directives**: Reference comments are ignored
-4. **Generic arrow functions**: The trailing comma of `<T,>` is not kept (`export const fn = <T>(x: T): T`)
-5. **`const enum`**: Printed as a plain `enum`
-6. **Optional and readonly markers on members**: The `?` of optional properties and methods and the `readonly` of interface members are dropped (`email?: string` prints as `property email: string`); class members keep `readonly` (`public readonly limit: number = 3`) and parameters keep their `?`
-7. **`const` type parameters**: The `const` of `<const T>` is dropped (`<T>`)
+2. **Triple-slash Directives**: Reference comments are ignored
+3. **Generic arrow functions**: The trailing comma of `<T,>` is not kept (`export const fn = <T>(x: T): T`)
+4. **`const enum`**: Printed as a plain `enum`
+5. **`const` type parameters**: The `const` of `<const T>` is dropped (`<T>`)
 
 ## Best Practices
 
@@ -437,6 +445,7 @@ class Service {
 5. **Accessors, generators, generic defaults** (✅ Fixed): `get size()` and `set size(v)` printed as two plain `size` methods, the `*` of generators was lost and `function* gen()` was missing, and a type parameter's default (`<T extends object = {}>`) was dropped
 6. **Arrow-function and wrapped constants** (✅ Fixed): `export const handler = async <T>(req: Request): Response => ...` printed as `export const handler(req: Request): Response`, without `=`, `async` and the type parameters; it prints `export const handler = async <T>(req: Request): Response`. A constant initialised with a call that takes a function printed bare (`export const Button`) or with its body; it prints `export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({ variant = "a", ...props }, ref))` and the whole initializer with `--implementation=1`. A typed arrow constant keeps its type: `const Inner: React.FC<P> = ({ a })`
 7. **`let` and `var`** (✅ Fixed): a `let` or `var` initialised with an arrow function printed as `function f(a: number)` and a `var` as `let`; every variable prints with its keyword as written (`let f = (a: number)`, `var v = 3`)
+8. **Optional, readonly and index-signature members** (✅ Fixed): the `?` of optional properties and methods and the `readonly` of interface members were dropped (`email?: string` printed as `property email: string`), and index signatures were not printed; they print as written: `property readonly id: string`, `property email?: string`, `method run?(a: number): void`, `property [key: string]: unknown`, and in a class `public name?: string`, `public [key: string]: any`
 
 ### Current Limitations
 

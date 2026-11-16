@@ -95,9 +95,10 @@ const (
 	ModifierNonMutating Modifier = "nonmutating"
 	ModifierClass       Modifier = "class"
 	ModifierExport      Modifier = "export"
-	ModifierDefault     Modifier = "default" // JavaScript and TypeScript `export default`
-	ModifierLet         Modifier = "let"     // JavaScript and TypeScript `let` (a `const` is `final`)
-	ModifierVar         Modifier = "var"     // JavaScript and TypeScript `var`
+	ModifierDefault     Modifier = "default"  // JavaScript and TypeScript `export default`
+	ModifierLet         Modifier = "let"      // JavaScript and TypeScript `let` (a `const` is `final`)
+	ModifierVar         Modifier = "var"      // JavaScript and TypeScript `var`
+	ModifierOptional    Modifier = "optional" // TypeScript `?` after a member's name: `email?: string`
 	ModifierAnnotation  Modifier = "annotation"
 	ModifierMacro       Modifier = "macro"
 	ModifierUnion       Modifier = "union"

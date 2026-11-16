@@ -111,6 +111,13 @@ var fixtures = []fixture{
 			"export let confLetArrow = (confL: number)",
 			"export var confVarValue = 3"},
 			NotContains: []string{"function confLetArrow"}},
+		check{Cap: "member-markers-as-written", Contains: []string{
+			"    property readonly confRoId: string",
+			"    property confOptEmail?: string",
+			"    property [confKey: string]: unknown",
+			"    method confOptRun?(confA: number): void",
+			"    public [confK: string]: any",
+			"    public confOptName?: string"}},
 		check{Cap: "heritage-as-written", Contains: []string{
 			"export interface ConfBased extends ConfGenericBase<string>, confNs.ConfQualified<number> {",
 			"export class ConfDerived extends confNs.ConfBaseClass<{ id: number }> implements ConfBased {"}},

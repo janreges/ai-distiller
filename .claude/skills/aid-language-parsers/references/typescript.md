@@ -31,8 +31,8 @@
 - Class members default to `public`; `private`, `protected` and `public`
   accessibility modifiers set it; a `#name` member is `private` and keeps the
   `#` in its name. Constructor parameter properties (`constructor(private x: T)`,
-  `constructor(readonly y: T)`) become fields with the parameter's modifier and
-  `readonly`
+  `constructor(readonly y: T)`) become fields with the parameter's modifier,
+  `readonly` and, for `y?: T`, `optional`
   (`internal/language/typescript/ast_parser.go#ASTParser.parseParameterProperties`).
   A parameter's `Name` is its pattern as written, so a destructuring pattern
   (`{ a, b = 1 }`) is the name; `...` sets `IsVariadic`, `?` `IsOptional`
@@ -52,6 +52,11 @@
 - Methods are nested in their `DistilledClass`; interfaces are
   `DistilledInterface` with their members as children; enums are
   `DistilledEnum`; `type X = ...` is a `DistilledTypeAlias`.
+- The `?` of an optional property or method is the modifier `optional`;
+  interface members keep `readonly` like class members. An index signature
+  of an interface or class is a `DistilledField` whose `Name` is the
+  bracketed part as written (`[key: string]`)
+  (`internal/language/typescript/ast_parser.go#ASTParser.parseIndexSignature`).
 - `parseClassBody` reorders the members: fields first, then the constructor,
   then the methods, then trailing comments.
 - Accessors are named `get x` and `set x`, generators `*name` (a generator

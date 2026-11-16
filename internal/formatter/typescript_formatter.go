@@ -172,15 +172,20 @@ func (f *TypeScriptFormatter) formatInterface(w io.Writer, intf *ir.DistilledInt
 	for _, child := range intf.Children {
 		switch c := child.(type) {
 		case *ir.DistilledField:
-			// Interface properties
-			fmt.Fprintf(w, "    property %s", c.Name)
+			// Interface properties and index signatures, as written:
+			// `readonly id: string`, `email?: string`, `[key: string]: T`
+			readonly := ""
+			if hasModifier(c.Modifiers, ir.ModifierReadonly) {
+				readonly = "readonly "
+			}
+			fmt.Fprintf(w, "    property %s%s%s", readonly, c.Name, tsOptional(c.Modifiers))
 			if c.Type != nil && c.Type.Name != "" {
 				fmt.Fprintf(w, ": %s", c.Type.Name)
 			}
 			fmt.Fprintln(w)
 		case *ir.DistilledFunction:
 			// Interface methods
-			fmt.Fprintf(w, "    method %s", c.Name)
+			fmt.Fprintf(w, "    method %s%s", c.Name, tsOptional(c.Modifiers))
 
 			fmt.Fprint(w, tsTypeParams(c.TypeParams))
 
@@ -250,7 +255,7 @@ func (f *TypeScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 		}
 	} else {
 		// Methods inside classes/interfaces - no "function" keyword needed
-		fmt.Fprintf(w, "%s%s%s", indentStr, modifiers, fn.Name)
+		fmt.Fprintf(w, "%s%s%s%s", indentStr, modifiers, fn.Name, tsOptional(fn.Modifiers))
 	}
 
 	fmt.Fprint(w, tsTypeParams(fn.TypeParams))
@@ -276,6 +281,14 @@ func (f *TypeScriptFormatter) formatFunction(w io.Writer, fn *ir.DistilledFuncti
 	}
 
 	return nil
+}
+
+// tsOptional returns the `?` of an optional member, or "".
+func tsOptional(mods []ir.Modifier) string {
+	if hasModifier(mods, ir.ModifierOptional) {
+		return "?"
+	}
+	return ""
 }
 
 // tsTypeParams prints type parameters as written, `<T extends object = {}, U>`,
@@ -353,7 +366,7 @@ func (f *TypeScriptFormatter) formatField(w io.Writer, field *ir.DistilledField,
 			}
 		}
 
-		fmt.Fprintf(w, "    %s%s", modifiers, field.Name)
+		fmt.Fprintf(w, "    %s%s%s", modifiers, field.Name, tsOptional(field.Modifiers))
 		if field.Type != nil && field.Type.Name != "" {
 			fmt.Fprintf(w, ": %s", field.Type.Name)
 		}

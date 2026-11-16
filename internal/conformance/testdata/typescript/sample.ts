@@ -89,3 +89,13 @@ enum ConfListedEnum { ConfL }
 export { ConfListedEnum };
 export let confLetArrow = (confL: number) => confL;
 export var confVarValue = 3;
+export interface ConfMarkers {
+    readonly confRoId: string;
+    confOptEmail?: string;
+    [confKey: string]: unknown;
+    confOptRun?(confA: number): void;
+}
+export class ConfMarked {
+    [confK: string]: any;
+    confOptName?: string;
+}

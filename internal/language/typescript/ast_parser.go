@@ -609,9 +609,11 @@ func (p *ASTParser) parseClassBody(node *sitter.Node, class *ir.DistilledClass) 
 				}
 				methods = append(methods, withComments(method)...)
 			}
+		case "index_signature":
+			fields = append(fields, withComments(p.parseIndexSignature(child))...)
 		default:
-			// A member that is not emitted (an index signature, a static
-			// block): the docs before it documented it, not the next member.
+			// A member that is not emitted (a static block): the docs
+			// before it documented it, not the next member.
 			if child.IsNamed() {
 				pendingComments = commentutil.WithoutDocs(pendingComments)
 			}
@@ -667,6 +669,8 @@ func (p *ASTParser) parseMethod(node *sitter.Node) *ir.DistilledFunction {
 			method.Modifiers = append(method.Modifiers, ir.ModifierAbstract)
 		case "readonly":
 			method.Modifiers = append(method.Modifiers, ir.ModifierReadonly)
+		case "?":
+			method.Modifiers = append(method.Modifiers, ir.ModifierOptional)
 		case "property_name":
 			if nameChild := child.Child(0); nameChild != nil {
 				if nameChild.Kind() == "identifier" || nameChild.Kind() == "property_identifier" {
@@ -724,6 +728,8 @@ func (p *ASTParser) parseMethodSignature(node *sitter.Node) *ir.DistilledFunctio
 			}
 		case "abstract":
 			method.Modifiers = append(method.Modifiers, ir.ModifierAbstract)
+		case "?":
+			method.Modifiers = append(method.Modifiers, ir.ModifierOptional)
 		case "property_name":
 			if nameChild := child.Child(0); nameChild != nil {
 				if nameChild.Kind() == "identifier" || nameChild.Kind() == "property_identifier" {
@@ -785,6 +791,8 @@ func (p *ASTParser) parseField(node *sitter.Node) *ir.DistilledField {
 			field.Modifiers = append(field.Modifiers, ir.ModifierStatic)
 		case "readonly":
 			field.Modifiers = append(field.Modifiers, ir.ModifierReadonly)
+		case "?":
+			field.Modifiers = append(field.Modifiers, ir.ModifierOptional)
 		case "property_name":
 			if nameChild := child.Child(0); nameChild != nil {
 				switch nameChild.Kind() {
@@ -912,8 +920,41 @@ func (p *ASTParser) parseInterfaceBody(node *sitter.Node, intf *ir.DistilledInte
 			if method := p.parseMethodSignature(child); method != nil {
 				intf.Children = append(intf.Children, method)
 			}
+		case "index_signature":
+			intf.Children = append(intf.Children, p.parseIndexSignature(child))
 		}
 	}
+}
+
+// parseIndexSignature reads an index signature, `readonly [key: string]: T`,
+// as a field whose name is the bracketed part as written on one line
+// (`[key: string]`) and whose type is T.
+func (p *ASTParser) parseIndexSignature(node *sitter.Node) *ir.DistilledField {
+	field := &ir.DistilledField{
+		BaseNode:   ir.BaseNode{Location: p.nodeToLocation(node)},
+		Visibility: ir.VisibilityPublic,
+		Modifiers:  []ir.Modifier{},
+	}
+	var open, close *sitter.Node
+	for i := uint(0); i < node.ChildCount(); i++ {
+		child := node.Child(i)
+		switch child.Kind() {
+		case "readonly":
+			field.Modifiers = append(field.Modifiers, ir.ModifierReadonly)
+		case "[":
+			if open == nil {
+				open = child
+			}
+		case "]":
+			close = child
+		case "type_annotation":
+			field.Type = p.typeFromAnnotation(child)
+		}
+	}
+	if open != nil && close != nil {
+		field.Name = strings.Join(strings.Fields(string(p.source[open.StartByte():close.EndByte()])), " ")
+	}
+	return field
 }
 
 // parsePropertySignature parses property signatures
@@ -936,6 +977,8 @@ func (p *ASTParser) parsePropertySignature(node *sitter.Node) *ir.DistilledField
 		switch child.Kind() {
 		case "readonly":
 			field.Modifiers = append(field.Modifiers, ir.ModifierReadonly)
+		case "?":
+			field.Modifiers = append(field.Modifiers, ir.ModifierOptional)
 		case "property_name":
 			if nameChild := child.Child(0); nameChild != nil {
 				if nameChild.Kind() == "identifier" || nameChild.Kind() == "property_identifier" {
@@ -945,14 +988,7 @@ func (p *ASTParser) parsePropertySignature(node *sitter.Node) *ir.DistilledField
 		case "property_identifier":
 			field.Name = p.nodeText(child)
 		case "type_annotation":
-			// Extract the actual type from the type annotation (skip the colon)
-			for j := 0; j < int(child.ChildCount()); j++ {
-				typeChild := child.Child(uint(j))
-				if typeChild != nil && typeChild.Kind() != ":" {
-					field.Type = &ir.TypeRef{Name: p.nodeText(typeChild)}
-					break
-				}
-			}
+			field.Type = p.typeFromAnnotation(child)
 		}
 	}
 
@@ -1389,6 +1425,9 @@ func (p *ASTParser) parseParameterProperties(node *sitter.Node) []*ir.DistilledF
 		}
 		if !isProperty {
 			continue
+		}
+		if child.Kind() == "optional_parameter" {
+			field.Modifiers = append(field.Modifiers, ir.ModifierOptional)
 		}
 		if field.Visibility == "" {
 			field.Visibility = ir.VisibilityPublic
